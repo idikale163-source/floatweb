@@ -11,12 +11,12 @@
 - 多媒体：AI 生图、Minimax 语音合成、网易云在线音乐（需自配 API）、3D 世界搭建（Tripo）
 - 桌面美化：主题、壁纸、贴纸小组件、自定义 CSS，支持 PWA 安装到手机桌面
 
-所有 LLM 调用都使用**你自己的 API key**（OpenAI 兼容接口或 Anthropic），本项目不内置任何模型服务。
+所有 LLM 调用都使用**你自己的 API key**，本项目不内置任何模型服务。
 
 ## 运行要求
 
 - Node.js 20+（Next.js 15 要求 ≥ 18.18）
-- 任意 OpenAI 兼容的 LLM API（OpenAI / DeepSeek / 中转站等）或 Anthropic API
+- 任意 OpenAI 兼容的 LLM API（OpenAI / DeepSeek / 中转站等），或 Anthropic / Google Gemini 官方 API
 
 ## 快速开始（本地运行）
 
@@ -42,7 +42,7 @@ NEXT_PUBLIC_SELF_HOSTED_MODE=true
 
 进入应用后只差一步就能开聊：
 
-1. 打开**设置 → API 设置**，添加你的 LLM API（填 Base URL + API Key，OpenAI 兼容接口和 Anthropic 都支持）；
+1. 打开**设置 → API 设置**，添加你的 LLM API（填 Base URL + API Key，支持 OpenAI 兼容接口、Anthropic、Google Gemini）；
 2. 创建或导入角色卡，开始聊天；
 3. 可选：在设置里继续配置生图、Minimax 语音、网易云音乐 API 等增强功能。
 
