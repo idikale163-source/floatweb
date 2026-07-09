@@ -66,14 +66,9 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# 根目录散图（吉祥物小卷、外观背景、默认壁纸）——同样改文件名才更新。
+# 根目录散图（吉祥物小卷、默认壁纸）——同样改文件名才更新。
 [[headers]]
   for = "/mascot.png"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
-
-[[headers]]
-  for = "/appearance-bg.jpg"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
