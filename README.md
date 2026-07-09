@@ -74,10 +74,10 @@ NEXT_PUBLIC_SELF_HOSTED_MODE=true
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 便签墙实时刷新用（anon key 本身可公开） |
 | `NEXT_PUBLIC_IMAGE_GEN_PROXY_URL` | 通用生图代理地址，需自己部署代理服务 |
 | `NEXT_PUBLIC_DEFAULT_NETEASE_API_BASE` | 网易云音乐 API 默认地址（NeteaseCloudMusicApi 兼容实例，请自行部署）。留空时在线音乐隐藏，用户也可在音乐 APP 设置里自填 |
-| `NEXT_PUBLIC_LEGACY_NETEASE_API_BASES` | 历史默认音乐 API 地址（逗号分隔），用于老用户自动迁移，新部署留空即可 |
+| `NEXT_PUBLIC_LEGACY_NETEASE_API_BASES` | 仅当你更换过默认音乐 API 地址时使用：旧地址填这里（逗号分隔），老用户浏览器里存的旧地址会自动迁移到新默认 |
 | `NEXT_PUBLIC_NETEASE_REAL_IP` | 网易云 API 的 X-Real-IP 参数（海外部署解锁地区限制用） |
-| `TRIPO_API_KEY` | Tripo 3D 生成，世界搭建功能用 |
-| `IMGBB_API_KEY` | ImgBB 图床上传 |
+| `TRIPO_API_KEY` | 可选的服务端兜底，一般不用填——用户在世界搭建界面内自行填写 Tripo key |
+| `IMGBB_API_KEY` | 可选的服务端兜底，一般不用填——用户在应用内生图/图床设置里自行填写 |
 | `WEIXIN_PROXY` | 微信本地助手代理，见 `tools/weixin-local-assistant/README.md` |
 
 ## 启用自己的 Supabase（可选云端功能）
