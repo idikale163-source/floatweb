@@ -5,7 +5,6 @@
 -- 应用市场、黑市。全部语句幂等，重复执行不报错、不破坏已有数据。
 -- 执行前请确认最后一行是 "-- ===== 全部结束 ====="，缺了说明复制被截断。
 -- ============================================================================
-
 -- ==================== docs/account-supabase.sql ====================
 -- Account, activation code, and session foundation.
 -- Run this in Supabase SQL Editor before enabling account login.
@@ -23,6 +22,13 @@ create table if not exists public.app_users (
   constraint app_users_username_check check (username ~ '^[A-Za-z0-9_@.-]{3,40}$'),
   constraint app_users_status_check check (status in ('active', 'disabled'))
 );
+
+-- 单机模式（NEXT_PUBLIC_SELF_HOSTED_MODE）下服务端使用固定账号 local_user；
+-- 黑市等云端表对 app_users 有外键，这里预置占位行，否则单机模式开钱包会
+-- 报外键错误。password_hash 为无法通过校验的占位值，此账号不可登录。
+insert into public.app_users (id, username, password_hash, display_name, status)
+values ('local_user', 'local_user', 'self_hosted_placeholder', '本地用户', 'active')
+on conflict do nothing;
 
 create table if not exists public.activation_codes (
   code text primary key,
@@ -131,7 +137,6 @@ $$;
 --     max_uses = excluded.max_uses,
 --     status = 'active',
 --     updated_at = now();
-
 -- ==================== docs/verify-supabase.sql ====================
 -- 成年审核 · 激活码自助申请
 -- 在 Supabase SQL Editor 中执行一次。
@@ -160,7 +165,6 @@ create index if not exists verification_requests_status_idx
 insert into storage.buckets (id, name, public)
 values ('verification-images', 'verification-images', false)
 on conflict (id) do nothing;
-
 -- ==================== docs/notewall-supabase.sql ====================
 -- Supabase SQL for the global note wall.
 -- Run this once in the Supabase SQL editor.
@@ -307,7 +311,6 @@ begin
     alter publication supabase_realtime add table public.note_wall_comments;
   end if;
 end $$;
-
 -- ==================== docs/game-hall-supabase.sql ====================
 -- Supabase SQL for the game hall marketplace.
 -- Run this once in the Supabase SQL editor.
@@ -513,7 +516,6 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
-
 -- ==================== docs/custom-app-market-supabase.sql ====================
 -- Supabase SQL for the custom app marketplace.
 -- Run this once in the Supabase SQL editor.
@@ -643,7 +645,6 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
-
 -- ==================== docs/black-market-supabase.sql ====================
 -- Supabase SQL for the black market theater marketplace.
 -- Run this once in the Supabase SQL editor.
