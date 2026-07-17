@@ -1,26 +1,12 @@
 -- ============================================================================
 -- AI 虚拟手机 · Supabase 一键初始化脚本（all-in-one）
---
--- 在 Supabase SQL Editor 中整段粘贴执行一次，即可建齐全部可选云端功能：
---   1. 账号 / 激活码 / 会话        （docs/account-supabase.sql）
---   2. 成年审核 + 审核图片桶       （docs/verify-supabase.sql，说明见 docs/verify-setup.md）
---   3. 便签墙                      （docs/notewall-supabase.sql）
---   4. 游戏大厅                    （docs/game-hall-supabase.sql）
---   5. 应用市场                    （docs/custom-app-market-supabase.sql）
---   6. 黑市                        （docs/black-market-supabase.sql）
---
--- 全部语句均为幂等写法（create table if not exists / drop policy if exists /
--- on conflict do nothing），重复执行不会报错、不会破坏已有数据——
--- 升级版本时重新跑一遍即可。
--- 本文件由上述单个脚本按依赖顺序拼接而成，内容与各单文件保持一致；
--- 只需要部分功能时也可以改为按需执行对应的单个脚本。
+-- 在 SQL Editor 整段执行一次即可建齐全部可选云端功能：账号/激活码/会话、
+-- 成年审核+审核图片桶（见 docs/verify-setup.md）、便签墙、游戏大厅、
+-- 应用市场、黑市。全部语句幂等，重复执行不报错、不破坏已有数据。
+-- 执行前请确认最后一行是 "-- ===== 全部结束 ====="，缺了说明复制被截断。
 -- ============================================================================
 
-
--- ============================================================================
--- >>> docs/account-supabase.sql
--- ============================================================================
-
+-- ==================== docs/account-supabase.sql ====================
 -- Account, activation code, and session foundation.
 -- Run this in Supabase SQL Editor before enabling account login.
 
@@ -146,11 +132,7 @@ $$;
 --     status = 'active',
 --     updated_at = now();
 
-
--- ============================================================================
--- >>> docs/verify-supabase.sql
--- ============================================================================
-
+-- ==================== docs/verify-supabase.sql ====================
 -- 成年审核 · 激活码自助申请
 -- 在 Supabase SQL Editor 中执行一次。
 -- 依赖：docs/account-supabase.sql（activation_codes 表）已执行。
@@ -179,11 +161,7 @@ insert into storage.buckets (id, name, public)
 values ('verification-images', 'verification-images', false)
 on conflict (id) do nothing;
 
-
--- ============================================================================
--- >>> docs/notewall-supabase.sql
--- ============================================================================
-
+-- ==================== docs/notewall-supabase.sql ====================
 -- Supabase SQL for the global note wall.
 -- Run this once in the Supabase SQL editor.
 
@@ -330,11 +308,7 @@ begin
   end if;
 end $$;
 
-
--- ============================================================================
--- >>> docs/game-hall-supabase.sql
--- ============================================================================
-
+-- ==================== docs/game-hall-supabase.sql ====================
 -- Supabase SQL for the game hall marketplace.
 -- Run this once in the Supabase SQL editor.
 
@@ -540,11 +514,7 @@ end $$;
 
 notify pgrst, 'reload schema';
 
-
--- ============================================================================
--- >>> docs/custom-app-market-supabase.sql
--- ============================================================================
-
+-- ==================== docs/custom-app-market-supabase.sql ====================
 -- Supabase SQL for the custom app marketplace.
 -- Run this once in the Supabase SQL editor.
 
@@ -674,11 +644,7 @@ end $$;
 
 notify pgrst, 'reload schema';
 
-
--- ============================================================================
--- >>> docs/black-market-supabase.sql
--- ============================================================================
-
+-- ==================== docs/black-market-supabase.sql ====================
 -- Supabase SQL for the black market theater marketplace.
 -- Run this once in the Supabase SQL editor.
 
@@ -1028,3 +994,4 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
+-- ===== 全部结束 =====
