@@ -81,7 +81,7 @@ NEXT_PUBLIC_SELF_HOSTED_MODE=true
 
 ## 启用自己的 Supabase（可选云端功能）
 
-账号、激活码、成年审核、便签墙、游戏大厅、应用市场、黑市等云端功能需要你自己的 Supabase 项目。在 Supabase SQL Editor 按需执行 `docs/` 下的建表脚本：
+账号、激活码、成年审核、便签墙、游戏大厅、应用市场、黑市等云端功能需要你自己的 Supabase 项目。推荐在 Supabase SQL Editor 直接执行 `docs/supabase-all-in-one.sql` 一键建齐全部云端功能（幂等脚本，重复执行不会破坏已有数据），也可按需执行下列单个脚本：
 
 - `docs/account-supabase.sql`：账号、会话、激活码
 - `docs/verify-supabase.sql`：成年审核与审核图片桶（部署说明见 `docs/verify-setup.md`）
