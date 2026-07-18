@@ -778,7 +778,8 @@
   border: var(--dock-border, none);
   background: var(--c-home-glass);
   min-height: 78px;
-  padding: 10px 0 5px;
+  /* 上下 0 内边距 + 网格居中：图标在胶囊内几何对称（旧值 10px/5px 造成图标偏下） */
+  padding: 0;
   display: grid;
   grid-template-columns: repeat(4, var(--slot-size));
   column-gap: var(--slot-gap-x);
@@ -895,7 +896,6 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  transform: translateY(-2px);
   position: relative;
   z-index: 2;
 }
