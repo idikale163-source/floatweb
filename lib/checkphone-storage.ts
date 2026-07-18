@@ -213,6 +213,18 @@ export function clearCheckPhoneProjectionEntries(characterId: string): void {
   kvRemove(projectionStorageKey(characterId));
 }
 
+/** 删除某角色查手机记录中的一条。 */
+export function removeCheckPhoneProjectionEntry(characterId: string, entryId: string): void {
+  if (typeof window === "undefined") return;
+  const key = projectionStorageKey(characterId);
+  const remaining = loadProjectionEventsByKey(key).filter(entry => entry.id !== entryId);
+  if (remaining.length === 0) {
+    kvRemove(key);
+    return;
+  }
+  saveProjectionEventsByKey(key, remaining);
+}
+
 export function loadCheckPhoneProjectionEntries(
   characterId: string,
   options?: { afterTimestamp?: string },
