@@ -18,6 +18,7 @@ import {
     MAX_VISION_IMAGE_PROMPT_LIMIT,
     type ChatMessage,
 } from "@/lib/chat-storage";
+import { clearCheckPhoneProjectionEntries } from "@/lib/checkphone-storage";
 import {
     GROUP_SELF_KEY,
     applyGroupAdminAction,
@@ -401,6 +402,7 @@ export function ChatSettingsPanel({
 
     const handleClearHistory = () => {
         clearChatSessionMessages(session.id);
+        clearCheckPhoneProjectionEntries(session.contactId);
         setShowConfirmClear(false);
     };
 
@@ -1076,7 +1078,7 @@ export function ChatSettingsPanel({
             {showConfirmClear && (
                 <ConfirmDialog
                     title="确定要清空线上聊天记录吗？"
-                    message="只清空普通聊天记录，不影响线下模式记录。清空后无法恢复。是否继续？"
+                    message="只清空普通聊天记录，不影响线下模式记录；查手机（查岗）留下的短期记忆记录会一并清除。清空后无法恢复。是否继续？"
                     icon={AlertCircle}
                     variant="danger"
                     confirmLabel="清空"
