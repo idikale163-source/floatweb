@@ -196,6 +196,18 @@ function ensureProviderHasUserMessage(messages: LlmRequestMessage[]): LlmRequest
     return messages;
 }
 
+/** 把 multipart content 里的图片 part 压平成文本占位（图像识别未启用时使用）。 */
+function stripVisionParts(messages: LlmRequestMessage[]): LlmRequestMessage[] {
+    return messages.map((message) => {
+        if (!Array.isArray(message.content)) return message;
+        const text = message.content
+            .map((part) => part.type === "text" ? part.text : "[图片]")
+            .filter(Boolean)
+            .join("\n");
+        return { ...message, content: text };
+    });
+}
+
 export function buildProviderRequest(
     config: ApiConfig,
     preset: PresetConfig | null,
@@ -213,7 +225,10 @@ export function buildProviderRequest(
         throw new Error("当前 API 配置未启用原生工具调用。");
     }
 
-    const providerMessages = ensureProviderHasUserMessage(normalizeNativeToolMessageAdjacency(messages));
+    // 图像识别关闭时的总闸：无论哪条路径塞入了 image_url part，一律降级为
+    // "[图片]" 文本，避免不支持视觉的模型（如 DeepSeek）收到 multipart 返回 400。
+    const guardedMessages = config.enableImageRecognition === true ? messages : stripVisionParts(messages);
+    const providerMessages = ensureProviderHasUserMessage(normalizeNativeToolMessageAdjacency(guardedMessages));
 
     if (providerKind === "anthropic") {
         return buildAnthropicRequest(config, preset, baseUrl, providerMessages, options);
