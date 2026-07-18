@@ -268,10 +268,6 @@
 
 .phone-workspace {
   margin-top: var(--home-grid-top-offset);
-  /* 外扩吃掉壳的 12px 内边距：图标/组件的投影原本渗入内边距区、在工作区
-     overflow 裁剪边上被生硬截断，形成一条纵向"背景接缝"。外扩后裁剪边
-     与屏幕边重合，阴影自然淡出；网格列仍按屏幕居中，位置不变。 */
-  margin-inline: -12px;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -281,6 +277,13 @@
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+/* 仅桌面态外扩吃掉壳的 12px 内边距：图标/组件的投影原本渗入内边距区、
+   在工作区 overflow 裁剪边上被生硬截断，形成一条纵向"背景接缝"。外扩后
+   裁剪边与屏幕边重合，阴影自然淡出；网格列仍按屏幕居中，位置不变。
+   App 打开时（.app-open）必须保持原始宽度，否则所有 App 页面会被拓宽。 */
+.phone-workspace:not(.app-open) {
+  margin-inline: -12px;
 }
 .phone-workspace img {
   -webkit-user-drag: none;
