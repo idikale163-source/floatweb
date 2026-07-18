@@ -309,11 +309,13 @@
   flex: 0 0 100%;
   width: 100%;
   -webkit-touch-callout: none;
-  --slot-size: 66px;
+  /* 窄视口（系统显示大小调大，CSS 视口 330~370px）下格子收缩；
+     视口 ≥374px 算出值 ≥66 被钳回 66px——正常手机零变化。dock 用同一公式保持上下对齐。 */
+  --slot-size: clamp(56px, calc((100vw - 108px) / 4), 66px);
   --slot-gap-x: 20px;
   --slot-gap-y: var(--home-row-gap-y);
-  --slot-icon-width: 62px;
-  --slot-icon-height: 62px;
+  --slot-icon-width: min(62px, var(--slot-size));
+  --slot-icon-height: min(62px, var(--slot-size));
   --slot-row-step: calc(var(--slot-icon-height) + var(--slot-gap-y));
   --slot-icon-offset-x: calc((var(--slot-size) - var(--slot-icon-width)) / 2);
   margin-top: 2px;
@@ -440,8 +442,9 @@
 }
 
 .icon-glyph-box {
-  width: 58px;
-  height: 58px;
+  /* 跟随格子收缩（无 --slot-size 上下文时回退 58px 原值） */
+  width: min(58px, var(--slot-size, 58px));
+  height: min(58px, var(--slot-size, 58px));
   border-radius: 16px;
   border: none;
   display: grid;
@@ -761,12 +764,12 @@
 /* ── Dock ── */
 
 .dock {
-  --slot-size: 66px;
+  --slot-size: clamp(56px, calc((100vw - 108px) / 4), 66px);
   --slot-gap-x: 20px;
   margin-top: 8px;
   margin-bottom: var(--home-dock-lift);
   margin-inline: auto;
-  width: calc((4 * var(--slot-size)) + (3 * var(--slot-gap-x)) + 30px);
+  width: min(calc((4 * var(--slot-size)) + (3 * var(--slot-gap-x)) + 30px), calc(100% - 8px));
   border-radius: var(--dock-radius, 9999px);
   border: var(--dock-border, none);
   background: var(--c-home-glass);
