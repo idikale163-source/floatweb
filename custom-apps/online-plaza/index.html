@@ -85,6 +85,12 @@
         <input id="chatInput" placeholder="说点什么…" />
         <button class="btn" id="btnSend">发送</button>
       </div>
+      <div class="row" id="charRow" style="align-items:center">
+        <select id="charSelect" style="flex:1;min-width:0;background:var(--card2);border:1px solid var(--line);border-radius:12px;color:var(--ink);padding:10px 12px;font-size:13px">
+          <option value="">带一位角色进房…</option>
+        </select>
+        <button class="btn ghost" id="btnCharSpeak" disabled>让TA发言</button>
+      </div>
     </div>
   </section>
 
@@ -135,6 +141,8 @@
     renderPlayers(room.players || []);
     $("chatlog").innerHTML = "";
     sysMsg(room.isHost ? "房间已创建，等朋友加入…" : "已加入房间");
+    chatHistory = [];
+    loadCharacters();
   }
   function exitLive() {
     room = null;
@@ -202,20 +210,78 @@
     api.room.leave().catch(function () {});
     exitLive();
   };
+  // 最近聊天上下文（给带来的角色发言用）
+  var chatHistory = [];
+  function remember(who, text) {
+    chatHistory.push(who + "：" + text);
+    if (chatHistory.length > 12) chatHistory.shift();
+  }
   function sendChat() {
     var text = $("chatInput").value.trim();
     if (!text || !room) return;
     $("chatInput").value = "";
     chatMsg(room.selfName || "我", text, true);
+    remember(room.selfName || "我", text);
     api.room.send({ type: "chat", text: text }).catch(err);
   }
+
+  // ── 带角色上桌：角色由主人的客户端驱动（本地 ai.generate 后广播）──
+  var charBusy = false;
+  function loadCharacters() {
+    api.characters.list()
+      .then(function (list) {
+        var select = $("charSelect");
+        while (select.options.length > 1) select.remove(1);
+        (list || []).forEach(function (c) {
+          var opt = document.createElement("option");
+          opt.value = c.id;
+          opt.textContent = c.name;
+          select.appendChild(opt);
+        });
+      })
+      .catch(function () { $("charRow").style.display = "none"; });
+  }
+  $("charSelect").addEventListener("change", function () {
+    $("btnCharSpeak").disabled = !$("charSelect").value;
+  });
+  $("btnCharSpeak").onclick = function () {
+    var charId = $("charSelect").value;
+    var charName = $("charSelect").selectedOptions[0] ? $("charSelect").selectedOptions[0].textContent : "角色";
+    if (!charId || !room || charBusy) return;
+    charBusy = true;
+    $("btnCharSpeak").disabled = true;
+    $("btnCharSpeak").textContent = "生成中…";
+    api.ai.generate({
+      characterId: charId,
+      instruction: "你正和大家在一个联机聊天室里闲聊。最近的聊天记录：\n" + (chatHistory.join("\n") || "（还没人说话）") + "\n请以你的角色身份自然地说一句话加入聊天（60字内，只输出这句话本身，不要引号和动作描写）。",
+    })
+      .then(function (result) {
+        var text = String((result && result.text) || "").trim();
+        if (!text) throw new Error("角色没有说出话来");
+        var who = charName + "（AI）";
+        chatMsg(who, text, true);
+        remember(who, text);
+        return api.room.send({ type: "chat", text: text, as: charName });
+      })
+      .catch(err)
+      .finally(function () {
+        charBusy = false;
+        $("btnCharSpeak").disabled = !$("charSelect").value;
+        $("btnCharSpeak").textContent = "让TA发言";
+      });
+  };
   $("btnSend").onclick = sendChat;
   $("chatInput").addEventListener("keydown", function (e) { if (e.key === "Enter") sendChat(); });
 
   // 房间事件（manifest extensions.events 里已声明）
   api.on("room.message", function (msg) {
     if (!room) return;
-    if (msg.payload && msg.payload.type === "chat") chatMsg(msg.from.name, String(msg.payload.text || ""), false);
+    if (msg.payload && msg.payload.type === "chat") {
+      var who = msg.payload.as ? String(msg.payload.as) + "（AI）" : msg.from.name;
+      var text = String(msg.payload.text || "");
+      chatMsg(who, text, false);
+      remember(who, text);
+    }
   });
   api.on("room.players", function (data) {
     if (room) renderPlayers(data.players || []);
