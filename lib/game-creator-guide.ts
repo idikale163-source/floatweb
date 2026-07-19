@@ -361,6 +361,7 @@ const bottle = await AiPhoneGame.cloud.takeRandom({ collection: "bottles" }); //
 - 房主掉线 30 秒后房间自动结束（reason 为 \`host_left\`），本版本不支持房主迁移，请做好收尾界面。
 - 限速每人每秒 25 条、单条 16000 字符；适合回合制与低频同步，不适合动作类帧同步。
 - 联机对战里的 AI 角色（如 AI 补位玩家）只在房主端调用 \`callLLM\` 生成，再通过 state 同步给全员，避免每个客户端各自生成不一致。
+- 内容安全：请在联机 UI 里放举报入口——\`AiPhoneGame.room.report(原因)\` 举报当前房间、\`AiPhoneGame.cloud.report({ id, reason })\` 举报一条云端内容（如排行榜/漂流瓶条目）。
 
 ## 权限说明
 

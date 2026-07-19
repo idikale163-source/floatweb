@@ -15,6 +15,7 @@ import { registerCustomAppToolExecutor, type CustomAppToolExecutorPayload } from
 import { updateInstalledCustomAppFromMarket } from "@/lib/custom-app-market-update";
 import { loadCharacters } from "@/lib/character-storage";
 import { OnlineRoomConnection, onlineCloudApi } from "@/lib/online-room-client";
+import { submitContentReport } from "@/lib/moderation-client";
 import { hydrateKvDb } from "@/lib/kv-db";
 import { ensureSettingsStorageHydrated } from "@/lib/settings-storage";
 import {
@@ -394,7 +395,8 @@ html, body { min-height: 100%; }
       players: function(){ return request('room.players'); },
       kick: function(userId){ return request('room.kick', { userId: userId }); },
       close: function(){ return request('room.close'); },
-      leave: function(){ return request('room.leave'); }
+      leave: function(){ return request('room.leave'); },
+      report: function(reason){ return request('room.report', { reason: reason }); }
     },
     cloud: {
       put: function(payload){ return request('cloud.put', payload || {}); },
@@ -402,7 +404,8 @@ html, body { min-height: 100%; }
       list: function(payload){ return request('cloud.list', payload || {}); },
       update: function(payload){ return request('cloud.update', payload || {}); },
       delete: function(payload){ return request('cloud.delete', typeof payload === 'string' ? { id: payload } : (payload || {})); },
-      takeRandom: function(payload){ return request('cloud.takeRandom', payload || {}); }
+      takeRandom: function(payload){ return request('cloud.takeRandom', payload || {}); },
+      report: function(payload){ return request('cloud.report', payload || {}); }
     },
     memory: {
       readCore: function(payload){ return request('memory.readCore', payload || {}); },
@@ -1026,6 +1029,16 @@ export function CustomAppRunner({
 
       if (action.startsWith("cloud.")) {
         const cloudAction = action.slice("cloud.".length);
+        if (cloudAction === "report") {
+          const reportId = String(record.id ?? "").trim();
+          if (!reportId) throw new Error("cloud.report 缺少 id。");
+          await submitContentReport({
+            contentType: "online_doc",
+            contentId: reportId,
+            reason: String(record.reason ?? "").slice(0, 500),
+          });
+          return true;
+        }
         if (!["put", "get", "list", "update", "delete", "takeRandom"].includes(cloudAction)) {
           throw new Error(`未知云端动作：${action}`);
         }
@@ -1101,6 +1114,14 @@ export function CustomAppRunner({
         return true;
       }
       if (!current) throw new Error("当前没有已连接的联机房间，请先 room.create 或 room.join。");
+      if (action === "room.report") {
+        await submitContentReport({
+          contentType: "online_room",
+          contentId: current.info.id,
+          reason: String(record.reason ?? "").slice(0, 500),
+        });
+        return true;
+      }
       if (action === "room.send") {
         await current.send(record.payload ?? record.data ?? record.message ?? null);
         return true;

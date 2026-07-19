@@ -45,6 +45,7 @@ import {
 } from "@/lib/game-hall-client";
 import { useAccount } from "@/lib/account-context";
 import { OnlineRoomConnection, onlineCloudApi } from "@/lib/online-room-client";
+import { submitContentReport } from "@/lib/moderation-client";
 import { buildGameRolePackage, callGameLLM } from "@/lib/game-engine";
 import {
   createDefaultGameDraft,
@@ -471,7 +472,8 @@ ${body}
       players: function(){ return request('room.players'); },
       kick: function(userId){ return request('room.kick', { userId: userId }); },
       close: function(){ return request('room.close'); },
-      leave: function(){ return request('room.leave'); }
+      leave: function(){ return request('room.leave'); },
+      report: function(reason){ return request('room.report', { reason: reason }); }
     },
     cloud: {
       put: function(payload){ return request('cloud.put', payload || {}); },
@@ -479,7 +481,8 @@ ${body}
       list: function(payload){ return request('cloud.list', payload || {}); },
       update: function(payload){ return request('cloud.update', payload || {}); },
       delete: function(payload){ return request('cloud.delete', typeof payload === 'string' ? { id: payload } : (payload || {})); },
-      takeRandom: function(payload){ return request('cloud.takeRandom', payload || {}); }
+      takeRandom: function(payload){ return request('cloud.takeRandom', payload || {}); },
+      report: function(payload){ return request('cloud.report', payload || {}); }
     },
     listAvailableCharacters: function(){ return request('listAvailableCharacters'); },
     getRoleSlots: function(){ return request('getRoleSlots'); },
@@ -1719,6 +1722,16 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       if (action.startsWith("cloud.")) {
         const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
         const cloudAction = action.slice("cloud.".length);
+        if (cloudAction === "report") {
+          const reportId = String(record.id ?? "").trim();
+          if (!reportId) throw new Error("cloud.report 缺少 id。");
+          await submitContentReport({
+            contentType: "online_doc",
+            contentId: reportId,
+            reason: String(record.reason ?? "").slice(0, 500),
+          });
+          return true;
+        }
         if (!["put", "get", "list", "update", "delete", "takeRandom"].includes(cloudAction)) {
           throw new Error(`未知云端动作：${action}`);
         }
@@ -1795,6 +1808,14 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
         return { ok: true };
       }
       if (!current) throw new Error("当前没有已连接的联机房间，请先 room.create 或 room.join。");
+      if (action === "room.report") {
+        await submitContentReport({
+          contentType: "online_room",
+          contentId: current.info.id,
+          reason: String(record.reason ?? "").slice(0, 500),
+        });
+        return true;
+      }
       if (action === "room.send") {
         await current.send(record.payload ?? null);
         return { ok: true };
@@ -2403,6 +2424,26 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
             <div className="game-modal-tags">
               {displayTags.map(tag => <span key={tag}>#{tag}</span>)}
             </div>
+          ) : null}
+          {template.source === "community" ? (
+            <button
+              type="button"
+              className="game-detail-report-link"
+              style={{ border: "none", background: "none", color: "var(--text-tertiary, #999)", fontSize: 11, alignSelf: "flex-end", padding: "2px 4px", cursor: "pointer" }}
+              onClick={() => {
+                void submitContentReport({
+                  contentType: "game",
+                  contentId: template.id,
+                  preview: `${template.title} — ${gameDisplayDescription(template) || ""}`.slice(0, 200),
+                  ownerId: template.authorId || "",
+                  ownerName: template.authorName || "",
+                })
+                  .then(() => showNotice("success", "已举报，管理员会尽快处理"))
+                  .catch(err => showNotice("error", err instanceof Error ? err.message : "举报失败"));
+              }}
+            >
+              举报该游戏
+            </button>
           ) : null}
           {GAME_HALL_COMMENTS_ENABLED ? (
             <div className={`game-comments game-comments--modal ${commentsExpanded ? "is-open" : ""}`}>
@@ -3042,6 +3083,26 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                 删除
               </button>
             ) : null}
+            <button
+              type="button"
+              role="menuitem"
+              className="game-comment-menu-btn"
+              onClick={() => {
+                const { comment } = commentMenu;
+                setCommentMenu(null);
+                void submitContentReport({
+                  contentType: "game_comment",
+                  contentId: comment.id,
+                  preview: comment.content.slice(0, 200),
+                  ownerId: comment.authorId || "",
+                  ownerName: comment.authorName || "",
+                })
+                  .then(() => showNotice("success", "已举报，管理员会尽快处理"))
+                  .catch(err => showNotice("error", err instanceof Error ? err.message : "举报失败"));
+              }}
+            >
+              举报
+            </button>
           </div>
         </div>
       ) : null}

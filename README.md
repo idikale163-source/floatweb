@@ -90,6 +90,7 @@ NEXT_PUBLIC_SELF_HOSTED_MODE=true
 - `docs/custom-app-market-supabase.sql`：应用市场
 - `docs/black-market-supabase.sql`：黑市
 - `docs/online-play-supabase.sql`：多人联机（自定义APP/游戏的实时房间与云端共享，可选；不在一体脚本内，需单独执行）
+- `docs/moderation-supabase.sql`：内容管理（举报/管理员/下架/封号，可选；执行后用 SQL 把自己的账号 role 设为 admin，即可在 设置 → 管理中心 处理举报）
 
 然后关闭单机模式并填入服务端密钥：
 
