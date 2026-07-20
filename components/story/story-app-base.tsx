@@ -365,6 +365,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
     if (scroller) scroller.scrollTop = prevTop;
   }, []);
   const scrollStoryToBottom = useCallback(() => {
+    if (editingMessageIdRef.current) return; // 段落编辑期间任何路径都不允许自动贴底
     const node = scrollRef.current;
     if (!node) return;
     const prevBehavior = node.style.scrollBehavior;
