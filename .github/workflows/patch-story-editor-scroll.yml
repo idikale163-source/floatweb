@@ -1,20 +1,26 @@
 name: Patch story editor scroll
 on:
-  push:
-    paths:
-      - .github/workflows/patch-story-editor-scroll.yml
+  issues:
+    types: [opened]
 permissions:
   contents: write
 jobs:
   patch:
+    if: github.event.issue.title == '[internal] patch story editor scroll'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
-      - name: Patch story editor scroll handling
+          fetch-depth: 0
+      - name: Patch main and test
         run: |
-          python3 - <<'PY'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          patch_branch() {
+            branch="$1"
+            git checkout "$branch"
+            python3 - <<'PY'
           from pathlib import Path
 
           path = Path('components/story/story-app.tsx')
@@ -29,36 +35,26 @@ jobs:
     autoBottomLockRef.current = false;
     setEditingMessageId(msg.id);
 '''
-          if old not in text:
-              raise SystemExit('edit start anchor not found')
-          text = text.replace(old, new, 1)
+          if old in text:
+              text = text.replace(old, new, 1)
 
           old = '''    const observer = new ResizeObserver(() => {
       if (performance.now() < foldToggleSuppressUntilRef.current) return;
       if (!autoBottomLockRef.current) return;
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(scrollStoryToBottom);
-    });
 '''
           new = '''    const observer = new ResizeObserver(() => {
       if (performance.now() < foldToggleSuppressUntilRef.current) return;
       if (editingMessageId) return;
       if (!autoBottomLockRef.current) return;
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(scrollStoryToBottom);
-    });
 '''
-          if old not in text:
-              raise SystemExit('resize observer anchor not found')
-          text = text.replace(old, new, 1)
+          if old in text:
+              text = text.replace(old, new, 1)
 
-          old = '''  }, [activeSessionId, scrollStoryToBottom]);
-'''
-          new = '''  }, [activeSessionId, editingMessageId, scrollStoryToBottom]);
-'''
-          if old not in text:
-              raise SystemExit('resize observer deps anchor not found')
-          text = text.replace(old, new, 1)
+          text = text.replace(
+              '  }, [activeSessionId, scrollStoryToBottom]);\n',
+              '  }, [activeSessionId, editingMessageId, scrollStoryToBottom]);\n',
+              1,
+          )
 
           old = '''                                onChange={(e) => { setEditingContent(e.target.value); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
 '''
@@ -75,18 +71,19 @@ jobs:
                                   }
                                 }}
 '''
-          if old not in text:
-              raise SystemExit('inline editor onChange anchor not found')
-          text = text.replace(old, new, 1)
+          if old in text:
+              text = text.replace(old, new, 1)
 
           path.write_text(text, encoding='utf-8')
-          Path('.github/workflows/patch-story-editor-scroll.yml').unlink()
+          workflow = Path('.github/workflows/patch-story-editor-scroll.yml')
+          if workflow.exists():
+              workflow.unlink()
           PY
-      - name: Commit changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add components/story/story-app.tsx .github/workflows/patch-story-editor-scroll.yml
-          git commit -m "fix: prevent story editor scroll jumps"
-          git push origin HEAD:${{ github.ref_name }}
-# trigger
+            git add components/story/story-app.tsx .github/workflows/patch-story-editor-scroll.yml
+            git commit -m "fix: prevent story editor scroll jumps" || true
+            git push origin "$branch"
+          }
+
+          patch_branch main
+          git fetch origin test:test
+          patch_branch test
