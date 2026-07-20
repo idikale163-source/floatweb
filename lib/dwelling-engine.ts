@@ -268,6 +268,14 @@ export async function generateItemHtml(
             undefined,
             { dwellingRoom: roomName, dwellingFurniture: furnitureLabel, dwellingItem: itemName, dwellingItemPreview: itemPreview },
         );
+        llmMessages.push({
+            role: "system",
+            content: [
+                "移动端嵌入要求：请生成适合嵌入 iframe 的普通流式页面。",
+                "不要给 html、body 或最外层容器设置 height: 100vh、100dvh、overflow: hidden、position: fixed 或 inset: 0。",
+                "页面高度必须由内容自然撑开，并允许纵向滚动。",
+            ].join("\n"),
+        });
 
         const rawOutput = await sendLLMRequest(apiConfig, preset, llmMessages, regexes, {
             characterName: loadCharacters().find(c => c.id === characterId)?.name,
