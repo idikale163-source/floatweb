@@ -354,16 +354,10 @@ export function StoryApp({ onClose }: StoryAppProps) {
     editingMessageIdRef.current = editingMessageId;
     if (editingMessageId) autoBottomLockRef.current = false;
   }, [editingMessageId]);
-  // 编辑框自适应高度要先塌成 auto 再量 scrollHeight，塌陷瞬间容器内容变矮，
-  // Android Chrome 的滚动锚定会把视口顶上去再弹回（表现为"打字跳到段顶"）。
-  // 前后锁住容器 scrollTop 消除跳动。
-  const resizeEditTextarea = useCallback((el: HTMLTextAreaElement) => {
-    const scroller = scrollRef.current;
-    const prevTop = scroller ? scroller.scrollTop : 0;
-    el.style.height = "auto";
-    el.style.height = el.scrollHeight + "px";
-    if (scroller) scroller.scrollTop = prevTop;
-  }, []);
+  // 编辑草稿放 ref、textarea 非受控：逐键 setState 会让 React 回写 value，
+  // 中文输入法下 iOS 会光标错位；逐键改 style.height 又会触发 iOS 自动滚动。
+  // 高度自适应改由纯 CSS 镜像（.story-grow-wrap::after）完成，打字零 JS 干预。
+  const editingDraftRef = useRef("");
   const scrollStoryToBottom = useCallback(() => {
     if (editingMessageIdRef.current) return; // 段落编辑期间任何路径都不允许自动贴底
     const node = scrollRef.current;
@@ -721,14 +715,15 @@ export function StoryApp({ onClose }: StoryAppProps) {
     setStorageVersion(v => v + 1);
   }
   function handleStoryEditStart(msg: StoryMessage) {
-    console.log("[Edit] start", msg.id, "rawContent length:", msg.rawContent?.length);
     setEditingMessageId(msg.id);
-    setEditingContent(msg.rawContent);
+    setEditingContent(msg.rawContent); // 仅作为非受控 textarea 的初始值
+    editingDraftRef.current = msg.rawContent;
     setActiveMessageId(null);
   }
   function handleStoryEditSave() {
-    if (!editingMessageId || !editingContent.trim()) { setEditingMessageId(null); setEditingContent(""); return; }
-    let newRawContent = editingContent.trim();
+    const draft = editingDraftRef.current;
+    if (!editingMessageId || !draft.trim()) { setEditingMessageId(null); setEditingContent(""); return; }
+    let newRawContent = draft.trim();
     // Apply runOnEdit regex rules (placement=2, isEdit=true) to the edited content.
     try {
       const { regexes } = getStoryRenderSignature(activeCharacterId);
@@ -1114,19 +1109,25 @@ export function StoryApp({ onClose }: StoryAppProps) {
                         <div className="story-bubble">
                           {editingMessageId === message.id ? (
                             <div className="story-inline-edit">
-                              <textarea
-                                autoFocus
-                                ref={(el) => { if (el && el.dataset.sized !== "1") { el.dataset.sized = "1"; el.style.height = el.scrollHeight + "px"; } }}
-                                value={editingContent}
-                                onChange={(e) => { setEditingContent(e.target.value); resizeEditTextarea(e.target); }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleStoryEditSave(); }
-                                  if (e.key === "Escape") { setEditingMessageId(null); setEditingContent(""); }
-                                }}
-                              />
+                              <div className="story-grow-wrap" data-value={editingContent}>
+                                <textarea
+                                  autoFocus
+                                  defaultValue={editingContent}
+                                  onInput={(e) => {
+                                    const el = e.currentTarget;
+                                    editingDraftRef.current = el.value;
+                                    const wrap = el.parentElement;
+                                    if (wrap) wrap.dataset.value = el.value;
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleStoryEditSave(); }
+                                    if (e.key === "Escape") { setEditingMessageId(null); setEditingContent(""); }
+                                  }}
+                                />
+                              </div>
                               <div className="story-inline-edit-actions">
                                 <button onClick={() => { setEditingMessageId(null); setEditingContent(""); }} className="story-inline-edit-btn">取消</button>
-                                <button onClick={handleStoryEditSave} disabled={!editingContent.trim()} className="story-inline-edit-btn story-inline-edit-btn-save">保存</button>
+                                <button onClick={handleStoryEditSave} className="story-inline-edit-btn story-inline-edit-btn-save">保存</button>
                               </div>
                             </div>
                           ) : (
