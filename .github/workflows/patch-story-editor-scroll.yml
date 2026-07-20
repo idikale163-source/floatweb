@@ -1,89 +1,13 @@
 name: Patch story editor scroll
 on:
-  issues:
-    types: [opened]
+  push:
+    paths:
+      - .github/workflows/patch-story-editor-scroll.yml
 permissions:
   contents: write
 jobs:
   patch:
-    if: github.event.issue.title == '[internal] patch story editor scroll'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Patch main and test
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          patch_branch() {
-            branch="$1"
-            git checkout "$branch"
-            python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('components/story/story-app.tsx')
-          text = path.read_text(encoding='utf-8')
-
-          old = '''  function handleStoryEditStart(msg: StoryMessage) {
-    console.log("[Edit] start", msg.id, "rawContent length:", msg.rawContent?.length);
-    setEditingMessageId(msg.id);
-'''
-          new = '''  function handleStoryEditStart(msg: StoryMessage) {
-    console.log("[Edit] start", msg.id, "rawContent length:", msg.rawContent?.length);
-    autoBottomLockRef.current = false;
-    setEditingMessageId(msg.id);
-'''
-          if old in text:
-              text = text.replace(old, new, 1)
-
-          old = '''    const observer = new ResizeObserver(() => {
-      if (performance.now() < foldToggleSuppressUntilRef.current) return;
-      if (!autoBottomLockRef.current) return;
-'''
-          new = '''    const observer = new ResizeObserver(() => {
-      if (performance.now() < foldToggleSuppressUntilRef.current) return;
-      if (editingMessageId) return;
-      if (!autoBottomLockRef.current) return;
-'''
-          if old in text:
-              text = text.replace(old, new, 1)
-
-          text = text.replace(
-              '  }, [activeSessionId, scrollStoryToBottom]);\n',
-              '  }, [activeSessionId, editingMessageId, scrollStoryToBottom]);\n',
-              1,
-          )
-
-          old = '''                                onChange={(e) => { setEditingContent(e.target.value); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
-'''
-          new = '''                                onChange={(e) => {
-                                  const stage = scrollRef.current;
-                                  const previousScrollTop = stage?.scrollTop;
-                                  setEditingContent(e.target.value);
-                                  e.target.style.height = "auto";
-                                  e.target.style.height = e.target.scrollHeight + "px";
-                                  if (stage && previousScrollTop != null) {
-                                    requestAnimationFrame(() => {
-                                      stage.scrollTop = previousScrollTop;
-                                    });
-                                  }
-                                }}
-'''
-          if old in text:
-              text = text.replace(old, new, 1)
-
-          path.write_text(text, encoding='utf-8')
-          workflow = Path('.github/workflows/patch-story-editor-scroll.yml')
-          if workflow.exists():
-              workflow.unlink()
-          PY
-            git add components/story/story-app.tsx .github/workflows/patch-story-editor-scroll.yml
-            git commit -m "fix: prevent story editor scroll jumps" || true
-            git push origin "$branch"
-          }
-
-          patch_branch main
-          git fetch origin test:test
-          patch_branch test
+      - run: echo ready
