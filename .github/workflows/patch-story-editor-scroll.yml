@@ -89,3 +89,4 @@ jobs:
           git add components/story/story-app.tsx .github/workflows/patch-story-editor-scroll.yml
           git commit -m "fix: prevent story editor scroll jumps"
           git push origin HEAD:${{ github.ref_name }}
+# trigger
