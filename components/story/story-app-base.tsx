@@ -347,6 +347,23 @@ export function StoryApp({ onClose }: StoryAppProps) {
 
   const autoBottomLockRef = useRef(true);
   const foldToggleSuppressUntilRef = useRef(0);
+  // 段落编辑期间：贴底锁必须关掉，否则编辑框自适应高度每次变化都会被
+  // ResizeObserver 拽到底部（表现为"一打字就滚到底"）
+  const editingMessageIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    editingMessageIdRef.current = editingMessageId;
+    if (editingMessageId) autoBottomLockRef.current = false;
+  }, [editingMessageId]);
+  // 编辑框自适应高度要先塌成 auto 再量 scrollHeight，塌陷瞬间容器内容变矮，
+  // Android Chrome 的滚动锚定会把视口顶上去再弹回（表现为"打字跳到段顶"）。
+  // 前后锁住容器 scrollTop 消除跳动。
+  const resizeEditTextarea = useCallback((el: HTMLTextAreaElement) => {
+    const scroller = scrollRef.current;
+    const prevTop = scroller ? scroller.scrollTop : 0;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+    if (scroller) scroller.scrollTop = prevTop;
+  }, []);
   const scrollStoryToBottom = useCallback(() => {
     const node = scrollRef.current;
     if (!node) return;
@@ -390,6 +407,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
     let frame = 0;
     const observer = new ResizeObserver(() => {
       if (performance.now() < foldToggleSuppressUntilRef.current) return;
+      if (editingMessageIdRef.current) return; // 编辑中不自动贴底
       if (!autoBottomLockRef.current) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(scrollStoryToBottom);
@@ -1099,7 +1117,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                                 autoFocus
                                 ref={(el) => { if (el && el.dataset.sized !== "1") { el.dataset.sized = "1"; el.style.height = el.scrollHeight + "px"; } }}
                                 value={editingContent}
-                                onChange={(e) => { setEditingContent(e.target.value); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+                                onChange={(e) => { setEditingContent(e.target.value); resizeEditTextarea(e.target); }}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleStoryEditSave(); }
                                   if (e.key === "Escape") { setEditingMessageId(null); setEditingContent(""); }
