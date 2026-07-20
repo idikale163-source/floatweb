@@ -1,0 +1,13 @@
+name: Patch dwelling prompt
+on:
+  push:
+    paths:
+      - .github/workflows/patch-dwelling-prompt.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo ok
