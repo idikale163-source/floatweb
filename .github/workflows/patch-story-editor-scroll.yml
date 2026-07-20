@@ -1,0 +1,91 @@
+name: Patch story editor scroll
+on:
+  push:
+    paths:
+      - .github/workflows/patch-story-editor-scroll.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Patch story editor scroll handling
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('components/story/story-app.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          old = '''  function handleStoryEditStart(msg: StoryMessage) {
+    console.log("[Edit] start", msg.id, "rawContent length:", msg.rawContent?.length);
+    setEditingMessageId(msg.id);
+'''
+          new = '''  function handleStoryEditStart(msg: StoryMessage) {
+    console.log("[Edit] start", msg.id, "rawContent length:", msg.rawContent?.length);
+    autoBottomLockRef.current = false;
+    setEditingMessageId(msg.id);
+'''
+          if old not in text:
+              raise SystemExit('edit start anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''    const observer = new ResizeObserver(() => {
+      if (performance.now() < foldToggleSuppressUntilRef.current) return;
+      if (!autoBottomLockRef.current) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(scrollStoryToBottom);
+    });
+'''
+          new = '''    const observer = new ResizeObserver(() => {
+      if (performance.now() < foldToggleSuppressUntilRef.current) return;
+      if (editingMessageId) return;
+      if (!autoBottomLockRef.current) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(scrollStoryToBottom);
+    });
+'''
+          if old not in text:
+              raise SystemExit('resize observer anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''  }, [activeSessionId, scrollStoryToBottom]);
+'''
+          new = '''  }, [activeSessionId, editingMessageId, scrollStoryToBottom]);
+'''
+          if old not in text:
+              raise SystemExit('resize observer deps anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''                                onChange={(e) => { setEditingContent(e.target.value); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+'''
+          new = '''                                onChange={(e) => {
+                                  const stage = scrollRef.current;
+                                  const previousScrollTop = stage?.scrollTop;
+                                  setEditingContent(e.target.value);
+                                  e.target.style.height = "auto";
+                                  e.target.style.height = e.target.scrollHeight + "px";
+                                  if (stage && previousScrollTop != null) {
+                                    requestAnimationFrame(() => {
+                                      stage.scrollTop = previousScrollTop;
+                                    });
+                                  }
+                                }}
+'''
+          if old not in text:
+              raise SystemExit('inline editor onChange anchor not found')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+          Path('.github/workflows/patch-story-editor-scroll.yml').unlink()
+          PY
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/story/story-app.tsx .github/workflows/patch-story-editor-scroll.yml
+          git commit -m "fix: prevent story editor scroll jumps"
+          git push origin HEAD:${{ github.ref_name }}
