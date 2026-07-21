@@ -612,6 +612,21 @@
   opacity: 0.25;
   animation: none;
 }
+/* Dock icons jiggle & drag just like grid icons in edit mode. */
+.dock.edit-mode .dock-item {
+  animation: jiggle 0.22s ease-in-out infinite;
+}
+.dock.edit-mode .dock-item[data-flip-active] {
+  animation: none;
+}
+.dock.edit-mode .dock-item:nth-child(even) {
+  animation-delay: -0.11s;
+  animation-duration: 0.26s;
+}
+.dock.edit-mode .dock-item.dragging {
+  opacity: 0.25;
+  animation: none;
+}
 .widget-drag-wrap {
   display: contents;
   -webkit-touch-callout: none;
