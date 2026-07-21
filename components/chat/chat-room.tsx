@@ -41,7 +41,7 @@ import { applyDisplayRegex, applyEditRegex } from "@/lib/llm-prompt-assembler";
 import { scheduleFollowUp, cancelFollowUp } from "@/lib/follow-up-service";
 import { PENDING_REPLY_PREFIX } from "@/lib/friend-request-engine";
 import type { UserIdentity } from "@/components/settings/user-identity";
-import { AlertCircle, Blocks, Check, Trash2, User, ChevronLeft, Clapperboard, Gift, Loader2, MoreHorizontal, X } from "lucide-react";
+import { AlertCircle, Blocks, Check, Trash2, User, ChevronLeft, ChevronRight, Clapperboard, Clock, Gift, Loader2, MoreHorizontal, X } from "lucide-react";
 import { setDebugChatState } from "@/lib/debug-store";
 import { scopeSessionCSS } from "@/lib/css-scoper";
 import { setChatActive } from "@/lib/music-action-queue";
@@ -229,7 +229,8 @@ function isHiddenChatFlowMessage(msg: ChatMessage, displayContent?: string): boo
         && !getChatFlowVisibleContent(msg, displayContent)
         && uiRole(msg) !== "system"
         && !msg.statusPanel
-        && !msg.innerMonologue;
+        && !msg.innerMonologue
+        && !msg.reasoningText;
 }
 
 // ── Background generation tracking ──────────────────────────
@@ -1075,6 +1076,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
     const [showConfirmMultiDelete, setShowConfirmMultiDelete] = useState(false);
     const [expandedMonologueId, setExpandedThinkingId] = useState<string | null>(null);
+    // 思维链底部弹窗：存当前查看的 reasoning 文本，null = 关闭
+    const [reasoningSheetText, setReasoningSheetText] = useState<string | null>(null);
     const [voiceTextIds, setVoiceTextIds] = useState<Set<string>>(new Set());
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [editingContent, setEditingContent] = useState("");
@@ -2067,10 +2070,18 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         results: { characterId: string; characterName: string; responseText: string }[],
         msgsSetter: typeof setMessages,
         guard?: GenerationRunGuard,
+        roundReasoning?: string,
     ) => {
         throwIfGenerationStopped(guard);
         const responseRoundId = createResponseRoundId();
         const editableResponseText = buildEditableGroupRoundText(results);
+        // 群聊一轮回复只有一份思维链，挂到本轮第一条落库消息上
+        let reasoningAttached = !roundReasoning;
+        const takeRoundReasoning = (): string | undefined => {
+            if (reasoningAttached) return undefined;
+            reasoningAttached = true;
+            return roundReasoning;
+        };
         const imageReplacementTasks: Promise<unknown>[] = [];
         const currentStateByCharacter = new Map<string, StateValue[]>();
         const getCurrentStateForCharacter = (characterId: string): StateValue[] => {
@@ -2170,6 +2181,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         editableResponseText,
                         statusPanel: !attachedState && statusPanel ? statusPanel : undefined,
                         innerMonologue: !attachedState && innerMonologue ? innerMonologue : undefined,
+                        reasoningText: takeRoundReasoning(),
                         stateValues: !attachedState && stateValues.length > 0 ? stateValues : undefined,
                         senderCharacterId: r.characterId,
                         senderName: applied.senderName,
@@ -2197,6 +2209,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         editableResponseText,
                         statusPanel: !attachedState && statusPanel ? statusPanel : undefined,
                         innerMonologue: !attachedState && innerMonologue ? innerMonologue : undefined,
+                        reasoningText: takeRoundReasoning(),
                         stateValues: !attachedState && stateValues.length > 0 ? stateValues : undefined,
                         senderCharacterId: r.characterId,
                         senderName: pokeSender,
@@ -2227,6 +2240,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     editableResponseText,
                     statusPanel: !attachedState && statusPanel ? statusPanel : undefined,
                     innerMonologue: !attachedState && innerMonologue ? innerMonologue : undefined,
+                    reasoningText: takeRoundReasoning(),
                     stateValues: !attachedState && stateValues.length > 0 ? stateValues : undefined,
                     senderCharacterId: r.characterId,
                     senderName: r.characterName,
@@ -2260,6 +2274,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     editableResponseText,
                     statusPanel,
                     innerMonologue,
+                    reasoningText: takeRoundReasoning(),
                     stateValues: stateValues.length > 0 ? stateValues : undefined,
                     senderCharacterId: r.characterId,
                     senderName: r.characterName,
@@ -2466,7 +2481,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     // Returns { hasVisible, stateValues, hasDecline } — hasVisible is false if the AI chose [静默].
     const splitAndSaveAIMessages = async (
         aiResponseText: string,
-        options?: { promptHidden?: boolean } & GenerationRunGuard,
+        options?: { promptHidden?: boolean; reasoningText?: string } & GenerationRunGuard,
     ): Promise<{ hasVisible: boolean; stateValues: StateValue[]; triggerCall?: "voice" | "video"; hasDecline?: boolean }> => {
         throwIfGenerationStopped(options);
         const responseBatchId = createResponseBatchId();
@@ -2528,8 +2543,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         }
 
         if (filteredParts.length === 0) {
-            // Silence: only status panel / inner monologue, no visible chat text
-            if (statusPanel || innerMonologue) {
+            // Silence: only status panel / inner monologue / reasoning, no visible chat text
+            if (statusPanel || innerMonologue || options?.reasoningText) {
                 throwIfGenerationStopped(options);
                 const aiMsg = pushChatMessage({
                     sessionId: session.id,
@@ -2539,6 +2554,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     rawResponseText: aiResponseText,
                     statusPanel,
                     innerMonologue,
+                    reasoningText: options?.reasoningText,
                     stateValues: stateValues.length > 0 ? stateValues : undefined,
                 });
                 setMessages(prev => [...prev, aiMsg]);
@@ -2565,6 +2581,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 rawResponseText: aiResponseText,
                 statusPanel: idx === 0 && statusPanel ? statusPanel : undefined,
                 innerMonologue: idx === 0 && innerMonologue ? innerMonologue : undefined,
+                reasoningText: idx === 0 ? options?.reasoningText : undefined,
                 stateValues: idx === 0 && stateValues.length > 0 ? stateValues : undefined,
             }, options);
             throwIfGenerationStopped(options);
@@ -2854,18 +2871,20 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
         try {
             if (session.isGroup) {
+                let roundReasoning: string | undefined;
                 const results = await generateGroupChatCompletion(
                     session,
                     history,
-                    undefined,
+                    { onReasoning: (t) => { roundReasoning = t; } },
                     {
                         signal: generationRun.controller.signal,
                         appTags: theaterMode ? ["group_chat"] : undefined,
                     },
                 );
                 if (!isCurrentGeneration()) return;
-                await processGroupParts(results, setMessages, generationGuard);
+                await processGroupParts(results, setMessages, generationGuard, roundReasoning);
             } else {
+                let capturedReasoning: string | undefined;
                 const cr = await generateChatCompletion(
                     session,
                     history,
@@ -2873,9 +2892,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         appTags: theaterMode ? ["chat"] : ["chat", "text"],
                         signal: generationRun.controller.signal,
                     },
+                    { onReasoning: (t) => { capturedReasoning = t; } },
                 );
                 if (!isCurrentGeneration()) return;
-                const result = await splitAndSaveAIMessages(flattenCompletionResult(cr), generationGuard);
+                const result = await splitAndSaveAIMessages(flattenCompletionResult(cr), { ...generationGuard, reasoningText: capturedReasoning });
                 if (!isCurrentGeneration()) return;
                 scheduleFollowUp(session.id, 0, result.stateValues);
                 handleCallTrigger(result.triggerCall);
@@ -3134,12 +3154,17 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             const latestMessages = loadChatMessages(session.id);
             if (session.isGroup) {
                 const streamedImageReplacementTasks: Promise<unknown>[] = [];
+                // 每轮 LLM 调用的思维链：中间轮挂到该轮首条气泡，最终轮传给 processGroupParts
+                let pendingGroupReasoning: string | undefined;
                 const results = await generateGroupChatCompletion(session, latestMessages, {
+                    onReasoning: (t) => { pendingGroupReasoning = t; },
                     onTextPart: async (text, senderInfo, options) => {
                         if (!isCurrentGeneration()) return;
                         if (!text.trim() || !senderInfo) return;
                         const cleanedEditableText = cleanEditableAssistantText(text);
                         if (!cleanedEditableText) return;
+                        const roundReasoning = pendingGroupReasoning;
+                        pendingGroupReasoning = undefined;
                         const responseBatchId = createResponseBatchId();
                         const responseRoundId = senderInfo.responseRoundId || createResponseRoundId();
                         const editableResponseText = senderInfo.editableResponseText || `[${senderInfo.characterName}]: ${cleanedEditableText}`;
@@ -3162,6 +3187,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                 editableResponseText,
                                 statusPanel: !attachedState && statusPanel ? statusPanel : undefined,
                                 innerMonologue: !attachedState && innerMonologue ? innerMonologue : undefined,
+                                reasoningText: !attachedState ? roundReasoning : undefined,
                                 stateValues: !attachedState && stateValues.length > 0 ? stateValues : undefined,
                                 senderCharacterId: senderInfo.characterId,
                                 senderName: senderInfo.characterName,
@@ -3173,7 +3199,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                             savedAnyPart = true;
                             setMessages(prev => [...prev, msg]);
                         }
-                        if (!savedAnyPart && (statusPanel || innerMonologue)) {
+                        if (!savedAnyPart && (statusPanel || innerMonologue || roundReasoning)) {
                             throwIfGenerationStopped(generationGuard);
                             const msg = pushChatMessage({
                                 sessionId: session.id,
@@ -3186,6 +3212,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                 editableResponseText,
                                 statusPanel,
                                 innerMonologue,
+                                reasoningText: roundReasoning,
                                 stateValues: stateValues.length > 0 ? stateValues : undefined,
                                 senderCharacterId: senderInfo.characterId,
                                 senderName: senderInfo.characterName,
@@ -3215,7 +3242,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         const visibleResults = parseGroupChatResponse(content, nameToId)
                             .filter(item => item.responseText.trim());
                         if (visibleResults.length > 0) {
-                            await processGroupParts(visibleResults, setMessages, generationGuard);
+                            await processGroupParts(visibleResults, setMessages, generationGuard, reasoning);
                         }
 
                         throwIfGenerationStopped(generationGuard);
@@ -3256,18 +3283,23 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     await Promise.allSettled(streamedImageReplacementTasks);
                     throwIfGenerationStopped(generationGuard);
                 }
-                await processGroupParts(results, setMessages, generationGuard);
+                await processGroupParts(results, setMessages, generationGuard, pendingGroupReasoning);
             } else {
                 let lastSendResult: Awaited<ReturnType<typeof splitAndSaveAIMessages>> | undefined;
+                // 每轮 LLM 调用的思维链，onReasoning 先于该轮 onTextPart 触发
+                let pendingReasoning: string | undefined;
 
                 const result = await generateChatCompletion(session, latestMessages, {
                     appTags: theaterMode ? ["chat"] : ["chat", "text"],
                     signal: generationRun.controller.signal,
                 }, {
+                    onReasoning: (t) => { pendingReasoning = t; },
                     onTextPart: async (text, _senderInfo, options) => {
                         if (!isCurrentGeneration()) return;
                         if (text.trim()) {
-                            lastSendResult = await splitAndSaveAIMessages(text, { ...options, ...generationGuard });
+                            const reasoningText = pendingReasoning;
+                            pendingReasoning = undefined;
+                            lastSendResult = await splitAndSaveAIMessages(text, { ...options, ...generationGuard, reasoningText });
                         }
                     },
                     onToolNotice: (notice) => {
@@ -3291,7 +3323,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         // bubbles. The native tool-call metadata then rides on a separate
                         // empty carrier message — mirroring the group-chat path above.
                         if (content.trim()) {
-                            await splitAndSaveAIMessages(content, generationGuard);
+                            await splitAndSaveAIMessages(content, { ...generationGuard, reasoningText: reasoning });
                         }
                         if (!isCurrentGeneration()) return;
                         const carrier = pushChatMessage({
@@ -4455,6 +4487,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     mediaData: part.mediaData,
                     statusPanel: index === 0 && parsed.statusPanel ? parsed.statusPanel : (index < batch.length ? base.statusPanel : undefined),
                     innerMonologue: index === 0 && parsed.innerMonologue ? parsed.innerMonologue : (index < batch.length ? base.innerMonologue : undefined),
+                    reasoningText: index === 0 ? batch[0].reasoningText : undefined,
                     stateValues: index === 0 ? base.stateValues : undefined,
                     displayProjected: true,
                     displaySourceId: sourceId,
@@ -5087,6 +5120,22 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                     </span>
                                 </div>
                             )}
+                            {/* 思维链触发条（Claude app 风格）：点击打开底部弹窗 */}
+                            {renderMsg.reasoningText && msg.role !== "user" && uiRole(msg) !== "system" && (
+                                <div className="chat-msg-wrapper" data-role={uiRole(msg)} style={{ marginBottom: -8 }}>
+                                    <div className="w-[40px] shrink-0" />
+                                    <button
+                                        type="button"
+                                        className="chat-reasoning-trigger"
+                                        onClick={(e) => { e.stopPropagation(); setReasoningSheetText(renderMsg.reasoningText || null); }}
+                                        aria-label="查看思考过程"
+                                    >
+                                        <Clock size={13} strokeWidth={1.8} className="chat-reasoning-trigger-icon" />
+                                        <span className="chat-reasoning-trigger-text">{renderMsg.reasoningText.trim().split("\n")[0]}</span>
+                                        <ChevronRight size={14} strokeWidth={1.8} className="chat-reasoning-trigger-icon" />
+                                    </button>
+                                </div>
+                            )}
                             <div
                                 id={`message-${msg.id}`}
                                 className="chat-msg-wrapper"
@@ -5631,6 +5680,35 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     }}
                     onClose={() => setRichModal(null)}
                 />
+            )}
+
+            {/* 思维链底部弹窗（Claude app 风格） */}
+            {reasoningSheetText !== null && (
+                <div
+                    className="modal-overlay modal-overlay-bottom"
+                    data-ui="modal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="思考过程"
+                    onClick={() => setReasoningSheetText(null)}
+                >
+                    <div className="modal-sheet chat-reasoning-sheet" onClick={(e) => e.stopPropagation()}>
+                        <div className="chat-reasoning-sheet-handle" />
+                        <div className="chat-reasoning-sheet-header">
+                            <button
+                                type="button"
+                                className="chat-reasoning-sheet-close"
+                                onClick={() => setReasoningSheetText(null)}
+                                aria-label="关闭"
+                            >
+                                <X size={18} strokeWidth={2} />
+                            </button>
+                            <span className="chat-reasoning-sheet-title">思考过程</span>
+                            <span className="chat-reasoning-sheet-close-spacer" />
+                        </div>
+                        <div className="chat-reasoning-sheet-body">{reasoningSheetText}</div>
+                    </div>
+                </div>
             )}
 
             {/* Red Packet / Transfer Detail Modal */}

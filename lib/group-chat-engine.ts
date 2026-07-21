@@ -783,6 +783,7 @@ export async function generateGroupChatCompletion(
                 appTags,
                 debugSessionId: session.id,
                 signal: options?.signal,
+                onReasoning: callbacks?.onReasoning,
             });
         } catch (err) {
             if (finalRawOutput) {
@@ -917,6 +918,7 @@ export async function generateGroupChatCompletion(
                         appTags,
                         debugSessionId: session.id,
                         signal: options?.signal,
+                        onReasoning: callbacks?.onReasoning,
                     });
                     throwIfAborted(options?.signal);
                 } catch {

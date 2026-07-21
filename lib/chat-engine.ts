@@ -801,6 +801,8 @@ export async function sendLLMRequest(
     options?: {
         skipOutputRegex?: boolean;
         includeReasoning?: boolean;
+        /** 供调用方捕获模型思维链（reasoning）内容，不影响返回文本 */
+        onReasoning?: (text: string) => void;
         appId?: string;
         appTags?: string[];
         followUpCount?: number;
@@ -856,6 +858,10 @@ export async function sendLLMRequest(
         const data = await response.json();
         const parsed = parseProviderResponse(request.providerKind, data);
         let rawOutput = parsed.content || "";
+
+        if (parsed.reasoning) {
+            try { options?.onReasoning?.(parsed.reasoning); } catch { /* 捕获回调异常，不影响主流程 */ }
+        }
 
         // Prepend reasoning content as <think> block (only when caller requests it, e.g. story mode)
         if (options?.includeReasoning) {
@@ -1849,6 +1855,8 @@ export type ChatCompletionCallbacks = {
     onToolNotice?: (notice: string) => void;
     onToolResult?: (content: string) => void;
     onToolAssistantTurn?: (content: string) => void;
+    /** 每轮 LLM 调用解析出思维链（reasoning）时触发，先于该轮 onTextPart */
+    onReasoning?: (text: string) => void;
     onToolExecution?: (results: ToolResult[], historyContent?: string) => void;
     onNativeToolAssistantTurn?: (turn: {
         content: string;
@@ -2176,6 +2184,7 @@ export async function generateChatCompletion(
                 followUpCount: options?.followUpCount,
                 debugSessionId: session.id,
                 signal: options?.signal,
+                onReasoning: callbacks?.onReasoning,
             });
         } catch (err) {
             const errMsg = `⚠️ 回复生成失败: ${err instanceof Error ? err.message : String(err)}`;
@@ -2331,6 +2340,7 @@ export async function generateChatCompletion(
                         followUpCount: options?.followUpCount,
                         debugSessionId: session.id,
                         signal: options?.signal,
+                        onReasoning: callbacks?.onReasoning,
                     });
                     throwIfAborted(options?.signal);
                     await callbacks?.onTextPart?.(finalOutput);

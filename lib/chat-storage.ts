@@ -216,6 +216,7 @@ export type ChatMessage = {
     isTyping?: boolean; // temporary flag for UI rendering
     statusPanel?: string; // AI display-only status content from [状态栏] tags
     innerMonologue?: string; // AI inner monologue content from [内心] tags
+    reasoningText?: string; // 模型思维链（reasoning/CoT）内容，挂在回复批次的第一条气泡上
     stateValues?: StateValue[]; // parsed character state values from inner monologue
     followUpIndex?: number; // which follow-up round produced this message (1 = first follow-up)
     nativeToolCalls?: NativeToolCallRecord[]; // assistant native function/tool calls for prompt replay
@@ -351,7 +352,7 @@ export function getChatMessagePreview(msg: ChatMessage): string {
     if (msg.mediaType) return MEDIA_PREVIEW_MAP[msg.mediaType] || `[${msg.mediaType}]`;
 
     // Silent thought/status: empty content + folded panel → "♥"
-    if (!msg.content.trim() && (msg.innerMonologue || msg.statusPanel) && msg.role === "assistant") return "♥";
+    if (!msg.content.trim() && (msg.innerMonologue || msg.statusPanel || msg.reasoningText) && msg.role === "assistant") return "♥";
 
     // System messages: call messages → clean format, others → user name → "你"
     if (msg.role === "system") {
@@ -400,7 +401,7 @@ function isSessionPreviewCandidate(msg: ChatMessage): boolean {
     if (msg.isRetracted) return true;
     if (msg.mediaType) return true;
     if (hasPreviewText(msg.content)) return true;
-    if (hasPreviewText(msg.statusPanel) || hasPreviewText(msg.innerMonologue)) return true;
+    if (hasPreviewText(msg.statusPanel) || hasPreviewText(msg.innerMonologue) || hasPreviewText(msg.reasoningText)) return true;
 
     return false;
 }
@@ -1128,6 +1129,7 @@ function hasVisibleMessagePayload(msg: ChatMessage): boolean {
         || (!!msg.mediaType && msg.mediaType !== "tool_result" && msg.mediaType !== "tool_notice")
         || !!msg.statusPanel?.trim()
         || !!msg.innerMonologue?.trim()
+        || !!msg.reasoningText?.trim()
         || !!msg.stateValues?.length;
 }
 
@@ -1395,6 +1397,7 @@ export function replaceMessageWithParts(
             editableResponseText: original.editableResponseText,
             statusPanel: i === 0 ? original.statusPanel : undefined,
             innerMonologue: i === 0 ? original.innerMonologue : undefined,
+            reasoningText: i === 0 ? original.reasoningText : undefined,
             stateValues: i === 0 ? original.stateValues : undefined,
             followUpIndex: original.followUpIndex,
             senderCharacterId: original.senderCharacterId,
@@ -1418,6 +1421,7 @@ export function replaceResponseBatchWithParts(
     options?: {
         statusPanel?: string;
         innerMonologue?: string;
+        reasoningText?: string;
         stateValues?: StateValue[];
     },
 ): ChatMessage[] {
@@ -1455,6 +1459,7 @@ export function replaceResponseBatchWithParts(
         editableResponseText: firstMessage.editableResponseText,
         statusPanel: index === 0 ? options?.statusPanel : undefined,
         innerMonologue: index === 0 ? options?.innerMonologue : undefined,
+        reasoningText: index === 0 ? options?.reasoningText : undefined,
         stateValues: index === 0 ? options?.stateValues : undefined,
         followUpIndex: firstMessage.followUpIndex,
         senderCharacterId: firstMessage.senderCharacterId,
@@ -1495,6 +1500,7 @@ export function replaceGroupResponseRound(
         responseBatchId?: string;
         statusPanel?: string;
         innerMonologue?: string;
+        reasoningText?: string;
         stateValues?: StateValue[];
         senderCharacterId?: string;
         senderName?: string;
@@ -1534,6 +1540,7 @@ export function replaceGroupResponseRound(
         editableResponseText,
         statusPanel: msg.statusPanel,
         innerMonologue: msg.innerMonologue,
+        reasoningText: msg.reasoningText,
         stateValues: msg.stateValues,
         followUpIndex: firstMessage.followUpIndex,
         senderCharacterId: msg.senderCharacterId,
