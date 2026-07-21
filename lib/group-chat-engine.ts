@@ -579,6 +579,8 @@ async function runNativeGroupToolLoop(params: {
         const assistantForToolContext = stripStateAndInnerForPrompt(result.content);
         if (result.toolCalls.length === 0) {
             throwIfAborted(signal);
+            // 无工具调用的最终轮：把解析到的思维链交给回调（随后由 processGroupParts 挂到本轮首条气泡）
+            if (result.reasoning) callbacks?.onReasoning?.(result.reasoning);
             finalRawOutput = result.content;
             break;
         }

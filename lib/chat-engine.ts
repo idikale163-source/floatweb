@@ -1982,6 +1982,8 @@ async function generateNativeChatCompletion(
 
         if (result.toolCalls.length === 0) {
             throwIfAborted(options?.signal);
+            // 无工具调用的最终轮：把解析到的思维链先交给回调（先于 onTextPart，与非原生路径一致）
+            if (result.reasoning) callbacks?.onReasoning?.(result.reasoning);
             await callbacks?.onTextPart?.(afterActionStrip);
             parts.push({ text: afterActionStrip });
             break;

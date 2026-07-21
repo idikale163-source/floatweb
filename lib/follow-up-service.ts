@@ -135,10 +135,12 @@ export async function requestBackgroundChatReply(sessionId: string): Promise<{ o
     try {
         const latestMessages = loadChatMessages(session.id);
         window.dispatchEvent(new CustomEvent("followup-started", { detail: { sessionId: session.id } }));
+        let reasoning: string | undefined;
         const aiResponseText = flattenCompletionResult(await generateChatCompletion(
             session,
             latestMessages,
             { appTags: session.isGroup ? undefined : ["chat", "text"] },
+            { onReasoning: (t) => { reasoning = t; } },
         ));
         const { hasVisible, stateValues } = await parseAndSaveResponse(
             aiResponseText,
@@ -146,6 +148,7 @@ export async function requestBackgroundChatReply(sessionId: string): Promise<{ o
             0,
             undefined,
             latestMessages,
+            reasoning,
         );
         if (hasVisible) scheduleFollowUp(session.id, 0, stateValues);
         window.dispatchEvent(new CustomEvent("followup-fired", { detail: { sessionId: session.id } }));
@@ -317,10 +320,12 @@ async function fireFollowUp(sched: { sessionId: string; count: number; delaySec?
         console.log("[FollowUp] Dispatching followup-started for session:", session.id);
         window.dispatchEvent(new CustomEvent("followup-started", { detail: { sessionId: session.id } }));
 
+        let reasoning: string | undefined;
         const aiResponseText = flattenCompletionResult(await generateChatCompletion(
             session,
             messagesWithHint,
             { followUpCount: count, followUpDelay: sched.delaySec ?? 60, appTags: ["chat", "text", "followup"] },
+            { onReasoning: (t) => { reasoning = t; } },
         ));
 
         // User sent a message while we were waiting for the API — discard result
@@ -330,7 +335,7 @@ async function fireFollowUp(sched: { sessionId: string; count: number; delaySec?
             return;
         }
 
-        const { hasVisible, newCount, stateValues } = await parseAndSaveResponse(aiResponseText, session.id, sched.count, count, latestMessages);
+        const { hasVisible, newCount, stateValues } = await parseAndSaveResponse(aiResponseText, session.id, sched.count, count, latestMessages, reasoning);
         console.log(`[FollowUp] Result: hasVisible=${hasVisible}, newCount=${newCount}`);
 
         if (hasVisible && newCount < MAX_FOLLOW_UPS) {
@@ -369,6 +374,7 @@ async function fireTimedWake(sched: TimedWakeSchedule) {
         console.log("[TimedWake] Dispatching followup-started for session:", session.id);
         window.dispatchEvent(new CustomEvent("followup-started", { detail: { sessionId: session.id } }));
 
+        let reasoning: string | undefined;
         const aiResponseText = flattenCompletionResult(await generateChatCompletion(
             session,
             latestMessages,
@@ -377,6 +383,7 @@ async function fireTimedWake(sched: TimedWakeSchedule) {
                 timedWakeElapsedMinutes: elapsedMinutes,
                 timedWakeIntent: sched.intent,
             },
+            { onReasoning: (t) => { reasoning = t; } },
         ));
 
         const { hasVisible, stateValues } = await parseAndSaveResponse(
@@ -385,6 +392,7 @@ async function fireTimedWake(sched: TimedWakeSchedule) {
             0,
             undefined,
             latestMessages,
+            reasoning,
         );
         console.log(`[TimedWake] Result: hasVisible=${hasVisible}`);
 
@@ -425,6 +433,7 @@ async function fireMenstrualPeriodCare(input: {
         console.log("[PeriodCare] Dispatching followup-started for session:", session.id);
         window.dispatchEvent(new CustomEvent("followup-started", { detail: { sessionId: session.id } }));
 
+        let reasoning: string | undefined;
         const aiResponseText = flattenCompletionResult(await generateChatCompletion(
             session,
             latestMessages,
@@ -432,6 +441,7 @@ async function fireMenstrualPeriodCare(input: {
                 appTags: ["chat", "text", "period_care"],
                 periodCareContext: input.event.context,
             },
+            { onReasoning: (t) => { reasoning = t; } },
         ));
 
         const { hasVisible, stateValues } = await parseAndSaveResponse(
@@ -440,6 +450,7 @@ async function fireMenstrualPeriodCare(input: {
             0,
             undefined,
             latestMessages,
+            reasoning,
         );
         saveMenstrualPeriodCareTrigger({
             characterId: input.characterId,
@@ -572,6 +583,7 @@ async function parseAndSaveResponse(
     currentCount: number,
     followUpIndex: number | undefined,
     contextMessages: ChatMessage[],
+    reasoningText?: string,
 ): Promise<{ hasVisible: boolean; newCount: number; stateValues: StateValue[] }> {
     const responseBatchId = createResponseBatchId();
     void contextMessages;
@@ -625,7 +637,7 @@ async function parseAndSaveResponse(
     }
 
     if (filteredParts.length === 0) {
-        if (statusPanel || innerMonologue) {
+        if (statusPanel || innerMonologue || reasoningText) {
             pushChatMessage({
                 sessionId,
                 role: "assistant",
@@ -634,6 +646,7 @@ async function parseAndSaveResponse(
                 rawResponseText: rawText,
                 statusPanel,
                 innerMonologue,
+                reasoningText,
                 stateValues: stateValues.length > 0 ? stateValues : undefined,
                 ...(followUpIndex ? { followUpIndex } : {}),
             });
@@ -660,6 +673,7 @@ async function parseAndSaveResponse(
             rawResponseText: rawText,
             statusPanel: i === 0 && statusPanel ? statusPanel : undefined,
             innerMonologue: i === 0 && innerMonologue ? innerMonologue : undefined,
+            reasoningText: i === 0 ? reasoningText : undefined,
             stateValues: i === 0 && stateValues.length > 0 ? stateValues : undefined,
             ...(followUpIndex ? { followUpIndex } : {}),
         });
