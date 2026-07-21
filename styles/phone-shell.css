@@ -786,12 +786,15 @@
 /* ── Dock ── */
 
 .dock {
+  /* 宽度随图标数量自适应：只有 3 个时 dock 就窄一格，不再留空位。
+     --dock-count 由 JS 按当前 dock 图标数注入（缺省 4，保证首帧/SSR 观感不变）。 */
+  --dock-count: 4;
   --slot-size: clamp(56px, calc((100vw - 108px) / 4), 66px);
   --slot-gap-x: 20px;
   margin-top: 8px;
   margin-bottom: var(--home-dock-lift);
   margin-inline: auto;
-  width: min(calc((4 * var(--slot-size)) + (3 * var(--slot-gap-x)) + 30px), calc(100% - 8px));
+  width: min(calc((var(--dock-count) * var(--slot-size)) + ((var(--dock-count) - 1) * var(--slot-gap-x)) + 30px), calc(100% - 8px));
   border-radius: var(--dock-radius, 9999px);
   border: var(--dock-border, none);
   background: var(--c-home-glass);
@@ -799,7 +802,7 @@
   /* 上下 0 内边距 + 网格居中：图标在胶囊内几何对称（旧值 10px/5px 造成图标偏下） */
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(4, var(--slot-size));
+  grid-template-columns: repeat(var(--dock-count), var(--slot-size));
   column-gap: var(--slot-gap-x);
   row-gap: 0;
   justify-content: center;
@@ -1024,7 +1027,8 @@
     height: 14.87vw;
   }
   .dock {
-    width: min(90.77vw, calc(100% - 8px));
+    /* 同样按数量自适应；count=4 时等于原 90.77vw。 */
+    width: min(calc((var(--dock-count) * var(--slot-size)) + ((var(--dock-count) - 1) * var(--slot-gap-x)) + 30px), calc(100% - 8px));
   }
   .dock .dock-glyph-box {
     width: 14.87vw;

@@ -3951,6 +3951,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                   ref={dockElRef}
                   className={editMode ? "dock edit-mode" : "dock"}
                   {...(dockSkinUrl ? { "data-skinned": "" } : {})}
+                  style={{ "--dock-count": Math.max(1, dock.length) } as CSSProperties}
                   onPointerMove={handleSwipeMove}
                   onPointerUp={handleSwipeEnd}
                   onPointerCancel={handleSwipeEnd}
