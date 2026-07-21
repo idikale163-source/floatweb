@@ -1875,6 +1875,8 @@ export type ChatCompletionCallbacks = {
 export type OfflineChatCompletionResult = ParsedOfflineResponse & {
     model: string;
     presetName: string;
+    /** 模型思维链（reasoning）内容，供线下记录展示 */
+    reasoning?: string;
 };
 
 export async function generateOfflineChatCompletion(
@@ -1891,6 +1893,7 @@ export async function generateOfflineChatCompletion(
         },
     );
     const summaryTag = preset?.story_summary_tag?.trim() || "summary";
+    let reasoning = "";
     const rawOutput = await sendLLMRequest(config, preset, llmMessages, regexes, {
         characterName: character.name,
         userName: userIdentity?.name,
@@ -1898,11 +1901,13 @@ export async function generateOfflineChatCompletion(
         appTags: ["chat", "offline"],
         debugSessionId: session.id,
         signal: options?.signal,
+        onReasoning: (t) => { reasoning = t; },
     });
     return {
         ...parseOfflineResponse(rawOutput, summaryTag),
         model: config.defaultModel,
         presetName: preset?.name || "默认预设",
+        reasoning: reasoning || undefined,
     };
 }
 

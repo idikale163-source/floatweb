@@ -3678,6 +3678,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     summary: result.summary.trim(),
                     summaryTag: result.summaryTag,
                     rawText: result.rawText,
+                    reasoningText: result.reasoning,
                 });
                 setOfflineTurns(prev => [...prev, saved]);
             } catch (error: any) {
@@ -3792,6 +3793,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 summary: result.summary.trim(),
                 summaryTag: result.summaryTag,
                 rawText: result.rawText,
+                reasoningText: result.reasoning,
             });
             setOfflineTurns([...baseTurns, saved]);
         } catch (error: any) {
@@ -4882,6 +4884,19 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                             </button>
                                         ) : null}
                                     </div>
+                                    {/* 思维链触发条（线下模式，Claude app 风格） */}
+                                    {turn.reasoningText && (
+                                        <button
+                                            type="button"
+                                            className="chat-reasoning-trigger"
+                                            onClick={(e) => { e.stopPropagation(); setReasoningSheetText(turn.reasoningText || null); }}
+                                            aria-label="查看思考过程"
+                                        >
+                                            <Clock size={13} strokeWidth={1.8} className="chat-reasoning-trigger-icon" />
+                                            <span className="chat-reasoning-trigger-text">{turn.reasoningText.trim().split("\n")[0]}</span>
+                                            <ChevronRight size={14} strokeWidth={1.8} className="chat-reasoning-trigger-icon" />
+                                        </button>
+                                    )}
                                     <div
                                         className="chat-offline-text"
                                         onPointerDown={(e) => { e.stopPropagation(); handleOfflinePointerDown(e, { turnId: turn.id, role: "assistant" }); }}

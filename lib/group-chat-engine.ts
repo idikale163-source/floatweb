@@ -996,6 +996,8 @@ export async function generateGroupRawCompletion(
 }
 
 export type GroupOfflineChatCompletionResult = ParsedOfflineResponse & {
+    /** 模型思维链（reasoning）内容，供线下记录展示 */
+    reasoning?: string;
     model: string;
     presetName: string;
 };
@@ -1015,6 +1017,7 @@ export async function generateGroupOfflineChatCompletion(
         },
     );
     const summaryTag = preset?.story_summary_tag?.trim() || "summary";
+    let reasoning = "";
     const rawOutput = await sendLLMRequest(config, preset, llmMessages, regexes, {
         characterName: `群聊:${session.groupName || "群聊"}`,
     }, {
@@ -1022,11 +1025,13 @@ export async function generateGroupOfflineChatCompletion(
         appTags: ["group_chat", "offline"],
         debugSessionId: session.id,
         signal: options?.signal,
+        onReasoning: (t) => { reasoning = t; },
     });
     return {
         ...parseOfflineResponse(rawOutput, summaryTag),
         model: config.defaultModel,
         presetName: preset?.name || "默认预设",
+        reasoning: reasoning || undefined,
     };
 }
 
