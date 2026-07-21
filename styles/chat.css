@@ -6324,7 +6324,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 82%;
+  /* 与消息气泡的宽度上限（max-w-[70%]）一致，避免触发条比气泡还长 */
+  max-width: 70%;
   min-width: 0;
   padding: 2px 0;
   border: none;
