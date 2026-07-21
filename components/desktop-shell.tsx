@@ -47,6 +47,7 @@ import {
   ICONS,
   PAGE_1_DEFAULT,
   PAGE_2_DEFAULT,
+  PAGE_3_DEFAULT,
   type DesktopIconId,
   type IconId,
   type IconPosition
@@ -482,11 +483,11 @@ function normalizeLayout(raw: unknown, widgets: WidgetInstance[], dockIds: Set<D
   // Ensure all default icons exist somewhere across desktop pages (but not ones
   // the user has moved into the dock).
   const allPlaced = new Set<DesktopIconId>(getDesktopIconLayoutItems(layout).map(ic => ic.id));
-  const allDefaults = [...PAGE_1_DEFAULT, ...PAGE_2_DEFAULT];
+  const allDefaults = [...PAGE_1_DEFAULT, ...PAGE_2_DEFAULT, ...PAGE_3_DEFAULT];
 
   for (const id of allDefaults) {
     if (allPlaced.has(id) || dockIds.has(id)) continue;
-    const primaryPage = PAGE_1_DEFAULT.includes(id) ? 1 : 2;
+    const primaryPage = PAGE_1_DEFAULT.includes(id) ? 1 : PAGE_2_DEFAULT.includes(id) ? 2 : 3;
     const fallbackPages = getDesktopPageKeysForState(layout, widgets)
       .map(getDesktopPageNumber)
       .filter((page) => page !== primaryPage);

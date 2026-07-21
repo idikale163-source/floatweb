@@ -1,4 +1,4 @@
-import { DOCK_DEFAULT, ICONS, PAGE_1_DEFAULT, PAGE_2_DEFAULT, type DesktopIconId, type IconId, type IconPosition } from "@/lib/desktop-config";
+import { DOCK_DEFAULT, ICONS, PAGE_1_DEFAULT, PAGE_2_DEFAULT, PAGE_3_DEFAULT, type DesktopIconId, type IconId, type IconPosition } from "@/lib/desktop-config";
 import { isCustomAppIconId } from "@/lib/custom-app-types";
 import { loadInstalledCustomApps } from "@/lib/custom-app-storage";
 import { GRID_COLS, GRID_ROWS, WIDGET_SIZE_CELLS, type WidgetInstance } from "@/lib/widget-types";
@@ -105,6 +105,12 @@ export function createDefaultDesktopIconLayout(_widgets: WidgetInstance[] = []):
       id,
       row: 4 + Math.floor(i / GRID_COLS),
       col: (i % GRID_COLS) + 1,
+    })),
+    // 第三页：水平居中排在中间那行（第 3 行）。单个图标居中于 col2，两个则 col2、col3。
+    page3: PAGE_3_DEFAULT.map((id, i) => ({
+      id,
+      row: 3,
+      col: Math.floor((GRID_COLS - PAGE_3_DEFAULT.length) / 2) + 1 + i,
     })),
   } as DesktopIconLayout;
 }
