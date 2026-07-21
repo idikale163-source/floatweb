@@ -481,13 +481,15 @@ function normalizeLayout(raw: unknown, widgets: WidgetInstance[], dockIds: Set<D
   }
 
   // Ensure all default icons exist somewhere across desktop pages (but not ones
-  // the user has moved into the dock).
+  // the user has moved into the dock). DOCK_DEFAULT 也纳入兜底：若某默认 dock
+  // 图标（如设置）既不在任何页面也不在 dock（如恢复默认/导入主题后 dock 未含它），
+  // 就近放回页面，防止图标彻底丢失。
   const allPlaced = new Set<DesktopIconId>(getDesktopIconLayoutItems(layout).map(ic => ic.id));
-  const allDefaults = [...PAGE_1_DEFAULT, ...PAGE_2_DEFAULT, ...PAGE_3_DEFAULT];
+  const allDefaults = [...PAGE_1_DEFAULT, ...PAGE_2_DEFAULT, ...PAGE_3_DEFAULT, ...DOCK_DEFAULT];
 
   for (const id of allDefaults) {
     if (allPlaced.has(id) || dockIds.has(id)) continue;
-    const primaryPage = PAGE_1_DEFAULT.includes(id) ? 1 : PAGE_2_DEFAULT.includes(id) ? 2 : 3;
+    const primaryPage = PAGE_1_DEFAULT.includes(id) ? 1 : PAGE_2_DEFAULT.includes(id) ? 2 : PAGE_3_DEFAULT.includes(id) ? 3 : 1;
     const fallbackPages = getDesktopPageKeysForState(layout, widgets)
       .map(getDesktopPageNumber)
       .filter((page) => page !== primaryPage);
@@ -2834,9 +2836,16 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     setCurrentPageIndex((index) => Math.min(index, Math.max(0, trimmedPageCount - 1)));
   }
 
-  function handleThemeDesktopChange(next: { widgets: WidgetInstance[]; iconLayout: DesktopLayout }): void {
+  function handleThemeDesktopChange(next: { widgets: WidgetInstance[]; iconLayout: DesktopLayout; dock?: DesktopIconId[] }): void {
     const normalizedWidgets = sanitizeWidgetsForLayout(next.iconLayout, next.widgets);
-    const normalizedLayout = normalizeLayout(next.iconLayout, normalizedWidgets);
+    // dock：恢复默认时传入出厂 dock；主题包导入不含 dock 时保留当前。
+    // 新布局里明确摆放的图标从 dock 去重（一个图标只能存在于一处）。
+    const placedIds = new Set<DesktopIconId>(getDesktopIconLayoutItems(next.iconLayout).map(ic => ic.id));
+    const nextDock = normalizeDock(next.dock ?? dockRef.current).filter(id => !placedIds.has(id));
+    dockRef.current = nextDock;
+    setDock(nextDock);
+    writeDockLayout(nextDock);
+    const normalizedLayout = normalizeLayout(next.iconLayout, normalizedWidgets, new Set(nextDock));
     setWidgets(normalizedWidgets);
     setLayout(normalizedLayout);
     saveWidgets(normalizedWidgets);
