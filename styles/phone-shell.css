@@ -798,7 +798,9 @@
   border-radius: var(--dock-radius, 9999px);
   border: var(--dock-border, none);
   background: var(--c-home-glass);
-  min-height: 78px;
+  /* 底板高度：图标(58px)在此高度内垂直居中，上下留白 = (高度-58)/2。
+     78→92 让上下各约 10px 增至约 17px，不再挤。可由主题 --dock-height 覆盖。 */
+  min-height: var(--dock-height, 92px);
   /* 上下 0 内边距 + 网格居中：图标在胶囊内几何对称（旧值 10px/5px 造成图标偏下） */
   padding: 0;
   display: grid;
