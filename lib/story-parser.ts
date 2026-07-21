@@ -113,7 +113,18 @@ export function parseStoryResponse(
   }
 
   const folded = applyFoldTags(reasoningProcessed, options?.foldTags);
-  const renderedText = folded
+  // 摘要块默认折叠：<summary> 内容已单独提取用于 recent_story/记忆，正文里平铺
+  // 显示既占屏又剧透。转成与 think 同款的折叠段（默认收起，标签显示「摘要」）。
+  const summaryTagName = options?.summaryTag?.trim() || "summary";
+  const summaryEscaped = escapeTagName(summaryTagName);
+  const summaryFolded = folded.replace(
+    new RegExp(`<${summaryEscaped}>([\\s\\S]*?)<\\/${summaryEscaped}>`, "gi"),
+    (_match, content: string) => {
+      const trimmed = content.trim();
+      return trimmed ? `\n<!--RHR-FOLD:摘要-->\n${trimmed}\n<!--/RHR-FOLD-->\n` : "";
+    },
+  );
+  const renderedText = summaryFolded
     .replace(/\r\n/g, "\n")
     .replace(/\n{4,}/g, "\n\n\n")
     .trim();
