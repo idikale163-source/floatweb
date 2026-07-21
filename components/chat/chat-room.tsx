@@ -5710,6 +5710,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     <div className="modal-sheet chat-reasoning-sheet" onClick={(e) => e.stopPropagation()}>
                         <div className="chat-reasoning-sheet-handle" />
                         <div className="chat-reasoning-sheet-header">
+                            <span className="chat-reasoning-sheet-close-spacer" />
+                            <span className="chat-reasoning-sheet-title">思考过程</span>
                             <button
                                 type="button"
                                 className="chat-reasoning-sheet-close"
@@ -5718,10 +5720,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                             >
                                 <X size={18} strokeWidth={2} />
                             </button>
-                            <span className="chat-reasoning-sheet-title">思考过程</span>
-                            <span className="chat-reasoning-sheet-close-spacer" />
                         </div>
-                        <div className="chat-reasoning-sheet-body">{reasoningSheetText}</div>
+                        <div className="chat-reasoning-sheet-body">
+                            <BilingualTextBlock text={reasoningSheetText} mode="markdown" defaultExpanded />
+                        </div>
                     </div>
                 </div>
             )}

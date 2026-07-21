@@ -6401,7 +6401,7 @@
   padding: 4px 18px 12px;
   font-size: calc(14px * var(--app-text-scale, 1));
   line-height: 1.75;
-  color: var(--c-text);
-  white-space: pre-wrap;
+  /* 正文颜色加深：跟标题色一致，避免大段浅灰难读 */
+  color: var(--c-text-title, var(--c-text));
   overflow-wrap: break-word;
 }
