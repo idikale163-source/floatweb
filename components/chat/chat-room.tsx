@@ -223,6 +223,26 @@ function isChatVisualMedia(msg: ChatMessage): boolean {
     return !!msg.mediaType && CHAT_VISUAL_MEDIA_TYPES.has(msg.mediaType);
 }
 
+/** 思维链触发条的单行摘要：取首个非空行并剥离 markdown 标记（**、`、# 等），避免星号原样显示 */
+function reasoningPreviewLine(text: string): string {
+    for (const rawLine of text.split("\n")) {
+        const line = rawLine
+            .replace(/```+/g, "")
+            .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+            .replace(/\*\*([^*]+)\*\*/g, "$1")
+            .replace(/__([^_]+)__/g, "$1")
+            .replace(/\*([^*]+)\*/g, "$1")
+            .replace(/`([^`]+)`/g, "$1")
+            .replace(/^\s*#{1,6}\s+/, "")
+            .replace(/^\s*>\s+/, "")
+            .replace(/^\s*[-*+]\s+/, "")
+            .replace(/[*`]+/g, "")
+            .trim();
+        if (line) return line;
+    }
+    return "思考过程";
+}
+
 function isHiddenChatFlowMessage(msg: ChatMessage, displayContent?: string): boolean {
     if (msg.mediaType === "tool_result") return true;
     return !isChatVisualMedia(msg)
@@ -4893,7 +4913,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                             aria-label="查看思考过程"
                                         >
                                             <Clock size={13} strokeWidth={1.8} className="chat-reasoning-trigger-icon" />
-                                            <span className="chat-reasoning-trigger-text">{turn.reasoningText.trim().split("\n")[0]}</span>
+                                            <span className="chat-reasoning-trigger-text">{reasoningPreviewLine(turn.reasoningText)}</span>
                                             <ChevronRight size={14} strokeWidth={1.8} className="chat-reasoning-trigger-icon" />
                                         </button>
                                     )}
@@ -5146,7 +5166,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                         aria-label="查看思考过程"
                                     >
                                         <Clock size={13} strokeWidth={1.8} className="chat-reasoning-trigger-icon" />
-                                        <span className="chat-reasoning-trigger-text">{renderMsg.reasoningText.trim().split("\n")[0]}</span>
+                                        <span className="chat-reasoning-trigger-text">{reasoningPreviewLine(renderMsg.reasoningText)}</span>
                                         <ChevronRight size={14} strokeWidth={1.8} className="chat-reasoning-trigger-icon" />
                                     </button>
                                 </div>
