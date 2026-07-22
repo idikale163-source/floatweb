@@ -5175,6 +5175,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                 id={`message-${msg.id}`}
                                 className="chat-msg-wrapper"
                                 data-role={uiRole(msg)}
+                                {...(isEmptyBubble && renderMsg.reasoningText ? { "data-reasoning-empty": "" } : {})}
                                 {...(isConsecutive ? { "data-consecutive": "" } : {})}
                                 {...(activeMessageId === msg.id ? { "data-active": "" } : {})}
                                 {...(highlightMessageId === msg.id ? { "data-highlight": "" } : {})}
