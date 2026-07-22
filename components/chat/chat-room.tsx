@@ -5147,7 +5147,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     } : {};
 
                     return (
-                        <div key={msg.id} className="flex flex-col gap-4" {...(hiddenEmpty ? { style: { display: "none" } } : {})}>
+                        <div key={msg.id} className="flex flex-col gap-4" {...(hiddenEmpty ? { style: { display: "none" } } : {})} {...(isEmptyBubble && renderMsg.reasoningText && !showTime ? { "data-reasoning-only": "" } : {})}>
                             {showTime && (
                                 <div className="flex justify-center w-full">
                                     <span className="chat-sys-msg py-[2px] px-2 rounded select-none">
@@ -5157,7 +5157,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                             )}
                             {/* 思维链触发条（Claude app 风格）：点击打开底部弹窗 */}
                             {renderMsg.reasoningText && msg.role !== "user" && uiRole(msg) !== "system" && (
-                                <div className="chat-msg-wrapper" data-role={uiRole(msg)} style={{ marginBottom: -8 }}>
+                                <div className="chat-msg-wrapper" data-role={uiRole(msg)} data-reasoning-row="" style={{ marginBottom: -8 }}>
                                     <div className="w-[40px] shrink-0" />
                                     <button
                                         type="button"
