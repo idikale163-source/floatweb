@@ -29,44 +29,70 @@ type Segment =
     | { type: "html-page"; content: string }
     | { type: "fold"; label: string; content: string };
 
-/** 折叠块（think/thinking 等）：带「翻译」按钮，点击调用思维链翻译 API 在折叠内容下方追加译文 */
+/** 折叠块：think/thinking（思维链）带「翻译」按钮与 中文/原文/对照 切换；其余折叠标签（summary、自定义等）不带 */
 function StoryFoldBlock({ label, content, scopeClass, children }: {
     label: string;
     content: string;
     scopeClass: string;
     children: ReactNode;
 }) {
+    const canTranslate = /^(think|thinking)$/i.test(label.trim());
     const [translation, setTranslation] = useState<string | null>(null);
     const [translating, setTranslating] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [viewMode, setViewMode] = useState<"both" | "zh" | "orig">("both");
     const handleTranslate = async (e: { preventDefault(): void; stopPropagation(): void }) => {
         e.preventDefault();
         e.stopPropagation();
         if (translating) return;
-        if (translation) { setTranslation(null); return; }
         setTranslating(true);
         setError(null);
-        const result = await translateReasoningText(content);
-        setTranslating(false);
-        if (result.content) setTranslation(result.content);
-        else setError(result.error || "翻译失败，请重试");
+        try {
+            const result = await translateReasoningText(content);
+            if (result.content) { setTranslation(result.content); setViewMode("both"); }
+            else setError(result.error || "翻译失败，请重试");
+        } catch {
+            setError("翻译失败，请重试");
+        } finally {
+            setTranslating(false);
+        }
+    };
+    const pickMode = (mode: "both" | "zh" | "orig") => (e: { preventDefault(): void; stopPropagation(): void }) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setViewMode(mode);
     };
     return (
         <details className="story-fold-block" data-fold-tag={label}>
             <summary>
                 {label}
-                <button type="button" className="story-fold-translate-btn" onClick={handleTranslate}>
-                    {translating ? "翻译中…" : (translation ? "隐藏译文" : "翻译")}
-                </button>
+                {canTranslate && !translation && (
+                    <button type="button" className="story-fold-translate-btn" onClick={handleTranslate}>
+                        {translating ? "翻译中…" : "翻译"}
+                    </button>
+                )}
+                {canTranslate && translation && (
+                    <span className="story-fold-view-switch">
+                        {([["zh", "中文"], ["orig", "原文"], ["both", "对照"]] as const).map(([mode, text]) => (
+                            <button
+                                key={mode}
+                                type="button"
+                                className="story-fold-translate-btn"
+                                {...(viewMode === mode ? { "data-active": "" } : {})}
+                                onClick={pickMode(mode)}
+                            >{text}</button>
+                        ))}
+                    </span>
+                )}
             </summary>
             <div className="story-fold-block__content">
                 {error && <div className="story-fold-translate-error">{error}</div>}
-                {translation && (
-                    <div className="story-fold-translation">
+                {translation && viewMode !== "orig" && (
+                    <div className={viewMode === "both" ? "story-fold-translation" : undefined}>
                         <MarkdownSegment content={translation} scopeClass={scopeClass} />
                     </div>
                 )}
-                {children}
+                {(viewMode !== "zh" || !translation) && children}
             </div>
         </details>
     );

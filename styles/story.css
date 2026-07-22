@@ -783,6 +783,19 @@
           letter-spacing: 0.05em;
           color: var(--c-story-sub, #94a3b8);
         }
+        .story-fold-view-switch {
+          float: right;
+          display: inline-flex;
+          gap: 4px;
+        }
+        .story-fold-view-switch .story-fold-translate-btn {
+          float: none;
+          margin-left: 0;
+        }
+        .story-fold-translate-btn[data-active] {
+          color: var(--c-story-accent, #e5484d);
+          border-color: currentColor;
+        }
         .story-fold-translation {
           margin-bottom: 12px;
           padding-bottom: 12px;

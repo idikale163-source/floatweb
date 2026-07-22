@@ -1104,20 +1104,28 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const [reasoningTranslation, setReasoningTranslation] = useState<string | null>(null);
     const [reasoningTranslating, setReasoningTranslating] = useState(false);
     const [reasoningTranslateError, setReasoningTranslateError] = useState<string | null>(null);
+    // 译文显示模式：对照（中文在上）/ 仅中文 / 仅原文
+    const [reasoningViewMode, setReasoningViewMode] = useState<"both" | "zh" | "orig">("both");
     useEffect(() => {
         setReasoningTranslation(null);
         setReasoningTranslating(false);
         setReasoningTranslateError(null);
+        setReasoningViewMode("both");
     }, [reasoningSheetText]);
     const handleTranslateReasoning = async () => {
         if (!reasoningSheetText || reasoningTranslating) return;
-        if (reasoningTranslation) { setReasoningTranslation(null); return; }
+        if (reasoningTranslation) { setReasoningTranslation(null); setReasoningViewMode("both"); return; }
         setReasoningTranslating(true);
         setReasoningTranslateError(null);
-        const result = await translateReasoningText(reasoningSheetText);
-        setReasoningTranslating(false);
-        if (result.content) setReasoningTranslation(result.content);
-        else setReasoningTranslateError(result.error || "翻译失败，请重试");
+        try {
+            const result = await translateReasoningText(reasoningSheetText);
+            if (result.content) { setReasoningTranslation(result.content); setReasoningViewMode("both"); }
+            else setReasoningTranslateError(result.error || "翻译失败，请重试");
+        } catch {
+            setReasoningTranslateError("翻译失败，请重试");
+        } finally {
+            setReasoningTranslating(false);
+        }
     };
     const [voiceTextIds, setVoiceTextIds] = useState<Set<string>>(new Set());
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -5793,11 +5801,26 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                 <div className="chat-reasoning-translate-error">{reasoningTranslateError}</div>
                             )}
                             {reasoningTranslation && (
-                                <div className="chat-reasoning-translation">
+                                <div className="chat-reasoning-view-switch">
+                                    {([["zh", "中文"], ["orig", "原文"], ["both", "对照"]] as const).map(([mode, text]) => (
+                                        <button
+                                            key={mode}
+                                            type="button"
+                                            className="chat-reasoning-view-btn"
+                                            {...(reasoningViewMode === mode ? { "data-active": "" } : {})}
+                                            onClick={() => setReasoningViewMode(mode)}
+                                        >{text}</button>
+                                    ))}
+                                </div>
+                            )}
+                            {reasoningTranslation && reasoningViewMode !== "orig" && (
+                                <div className={reasoningViewMode === "both" ? "chat-reasoning-translation" : undefined}>
                                     <BilingualTextBlock text={reasoningTranslation} mode="markdown" defaultExpanded />
                                 </div>
                             )}
-                            <BilingualTextBlock text={reasoningSheetText} mode="markdown" defaultExpanded />
+                            {(reasoningViewMode !== "zh" || !reasoningTranslation) && (
+                                <BilingualTextBlock text={reasoningSheetText} mode="markdown" defaultExpanded />
+                            )}
                         </div>
                     </div>
                 </div>

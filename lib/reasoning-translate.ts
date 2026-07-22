@@ -34,19 +34,29 @@ export async function translateReasoningText(
         return { error: "请先在设置 → 绑定配置 → 辅助 API 中设置思维链翻译 API（或设置全局默认 API）" };
     }
 
-    const result = await simpleLLMCall(apiConfig, [
-        { role: "system", content: TRANSLATE_SYSTEM_PROMPT },
-        { role: "user", content: trimmed },
-    ], { temperature: 0.6, signal: options?.signal });
+    // 默认 90 秒超时，避免请求挂死导致调用方一直处于「翻译中」状态
+    const controller = options?.signal ? null : new AbortController();
+    const timer = controller ? setTimeout(() => controller.abort(), 90_000) : null;
+    try {
+        const result = await simpleLLMCall(apiConfig, [
+            { role: "system", content: TRANSLATE_SYSTEM_PROMPT },
+            { role: "user", content: trimmed },
+        ], { temperature: 0.6, signal: options?.signal ?? controller?.signal });
 
-    if (!result.content?.trim()) {
-        return { error: result.error || "翻译失败，请重试" };
-    }
+        if (!result.content?.trim()) {
+            return { error: result.error || "翻译失败，请重试" };
+        }
 
-    if (cache.size >= CACHE_MAX) {
-        const oldest = cache.keys().next().value;
-        if (oldest !== undefined) cache.delete(oldest);
+        if (cache.size >= CACHE_MAX) {
+            const oldest = cache.keys().next().value;
+            if (oldest !== undefined) cache.delete(oldest);
+        }
+        cache.set(trimmed, result.content.trim());
+        return { content: result.content.trim() };
+    } catch (e) {
+        if (controller?.signal.aborted) return { error: "翻译超时，请重试" };
+        return { error: e instanceof Error ? e.message : "翻译失败，请重试" };
+    } finally {
+        if (timer) clearTimeout(timer);
     }
-    cache.set(trimmed, result.content.trim());
-    return { content: result.content.trim() };
 }
