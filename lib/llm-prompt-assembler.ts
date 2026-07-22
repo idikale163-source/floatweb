@@ -1125,10 +1125,10 @@ export function assemblePromptPayload(input: AssemblerInput): LLMMessage[] {
     // --- CHAT HISTORY / SHORT-TERM MEMORY ---
     // shortTermMemory/chatHistory 标记条目被关闭时，跳过聊天历史与短期记忆注入
     // （标记的分界作用不受开关影响，见 prompt_order 循环）
-    const historyMarkerPrompt = hasPromptOrder
-        ? preset!.prompts.find(p => p.marker && (p.identifier === "shortTermMemory" || p.identifier === "chatHistory"))
+    const historyMarkerPrompt = preset
+        ? preset.prompts.find(p => p.marker && (p.identifier === "shortTermMemory" || p.identifier === "chatHistory"))
         : undefined;
-    const historyInjectionEnabled = !historyMarkerPrompt || isPromptEnabled(historyMarkerPrompt, preset!.prompt_order);
+    const historyInjectionEnabled = !historyMarkerPrompt || isPromptEnabled(historyMarkerPrompt, preset?.prompt_order);
     const useChronologicalShortTerm = Boolean(input.unifiedRecentItems && input.unifiedRecentItems.length > 0);
     if (!hasPromptOrder) {
         blocks.push({
@@ -2350,10 +2350,10 @@ export function assembleGroupPromptPayload(input: GroupAssemblerInput): LLMMessa
 
     const useChronologicalShortTerm = Boolean(unifiedRecentItems && unifiedRecentItems.length > 0);
     // shortTermMemory/chatHistory 标记条目被关闭时，跳过聊天历史与短期记忆注入
-    const groupHistoryMarkerPrompt = hasPromptOrder
-        ? preset!.prompts.find(p => p.marker && (p.identifier === "shortTermMemory" || p.identifier === "chatHistory"))
+    const groupHistoryMarkerPrompt = preset
+        ? preset.prompts.find(p => p.marker && (p.identifier === "shortTermMemory" || p.identifier === "chatHistory"))
         : undefined;
-    const historyInjectionEnabled = !groupHistoryMarkerPrompt || isPromptEnabled(groupHistoryMarkerPrompt, preset!.prompt_order);
+    const historyInjectionEnabled = !groupHistoryMarkerPrompt || isPromptEnabled(groupHistoryMarkerPrompt, preset?.prompt_order);
 
     // 4. Short-term memory / chat history
     if (!historyInjectionEnabled) {
