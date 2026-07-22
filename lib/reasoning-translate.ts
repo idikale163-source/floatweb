@@ -5,7 +5,16 @@
 import { resolveAuxiliaryApiConfig } from "./settings-storage";
 import { simpleLLMCall } from "./api-helpers";
 
-const TRANSLATE_SYSTEM_PROMPT = "你是翻译助手。把用户提供的内容完整翻译成简体中文，保留原有段落结构与 Markdown 格式，不要解释、不要评论、不要遗漏，只输出译文。";
+const TRANSLATE_SYSTEM_PROMPT = [
+    "你是资深中文译者。把用户提供的内容翻译成地道、自然的简体中文。",
+    "",
+    "要求：",
+    "- 摆脱原文句式的束缚，按中文的表达习惯重新组织句子，坚决避免翻译腔（如「这正是为什么」「如此地」「被…所…」「进行了…」等欧化句式）",
+    "- 待译内容多为角色的内心独白或思考过程：译文要像这个人在心里自言自语，口语化、有情绪、有节奏，不要译成书面报告体",
+    "- 人名、称呼、专有名词沿用原文或上下文中已有的译法，不要另起译名",
+    "- 保留原有段落结构与 Markdown 格式（加粗、列表等）",
+    "- 完整翻译，不删减、不解释、不评论，只输出译文",
+].join("\n");
 
 const cache = new Map<string, string>();
 const CACHE_MAX = 50;
@@ -28,7 +37,7 @@ export async function translateReasoningText(
     const result = await simpleLLMCall(apiConfig, [
         { role: "system", content: TRANSLATE_SYSTEM_PROMPT },
         { role: "user", content: trimmed },
-    ], { temperature: 0.3, signal: options?.signal });
+    ], { temperature: 0.6, signal: options?.signal });
 
     if (!result.content?.trim()) {
         return { error: result.error || "翻译失败，请重试" };

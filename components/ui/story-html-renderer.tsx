@@ -60,13 +60,13 @@ function StoryFoldBlock({ label, content, scopeClass, children }: {
                 </button>
             </summary>
             <div className="story-fold-block__content">
-                {children}
                 {error && <div className="story-fold-translate-error">{error}</div>}
                 {translation && (
                     <div className="story-fold-translation">
                         <MarkdownSegment content={translation} scopeClass={scopeClass} />
                     </div>
                 )}
+                {children}
             </div>
         </details>
     );

@@ -784,12 +784,12 @@
           color: var(--c-story-sub, #94a3b8);
         }
         .story-fold-translation {
-          margin-top: 12px;
-          padding-top: 12px;
-          border-top: 1px dashed var(--c-story-border, rgba(100, 116, 139, 0.3));
+          margin-bottom: 12px;
+          padding-bottom: 12px;
+          border-bottom: 1px dashed var(--c-story-border, rgba(100, 116, 139, 0.3));
         }
         .story-fold-translate-error {
-          margin-top: 10px;
+          margin-bottom: 10px;
           font-size: calc(11px*var(--app-text-scale,1));
           color: #e5484d;
         }

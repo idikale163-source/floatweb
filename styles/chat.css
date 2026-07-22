@@ -6407,12 +6407,12 @@
   overflow-wrap: break-word;
 }
 .chat-reasoning-translation {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px dashed rgba(0, 0, 0, 0.15);
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.15);
 }
 .chat-reasoning-translate-error {
-  margin-top: 12px;
+  margin-bottom: 12px;
   font-size: calc(12px * var(--app-text-scale, 1));
   color: var(--c-danger, #e5484d);
 }

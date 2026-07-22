@@ -5789,7 +5789,6 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                             </button>
                         </div>
                         <div className="chat-reasoning-sheet-body">
-                            <BilingualTextBlock text={reasoningSheetText} mode="markdown" defaultExpanded />
                             {reasoningTranslateError && (
                                 <div className="chat-reasoning-translate-error">{reasoningTranslateError}</div>
                             )}
@@ -5798,6 +5797,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                     <BilingualTextBlock text={reasoningTranslation} mode="markdown" defaultExpanded />
                                 </div>
                             )}
+                            <BilingualTextBlock text={reasoningSheetText} mode="markdown" defaultExpanded />
                         </div>
                     </div>
                 </div>
