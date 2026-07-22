@@ -992,10 +992,15 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                             </div>
                                                             )}
                                                             <div className="flex flex-col gap-3 p-[10px] rounded-lg bg-[var(--c-input)]">
+                                                                {prompt.marker && (
+                                                                    <div className="menu-desc ts-11">
+                                                                        标记条目的位置由排序与「短期记忆」分界决定，Role 固定为 System——以下「注入方式 / Inject Depth / Role」对标记条目不生效
+                                                                    </div>
+                                                                )}
                                                                 <div className="grid grid-cols-2 gap-3">
-                                                                    <div className="flex flex-col gap-1 min-w-0">
+                                                                    <div className={`flex flex-col gap-1 min-w-0${prompt.marker ? " opacity-40 pointer-events-none" : ""}`}>
                                                                         <label className="menu-desc ts-11">注入方式</label>
-                                                                        <select value={(prompt.injection_position ?? 0) === 0 ? "0" : "1"} onChange={e => {
+                                                                        <select disabled={!!prompt.marker} value={(prompt.injection_position ?? 0) === 0 ? "0" : "1"} onChange={e => {
                                                                             updatePrompt(
                                                                                 preset,
                                                                                 prompt.identifier,
@@ -1006,9 +1011,9 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                             <option value="1">插入聊天</option>
                                                                         </select>
                                                                     </div>
-                                                                    <div className="flex flex-col gap-1 min-w-0">
+                                                                    <div className={`flex flex-col gap-1 min-w-0${prompt.marker ? " opacity-40 pointer-events-none" : ""}`}>
                                                                         <label className="menu-desc ts-11">Inject Depth</label>
-                                                                        <input type="number" value={prompt.injection_depth ?? 0} onChange={e => {
+                                                                        <input type="number" disabled={!!prompt.marker} value={prompt.injection_depth ?? 0} onChange={e => {
                                                                             updatePrompt(
                                                                                 preset,
                                                                                 prompt.identifier,
@@ -1018,9 +1023,10 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                     </div>
                                                                 </div>
                                                                 <div className="grid grid-cols-2 gap-3">
-                                                                    <div className="flex flex-col gap-[2px] min-w-0">
+                                                                    <div className={`flex flex-col gap-[2px] min-w-0${prompt.marker ? " opacity-40 pointer-events-none" : ""}`}>
                                                                         <label className="menu-desc ts-11 ml-[2px]">Role</label>
                                                                         <select
+                                                                            disabled={!!prompt.marker}
                                                                             value={prompt.role}
                                                                             onChange={(e) => {
                                                                                 updatePrompt(
