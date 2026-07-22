@@ -1,7 +1,8 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { marked } from "marked";
+import { translateReasoningText } from "@/lib/reasoning-translate";
 
 /** Standard HTML tags — anything not in this set gets stripped (content kept) */
 const STANDARD_TAGS = new Set([
@@ -27,6 +28,49 @@ type Segment =
     | { type: "markdown"; content: string }
     | { type: "html-page"; content: string }
     | { type: "fold"; label: string; content: string };
+
+/** 折叠块（think/thinking 等）：带「翻译」按钮，点击调用思维链翻译 API 在折叠内容下方追加译文 */
+function StoryFoldBlock({ label, content, scopeClass, children }: {
+    label: string;
+    content: string;
+    scopeClass: string;
+    children: ReactNode;
+}) {
+    const [translation, setTranslation] = useState<string | null>(null);
+    const [translating, setTranslating] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const handleTranslate = async (e: { preventDefault(): void; stopPropagation(): void }) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (translating) return;
+        if (translation) { setTranslation(null); return; }
+        setTranslating(true);
+        setError(null);
+        const result = await translateReasoningText(content);
+        setTranslating(false);
+        if (result.content) setTranslation(result.content);
+        else setError(result.error || "翻译失败，请重试");
+    };
+    return (
+        <details className="story-fold-block" data-fold-tag={label}>
+            <summary>
+                {label}
+                <button type="button" className="story-fold-translate-btn" onClick={handleTranslate}>
+                    {translating ? "翻译中…" : (translation ? "隐藏译文" : "翻译")}
+                </button>
+            </summary>
+            <div className="story-fold-block__content">
+                {children}
+                {error && <div className="story-fold-translate-error">{error}</div>}
+                {translation && (
+                    <div className="story-fold-translation">
+                        <MarkdownSegment content={translation} scopeClass={scopeClass} />
+                    </div>
+                )}
+            </div>
+        </details>
+    );
+}
 
 function splitContent(text: string): Segment[] {
     if (!text) return [];
@@ -242,27 +286,21 @@ function StoryHtmlRendererInner({ content, messageId, onOptionSelect, htmlPageMo
                 }
                 if (seg.type === "fold") {
                     return (
-                        <details key={`fold-${i}`} className="story-fold-block" data-fold-tag={seg.label}>
-                            <summary>{seg.label}</summary>
-                            <div className="story-fold-block__content">
-                                {splitContent(seg.content).map((innerSeg, innerIndex) => {
-                                    if (innerSeg.type === "html-page") {
-                                        return <HtmlPageSegment key={`fold-hp-${i}-${innerIndex}`} html={innerSeg.content} onOptionSelect={onOptionSelect} htmlPageMode={htmlPageMode} />;
-                                    }
-                                    if (innerSeg.type === "fold") {
-                                        return (
-                                            <details key={`fold-inner-${i}-${innerIndex}`} className="story-fold-block" data-fold-tag={innerSeg.label}>
-                                                <summary>{innerSeg.label}</summary>
-                                                <div className="story-fold-block__content">
-                                                    <MarkdownSegment content={innerSeg.content} scopeClass={scopeClass} />
-                                                </div>
-                                            </details>
-                                        );
-                                    }
-                                    return <MarkdownSegment key={`fold-md-${i}-${innerIndex}`} content={innerSeg.content} scopeClass={scopeClass} />;
-                                })}
-                            </div>
-                        </details>
+                        <StoryFoldBlock key={`fold-${i}`} label={seg.label} content={seg.content} scopeClass={scopeClass}>
+                            {splitContent(seg.content).map((innerSeg, innerIndex) => {
+                                if (innerSeg.type === "html-page") {
+                                    return <HtmlPageSegment key={`fold-hp-${i}-${innerIndex}`} html={innerSeg.content} onOptionSelect={onOptionSelect} htmlPageMode={htmlPageMode} />;
+                                }
+                                if (innerSeg.type === "fold") {
+                                    return (
+                                        <StoryFoldBlock key={`fold-inner-${i}-${innerIndex}`} label={innerSeg.label} content={innerSeg.content} scopeClass={scopeClass}>
+                                            <MarkdownSegment content={innerSeg.content} scopeClass={scopeClass} />
+                                        </StoryFoldBlock>
+                                    );
+                                }
+                                return <MarkdownSegment key={`fold-md-${i}-${innerIndex}`} content={innerSeg.content} scopeClass={scopeClass} />;
+                            })}
+                        </StoryFoldBlock>
                     );
                 }
                 return <MarkdownSegment key={`md-${i}`} content={seg.content} scopeClass={scopeClass} />;

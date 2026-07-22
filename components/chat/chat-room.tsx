@@ -6,6 +6,7 @@ import type { StateValue } from "@/lib/chat-storage";
 import { parseStateValues, mergeStateValues } from "@/lib/state-value-parser";
 import { parseAIResponse, type ParsedMessagePart } from "@/lib/rich-message-parser";
 import { isKnownStickerLabel } from "@/lib/sticker-data";
+import { translateReasoningText } from "@/lib/reasoning-translate";
 import { MessageBubble, MediaDetailModal, prewarmStickerCache, BilingualTextBlock, isStandaloneHtmlPreviewContent, normalizeTextBubbleContent } from "./message-bubble";
 import { PhotoInputModal, TextPhotoModal, VoiceRecordModal, RedPacketModal, LocationInputModal, SystemInstructionModal } from "./rich-input-modals";
 import { EmojiPanel, StickerPanel } from "./emoji-panel";
@@ -42,7 +43,7 @@ import { applyDisplayRegex, applyEditRegex } from "@/lib/llm-prompt-assembler";
 import { scheduleFollowUp, cancelFollowUp } from "@/lib/follow-up-service";
 import { PENDING_REPLY_PREFIX } from "@/lib/friend-request-engine";
 import type { UserIdentity } from "@/components/settings/user-identity";
-import { AlertCircle, Blocks, Check, Trash2, User, ChevronLeft, ChevronRight, Clapperboard, Clock, Gift, Loader2, MoreHorizontal, X } from "lucide-react";
+import { AlertCircle, Blocks, Check, Trash2, User, ChevronLeft, ChevronRight, Clapperboard, Clock, Gift, Languages, Loader2, MoreHorizontal, X } from "lucide-react";
 import { setDebugChatState } from "@/lib/debug-store";
 import { scopeSessionCSS } from "@/lib/css-scoper";
 import { setChatActive } from "@/lib/music-action-queue";
@@ -1099,6 +1100,25 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const [expandedMonologueId, setExpandedThinkingId] = useState<string | null>(null);
     // 思维链底部弹窗：存当前查看的 reasoning 文本，null = 关闭
     const [reasoningSheetText, setReasoningSheetText] = useState<string | null>(null);
+    // 思维链翻译（弹窗内点击翻译按钮生成，切换弹窗内容时重置）
+    const [reasoningTranslation, setReasoningTranslation] = useState<string | null>(null);
+    const [reasoningTranslating, setReasoningTranslating] = useState(false);
+    const [reasoningTranslateError, setReasoningTranslateError] = useState<string | null>(null);
+    useEffect(() => {
+        setReasoningTranslation(null);
+        setReasoningTranslating(false);
+        setReasoningTranslateError(null);
+    }, [reasoningSheetText]);
+    const handleTranslateReasoning = async () => {
+        if (!reasoningSheetText || reasoningTranslating) return;
+        if (reasoningTranslation) { setReasoningTranslation(null); return; }
+        setReasoningTranslating(true);
+        setReasoningTranslateError(null);
+        const result = await translateReasoningText(reasoningSheetText);
+        setReasoningTranslating(false);
+        if (result.content) setReasoningTranslation(result.content);
+        else setReasoningTranslateError(result.error || "翻译失败，请重试");
+    };
     const [voiceTextIds, setVoiceTextIds] = useState<Set<string>>(new Set());
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [editingContent, setEditingContent] = useState("");
@@ -5747,7 +5767,17 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     <div className="modal-sheet chat-reasoning-sheet" onClick={(e) => e.stopPropagation()}>
                         <div className="chat-reasoning-sheet-handle" />
                         <div className="chat-reasoning-sheet-header">
-                            <span className="chat-reasoning-sheet-close-spacer" />
+                            <button
+                                type="button"
+                                className="chat-reasoning-sheet-close"
+                                onClick={handleTranslateReasoning}
+                                aria-label={reasoningTranslation ? "隐藏译文" : "翻译思考过程"}
+                                title={reasoningTranslation ? "隐藏译文" : "翻译思考过程"}
+                            >
+                                {reasoningTranslating
+                                    ? <Loader2 size={18} strokeWidth={2} className="animate-spin" />
+                                    : <Languages size={18} strokeWidth={2} {...(reasoningTranslation ? { color: "var(--c-icon-active)" } : {})} />}
+                            </button>
                             <span className="chat-reasoning-sheet-title">思考过程</span>
                             <button
                                 type="button"
@@ -5760,6 +5790,14 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         </div>
                         <div className="chat-reasoning-sheet-body">
                             <BilingualTextBlock text={reasoningSheetText} mode="markdown" defaultExpanded />
+                            {reasoningTranslateError && (
+                                <div className="chat-reasoning-translate-error">{reasoningTranslateError}</div>
+                            )}
+                            {reasoningTranslation && (
+                                <div className="chat-reasoning-translation">
+                                    <BilingualTextBlock text={reasoningTranslation} mode="markdown" defaultExpanded />
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
