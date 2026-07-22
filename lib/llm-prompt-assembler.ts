@@ -1128,7 +1128,10 @@ export function assemblePromptPayload(input: AssemblerInput): LLMMessage[] {
     const historyMarkerPrompt = preset
         ? preset.prompts.find(p => p.marker && (p.identifier === "shortTermMemory" || p.identifier === "chatHistory"))
         : undefined;
-    const historyInjectionEnabled = !historyMarkerPrompt || isPromptEnabled(historyMarkerPrompt, preset?.prompt_order);
+    // 条目存在且开启才注入；条目被关闭或预设中没有该条目都不注入（没有就没有）。
+    // 仅在完全未选择预设时保持注入兜底。
+    const historyInjectionEnabled = !preset
+        || (historyMarkerPrompt ? isPromptEnabled(historyMarkerPrompt, preset.prompt_order) : false);
     const useChronologicalShortTerm = Boolean(input.unifiedRecentItems && input.unifiedRecentItems.length > 0);
     if (!hasPromptOrder) {
         blocks.push({
@@ -2353,7 +2356,10 @@ export function assembleGroupPromptPayload(input: GroupAssemblerInput): LLMMessa
     const groupHistoryMarkerPrompt = preset
         ? preset.prompts.find(p => p.marker && (p.identifier === "shortTermMemory" || p.identifier === "chatHistory"))
         : undefined;
-    const historyInjectionEnabled = !groupHistoryMarkerPrompt || isPromptEnabled(groupHistoryMarkerPrompt, preset?.prompt_order);
+    // 条目存在且开启才注入；条目被关闭或预设中没有该条目都不注入（没有就没有）。
+    // 仅在完全未选择预设时保持注入兜底。
+    const historyInjectionEnabled = !preset
+        || (groupHistoryMarkerPrompt ? isPromptEnabled(groupHistoryMarkerPrompt, preset.prompt_order) : false);
 
     // 4. Short-term memory / chat history
     if (!historyInjectionEnabled) {
