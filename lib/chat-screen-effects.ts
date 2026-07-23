@@ -175,33 +175,17 @@ export function formatChatDiceResultMessage(face: number): string {
     return `🎲 掷出了 ${face} 点`;
 }
 
-function firstKeyword(keyword: string): string {
-    return keyword.split(/[,，、\s]+/).filter(Boolean)[0] ?? "";
-}
-
-/** 注入聊天提示词的特效说明：让角色知道有哪些触发词、怎么用、骰子结果怎么读 */
+/** 注入聊天提示词的特效说明；全部特效关闭时不注入 */
 export function buildScreenEffectPromptHint(): string {
     try {
         const builtins = loadBuiltinScreenEffectSettings();
-        const builtinParts = BUILTIN_SCREEN_EFFECTS
-            .filter(effect => builtins[effect.type].enabled)
-            .map(effect => `${effect.name}「${firstKeyword(builtins[effect.type].keyword) || effect.icon}」`);
-        const rainParts = loadChatScreenEffectRules()
-            .filter(rule => rule.enabled && rule.keyword)
-            .slice(0, 8)
-            .map(rule => `「${firstKeyword(rule.keyword)}」`);
-        if (builtinParts.length === 0 && rainParts.length === 0) return "";
-        const lines = [
-            "### 聊天室全屏特效",
-            "消息文本包含触发词会自动播放全屏动画，你和用户都能触发；想烘托气氛时把触发词自然写进消息即可，不要解释触发机制。",
-        ];
-        if (builtinParts.length > 0) lines.push(`- 内置特效：${builtinParts.join("、")}`);
-        if (rainParts.length > 0) lines.push(`- 表情雨触发词：${rainParts.join("、")}`);
-        if (builtins.dice?.enabled) {
-            lines.push("- 掷骰子：消息带触发词即掷出 1-6 点，结果由系统旁白公布。用户掷的点数你能直接看到；你自己掷的结果要到下一轮才可见。请以旁白公布的点数为准回应，不要自行编造点数。");
-        }
+        const anyEnabled = BUILTIN_SCREEN_EFFECTS.some(effect => builtins[effect.type].enabled)
+            || loadChatScreenEffectRules().some(rule => rule.enabled && rule.keyword);
+        if (!anyEnabled) return "";
         // 前面留空行与上一板块隔开（挂在自定义 APP 指令之后）
-        return "\n\n" + lines.join("\n") + "\n";
+        return "\n\n### 聊天室全屏特效\n"
+            + "消息文本包含触发词会自动播放全屏动画，包括：全屏烟花「🎆」、全屏爱心「💗」、全屏礼花「🎊」、全屏炸弹「💣」、掷骰子「🎲」，"
+            + "其中掷骰子结果由系统旁白公布。你自己掷的结果要到下一轮才可见。请以旁白公布的点数为准回应，不要自行编造点数。\n";
     } catch {
         return "";
     }
