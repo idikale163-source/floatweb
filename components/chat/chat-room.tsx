@@ -5364,7 +5364,12 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                         onContextMenu={(e) => { e.preventDefault(); openMessageContextMenu(msg.id, { x: e.clientX, y: e.clientY }); }}
                                         className={isSystemInstruction
                                             ? "chat-system-instruction-card relative cursor-pointer"
-                                            : "chat-sys-msg break-all max-w-[90%] relative cursor-pointer"}
+                                            : `chat-sys-msg break-all max-w-[90%] relative cursor-pointer${
+                                                // 骰子旁白：等骰子落定再淡入，避免剧透点数
+                                                msg.content.startsWith("🎲 掷出了") && Date.now() - new Date(msg.createdAt).getTime() < 6000
+                                                    ? " dice-aside-reveal"
+                                                    : ""
+                                            }`}
                                         {...(activeMessageId === msg.id ? { "data-active": "" } : {})}
                                     >
                                         {isSystemInstruction ? (

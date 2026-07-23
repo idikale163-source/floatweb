@@ -6761,3 +6761,13 @@
   width: 9px;
   height: 9px;
 }
+
+/* ── 骰子旁白：等骰子落定后再淡入，避免提前剧透点数 ── */
+.dice-aside-reveal {
+  opacity: 0;
+  animation: diceAsideReveal 0.35s ease 1.6s forwards;
+}
+
+@keyframes diceAsideReveal {
+  to { opacity: 1; }
+}
