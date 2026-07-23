@@ -27,13 +27,13 @@ type Palette = {
 };
 
 const PALETTES: Palette[] = [
-    { hue: 40, sat: 100, light: 62, strayHue: 215, shape: "peony" },   // 金
-    { hue: 48, sat: 22, light: 86, strayHue: 205, shape: "ring" },     // 银白环
-    { hue: 26, sat: 100, light: 60, strayHue: 225, shape: "willow" },  // 橙金瀑布
-    { hue: 330, sat: 95, light: 68, strayHue: 48, shape: "peony" },    // 粉
-    { hue: 262, sat: 90, light: 70, strayHue: 44, shape: "willow" },   // 紫瀑布
-    { hue: 195, sat: 95, light: 64, strayHue: 330, shape: "peony" },   // 青蓝
-    { hue: 155, sat: 90, light: 62, strayHue: 40, shape: "ring" },     // 翠绿环
+    { hue: 212, sat: 92, light: 62, strayHue: 210, shape: "peony" },   // 冰蓝
+    { hue: 218, sat: 30, light: 84, strayHue: 220, shape: "ring" },    // 蓝白环
+    { hue: 224, sat: 88, light: 58, strayHue: 205, shape: "willow" },  // 深蓝瀑布
+    { hue: 205, sat: 85, light: 68, strayHue: 240, shape: "peony" },   // 天蓝
+    { hue: 242, sat: 70, light: 68, strayHue: 210, shape: "willow" },  // 蓝紫瀑布
+    { hue: 210, sat: 14, light: 88, strayHue: 215, shape: "peony" },   // 银白
+    { hue: 216, sat: 90, light: 64, strayHue: 200, shape: "ring" },    // 宝蓝环
 ];
 
 type Spark = {
@@ -110,21 +110,23 @@ export function FireworksCanvas() {
                     : maxSpeed * (Math.random() < 0.75 ? 0.72 + Math.random() * 0.28 : 0.25 + Math.random() * 0.45);
                 const stray = palette.shape !== "ring" && Math.random() < 0.14;
                 const life = palette.shape === "willow" ? 130 + Math.random() * 50 : 68 + Math.random() * 46;
+                const spawnRadius = (6 + Math.random() * 10) * scale;
                 sparks.push({
-                    x: rocket.x, y: rocket.y,
+                    x: rocket.x + Math.cos(angle) * spawnRadius,
+                    y: rocket.y + Math.sin(angle) * spawnRadius,
                     vx: Math.cos(angle) * speed,
                     vy: Math.sin(angle) * speed,
                     life, maxLife: life,
                     hue: (stray ? palette.strayHue : palette.hue) + (Math.random() - 0.5) * 14,
                     sat: stray ? 90 : palette.sat,
                     light: stray ? 66 : palette.light,
-                    size: (palette.shape === "willow" ? 1.7 : 1.4) + Math.random() * 1.1,
+                    size: (palette.shape === "willow" ? 1.4 : 1.1) + Math.random() * 0.8,
                     willow: palette.shape === "willow",
                     crackle: palette.shape === "peony" && !stray && Math.random() < 0.22,
                     trail: [rocket.x, rocket.y],
                 });
             }
-            flashes.push({ x: rocket.x, y: rocket.y, life: 9, maxLife: 9, radius: (palette.shape === "willow" ? 80 : 110) * scale });
+            flashes.push({ x: rocket.x, y: rocket.y, life: 7, maxLife: 7, radius: (palette.shape === "willow" ? 55 : 75) * scale });
             rings.push({ x: rocket.x, y: rocket.y, life: 16, maxLife: 16, radius: 10 * scale, hue: palette.hue });
         };
 
@@ -136,22 +138,22 @@ export function FireworksCanvas() {
             const pts = s.trail;
             if (pts.length < 4) return;
             // 外圈柔光：粗、淡，营造辉光；内核：细、亮
-            ctx.strokeStyle = `hsla(${s.hue}, ${s.sat}%, ${Math.min(80, s.light + 6)}%, ${alpha * 0.16})`;
-            ctx.lineWidth = s.size * 3.4;
+            ctx.strokeStyle = `hsla(${s.hue}, ${s.sat}%, ${Math.min(80, s.light + 6)}%, ${alpha * 0.1})`;
+            ctx.lineWidth = s.size * 2.6;
             ctx.beginPath();
             ctx.moveTo(pts[0], pts[1]);
             for (let j = 2; j < pts.length; j += 2) ctx.lineTo(pts[j], pts[j + 1]);
             ctx.stroke();
             ctx.strokeStyle = `hsla(${s.hue}, ${s.sat}%, ${s.light}%, ${alpha})`;
-            ctx.lineWidth = s.size * (0.8 + t * 0.6);
+            ctx.lineWidth = s.size * (0.55 + t * 0.5);
             ctx.beginPath();
             ctx.moveTo(pts[0], pts[1]);
             for (let j = 2; j < pts.length; j += 2) ctx.lineTo(pts[j], pts[j + 1]);
             ctx.stroke();
             // 白热头部
-            ctx.fillStyle = `hsla(${s.hue}, ${Math.max(12, s.sat - 55)}%, 92%, ${alpha * 0.85})`;
+            ctx.fillStyle = `hsla(${s.hue}, ${Math.max(12, s.sat - 55)}%, 92%, ${alpha * 0.55})`;
             ctx.beginPath();
-            ctx.arc(s.x, s.y, s.size * 0.5, 0, Math.PI * 2);
+            ctx.arc(s.x, s.y, s.size * 0.4, 0, Math.PI * 2);
             ctx.fill();
         };
 
@@ -179,14 +181,14 @@ export function FireworksCanvas() {
                 r.vy += 0.34 * scale * dt;
                 r.x += r.vx * dt;
                 r.y += r.vy * dt;
-                ctx.strokeStyle = "hsla(42, 100%, 82%, 0.28)";
-                ctx.lineWidth = 5;
+                ctx.strokeStyle = "hsla(215, 90%, 82%, 0.2)";
+                ctx.lineWidth = 4;
                 ctx.beginPath();
                 ctx.moveTo(r.px, r.py);
                 ctx.lineTo(r.x, r.y);
                 ctx.stroke();
-                ctx.strokeStyle = "hsla(42, 100%, 80%, 0.95)";
-                ctx.lineWidth = 2;
+                ctx.strokeStyle = "hsla(215, 80%, 82%, 0.85)";
+                ctx.lineWidth = 1.6;
                 ctx.beginPath();
                 ctx.moveTo(r.px, r.py);
                 ctx.lineTo(r.x, r.y);
@@ -203,8 +205,8 @@ export function FireworksCanvas() {
                 if (f.life <= 0) { flashes.splice(i, 1); continue; }
                 const t = f.life / f.maxLife;
                 const gradient = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.radius * (1.3 - t * 0.5));
-                gradient.addColorStop(0, `hsla(45, 100%, 90%, ${0.65 * t})`);
-                gradient.addColorStop(1, "hsla(45, 100%, 90%, 0)");
+                gradient.addColorStop(0, `hsla(215, 80%, 90%, ${0.42 * t})`);
+                gradient.addColorStop(1, "hsla(215, 80%, 90%, 0)");
                 ctx.fillStyle = gradient;
                 ctx.beginPath();
                 ctx.arc(f.x, f.y, f.radius * 1.3, 0, Math.PI * 2);
@@ -258,7 +260,7 @@ export function FireworksCanvas() {
                             vx: Math.cos(angle) * speed,
                             vy: Math.sin(angle) * speed,
                             life, maxLife: life,
-                            hue: 48, sat: 30, light: 88,
+                            hue: 215, sat: 30, light: 90,
                             size: 0.9, willow: false, crackle: false,
                             trail: [s.x, s.y],
                         });
@@ -266,9 +268,10 @@ export function FireworksCanvas() {
                 }
 
                 const t = s.life / s.maxLife;
-                // 末端闪烁：寿命最后 30% 随机明灭
+                // 前几帧渐入（避免爆心过曝糊成一团）；末端 30% 随机明灭
+                const born = Math.min(1, (s.maxLife - s.life) / 5);
                 const flicker = t < 0.3 ? (Math.random() < 0.45 ? 0.15 : 1) : 1;
-                const alpha = Math.min(1, t * 1.6) * flicker;
+                const alpha = Math.min(1, t * 1.6) * flicker * (0.35 + 0.65 * born);
                 if (alpha <= 0.02) continue;
                 strokeTrail(s, alpha, t);
             }
