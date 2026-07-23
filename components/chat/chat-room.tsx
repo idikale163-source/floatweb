@@ -2918,7 +2918,13 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         errorPrefix = "发送失败",
         onDecline,
     }: ManagedGenerationOptions) => {
-        if (isGeneratingRef.current) return;
+        if (isGeneratingRef.current) {
+            if (activeGenerationRuns.has(session.id)) return;
+            // 上一轮被外部取消/顶替后收尾提前返回过，标记已是陈旧状态：复位后继续本次请求
+            isGeneratingRef.current = false;
+            setIsGenerating(false);
+            clearGenerationLock(session.id);
+        }
 
         const generationRun = createGenerationRun(session.id);
         const generationRunId = generationRun.runId;
@@ -2971,12 +2977,19 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             });
             setMessages(prev => [...prev, errorMsg]);
         } finally {
-            if (!finishGenerationRun(session.id, generationRunId)) return;
-            isGeneratingRef.current = false;
-            setIsGenerating(false);
-            clearGenerationLock(session.id);
-            if (!mountedRef.current) {
-                window.dispatchEvent(new CustomEvent(CHAT_BG_COMPLETE, { detail: { sessionId: session.id } }));
+            if (finishGenerationRun(session.id, generationRunId)) {
+                isGeneratingRef.current = false;
+                setIsGenerating(false);
+                clearGenerationLock(session.id);
+                if (!mountedRef.current) {
+                    window.dispatchEvent(new CustomEvent(CHAT_BG_COMPLETE, { detail: { sessionId: session.id } }));
+                }
+            } else if (!activeGenerationRuns.has(session.id)) {
+                // 本轮被外部取消且没有新一轮接手：仍需复位，否则「生成中」标记永久卡死，
+                // 后续联动/追问的回复请求会被静默吞掉
+                isGeneratingRef.current = false;
+                setIsGenerating(false);
+                clearGenerationLock(session.id);
             }
         }
 
@@ -3201,7 +3214,13 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     };
 
     const triggerAIResponse = async () => {
-        if (isGeneratingRef.current) return;
+        if (isGeneratingRef.current) {
+            if (activeGenerationRuns.has(session.id)) return;
+            // 上一轮被外部取消/顶替后收尾提前返回过，标记已是陈旧状态：复位后继续本次请求
+            isGeneratingRef.current = false;
+            setIsGenerating(false);
+            clearGenerationLock(session.id);
+        }
         const generationRun = createGenerationRun(session.id);
         const generationRunId = generationRun.runId;
         const isCurrentGeneration = () => isGenerationRunActive(session.id, generationRunId);
@@ -3441,18 +3460,25 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             });
             setMessages(prev => [...prev, errorMsg]);
         } finally {
-            if (!finishGenerationRun(session.id, generationRunId)) return;
-            isGeneratingRef.current = false;
-            setIsGenerating(false);
-            clearGenerationLock(session.id);
-            if (!mountedRef.current) {
-                window.dispatchEvent(new CustomEvent(CHAT_BG_COMPLETE, { detail: { sessionId: session.id } }));
-            }
-            // If user sent more messages while AI was generating, show the generate button again
-            const latestMsgs = loadChatMessages(session.id);
-            const last = latestMsgs[latestMsgs.length - 1];
-            if (last && last.role === "user") {
-                setPendingGenerate(true);
+            if (finishGenerationRun(session.id, generationRunId)) {
+                isGeneratingRef.current = false;
+                setIsGenerating(false);
+                clearGenerationLock(session.id);
+                if (!mountedRef.current) {
+                    window.dispatchEvent(new CustomEvent(CHAT_BG_COMPLETE, { detail: { sessionId: session.id } }));
+                }
+                // If user sent more messages while AI was generating, show the generate button again
+                const latestMsgs = loadChatMessages(session.id);
+                const last = latestMsgs[latestMsgs.length - 1];
+                if (last && last.role === "user") {
+                    setPendingGenerate(true);
+                }
+            } else if (!activeGenerationRuns.has(session.id)) {
+                // 本轮被外部取消且没有新一轮接手：仍需复位，否则「生成中」标记永久卡死，
+                // 后续联动/追问的回复请求会被静默吞掉
+                isGeneratingRef.current = false;
+                setIsGenerating(false);
+                clearGenerationLock(session.id);
             }
         }
         if (shouldRunDeclineReply) await triggerReply();
@@ -3464,6 +3490,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 sessionId?: string;
                 characterId?: string;
                 handled?: boolean;
+                busy?: boolean;
             }>).detail;
             const requestSessionId = typeof detail?.sessionId === "string" ? detail.sessionId : "";
             const requestCharacterId = typeof detail?.characterId === "string" ? detail.characterId : "";
@@ -3474,6 +3501,11 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
 
             if (detail) detail.handled = true;
             syncMessagesFromStorage();
+            // 真在生成中：如实告知调用方（避免记成「已生成回应」），本轮结束后 pendingGenerate 兜底
+            if (isGeneratingRef.current && activeGenerationRuns.has(session.id)) {
+                if (detail) detail.busy = true;
+                return;
+            }
             void triggerAIResponse();
         };
 
