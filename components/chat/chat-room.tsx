@@ -1110,15 +1110,21 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             const hit = matchChatScreenEffectRule(msg.content);
             if (!hit) continue;
             if (hit.effect === "dice") {
-                // 单独一条骰子图标（角色发的）：原地转换成骰子气泡，避免图标+骰子重复显示
+                // 单独一条骰子图标（角色发的）：原地转成骰子气泡（内容保持图标），
+                // 点数由系统旁白公布，避免结果挂在角色消息上被模仿
                 const face = rollChatDiceFace();
                 const patch = {
-                    content: formatChatDiceResultMessage(face),
                     mediaType: "dice" as const,
                     mediaData: { ...msg.mediaData, diceFace: face },
                 };
                 updateChatMessage(msg.id, patch);
                 setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, ...patch } : m)));
+                const diceAside = pushChatMessage({
+                    sessionId: session.id,
+                    role: "system",
+                    content: formatChatDiceResultMessage(face),
+                });
+                setMessages(prev => [...prev, diceAside]);
                 if (!fired) {
                     setActiveScreenEffect({ runId: msg.id, effect: "dice", emojis: "", diceFace: face });
                     fired = true;
@@ -3615,19 +3621,28 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         } : undefined;
         setQuotingMessage(null);
 
-        // 掷骰子：整条消息就是触发词时，改发骰子气泡（翻滚后定格点数，内容带结果角色本轮可见）
+        // 掷骰子：整条消息就是骰子图标时，发骰子气泡（内容仅图标），
+        // 点数由系统旁白公布——避免结果挂在 user 消息上被角色模仿格式
         const diceOnly = !isQuoting && isDiceOnlyMessage(currentText);
         const diceFace = diceOnly ? rollChatDiceFace() : 0;
 
         const newMsg = pushChatMessage({
             sessionId: session.id,
             role: "user",
-            content: diceOnly ? formatChatDiceResultMessage(diceFace) : currentText,
+            content: currentText,
             mediaType: diceOnly ? "dice" : isQuoting ? "quote" : undefined,
             mediaData: diceOnly ? { diceFace } : isQuoting ? quoteData : undefined,
         });
 
         setMessages(prev => [...prev, newMsg]);
+        if (diceOnly) {
+            const diceAside = pushChatMessage({
+                sessionId: session.id,
+                role: "system",
+                content: formatChatDiceResultMessage(diceFace),
+            });
+            setMessages(prev => [...prev, diceAside]);
+        }
         setPendingGenerate(true);
         return true;
     };
