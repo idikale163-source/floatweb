@@ -70,30 +70,32 @@ export function ScreenEffectSettingsModal({ onClose }: { onClose: () => void }) 
                             {rules.length === 0 && <p className="screen-fx-note">还没有规则，点下方按钮添加</p>}
                             {rules.map(rule => (
                                 <div key={rule.id} className="screen-fx-card" {...(rule.enabled ? { "data-enabled": "" } : {})}>
-                                    <div className="screen-fx-card-row">
+                                    <label className="screen-fx-field">
+                                        <span>触发词</span>
                                         <input
-                                            className="screen-fx-input screen-fx-input-keyword"
                                             type="text"
                                             value={rule.keyword}
                                             onChange={e => patchRule(rule.id, { keyword: e.target.value.slice(0, 60) })}
-                                            placeholder="触发词，如：生日快乐"
+                                            placeholder="如：生日快乐"
                                         />
-                                        <Toggle checked={rule.enabled} onChange={c => patchRule(rule.id, { enabled: c })} />
-                                    </div>
-                                    <div className="screen-fx-card-row">
+                                    </label>
+                                    <label className="screen-fx-field">
+                                        <span>下落表情</span>
                                         <input
-                                            className="screen-fx-input"
                                             type="text"
                                             value={rule.emojis}
                                             onChange={e => patchRule(rule.id, { emojis: e.target.value.slice(0, 16) })}
-                                            placeholder="下落的表情 🎂🎉"
+                                            placeholder="如：🎂🎉"
                                         />
+                                    </label>
+                                    <div className="screen-fx-card-actions">
                                         <button className="screen-fx-pill-btn" onClick={() => playPreview("emoji_rain", rule.emojis)}>
                                             预览
                                         </button>
                                         <button className="screen-fx-icon-btn" aria-label="删除规则" onClick={() => updateRules(rules.filter(r => r.id !== rule.id))}>
                                             <Trash2 size={17} />
                                         </button>
+                                        <Toggle checked={rule.enabled} onChange={c => patchRule(rule.id, { enabled: c })} />
                                     </div>
                                 </div>
                             ))}
@@ -117,15 +119,15 @@ export function ScreenEffectSettingsModal({ onClose }: { onClose: () => void }) 
                                             onChange={c => patchBuiltin(effect.type, { enabled: c })}
                                         />
                                     </div>
-                                    <div className="screen-fx-card-row">
+                                    <label className="screen-fx-field">
+                                        <span>触发词</span>
                                         <input
-                                            className="screen-fx-input"
                                             type="text"
                                             value={builtins[effect.type].keyword}
                                             onChange={e => patchBuiltin(effect.type, { keyword: e.target.value.slice(0, 60) })}
-                                            placeholder={`触发词，如 ${effect.icon}`}
+                                            placeholder={`如 ${effect.icon}`}
                                         />
-                                    </div>
+                                    </label>
                                 </div>
                             ))}
                         </>

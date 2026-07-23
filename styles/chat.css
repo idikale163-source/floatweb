@@ -6544,24 +6544,46 @@
   gap: 9px;
 }
 
-.screen-fx-input {
+.screen-fx-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--c-input);
+  border-radius: 11px;
+  padding: 0 12px;
+}
+
+.screen-fx-field > span {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--c-text);
+}
+
+.screen-fx-field > input {
   flex: 1;
   min-width: 0;
   border: none;
   outline: none;
-  background: var(--c-input);
+  background: transparent;
   color: var(--c-text-title);
-  border-radius: 11px;
-  padding: 10px 12px;
-  font-size: 14px;
-}
-
-.screen-fx-input::placeholder {
-  color: var(--c-icon);
-}
-
-.screen-fx-input-keyword {
+  padding: 11px 0;
+  font-size: 14.5px;
   font-weight: 600;
+}
+
+.screen-fx-field > input::placeholder {
+  color: var(--c-icon);
+  font-weight: 400;
+}
+
+.screen-fx-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.screen-fx-card-actions > :last-child {
+  margin-left: auto;
 }
 
 .screen-fx-icon {
