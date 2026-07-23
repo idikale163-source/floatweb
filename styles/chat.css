@@ -6688,9 +6688,9 @@
 
 /* ── 骰子消息气泡：3D 实骰翻滚后定格点数（中式骰，1/4 红点） ── */
 .dice-bubble3d {
-  width: 62px;
-  height: 62px;
-  perspective: 320px;
+  width: 46px;
+  height: 46px;
+  perspective: 240px;
   margin: 4px 2px;
 }
 
@@ -6722,27 +6722,27 @@
 .dice-bubble3d-face {
   position: absolute;
   inset: 0;
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(150deg, #ffffff, #e7e7ee);
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05), inset 0 -3px 8px rgba(0, 0, 0, 0.07);
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
   place-items: center;
-  padding: 9px;
+  padding: 7px;
   box-sizing: border-box;
 }
 
-.dice-bubble3d-face[data-face="1"] { transform: translateZ(31px); }
-.dice-bubble3d-face[data-face="6"] { transform: rotateY(180deg) translateZ(31px); }
-.dice-bubble3d-face[data-face="3"] { transform: rotateY(90deg) translateZ(31px); }
-.dice-bubble3d-face[data-face="4"] { transform: rotateY(-90deg) translateZ(31px); }
-.dice-bubble3d-face[data-face="2"] { transform: rotateX(90deg) translateZ(31px); }
-.dice-bubble3d-face[data-face="5"] { transform: rotateX(-90deg) translateZ(31px); }
+.dice-bubble3d-face[data-face="1"] { transform: translateZ(23px); }
+.dice-bubble3d-face[data-face="6"] { transform: rotateY(180deg) translateZ(23px); }
+.dice-bubble3d-face[data-face="3"] { transform: rotateY(90deg) translateZ(23px); }
+.dice-bubble3d-face[data-face="4"] { transform: rotateY(-90deg) translateZ(23px); }
+.dice-bubble3d-face[data-face="2"] { transform: rotateX(90deg) translateZ(23px); }
+.dice-bubble3d-face[data-face="5"] { transform: rotateX(-90deg) translateZ(23px); }
 
 .dice-bubble3d-pip {
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: transparent;
 }
@@ -6758,6 +6758,6 @@
 }
 
 .dice-bubble3d-face[data-face="1"] .dice-bubble3d-pip[data-on] {
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
 }
