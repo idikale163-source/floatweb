@@ -6685,3 +6685,51 @@
   color: var(--c-text);
   opacity: 0.75;
 }
+
+/* ── 骰子消息气泡：翻滚后定格点数（中式骰，1/4 红点） ── */
+.dice-bubble {
+  width: 58px;
+  height: 58px;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #ffffff, #e9e9ef);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14), inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  place-items: center;
+  padding: 9px;
+  box-sizing: border-box;
+}
+
+.dice-bubble[data-rolling] {
+  animation: diceBubbleRoll 1.25s ease-out;
+}
+
+@keyframes diceBubbleRoll {
+  0% { transform: rotate(0deg) scale(0.6); }
+  55% { transform: rotate(660deg) scale(1.12); }
+  80% { transform: rotate(706deg) scale(0.95); }
+  100% { transform: rotate(720deg) scale(1); }
+}
+
+.dice-bubble-pip {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.dice-bubble-pip[data-on] {
+  background: #23242b;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.dice-bubble[data-face="1"] .dice-bubble-pip[data-on],
+.dice-bubble[data-face="4"] .dice-bubble-pip[data-on] {
+  background: #d64545;
+}
+
+.dice-bubble[data-face="1"] .dice-bubble-pip[data-on] {
+  width: 15px;
+  height: 15px;
+}

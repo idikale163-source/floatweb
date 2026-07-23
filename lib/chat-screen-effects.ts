@@ -152,27 +152,24 @@ export function resetBuiltinScreenEffectSettings(): Record<BuiltinScreenEffectTy
 }
 
 // ── 掷骰子 ──────────────────────────────────────────────
-// 点数由发送管线/特效钩子掷定并写成旁白进入聊天记录，特效层播放同一结果。
-
-let pendingDiceFace: number | null = null;
+// 点数掷定后作为「骰子气泡」消息进入聊天记录（气泡翻滚后定格点数），
+// 内容文本带结果供角色读取，全屏动效播放同一点数。
 
 export function rollChatDiceFace(): number {
     return 1 + Math.floor(Math.random() * 6);
 }
 
-/** 发送管线先掷好点数暂存，特效层触发时取走，保证动画和旁白一致 */
-export function setPendingChatDiceFace(face: number): void {
-    pendingDiceFace = face;
-}
-
-export function consumePendingChatDiceFace(): number | null {
-    const face = pendingDiceFace;
-    pendingDiceFace = null;
-    return face;
-}
-
 export function formatChatDiceResultMessage(face: number): string {
     return `🎲 掷出了 ${face} 点`;
+}
+
+/** 整条消息就是骰子触发词（如表情面板点出的 🎲）→ 直接转成骰子气泡 */
+export function isDiceOnlyMessage(text: string): boolean {
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+    const setting = loadBuiltinScreenEffectSettings().dice;
+    if (!setting.enabled) return false;
+    return setting.keyword.split(/[,，、\s]+/).some(word => word && word === trimmed);
 }
 
 /** 注入聊天提示词的特效说明；全部特效关闭时不注入 */
@@ -185,7 +182,7 @@ export function buildScreenEffectPromptHint(): string {
         // 前面留空行与上一板块隔开（挂在自定义 APP 指令之后）
         return "\n\n### 聊天室全屏特效\n"
             + "消息文本包含触发词会自动播放全屏动画，包括：全屏烟花「🎆」、全屏爱心「💗」、全屏礼花「🎊」、全屏炸弹「💣」、掷骰子「🎲」，"
-            + "其中掷骰子结果由系统旁白公布。你自己掷的结果要到下一轮才可见。请以旁白公布的点数为准回应，不要自行编造点数。\n";
+            + "其中掷骰子会掷出 1-6 点，点数以聊天里的骰子消息（「🎲 掷出了 N 点」）为准。你自己掷的结果要到下一轮才可见。请按公布的点数回应，不要自行编造点数。\n";
     } catch {
         return "";
     }

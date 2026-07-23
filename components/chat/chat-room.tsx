@@ -68,11 +68,10 @@ import { scrollElementWithinContainer } from "@/lib/dom-scroll";
 import { ChatFallbackAvatar } from "./chat-fallback-avatar";
 import { ChatScreenEffectOverlay, type ActiveScreenEffect } from "./chat-screen-effect";
 import {
-    consumePendingChatDiceFace,
     formatChatDiceResultMessage,
+    isDiceOnlyMessage,
     matchChatScreenEffectRule,
     rollChatDiceFace,
-    setPendingChatDiceFace,
 } from "@/lib/chat-screen-effects";
 import { abortableDelay, throwIfAborted } from "@/lib/abort-utils";
 import { GROUP_SELF_KEY, canGroupAdminAct, applyGroupAdminAction, buildGroupAdminNoticeText, getGroupMemberDisplayName, getGroupMuteRemainingMs, getGroupRole, isGroupMuted, formatMuteRemainingLabel, resolveGroupMemberKeyByName, type GroupAdminAction } from "@/lib/group-admin";
@@ -155,6 +154,7 @@ const OfflineAssistantTextBlock = memo(function OfflineAssistantTextBlock({
 
 const CHAT_VISUAL_MEDIA_TYPES = new Set([
     "sticker",
+    "dice",
     "red_packet",
     "transfer",
     "payment_request",
@@ -202,6 +202,7 @@ function getWeixinCloudDeleteTargetCount(messages: ChatMessage[]): number {
 
 const CHAT_MEDIA_BUBBLE_TYPES = new Set([
     "sticker",
+    "dice",
     "red_packet",
     "transfer",
     "payment_request",
@@ -1094,28 +1095,36 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         for (const msg of messages) {
             if (seen.has(msg.id)) continue;
             seen.add(msg.id);
-            if (fired) continue;
             if (msg.role !== "user" && msg.role !== "assistant") continue;
-            if (msg.mediaType || !msg.content) continue;
             // 只对本次打开聊天室之后产生的消息生效，历史加载/翻页不触发
             if (new Date(msg.createdAt).getTime() < screenFxMountedAtRef.current) continue;
+            // 骰子气泡：气泡自己翻滚定格，这里同步播全屏骰子（点数一致）
+            if (msg.mediaType === "dice") {
+                if (fired) continue;
+                const face = Math.min(6, Math.max(1, Number(msg.mediaData?.diceFace) || 1));
+                setActiveScreenEffect({ runId: msg.id, effect: "dice", emojis: "", diceFace: face });
+                fired = true;
+                continue;
+            }
+            if (msg.mediaType || !msg.content) continue;
             const hit = matchChatScreenEffectRule(msg.content);
             if (!hit) continue;
-            let diceFace: number | undefined;
             if (hit.effect === "dice") {
-                // 发送管线可能已掷好点数；角色触发时在这里掷，并写旁白公布结果
-                diceFace = consumePendingChatDiceFace() ?? undefined;
-                if (diceFace === undefined) {
-                    diceFace = rollChatDiceFace();
-                    const diceMsg = pushChatMessage({
-                        sessionId: session.id,
-                        role: "system",
-                        content: formatChatDiceResultMessage(diceFace),
-                    });
-                    setMessages(prev => [...prev, diceMsg]);
-                }
+                // 文本里带骰子触发词：补一条骰子气泡公布点数（全屏动效由气泡再触发）
+                const face = rollChatDiceFace();
+                const diceMsg = pushChatMessage({
+                    sessionId: session.id,
+                    role: msg.role,
+                    content: formatChatDiceResultMessage(face),
+                    mediaType: "dice",
+                    mediaData: { diceFace: face },
+                    ...(msg.senderCharacterId ? { senderCharacterId: msg.senderCharacterId, senderName: msg.senderName } : {}),
+                });
+                setMessages(prev => [...prev, diceMsg]);
+                continue;
             }
-            setActiveScreenEffect({ runId: msg.id, ...hit, diceFace });
+            if (fired) continue;
+            setActiveScreenEffect({ runId: msg.id, ...hit });
             fired = true;
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3604,26 +3613,19 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         } : undefined;
         setQuotingMessage(null);
 
+        // 掷骰子：整条消息就是触发词时，改发骰子气泡（翻滚后定格点数，内容带结果角色本轮可见）
+        const diceOnly = !isQuoting && isDiceOnlyMessage(currentText);
+        const diceFace = diceOnly ? rollChatDiceFace() : 0;
+
         const newMsg = pushChatMessage({
             sessionId: session.id,
             role: "user",
-            content: currentText,
-            mediaType: isQuoting ? "quote" : undefined,
-            mediaData: isQuoting ? quoteData : undefined,
+            content: diceOnly ? formatChatDiceResultMessage(diceFace) : currentText,
+            mediaType: diceOnly ? "dice" : isQuoting ? "quote" : undefined,
+            mediaData: diceOnly ? { diceFace } : isQuoting ? quoteData : undefined,
         });
 
         setMessages(prev => [...prev, newMsg]);
-        // 掷骰子：点数在进入生成前掷好并写成旁白，让角色本轮就能对结果做出回应
-        if (matchChatScreenEffectRule(currentText)?.effect === "dice") {
-            const face = rollChatDiceFace();
-            setPendingChatDiceFace(face);
-            const diceMsg = pushChatMessage({
-                sessionId: session.id,
-                role: "system",
-                content: formatChatDiceResultMessage(face),
-            });
-            setMessages(prev => [...prev, diceMsg]);
-        }
         setPendingGenerate(true);
         return true;
     };
