@@ -1,11 +1,11 @@
 "use client";
 
-// 全屏特效管理：两个 Tab——「表情雨」自定义触发词规则；「全屏特效」内置玩法
-// （烟花/爱心/礼花/炸弹/骰子）。全局配置，所有会话共用。
+// 全屏特效管理：底部全宽弹层，两个 Tab——「表情雨」自定义触发词规则；
+// 「全屏特效」内置玩法（烟花/爱心/礼花/炸弹/骰子）。全局配置，所有会话共用。
 
 import { useState } from "react";
-import { Plus, RotateCcw, Trash2 } from "lucide-react";
-import { Toggle, Input } from "@/components/ui/form";
+import { Plus, Trash2 } from "lucide-react";
+import { Toggle } from "@/components/ui/form";
 import {
     BUILTIN_SCREEN_EFFECTS,
     createChatScreenEffectRule,
@@ -46,27 +46,33 @@ export function ScreenEffectSettingsModal({ onClose }: { onClose: () => void }) 
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-dialog screen-fx-dialog" onClick={e => e.stopPropagation()}>
-                <span className="modal-header-title">全屏特效</span>
-                <div className="screen-fx-tabs">
-                    <button className="emoji-category-pill" {...(tab === "rain" ? { "data-active": "" } : {})} onClick={() => setTab("rain")}>
+        <div className="modal-overlay modal-overlay-bottom" onClick={onClose}>
+            <div className="modal-sheet screen-fx-sheet" onClick={e => e.stopPropagation()}>
+                <span className="screen-fx-grabber" aria-hidden="true" />
+                <div className="screen-fx-titles">
+                    <h2 className="screen-fx-title">全屏<em>特效</em></h2>
+                    <p className="screen-fx-subtitle">消息包含触发词即自动播放，全部会话通用</p>
+                </div>
+
+                <div className="screen-fx-tabs" role="tablist">
+                    <button role="tab" aria-selected={tab === "rain"} {...(tab === "rain" ? { "data-active": "" } : {})} onClick={() => setTab("rain")}>
                         表情雨
                     </button>
-                    <button className="emoji-category-pill" {...(tab === "builtin" ? { "data-active": "" } : {})} onClick={() => setTab("builtin")}>
+                    <button role="tab" aria-selected={tab === "builtin"} {...(tab === "builtin" ? { "data-active": "" } : {})} onClick={() => setTab("builtin")}>
                         全屏特效
                     </button>
                 </div>
 
-                {tab === "rain" ? (
-                    <>
-                        <span className="menu-desc">消息包含触发词就下一场表情雨；触发词可用逗号分隔多个，从上到下取第一个命中。</span>
-                        <div className="screen-fx-list">
-                            {rules.length === 0 && <span className="menu-desc text-center py-4">还没有规则，点下方按钮添加</span>}
+                <div className="screen-fx-list">
+                    {tab === "rain" ? (
+                        <>
+                            <p className="screen-fx-note">触发词可用逗号分隔多个，从上到下取第一个命中</p>
+                            {rules.length === 0 && <p className="screen-fx-note">还没有规则，点下方按钮添加</p>}
                             {rules.map(rule => (
-                                <div key={rule.id} className="screen-fx-card">
+                                <div key={rule.id} className="screen-fx-card" {...(rule.enabled ? { "data-enabled": "" } : {})}>
                                     <div className="screen-fx-card-row">
-                                        <Input
+                                        <input
+                                            className="screen-fx-input screen-fx-input-keyword"
                                             type="text"
                                             value={rule.keyword}
                                             onChange={e => patchRule(rule.id, { keyword: e.target.value.slice(0, 60) })}
@@ -75,41 +81,35 @@ export function ScreenEffectSettingsModal({ onClose }: { onClose: () => void }) 
                                         <Toggle checked={rule.enabled} onChange={c => patchRule(rule.id, { enabled: c })} />
                                     </div>
                                     <div className="screen-fx-card-row">
-                                        <Input
+                                        <input
+                                            className="screen-fx-input"
                                             type="text"
                                             value={rule.emojis}
                                             onChange={e => patchRule(rule.id, { emojis: e.target.value.slice(0, 16) })}
-                                            placeholder="下落的表情，如 🎂🎉"
+                                            placeholder="下落的表情 🎂🎉"
                                         />
-                                        <button className="ui-btn ui-btn-ghost screen-fx-mini-btn" onClick={() => playPreview("emoji_rain", rule.emojis)}>
+                                        <button className="screen-fx-pill-btn" onClick={() => playPreview("emoji_rain", rule.emojis)}>
                                             预览
                                         </button>
-                                        <button className="ui-btn ui-btn-ghost screen-fx-mini-btn" aria-label="删除规则" onClick={() => updateRules(rules.filter(r => r.id !== rule.id))}>
-                                            <Trash2 size={16} />
+                                        <button className="screen-fx-icon-btn" aria-label="删除规则" onClick={() => updateRules(rules.filter(r => r.id !== rule.id))}>
+                                            <Trash2 size={17} />
                                         </button>
                                     </div>
                                 </div>
                             ))}
-                        </div>
-                        <div className="flex gap-3 w-full">
-                            <button className="ui-btn ui-btn-outline flex-1" onClick={() => updateRules([...rules, createChatScreenEffectRule()])}>
-                                <Plus size={16} /> 添加规则
+                            <button className="screen-fx-add-btn" onClick={() => updateRules([...rules, createChatScreenEffectRule()])}>
+                                <Plus size={17} /> 添加规则
                             </button>
-                            <button className="ui-btn ui-btn-ghost flex-1" onClick={() => setRules(resetChatScreenEffectRules())}>
-                                <RotateCcw size={16} /> 恢复默认
-                            </button>
-                        </div>
-                    </>
-                ) : (
-                    <>
-                        <span className="menu-desc">表情面板「特效」栏点一下即可发送；消息包含触发词也会播放，触发词可用逗号分隔多个。</span>
-                        <div className="screen-fx-list">
+                        </>
+                    ) : (
+                        <>
+                            <p className="screen-fx-note">表情面板「特效」栏点一下即可发送，命中触发词也会播放</p>
                             {BUILTIN_SCREEN_EFFECTS.map(effect => (
-                                <div key={effect.type} className="screen-fx-card">
+                                <div key={effect.type} className="screen-fx-card" {...(builtins[effect.type].enabled ? { "data-enabled": "" } : {})}>
                                     <div className="screen-fx-card-row">
                                         <span className="screen-fx-icon">{effect.icon}</span>
                                         <span className="screen-fx-name">{effect.name}</span>
-                                        <button className="ui-btn ui-btn-ghost screen-fx-mini-btn" onClick={() => playPreview(effect.type, "")}>
+                                        <button className="screen-fx-pill-btn" onClick={() => playPreview(effect.type, "")}>
                                             预览
                                         </button>
                                         <Toggle
@@ -118,7 +118,8 @@ export function ScreenEffectSettingsModal({ onClose }: { onClose: () => void }) 
                                         />
                                     </div>
                                     <div className="screen-fx-card-row">
-                                        <Input
+                                        <input
+                                            className="screen-fx-input"
                                             type="text"
                                             value={builtins[effect.type].keyword}
                                             onChange={e => patchBuiltin(effect.type, { keyword: e.target.value.slice(0, 60) })}
@@ -127,14 +128,19 @@ export function ScreenEffectSettingsModal({ onClose }: { onClose: () => void }) 
                                     </div>
                                 </div>
                             ))}
-                        </div>
-                        <button className="ui-btn ui-btn-ghost w-full" onClick={() => setBuiltins(resetBuiltinScreenEffectSettings())}>
-                            <RotateCcw size={16} /> 恢复默认触发词
-                        </button>
-                    </>
-                )}
+                        </>
+                    )}
+                </div>
 
-                <button className="ui-btn ui-btn-success w-full" onClick={onClose}>完成</button>
+                <div className="screen-fx-footer">
+                    <button
+                        className="screen-fx-reset-link"
+                        onClick={() => (tab === "rain" ? setRules(resetChatScreenEffectRules()) : setBuiltins(resetBuiltinScreenEffectSettings()))}
+                    >
+                        恢复默认{tab === "rain" ? "规则" : "触发词"}
+                    </button>
+                    <button className="screen-fx-cta" onClick={onClose}>完成</button>
+                </div>
             </div>
             <ChatScreenEffectOverlay active={preview} onDone={() => setPreview(null)} />
         </div>

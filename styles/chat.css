@@ -6436,68 +6436,213 @@
   color: var(--c-danger, #e5484d);
 }
 
-/* ── 全屏特效设置弹窗 ── */
-.screen-fx-dialog {
-  max-height: 82vh;
-  display: flex;
-  flex-direction: column;
+/* ── 全屏特效设置弹窗（底部全宽弹层）── */
+.screen-fx-sheet {
+  background: var(--c-page-body-bg);
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  padding: 10px 18px calc(14px + env(safe-area-inset-bottom));
+  max-height: 88%;
+}
+
+.screen-fx-grabber {
+  width: 38px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--c-icon);
+  opacity: 0.35;
+  margin: 4px auto 10px;
+  flex-shrink: 0;
+}
+
+.screen-fx-titles {
+  padding: 2px 4px 12px;
+  flex-shrink: 0;
+}
+
+.screen-fx-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--c-text-title);
+  line-height: 1.25;
+}
+
+.screen-fx-title em {
+  font-style: normal;
+  color: var(--c-success);
+}
+
+.screen-fx-subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--c-text);
 }
 
 .screen-fx-tabs {
   display: flex;
-  gap: 6px;
-  width: 100%;
-  justify-content: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 13px;
+  background: var(--c-input);
+  flex-shrink: 0;
+}
+
+.screen-fx-tabs button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 9px 0;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.screen-fx-tabs button[data-active] {
+  background: var(--c-panel);
+  color: var(--c-text-title);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .screen-fx-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: 100%;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
-  padding: 2px;
+  padding: 12px 2px 4px;
+}
+
+.screen-fx-note {
+  margin: 0 4px;
+  font-size: 12px;
+  color: var(--c-text);
 }
 
 .screen-fx-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  border-radius: 14px;
-  padding: 10px 12px;
-  background: var(--c-input);
+  gap: 10px;
+  border-radius: 18px;
+  padding: 13px 14px;
+  background: var(--c-panel);
+  border: 1.5px solid transparent;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.screen-fx-card[data-enabled] {
+  border-color: color-mix(in srgb, var(--c-success) 55%, transparent);
 }
 
 .screen-fx-card-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 
-.screen-fx-card-row .ui-input {
+.screen-fx-input {
   flex: 1;
   min-width: 0;
+  border: none;
+  outline: none;
+  background: var(--c-input);
+  color: var(--c-text-title);
+  border-radius: 11px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.screen-fx-input::placeholder {
+  color: var(--c-icon);
+}
+
+.screen-fx-input-keyword {
+  font-weight: 600;
 }
 
 .screen-fx-icon {
-  font-size: 24px;
+  font-size: 25px;
   line-height: 1;
   flex-shrink: 0;
 }
 
 .screen-fx-name {
   flex: 1;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--c-text);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--c-text-title);
 }
 
-.screen-fx-mini-btn {
+.screen-fx-pill-btn {
   flex-shrink: 0;
-  padding: 6px 10px;
-  white-space: nowrap;
+  border: none;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--c-success) 13%, transparent);
+  color: var(--c-success);
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 7px 14px;
+}
+
+.screen-fx-icon-btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--c-icon);
+  padding: 6px;
+  border-radius: 8px;
+  display: flex;
+}
+
+.screen-fx-add-btn {
+  border: 1.5px dashed color-mix(in srgb, var(--c-success) 55%, transparent);
+  background: transparent;
+  color: var(--c-success);
+  cursor: pointer;
+  border-radius: 16px;
+  padding: 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.screen-fx-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 10px;
+  flex-shrink: 0;
+}
+
+.screen-fx-reset-link {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--c-text);
+  font-size: 13px;
+  padding: 6px 0;
+}
+
+.screen-fx-cta {
+  border: none;
+  cursor: pointer;
+  background: var(--c-success);
+  color: #fff;
+  font-size: 16.5px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 14px 0;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--c-success) 35%, transparent);
 }
 
 /* ── 表情面板「特效」栏 ── */
