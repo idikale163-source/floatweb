@@ -151,6 +151,61 @@ export function resetBuiltinScreenEffectSettings(): Record<BuiltinScreenEffectTy
     return result;
 }
 
+// ── 掷骰子 ──────────────────────────────────────────────
+// 点数由发送管线/特效钩子掷定并写成旁白进入聊天记录，特效层播放同一结果。
+
+let pendingDiceFace: number | null = null;
+
+export function rollChatDiceFace(): number {
+    return 1 + Math.floor(Math.random() * 6);
+}
+
+/** 发送管线先掷好点数暂存，特效层触发时取走，保证动画和旁白一致 */
+export function setPendingChatDiceFace(face: number): void {
+    pendingDiceFace = face;
+}
+
+export function consumePendingChatDiceFace(): number | null {
+    const face = pendingDiceFace;
+    pendingDiceFace = null;
+    return face;
+}
+
+export function formatChatDiceResultMessage(face: number): string {
+    return `🎲 掷出了 ${face} 点`;
+}
+
+function firstKeyword(keyword: string): string {
+    return keyword.split(/[,，、\s]+/).filter(Boolean)[0] ?? "";
+}
+
+/** 注入聊天提示词的特效说明：让角色知道有哪些触发词、怎么用、骰子结果怎么读 */
+export function buildScreenEffectPromptHint(): string {
+    try {
+        const builtins = loadBuiltinScreenEffectSettings();
+        const builtinParts = BUILTIN_SCREEN_EFFECTS
+            .filter(effect => builtins[effect.type].enabled)
+            .map(effect => `${effect.name}「${firstKeyword(builtins[effect.type].keyword) || effect.icon}」`);
+        const rainParts = loadChatScreenEffectRules()
+            .filter(rule => rule.enabled && rule.keyword)
+            .slice(0, 8)
+            .map(rule => `「${firstKeyword(rule.keyword)}」`);
+        if (builtinParts.length === 0 && rainParts.length === 0) return "";
+        const lines = [
+            "\n## 聊天室全屏特效",
+            "消息文本包含触发词会自动播放全屏动画，你和用户都能触发；想烘托气氛时把触发词自然写进消息即可，不要解释触发机制。",
+        ];
+        if (builtinParts.length > 0) lines.push(`- 内置特效：${builtinParts.join("、")}`);
+        if (rainParts.length > 0) lines.push(`- 表情雨触发词：${rainParts.join("、")}`);
+        if (builtins.dice?.enabled) {
+            lines.push("- 掷骰子：消息带触发词即掷出 1-6 点，结果由系统旁白公布。用户掷的点数你能直接看到；你自己掷的结果要到下一轮才可见。请以旁白公布的点数为准回应，不要自行编造点数。");
+        }
+        return lines.join("\n") + "\n";
+    } catch {
+        return "";
+    }
+}
+
 function keywordHit(text: string, keyword: string): boolean {
     return keyword
         .split(/[,，、\s]+/)

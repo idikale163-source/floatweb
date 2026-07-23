@@ -67,7 +67,13 @@ import {
 import { scrollElementWithinContainer } from "@/lib/dom-scroll";
 import { ChatFallbackAvatar } from "./chat-fallback-avatar";
 import { ChatScreenEffectOverlay, type ActiveScreenEffect } from "./chat-screen-effect";
-import { matchChatScreenEffectRule } from "@/lib/chat-screen-effects";
+import {
+    consumePendingChatDiceFace,
+    formatChatDiceResultMessage,
+    matchChatScreenEffectRule,
+    rollChatDiceFace,
+    setPendingChatDiceFace,
+} from "@/lib/chat-screen-effects";
 import { abortableDelay, throwIfAborted } from "@/lib/abort-utils";
 import { GROUP_SELF_KEY, canGroupAdminAct, applyGroupAdminAction, buildGroupAdminNoticeText, getGroupMemberDisplayName, getGroupMuteRemainingMs, getGroupRole, isGroupMuted, formatMuteRemainingLabel, resolveGroupMemberKeyByName, type GroupAdminAction } from "@/lib/group-admin";
 
@@ -1095,7 +1101,21 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             if (new Date(msg.createdAt).getTime() < screenFxMountedAtRef.current) continue;
             const hit = matchChatScreenEffectRule(msg.content);
             if (!hit) continue;
-            setActiveScreenEffect({ runId: msg.id, ...hit });
+            let diceFace: number | undefined;
+            if (hit.effect === "dice") {
+                // 发送管线可能已掷好点数；角色触发时在这里掷，并写旁白公布结果
+                diceFace = consumePendingChatDiceFace() ?? undefined;
+                if (diceFace === undefined) {
+                    diceFace = rollChatDiceFace();
+                    const diceMsg = pushChatMessage({
+                        sessionId: session.id,
+                        role: "system",
+                        content: formatChatDiceResultMessage(diceFace),
+                    });
+                    setMessages(prev => [...prev, diceMsg]);
+                }
+            }
+            setActiveScreenEffect({ runId: msg.id, ...hit, diceFace });
             fired = true;
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3593,6 +3613,17 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         });
 
         setMessages(prev => [...prev, newMsg]);
+        // 掷骰子：点数在进入生成前掷好并写成旁白，让角色本轮就能对结果做出回应
+        if (matchChatScreenEffectRule(currentText)?.effect === "dice") {
+            const face = rollChatDiceFace();
+            setPendingChatDiceFace(face);
+            const diceMsg = pushChatMessage({
+                sessionId: session.id,
+                role: "system",
+                content: formatChatDiceResultMessage(face),
+            });
+            setMessages(prev => [...prev, diceMsg]);
+        }
         setPendingGenerate(true);
         return true;
     };

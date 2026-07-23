@@ -12,6 +12,8 @@ export type ActiveScreenEffect = {
     runId: string;
     effect: ChatScreenEffectType;
     emojis: string;
+    /** 骰子点数：由发送管线/特效钩子掷定并写入旁白，动画播放同一结果 */
+    diceFace?: number;
 };
 
 const EFFECT_DURATION_MS: Record<ChatScreenEffectType, number> = {
@@ -133,13 +135,13 @@ type EffectParticles = {
     diceFace?: number;
 };
 
-function buildParticles(effect: ChatScreenEffectType, emojis: string): EffectParticles {
+function buildParticles(effect: ChatScreenEffectType, emojis: string, diceFace?: number): EffectParticles {
     switch (effect) {
         case "confetti": return { confetti: confettiParticles() };
         case "fireworks": return { fireworks: true };
         case "hearts": return { hearts: heartParticles() };
         case "bomb": return { bombSparks: bombSparks() };
-        case "dice": return { diceFace: 1 + Math.floor(Math.random() * 6) };
+        case "dice": return { diceFace: diceFace ?? 1 + Math.floor(Math.random() * 6) };
         default: return { rain: emojiRainParticles(emojis) };
     }
 }
@@ -151,7 +153,7 @@ export function ChatScreenEffectOverlay({ active, onDone }: {
     // 粒子随机参数在每次 runId 变化时生成一次，动画期间保持稳定
     const particles = useMemo(() => {
         if (!active) return null;
-        return buildParticles(active.effect, active.emojis);
+        return buildParticles(active.effect, active.emojis, active.diceFace);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [active?.runId]);
 
