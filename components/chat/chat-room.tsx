@@ -825,7 +825,14 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
             )}
 
             {showEmojiPanel && (
-                <EmojiPanel onSelect={(emoji) => appendText(emoji, { focus: false })} />
+                <EmojiPanel
+                    onSelect={(emoji) => appendText(emoji, { focus: false })}
+                    onEffectSend={(text) => {
+                        if (inputLocked || isGenerating) return;
+                        onSendText(text);
+                        onClosePanels();
+                    }}
+                />
             )}
 
             {showStickerPanel && (
@@ -1086,9 +1093,9 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             if (msg.mediaType || !msg.content) continue;
             // 只对本次打开聊天室之后产生的消息生效，历史加载/翻页不触发
             if (new Date(msg.createdAt).getTime() < screenFxMountedAtRef.current) continue;
-            const rule = matchChatScreenEffectRule(msg.content);
-            if (!rule) continue;
-            setActiveScreenEffect({ runId: msg.id, effect: rule.effect, emojis: rule.emojis });
+            const hit = matchChatScreenEffectRule(msg.content);
+            if (!hit) continue;
+            setActiveScreenEffect({ runId: msg.id, ...hit });
             fired = true;
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps

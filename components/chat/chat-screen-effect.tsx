@@ -1,7 +1,7 @@
 "use client";
 
-// 聊天室全屏特效层：表情雨 / 礼花。盖在聊天室上层但不拦截任何操作，
-// 粒子只用 transform/opacity 动画，播完自动卸载。
+// 聊天室全屏特效层：表情雨 / 礼花 / 烟花 / 爱心 / 炸弹 / 骰子。
+// 盖在聊天室上层但不拦截任何操作，粒子只用 transform/opacity 动画，播完自动卸载。
 
 import { useEffect, useMemo, type CSSProperties } from "react";
 import type { ChatScreenEffectType } from "@/lib/chat-screen-effects";
@@ -13,11 +13,34 @@ export type ActiveScreenEffect = {
     emojis: string;
 };
 
-export const SCREEN_EFFECT_DURATION_MS = 4200;
+const EFFECT_DURATION_MS: Record<ChatScreenEffectType, number> = {
+    emoji_rain: 4200,
+    confetti: 4200,
+    fireworks: 3800,
+    hearts: 4200,
+    bomb: 2800,
+    dice: 2800,
+};
 
 const EMOJI_RAIN_COUNT = 32;
 const CONFETTI_COUNT = 44;
+const HEART_COUNT = 22;
+const FIREWORK_BURSTS = 6;
+const FIREWORK_SPARKS = 14;
+const BOMB_SPARKS = 16;
 const CONFETTI_COLORS = ["#ff5f5f", "#ffb03a", "#ffe14d", "#5fd68a", "#4fa8ff", "#b28cff", "#ff8ad4"];
+const FIREWORK_COLORS = ["#ffd54d", "#ff8a5f", "#ff5fa2", "#6fd3ff", "#9dff8a", "#c9a2ff"];
+const HEART_EMOJIS = ["💗", "💖", "❤️", "💕"];
+
+// 骰子点位：3x3 宫格（0-8）中每个点数要点亮的格子
+const DICE_PIPS: Record<number, number[]> = {
+    1: [4],
+    2: [0, 8],
+    3: [0, 4, 8],
+    4: [0, 2, 6, 8],
+    5: [0, 2, 4, 6, 8],
+    6: [0, 2, 3, 5, 6, 8],
+};
 
 function splitEmojis(value: string): string[] {
     const list = Array.from(value.trim());
@@ -63,6 +86,87 @@ function confettiParticles(): { color: string; style: ParticleStyle }[] {
     });
 }
 
+type FireworkBurst = {
+    style: ParticleStyle;
+    color: string;
+    sparks: { style: ParticleStyle }[];
+};
+
+function fireworkBursts(): FireworkBurst[] {
+    return Array.from({ length: FIREWORK_BURSTS }, (_, i) => {
+        const delay = i * 0.45 + Math.random() * 0.2;
+        const color = FIREWORK_COLORS[i % FIREWORK_COLORS.length];
+        const radius = 90 + Math.random() * 70;
+        return {
+            color,
+            style: {
+                left: `${12 + Math.random() * 76}%`,
+                top: `${12 + Math.random() * 42}%`,
+            },
+            sparks: Array.from({ length: FIREWORK_SPARKS }, (_, j) => {
+                const angle = (j / FIREWORK_SPARKS) * Math.PI * 2 + Math.random() * 0.3;
+                const dist = radius * (0.75 + Math.random() * 0.35);
+                return {
+                    style: {
+                        animationDelay: `${delay.toFixed(2)}s`,
+                        "--fx-tx": `${Math.round(Math.cos(angle) * dist)}px`,
+                        "--fx-ty": `${Math.round(Math.sin(angle) * dist + 24)}px`,
+                    } as ParticleStyle,
+                };
+            }),
+        };
+    });
+}
+
+function heartParticles(): { char: string; style: ParticleStyle }[] {
+    return Array.from({ length: HEART_COUNT }, (_, i) => ({
+        char: HEART_EMOJIS[i % HEART_EMOJIS.length],
+        style: {
+            left: `${6 + Math.random() * 86}%`,
+            fontSize: `${Math.round(22 + Math.random() * 26)}px`,
+            animationDelay: `${(Math.random() * 1.6).toFixed(2)}s`,
+            animationDuration: `${(2.2 + Math.random() * 1.2).toFixed(2)}s`,
+            "--fx-drift": `${Math.round((Math.random() - 0.5) * 120)}px`,
+            "--fx-spin": `${Math.round((Math.random() - 0.5) * 60)}deg`,
+        },
+    }));
+}
+
+function bombSparks(): { char: string; style: ParticleStyle }[] {
+    return Array.from({ length: BOMB_SPARKS }, (_, i) => {
+        const angle = (i / BOMB_SPARKS) * Math.PI * 2 + Math.random() * 0.3;
+        const dist = 110 + Math.random() * 120;
+        return {
+            char: i % 3 === 0 ? "🔥" : "💥",
+            style: {
+                fontSize: `${Math.round(20 + Math.random() * 18)}px`,
+                "--fx-tx": `${Math.round(Math.cos(angle) * dist)}px`,
+                "--fx-ty": `${Math.round(Math.sin(angle) * dist)}px`,
+            } as ParticleStyle,
+        };
+    });
+}
+
+type EffectParticles = {
+    rain?: { char: string; style: ParticleStyle }[];
+    confetti?: { color: string; style: ParticleStyle }[];
+    fireworks?: FireworkBurst[];
+    hearts?: { char: string; style: ParticleStyle }[];
+    bombSparks?: { char: string; style: ParticleStyle }[];
+    diceFace?: number;
+};
+
+function buildParticles(effect: ChatScreenEffectType, emojis: string): EffectParticles {
+    switch (effect) {
+        case "confetti": return { confetti: confettiParticles() };
+        case "fireworks": return { fireworks: fireworkBursts() };
+        case "hearts": return { hearts: heartParticles() };
+        case "bomb": return { bombSparks: bombSparks() };
+        case "dice": return { diceFace: 1 + Math.floor(Math.random() * 6) };
+        default: return { rain: emojiRainParticles(emojis) };
+    }
+}
+
 export function ChatScreenEffectOverlay({ active, onDone }: {
     active: ActiveScreenEffect | null;
     onDone: () => void;
@@ -70,15 +174,13 @@ export function ChatScreenEffectOverlay({ active, onDone }: {
     // 粒子随机参数在每次 runId 变化时生成一次，动画期间保持稳定
     const particles = useMemo(() => {
         if (!active) return null;
-        return active.effect === "confetti"
-            ? { confetti: confettiParticles() }
-            : { rain: emojiRainParticles(active.emojis) };
+        return buildParticles(active.effect, active.emojis);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [active?.runId]);
 
     useEffect(() => {
         if (!active) return;
-        const timer = window.setTimeout(onDone, SCREEN_EFFECT_DURATION_MS);
+        const timer = window.setTimeout(onDone, EFFECT_DURATION_MS[active.effect] ?? 4200);
         return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [active?.runId]);
@@ -86,13 +188,43 @@ export function ChatScreenEffectOverlay({ active, onDone }: {
     if (!active || !particles) return null;
 
     return (
-        <div key={active.runId} className="chat-screen-fx" aria-hidden="true">
+        <div key={active.runId} className="chat-screen-fx" aria-hidden="true" {...(particles.bombSparks ? { "data-shake": "" } : {})}>
             {particles.rain?.map((p, i) => (
                 <span key={i} className="chat-screen-fx-emoji" style={p.style}>{p.char}</span>
             ))}
             {particles.confetti?.map((p, i) => (
                 <span key={i} className="chat-screen-fx-confetti" style={{ ...p.style, backgroundColor: p.color }} />
             ))}
+            {particles.fireworks?.map((burst, i) => (
+                <span key={i} className="chat-screen-fx-burst" style={burst.style}>
+                    {burst.sparks.map((s, j) => (
+                        <span key={j} className="chat-screen-fx-spark" style={{ ...s.style, backgroundColor: burst.color }} />
+                    ))}
+                </span>
+            ))}
+            {particles.hearts?.map((p, i) => (
+                <span key={i} className="chat-screen-fx-heart" style={p.style}>{p.char}</span>
+            ))}
+            {particles.bombSparks && (
+                <>
+                    <span className="chat-screen-fx-bomb">💣</span>
+                    <span className="chat-screen-fx-flash" />
+                    {particles.bombSparks.map((p, i) => (
+                        <span key={i} className="chat-screen-fx-bomb-spark" style={p.style}>{p.char}</span>
+                    ))}
+                </>
+            )}
+            {particles.diceFace && (
+                <span className="chat-screen-fx-dice">
+                    {Array.from({ length: 9 }, (_, cell) => (
+                        <span
+                            key={cell}
+                            className="chat-screen-fx-dice-pip"
+                            {...(DICE_PIPS[particles.diceFace!]?.includes(cell) ? { "data-on": "" } : {})}
+                        />
+                    ))}
+                </span>
+            )}
         </div>
     );
 }

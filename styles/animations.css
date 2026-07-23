@@ -170,13 +170,25 @@
   }
 }
 
-/* 聊天室全屏特效：表情雨 / 礼花（触发词命中时播放，不拦截交互） */
+/* 聊天室全屏特效：表情雨/礼花/烟花/爱心/炸弹/骰子（触发词命中时播放，不拦截交互） */
 .chat-screen-fx {
   position: absolute;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
   z-index: 90;
+}
+
+.chat-screen-fx[data-shake] {
+  animation: chatScreenFxShake 0.5s linear 1.05s;
+}
+
+@keyframes chatScreenFxShake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-7px, 3px); }
+  40% { transform: translate(6px, -4px); }
+  60% { transform: translate(-5px, -3px); }
+  80% { transform: translate(4px, 3px); }
 }
 
 .chat-screen-fx-emoji {
@@ -223,6 +235,179 @@
   100% {
     transform: translate(var(--fx-end-x, 0vw), 12vh) rotate(var(--fx-spin, 360deg));
     opacity: 0.85;
+  }
+}
+
+/* 烟花：多个爆点错峰绽放，火花从爆心向四周射出后坠落淡出 */
+.chat-screen-fx-burst {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.chat-screen-fx-spark {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  opacity: 0;
+  animation: chatScreenFxSpark 1.3s ease-out forwards;
+  will-change: transform;
+}
+
+@keyframes chatScreenFxSpark {
+  0% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1.4);
+  }
+  70% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(var(--fx-tx, 0px), var(--fx-ty, 0px)) scale(0.4);
+    opacity: 0;
+  }
+}
+
+/* 爱心：从底部飘升，左右摇摆放大再淡出 */
+.chat-screen-fx-heart {
+  position: absolute;
+  bottom: -50px;
+  line-height: 1;
+  animation: chatScreenFxRise ease-out forwards;
+  will-change: transform;
+}
+
+@keyframes chatScreenFxRise {
+  0% {
+    transform: translate(0, 0) scale(0.5) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--fx-drift, 0px), calc(-100vh - 80px)) scale(1.1) rotate(var(--fx-spin, 0deg));
+    opacity: 0;
+  }
+}
+
+/* 炸弹：落到屏幕中央 → 闪光 → 火花四射 + 画面震动 */
+.chat-screen-fx-bomb {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  font-size: 52px;
+  line-height: 1;
+  animation: chatScreenFxBombDrop 1.05s ease-in forwards;
+  will-change: transform;
+}
+
+@keyframes chatScreenFxBombDrop {
+  0% {
+    transform: translate(-50%, -60vh) rotate(-30deg);
+    opacity: 1;
+  }
+  62% {
+    transform: translate(-50%, 0) rotate(8deg);
+    opacity: 1;
+  }
+  76% {
+    transform: translate(-50%, 0) scale(1.15) rotate(-6deg);
+  }
+  99% {
+    transform: translate(-50%, 0) scale(1.25);
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.chat-screen-fx-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 44%, rgba(255, 236, 160, 0.95), rgba(255, 150, 60, 0.55) 45%, transparent 75%);
+  opacity: 0;
+  animation: chatScreenFxFlash 0.55s ease-out 1.02s forwards;
+}
+
+@keyframes chatScreenFxFlash {
+  0% { opacity: 0; }
+  25% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.chat-screen-fx-bomb-spark {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  line-height: 1;
+  opacity: 0;
+  animation: chatScreenFxSpark 1.1s ease-out 1.05s forwards;
+  will-change: transform;
+}
+
+/* 骰子：中央翻滚落定随机点数，停顿后淡出 */
+.chat-screen-fx-dice {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: 84px;
+  height: 84px;
+  margin: -42px 0 0 -42px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28), inset 0 -4px 0 rgba(0, 0, 0, 0.06);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  place-items: center;
+  padding: 12px;
+  box-sizing: border-box;
+  animation: chatScreenFxDice 2.6s ease-out forwards;
+  will-change: transform;
+}
+
+.chat-screen-fx-dice-pip {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.chat-screen-fx-dice-pip[data-on] {
+  background: #d64545;
+}
+
+@keyframes chatScreenFxDice {
+  0% {
+    transform: translateY(-45vh) rotate(-200deg) scale(0.5);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  45% {
+    transform: translateY(0) rotate(360deg) scale(1.15);
+  }
+  58% {
+    transform: translateY(-26px) rotate(376deg) scale(1.05);
+  }
+  70% {
+    transform: translateY(0) rotate(360deg) scale(1);
+  }
+  88% {
+    transform: translateY(0) rotate(360deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) rotate(360deg) scale(0.92);
+    opacity: 0;
   }
 }
 

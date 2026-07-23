@@ -6435,3 +6435,96 @@
   font-size: calc(12px * var(--app-text-scale, 1));
   color: var(--c-danger, #e5484d);
 }
+
+/* ── 全屏特效设置弹窗 ── */
+.screen-fx-dialog {
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.screen-fx-tabs {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  justify-content: center;
+}
+
+.screen-fx-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 2px;
+}
+
+.screen-fx-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: var(--c-input);
+}
+
+.screen-fx-card-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.screen-fx-card-row .ui-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.screen-fx-icon {
+  font-size: 24px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.screen-fx-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.screen-fx-mini-btn {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+/* ── 表情面板「特效」栏 ── */
+.emoji-effect-tile {
+  border: none;
+  background: var(--c-input);
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 4px;
+}
+
+.emoji-effect-tile:active {
+  transform: scale(0.94);
+}
+
+.emoji-effect-tile-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.emoji-effect-tile-name {
+  font-size: 10px;
+  color: var(--c-text);
+  opacity: 0.75;
+}
