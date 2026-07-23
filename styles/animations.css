@@ -238,22 +238,36 @@
   }
 }
 
-/* 烟花：多个爆点错峰绽放，火花从爆心向四周射出后坠落淡出 */
-.chat-screen-fx-burst {
+/* 仿真烟花：夜空压暗层 + Canvas 粒子（升空/炸开/拖尾在 chat-screen-fireworks 中模拟） */
+.chat-screen-fx-night {
   position: absolute;
-  width: 0;
-  height: 0;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 24%, rgba(16, 24, 58, 0.9), rgba(3, 5, 16, 0.96) 78%);
+  opacity: 0;
+  animation: chatScreenFxNight 5.8s ease forwards;
 }
 
-.chat-screen-fx-spark {
-  position: absolute;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  opacity: 0;
-  animation: chatScreenFxSpark 1.3s ease-out forwards;
-  will-change: transform;
+@keyframes chatScreenFxNight {
+  0% { opacity: 0; }
+  8% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { opacity: 0; }
 }
+
+.chat-screen-fx-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  animation: chatScreenFxCanvasFade 5.8s ease forwards;
+}
+
+@keyframes chatScreenFxCanvasFade {
+  0%, 90% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* 炸弹火花沿用的径向飞散动画 */
 
 @keyframes chatScreenFxSpark {
   0% {

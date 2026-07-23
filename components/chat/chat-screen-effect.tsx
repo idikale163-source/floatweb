@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, type CSSProperties } from "react";
 import type { ChatScreenEffectType } from "@/lib/chat-screen-effects";
+import { FireworksCanvas, FIREWORKS_DURATION_MS } from "./chat-screen-fireworks";
 
 export type ActiveScreenEffect = {
     /** 每次触发唯一，作为 key 强制重建粒子 */
@@ -16,7 +17,7 @@ export type ActiveScreenEffect = {
 const EFFECT_DURATION_MS: Record<ChatScreenEffectType, number> = {
     emoji_rain: 4200,
     confetti: 4200,
-    fireworks: 3800,
+    fireworks: FIREWORKS_DURATION_MS,
     hearts: 4200,
     bomb: 2800,
     dice: 2800,
@@ -25,11 +26,8 @@ const EFFECT_DURATION_MS: Record<ChatScreenEffectType, number> = {
 const EMOJI_RAIN_COUNT = 32;
 const CONFETTI_COUNT = 44;
 const HEART_COUNT = 22;
-const FIREWORK_BURSTS = 6;
-const FIREWORK_SPARKS = 14;
 const BOMB_SPARKS = 16;
 const CONFETTI_COLORS = ["#ff5f5f", "#ffb03a", "#ffe14d", "#5fd68a", "#4fa8ff", "#b28cff", "#ff8ad4"];
-const FIREWORK_COLORS = ["#ffd54d", "#ff8a5f", "#ff5fa2", "#6fd3ff", "#9dff8a", "#c9a2ff"];
 const HEART_EMOJIS = ["💗", "💖", "❤️", "💕"];
 
 // 骰子点位：3x3 宫格（0-8）中每个点数要点亮的格子
@@ -86,38 +84,6 @@ function confettiParticles(): { color: string; style: ParticleStyle }[] {
     });
 }
 
-type FireworkBurst = {
-    style: ParticleStyle;
-    color: string;
-    sparks: { style: ParticleStyle }[];
-};
-
-function fireworkBursts(): FireworkBurst[] {
-    return Array.from({ length: FIREWORK_BURSTS }, (_, i) => {
-        const delay = i * 0.45 + Math.random() * 0.2;
-        const color = FIREWORK_COLORS[i % FIREWORK_COLORS.length];
-        const radius = 90 + Math.random() * 70;
-        return {
-            color,
-            style: {
-                left: `${12 + Math.random() * 76}%`,
-                top: `${12 + Math.random() * 42}%`,
-            },
-            sparks: Array.from({ length: FIREWORK_SPARKS }, (_, j) => {
-                const angle = (j / FIREWORK_SPARKS) * Math.PI * 2 + Math.random() * 0.3;
-                const dist = radius * (0.75 + Math.random() * 0.35);
-                return {
-                    style: {
-                        animationDelay: `${delay.toFixed(2)}s`,
-                        "--fx-tx": `${Math.round(Math.cos(angle) * dist)}px`,
-                        "--fx-ty": `${Math.round(Math.sin(angle) * dist + 24)}px`,
-                    } as ParticleStyle,
-                };
-            }),
-        };
-    });
-}
-
 function heartParticles(): { char: string; style: ParticleStyle }[] {
     return Array.from({ length: HEART_COUNT }, (_, i) => ({
         char: HEART_EMOJIS[i % HEART_EMOJIS.length],
@@ -150,7 +116,7 @@ function bombSparks(): { char: string; style: ParticleStyle }[] {
 type EffectParticles = {
     rain?: { char: string; style: ParticleStyle }[];
     confetti?: { color: string; style: ParticleStyle }[];
-    fireworks?: FireworkBurst[];
+    fireworks?: boolean;
     hearts?: { char: string; style: ParticleStyle }[];
     bombSparks?: { char: string; style: ParticleStyle }[];
     diceFace?: number;
@@ -159,7 +125,7 @@ type EffectParticles = {
 function buildParticles(effect: ChatScreenEffectType, emojis: string): EffectParticles {
     switch (effect) {
         case "confetti": return { confetti: confettiParticles() };
-        case "fireworks": return { fireworks: fireworkBursts() };
+        case "fireworks": return { fireworks: true };
         case "hearts": return { hearts: heartParticles() };
         case "bomb": return { bombSparks: bombSparks() };
         case "dice": return { diceFace: 1 + Math.floor(Math.random() * 6) };
@@ -195,13 +161,12 @@ export function ChatScreenEffectOverlay({ active, onDone }: {
             {particles.confetti?.map((p, i) => (
                 <span key={i} className="chat-screen-fx-confetti" style={{ ...p.style, backgroundColor: p.color }} />
             ))}
-            {particles.fireworks?.map((burst, i) => (
-                <span key={i} className="chat-screen-fx-burst" style={burst.style}>
-                    {burst.sparks.map((s, j) => (
-                        <span key={j} className="chat-screen-fx-spark" style={{ ...s.style, backgroundColor: burst.color }} />
-                    ))}
-                </span>
-            ))}
+            {particles.fireworks && (
+                <>
+                    <span className="chat-screen-fx-night" />
+                    <FireworksCanvas />
+                </>
+            )}
             {particles.hearts?.map((p, i) => (
                 <span key={i} className="chat-screen-fx-heart" style={p.style}>{p.char}</span>
             ))}
