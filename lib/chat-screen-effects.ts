@@ -192,7 +192,7 @@ export function buildScreenEffectPromptHint(): string {
             .map(rule => `「${firstKeyword(rule.keyword)}」`);
         if (builtinParts.length === 0 && rainParts.length === 0) return "";
         const lines = [
-            "\n## 聊天室全屏特效",
+            "### 聊天室全屏特效",
             "消息文本包含触发词会自动播放全屏动画，你和用户都能触发；想烘托气氛时把触发词自然写进消息即可，不要解释触发机制。",
         ];
         if (builtinParts.length > 0) lines.push(`- 内置特效：${builtinParts.join("、")}`);
@@ -200,7 +200,8 @@ export function buildScreenEffectPromptHint(): string {
         if (builtins.dice?.enabled) {
             lines.push("- 掷骰子：消息带触发词即掷出 1-6 点，结果由系统旁白公布。用户掷的点数你能直接看到；你自己掷的结果要到下一轮才可见。请以旁白公布的点数为准回应，不要自行编造点数。");
         }
-        return lines.join("\n") + "\n";
+        // 前面留空行与上一板块隔开（挂在自定义 APP 指令之后）
+        return "\n\n" + lines.join("\n") + "\n";
     } catch {
         return "";
     }
