@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, Fragment, memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChatSession, ChatMessage, CHAT_APP_SETTINGS_UPDATED_EVENT, CHAT_INITIAL_VISIBLE_MESSAGE_COUNT, CHAT_LOAD_MORE_MESSAGE_COUNT, CHAT_REQUEST_REPLY_EVENT, loadChatAppSettings, loadChatMessages, loadChatContacts, loadChatSessions, saveChatSessions, pushChatMessage, deleteChatMessage, deleteChatMessagesFrom, deleteChatMessagesByIds, retractChatMessage, editChatMessage, updateMessageMediaData, replaceResponseBatchWithParts, replaceGroupResponseRound, isReadingDiscussMessage, isSystemInstructionMessage, createResponseBatchId, createResponseRoundId, getLatestStateValues, getLatestCharacterStateValues, compareChatMessages } from "@/lib/chat-storage";
+import { ChatSession, ChatMessage, CHAT_APP_SETTINGS_UPDATED_EVENT, CHAT_INITIAL_VISIBLE_MESSAGE_COUNT, CHAT_LOAD_MORE_MESSAGE_COUNT, CHAT_REQUEST_REPLY_EVENT, loadChatAppSettings, loadChatMessages, loadChatContacts, loadChatSessions, saveChatSessions, pushChatMessage, updateChatMessage, deleteChatMessage, deleteChatMessagesFrom, deleteChatMessagesByIds, retractChatMessage, editChatMessage, updateMessageMediaData, replaceResponseBatchWithParts, replaceGroupResponseRound, isReadingDiscussMessage, isSystemInstructionMessage, createResponseBatchId, createResponseRoundId, getLatestStateValues, getLatestCharacterStateValues, compareChatMessages } from "@/lib/chat-storage";
 import type { StateValue } from "@/lib/chat-storage";
 import { parseStateValues, mergeStateValues } from "@/lib/state-value-parser";
 import { parseAIResponse, type ParsedMessagePart } from "@/lib/rich-message-parser";
@@ -1110,17 +1110,19 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             const hit = matchChatScreenEffectRule(msg.content);
             if (!hit) continue;
             if (hit.effect === "dice") {
-                // 文本里带骰子触发词：补一条骰子气泡公布点数（全屏动效由气泡再触发）
+                // 单独一条骰子图标（角色发的）：原地转换成骰子气泡，避免图标+骰子重复显示
                 const face = rollChatDiceFace();
-                const diceMsg = pushChatMessage({
-                    sessionId: session.id,
-                    role: msg.role,
+                const patch = {
                     content: formatChatDiceResultMessage(face),
-                    mediaType: "dice",
-                    mediaData: { diceFace: face },
-                    ...(msg.senderCharacterId ? { senderCharacterId: msg.senderCharacterId, senderName: msg.senderName } : {}),
-                });
-                setMessages(prev => [...prev, diceMsg]);
+                    mediaType: "dice" as const,
+                    mediaData: { ...msg.mediaData, diceFace: face },
+                };
+                updateChatMessage(msg.id, patch);
+                setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, ...patch } : m)));
+                if (!fired) {
+                    setActiveScreenEffect({ runId: msg.id, effect: "dice", emojis: "", diceFace: face });
+                    fired = true;
+                }
                 continue;
             }
             if (fired) continue;
