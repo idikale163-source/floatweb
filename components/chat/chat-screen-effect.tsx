@@ -20,7 +20,7 @@ const EFFECT_DURATION_MS: Record<ChatScreenEffectType, number> = {
     fireworks: FIREWORKS_DURATION_MS,
     hearts: 4200,
     bomb: 2800,
-    dice: 2800,
+    dice: 3200,
 };
 
 const EMOJI_RAIN_COUNT = 32;
@@ -39,6 +39,17 @@ const DICE_PIPS: Record<number, number[]> = {
     5: [0, 2, 4, 6, 8],
     6: [0, 2, 3, 5, 6, 8],
 };
+
+// 3D 骰子：让指定点数朝向屏幕所需的立方体末态旋转（配合各面的摆放变换）
+const DICE_ORIENTATIONS: Record<number, [number, number]> = {
+    1: [0, 0],
+    2: [-90, 0],
+    3: [0, -90],
+    4: [0, 90],
+    5: [90, 0],
+    6: [0, 180],
+};
+const DICE_FACES = [1, 2, 3, 4, 5, 6];
 
 function splitEmojis(value: string): string[] {
     const list = Array.from(value.trim());
@@ -180,14 +191,29 @@ export function ChatScreenEffectOverlay({ active, onDone }: {
                 </>
             )}
             {particles.diceFace && (
-                <span className="chat-screen-fx-dice">
-                    {Array.from({ length: 9 }, (_, cell) => (
+                <span className="chat-screen-fx-dice-stage">
+                    <span className="chat-screen-fx-dice-shadow" />
+                    <span className="chat-screen-fx-dice-drop">
                         <span
-                            key={cell}
-                            className="chat-screen-fx-dice-pip"
-                            {...(DICE_PIPS[particles.diceFace!]?.includes(cell) ? { "data-on": "" } : {})}
-                        />
-                    ))}
+                            className="chat-screen-fx-dice-cube"
+                            style={{
+                                "--dice-rx": `${DICE_ORIENTATIONS[particles.diceFace][0]}deg`,
+                                "--dice-ry": `${DICE_ORIENTATIONS[particles.diceFace][1]}deg`,
+                            } as ParticleStyle}
+                        >
+                            {DICE_FACES.map(face => (
+                                <span key={face} className="chat-screen-fx-dice-face" data-face={face}>
+                                    {Array.from({ length: 9 }, (_, cell) => (
+                                        <span
+                                            key={cell}
+                                            className="chat-screen-fx-dice-pip"
+                                            {...(DICE_PIPS[face].includes(cell) ? { "data-on": "" } : {})}
+                                        />
+                                    ))}
+                                </span>
+                            ))}
+                        </span>
+                    </span>
                 </span>
             )}
         </div>

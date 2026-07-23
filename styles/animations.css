@@ -242,7 +242,7 @@
 .chat-screen-fx-night {
   position: absolute;
   inset: 0;
-  background: radial-gradient(120% 90% at 50% 24%, rgba(16, 24, 58, 0.9), rgba(3, 5, 16, 0.96) 78%);
+  background: radial-gradient(120% 90% at 50% 24%, rgba(16, 24, 58, 0.55), rgba(3, 5, 16, 0.68) 78%);
   opacity: 0;
   animation: chatScreenFxNight 5.8s ease forwards;
 }
@@ -366,63 +366,116 @@
   will-change: transform;
 }
 
-/* 骰子：中央翻滚落定随机点数，停顿后淡出 */
-.chat-screen-fx-dice {
+/* 3D 骰子：从上方翻滚砸落、弹跳落定随机点数，停顿后淡出 */
+.chat-screen-fx-dice-stage {
   position: absolute;
   left: 50%;
-  top: 40%;
-  width: 84px;
-  height: 84px;
-  margin: -42px 0 0 -42px;
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28), inset 0 -4px 0 rgba(0, 0, 0, 0.06);
+  top: 42%;
+  width: 0;
+  height: 0;
+  perspective: 640px;
+  animation: chatScreenFxDiceStage 3.2s ease forwards;
+}
+
+@keyframes chatScreenFxDiceStage {
+  0%, 86% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.chat-screen-fx-dice-drop {
+  position: absolute;
+  left: -44px;
+  top: -44px;
+  width: 88px;
+  height: 88px;
+  animation: chatScreenFxDiceDrop 1.9s forwards;
+}
+
+@keyframes chatScreenFxDiceDrop {
+  0% { transform: translateY(-58vh); animation-timing-function: ease-in; }
+  40% { transform: translateY(0); animation-timing-function: ease-out; }
+  56% { transform: translateY(-64px); animation-timing-function: ease-in; }
+  70% { transform: translateY(0); animation-timing-function: ease-out; }
+  82% { transform: translateY(-20px); animation-timing-function: ease-in; }
+  92%, 100% { transform: translateY(0); }
+}
+
+.chat-screen-fx-dice-cube {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  animation: chatScreenFxDiceSpin 1.9s cubic-bezier(0.22, 0.72, 0.3, 1) forwards;
+}
+
+@keyframes chatScreenFxDiceSpin {
+  0% { transform: rotateX(calc(var(--dice-rx, 0deg) - 1170deg)) rotateY(calc(var(--dice-ry, 0deg) - 900deg)) rotateZ(-40deg); }
+  100% { transform: rotateX(var(--dice-rx, 0deg)) rotateY(var(--dice-ry, 0deg)) rotateZ(0deg); }
+}
+
+.chat-screen-fx-dice-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #ffffff, #e6e6ee);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
   place-items: center;
-  padding: 12px;
+  padding: 11px;
   box-sizing: border-box;
-  animation: chatScreenFxDice 2.6s ease-out forwards;
-  will-change: transform;
+  backface-visibility: hidden;
 }
 
+.chat-screen-fx-dice-face[data-face="1"] { transform: translateZ(44px); }
+.chat-screen-fx-dice-face[data-face="6"] { transform: rotateY(180deg) translateZ(44px); }
+.chat-screen-fx-dice-face[data-face="3"] { transform: rotateY(90deg) translateZ(44px); }
+.chat-screen-fx-dice-face[data-face="4"] { transform: rotateY(-90deg) translateZ(44px); }
+.chat-screen-fx-dice-face[data-face="2"] { transform: rotateX(90deg) translateZ(44px); }
+.chat-screen-fx-dice-face[data-face="5"] { transform: rotateX(-90deg) translateZ(44px); }
+
 .chat-screen-fx-dice-pip {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: transparent;
 }
 
 .chat-screen-fx-dice-pip[data-on] {
+  background: #23242b;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.45);
+}
+
+/* 中式骰子：1、4 点红色，1 点更大 */
+.chat-screen-fx-dice-face[data-face="1"] .chat-screen-fx-dice-pip[data-on],
+.chat-screen-fx-dice-face[data-face="4"] .chat-screen-fx-dice-pip[data-on] {
   background: #d64545;
 }
 
-@keyframes chatScreenFxDice {
-  0% {
-    transform: translateY(-45vh) rotate(-200deg) scale(0.5);
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  45% {
-    transform: translateY(0) rotate(360deg) scale(1.15);
-  }
-  58% {
-    transform: translateY(-26px) rotate(376deg) scale(1.05);
-  }
-  70% {
-    transform: translateY(0) rotate(360deg) scale(1);
-  }
-  88% {
-    transform: translateY(0) rotate(360deg) scale(1);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(0) rotate(360deg) scale(0.92);
-    opacity: 0;
-  }
+.chat-screen-fx-dice-face[data-face="1"] .chat-screen-fx-dice-pip[data-on] {
+  width: 24px;
+  height: 24px;
+}
+
+.chat-screen-fx-dice-shadow {
+  position: absolute;
+  left: -40px;
+  top: 46px;
+  width: 80px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.32);
+  filter: blur(6px);
+  animation: chatScreenFxDiceShadow 1.9s ease forwards;
+}
+
+@keyframes chatScreenFxDiceShadow {
+  0% { transform: scale(0.3); opacity: 0; }
+  40% { transform: scale(1); opacity: 1; }
+  56% { transform: scale(0.72); opacity: 0.6; }
+  70% { transform: scale(1); opacity: 1; }
+  82% { transform: scale(0.86); opacity: 0.8; }
+  92%, 100% { transform: scale(1); opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
