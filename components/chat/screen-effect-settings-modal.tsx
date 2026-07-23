@@ -50,7 +50,7 @@ export function ScreenEffectSettingsModal({ onClose }: { onClose: () => void }) 
             <div className="modal-sheet screen-fx-sheet" onClick={e => e.stopPropagation()}>
                 <span className="screen-fx-grabber" aria-hidden="true" />
                 <div className="screen-fx-titles">
-                    <h2 className="screen-fx-title">全屏<em>特效</em></h2>
+                    <h2 className="screen-fx-title">全屏特效</h2>
                     <p className="screen-fx-subtitle">消息包含触发词即自动播放，全部会话通用</p>
                 </div>
 

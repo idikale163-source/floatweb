@@ -6469,11 +6469,6 @@
   line-height: 1.25;
 }
 
-.screen-fx-title em {
-  font-style: normal;
-  color: var(--c-success);
-}
-
 .screen-fx-subtitle {
   margin: 5px 0 0;
   font-size: 12px;
