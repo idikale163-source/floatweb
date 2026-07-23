@@ -370,7 +370,7 @@
 .chat-screen-fx-dice-stage {
   position: absolute;
   left: 50%;
-  top: 42%;
+  top: 62%;
   width: 0;
   height: 0;
   perspective: 640px;
@@ -392,7 +392,7 @@
 }
 
 @keyframes chatScreenFxDiceDrop {
-  0% { transform: translateY(-58vh); animation-timing-function: ease-in; }
+  0% { transform: translateY(-78vh); animation-timing-function: ease-in; }
   40% { transform: translateY(0); animation-timing-function: ease-out; }
   56% { transform: translateY(-64px); animation-timing-function: ease-in; }
   70% { transform: translateY(0); animation-timing-function: ease-out; }
