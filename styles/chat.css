@@ -6456,14 +6456,14 @@
 }
 
 .screen-fx-titles {
-  padding: 2px 4px 12px;
+  padding: 2px 4px 10px;
   flex-shrink: 0;
 }
 
 .screen-fx-title {
   margin: 0;
-  font-size: 26px;
-  font-weight: 800;
+  font-size: 20px;
+  font-weight: 700;
   letter-spacing: 0.5px;
   color: var(--c-text-title);
   line-height: 1.25;
@@ -6475,8 +6475,8 @@
 }
 
 .screen-fx-subtitle {
-  margin: 6px 0 0;
-  font-size: 13px;
+  margin: 5px 0 0;
+  font-size: 12px;
   color: var(--c-text);
 }
 
@@ -6494,9 +6494,9 @@
   border: none;
   background: transparent;
   cursor: pointer;
-  padding: 9px 0;
+  padding: 7px 0;
   border-radius: 10px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--c-text);
 }
@@ -6519,23 +6519,18 @@
 
 .screen-fx-note {
   margin: 0 4px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--c-text);
 }
 
 .screen-fx-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  border-radius: 18px;
-  padding: 13px 14px;
+  gap: 8px;
+  border-radius: 16px;
+  padding: 11px 12px;
   background: var(--c-panel);
-  border: 1.5px solid transparent;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-}
-
-.screen-fx-card[data-enabled] {
-  border-color: color-mix(in srgb, var(--c-success) 55%, transparent);
 }
 
 .screen-fx-card-row {
@@ -6555,7 +6550,7 @@
 
 .screen-fx-field > span {
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--c-text);
 }
 
@@ -6566,8 +6561,8 @@
   outline: none;
   background: transparent;
   color: var(--c-text-title);
-  padding: 11px 0;
-  font-size: 14.5px;
+  padding: 9px 0;
+  font-size: 13.5px;
   font-weight: 600;
 }
 
@@ -6587,15 +6582,15 @@
 }
 
 .screen-fx-icon {
-  font-size: 25px;
+  font-size: 20px;
   line-height: 1;
   flex-shrink: 0;
 }
 
 .screen-fx-name {
   flex: 1;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 14.5px;
+  font-weight: 600;
   color: var(--c-text-title);
 }
 
@@ -6605,10 +6600,10 @@
   cursor: pointer;
   background: color-mix(in srgb, var(--c-success) 13%, transparent);
   color: var(--c-success);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   border-radius: 999px;
-  padding: 7px 14px;
+  padding: 5px 12px;
 }
 
 .screen-fx-icon-btn {
@@ -6627,9 +6622,9 @@
   background: transparent;
   color: var(--c-success);
   cursor: pointer;
-  border-radius: 16px;
-  padding: 12px 0;
-  font-size: 14px;
+  border-radius: 14px;
+  padding: 10px 0;
+  font-size: 13px;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -6651,8 +6646,8 @@
   background: transparent;
   cursor: pointer;
   color: var(--c-text);
-  font-size: 13px;
-  padding: 6px 0;
+  font-size: 12px;
+  padding: 5px 0;
 }
 
 .screen-fx-cta {
@@ -6660,10 +6655,10 @@
   cursor: pointer;
   background: var(--c-success);
   color: #fff;
-  font-size: 16.5px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
   border-radius: 999px;
-  padding: 14px 0;
+  padding: 12px 0;
   box-shadow: 0 6px 18px color-mix(in srgb, var(--c-success) 35%, transparent);
 }
 
