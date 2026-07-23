@@ -1323,39 +1323,44 @@ const DICE_BUBBLE_PIPS: Record<number, number[]> = {
     6: [0, 2, 3, 5, 6, 8],
 };
 
-/** 骰子消息：新消息先快速翻面旋转，动效播完定格在掷出的点数；历史消息直接定格 */
+// 让指定点数朝向屏幕所需的立方体末态旋转（配合各面的摆放变换）
+const DICE_BUBBLE_ORIENTATIONS: Record<number, [number, number]> = {
+    1: [0, 0],
+    2: [-90, 0],
+    3: [0, -90],
+    4: [0, 90],
+    5: [90, 0],
+    6: [0, 180],
+};
+
+/** 骰子消息：3D 实骰。新消息立方体翻滚约 1.4 秒后定格在掷出的点数；历史消息直接定格 */
 function DiceBubble({ msg }: { msg: ChatMessage }) {
     const face = Math.min(6, Math.max(1, Number(msg.mediaData?.diceFace) || 1));
-    const freshRef = useRef(Date.now() - new Date(msg.createdAt).getTime() < 6000);
-    const [rolling, setRolling] = useState(freshRef.current);
-    const [shownFace, setShownFace] = useState(() => (freshRef.current ? 1 + Math.floor(Math.random() * 6) : face));
-
-    useEffect(() => {
-        if (!freshRef.current) return;
-        const cycle = window.setInterval(() => setShownFace(1 + Math.floor(Math.random() * 6)), 90);
-        const stop = window.setTimeout(() => {
-            window.clearInterval(cycle);
-            setShownFace(face);
-            setRolling(false);
-        }, 1250);
-        return () => { window.clearInterval(cycle); window.clearTimeout(stop); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    // 挂载瞬间判定一次：只有刚发出的消息播翻滚动画
+    const rollingRef = useRef(Date.now() - new Date(msg.createdAt).getTime() < 6000);
+    const [rx, ry] = DICE_BUBBLE_ORIENTATIONS[face];
 
     return (
-        <div
-            className="dice-bubble"
-            {...(rolling ? { "data-rolling": "" } : {})}
-            data-face={shownFace}
-            aria-label={`骰子 ${face} 点`}
-        >
-            {Array.from({ length: 9 }, (_, cell) => (
-                <span
-                    key={cell}
-                    className="dice-bubble-pip"
-                    {...(DICE_BUBBLE_PIPS[shownFace].includes(cell) ? { "data-on": "" } : {})}
-                />
-            ))}
+        <div className="dice-bubble3d" aria-label={`骰子 ${face} 点`}>
+            <div className="dice-bubble3d-tilt">
+                <div
+                    className="dice-bubble3d-cube"
+                    {...(rollingRef.current ? { "data-rolling": "" } : {})}
+                    style={{ "--dice-rx": `${rx}deg`, "--dice-ry": `${ry}deg` } as React.CSSProperties}
+                >
+                    {[1, 2, 3, 4, 5, 6].map(f => (
+                        <span key={f} className="dice-bubble3d-face" data-face={f}>
+                            {Array.from({ length: 9 }, (_, cell) => (
+                                <span
+                                    key={cell}
+                                    className="dice-bubble3d-pip"
+                                    {...(DICE_BUBBLE_PIPS[f].includes(cell) ? { "data-on": "" } : {})}
+                                />
+                            ))}
+                        </span>
+                    ))}
+                </div>
+            </div>
         </div>
     );
 }
