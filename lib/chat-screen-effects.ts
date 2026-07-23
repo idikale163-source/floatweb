@@ -3,8 +3,8 @@
 // 聊天室全屏特效（微信同款）：消息文本包含触发词时播放全屏动画。
 // 两类配置，均为全局、所有会话共用，在聊天设置面板中管理：
 // - 表情雨规则：触发词 + 自定义表情，用户可增删；
-// - 内置全屏特效：礼花/烟花/爱心/炸弹/骰子，固定条目，可改触发词、可开关，
-//   同时挂在表情面板「特效」栏里点击直发。
+// - 内置全屏特效：礼花/烟花/爱心/炸弹/骰子，固定条目、可开关；只能通过
+//   单独发送特效图标触发（表情面板「特效」栏点击直发）。
 
 import { kvGet, kvSet } from "./kv-db";
 
@@ -21,7 +21,6 @@ export type ChatScreenEffectRule = {
 };
 
 export type BuiltinScreenEffectSetting = {
-    keyword: string;
     enabled: boolean;
 };
 
@@ -47,18 +46,18 @@ const DEFAULT_RAIN_RULES: ChatScreenEffectRule[] = [
     { id: "preset_night", keyword: "晚安", emojis: "🌙✨", enabled: true },
 ];
 
-// 内置全屏特效：图标同时是表情面板里的「特效表情」，点击即以该图标为消息内容发送
+// 内置全屏特效：图标就是唯一触发方式——单独发一条只含该图标的消息（表情面板
+// 「特效」栏点击即发这种消息），夹在文字里不触发
 export const BUILTIN_SCREEN_EFFECTS: {
     type: BuiltinScreenEffectType;
     name: string;
     icon: string;
-    defaultKeyword: string;
 }[] = [
-    { type: "fireworks", name: "全屏烟花", icon: "🎆", defaultKeyword: "🎆, 放烟花" },
-    { type: "hearts", name: "全屏爱心", icon: "💗", defaultKeyword: "💗, 比心, 爱你" },
-    { type: "confetti", name: "全屏礼花", icon: "🎊", defaultKeyword: "🎊, 恭喜, 新年快乐" },
-    { type: "bomb", name: "全屏炸弹", icon: "💣", defaultKeyword: "💣, 炸你" },
-    { type: "dice", name: "掷骰子", icon: "🎲", defaultKeyword: "🎲, 掷骰子" },
+    { type: "fireworks", name: "全屏烟花", icon: "🎆" },
+    { type: "hearts", name: "全屏爱心", icon: "💗" },
+    { type: "confetti", name: "全屏礼花", icon: "🎊" },
+    { type: "bomb", name: "全屏炸弹", icon: "💣" },
+    { type: "dice", name: "掷骰子", icon: "🎲" },
 ];
 
 function notifyRulesUpdated(): void {
@@ -127,12 +126,7 @@ export function loadBuiltinScreenEffectSettings(): Record<BuiltinScreenEffectTyp
     for (const effect of BUILTIN_SCREEN_EFFECTS) {
         const entry = stored[effect.type];
         const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : null;
-        result[effect.type] = {
-            keyword: typeof record?.keyword === "string"
-                ? record.keyword.trim().slice(0, MAX_KEYWORD_LENGTH)
-                : effect.defaultKeyword,
-            enabled: record?.enabled !== false,
-        };
+        result[effect.type] = { enabled: record?.enabled !== false };
     }
     return result;
 }
@@ -145,7 +139,7 @@ export function saveBuiltinScreenEffectSettings(settings: Record<BuiltinScreenEf
 export function resetBuiltinScreenEffectSettings(): Record<BuiltinScreenEffectType, BuiltinScreenEffectSetting> {
     const result = {} as Record<BuiltinScreenEffectType, BuiltinScreenEffectSetting>;
     for (const effect of BUILTIN_SCREEN_EFFECTS) {
-        result[effect.type] = { keyword: effect.defaultKeyword, enabled: true };
+        result[effect.type] = { enabled: true };
     }
     saveBuiltinScreenEffectSettings(result);
     return result;
@@ -163,13 +157,10 @@ export function formatChatDiceResultMessage(face: number): string {
     return `🎲 掷出了 ${face} 点`;
 }
 
-/** 整条消息就是骰子触发词（如表情面板点出的 🎲）→ 直接转成骰子气泡 */
+/** 整条消息就是骰子图标（表情面板点出的 🎲）→ 直接转成骰子气泡 */
 export function isDiceOnlyMessage(text: string): boolean {
-    const trimmed = text.trim();
-    if (!trimmed) return false;
-    const setting = loadBuiltinScreenEffectSettings().dice;
-    if (!setting.enabled) return false;
-    return setting.keyword.split(/[,，、\s]+/).some(word => word && word === trimmed);
+    if (text.trim() !== "🎲") return false;
+    return loadBuiltinScreenEffectSettings().dice.enabled;
 }
 
 /** 注入聊天提示词的特效说明；全部特效关闭时不注入 */
@@ -181,8 +172,8 @@ export function buildScreenEffectPromptHint(): string {
         if (!anyEnabled) return "";
         // 前面留空行与上一板块隔开（挂在自定义 APP 指令之后）
         return "\n\n### 聊天室全屏特效\n"
-            + "消息文本包含触发词会自动播放全屏动画，包括：全屏烟花「🎆」、全屏爱心「💗」、全屏礼花「🎊」、全屏炸弹「💣」、掷骰子「🎲」，"
-            + "其中掷骰子会掷出 1-6 点，点数以聊天里的骰子消息（「🎲 掷出了 N 点」）为准。你自己掷的结果要到下一轮才可见。请按公布的点数回应，不要自行编造点数。\n";
+            + "想烘托气氛时，单独发一条只包含对应图标的消息即可触发全屏动画：烟花「🎆」、爱心「💗」、礼花「🎊」、炸弹「💣」、掷骰子「🎲」。图标夹在其他文字里不会触发。"
+            + "掷骰子会掷出 1-6 点，点数以聊天里的骰子消息（「🎲 掷出了 N 点」）为准。你自己掷的结果要到下一轮才可见。请按公布的点数回应，不要自行编造点数。\n";
     } catch {
         return "";
     }
@@ -194,7 +185,8 @@ function keywordHit(text: string, keyword: string): boolean {
         .some(word => word && text.includes(word));
 }
 
-/** 首个命中的启用规则：表情雨规则优先（配置顺序即优先级），再查内置全屏特效 */
+/** 首个命中的启用规则：表情雨按「包含」匹配；内置全屏特效没有触发词，
+ *  只认整条消息恰好是特效图标本身（🎆💗🎊💣🎲），夹在句子里不触发 */
 export function matchChatScreenEffectRule(text: string): ChatScreenEffectMatch | null {
     if (!text) return null;
     for (const rule of loadChatScreenEffectRules()) {
@@ -202,10 +194,10 @@ export function matchChatScreenEffectRule(text: string): ChatScreenEffectMatch |
             return { effect: "emoji_rain", emojis: rule.emojis };
         }
     }
+    const trimmed = text.trim();
     const builtins = loadBuiltinScreenEffectSettings();
     for (const effect of BUILTIN_SCREEN_EFFECTS) {
-        const setting = builtins[effect.type];
-        if (setting.enabled && keywordHit(text, setting.keyword)) {
+        if (trimmed === effect.icon && builtins[effect.type].enabled) {
             return { effect: effect.type, emojis: "" };
         }
     }

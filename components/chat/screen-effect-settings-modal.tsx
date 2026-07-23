@@ -11,7 +11,6 @@ import {
     createChatScreenEffectRule,
     loadBuiltinScreenEffectSettings,
     loadChatScreenEffectRules,
-    resetBuiltinScreenEffectSettings,
     resetChatScreenEffectRules,
     saveBuiltinScreenEffectSettings,
     saveChatScreenEffectRules,
@@ -105,7 +104,7 @@ export function ScreenEffectSettingsModal({ onClose }: { onClose: () => void }) 
                         </>
                     ) : (
                         <>
-                            <p className="screen-fx-note">表情面板「特效」栏点一下即可发送，命中触发词也会播放</p>
+                            <p className="screen-fx-note">在表情面板「特效」栏点击发送，或单独发一条只含图标的消息触发；图标夹在文字里不触发</p>
                             {BUILTIN_SCREEN_EFFECTS.map(effect => (
                                 <div key={effect.type} className="screen-fx-card" {...(builtins[effect.type].enabled ? { "data-enabled": "" } : {})}>
                                     <div className="screen-fx-card-row">
@@ -119,15 +118,6 @@ export function ScreenEffectSettingsModal({ onClose }: { onClose: () => void }) 
                                             onChange={c => patchBuiltin(effect.type, { enabled: c })}
                                         />
                                     </div>
-                                    <label className="screen-fx-field">
-                                        <span>触发词</span>
-                                        <input
-                                            type="text"
-                                            value={builtins[effect.type].keyword}
-                                            onChange={e => patchBuiltin(effect.type, { keyword: e.target.value.slice(0, 60) })}
-                                            placeholder={`如 ${effect.icon}`}
-                                        />
-                                    </label>
                                 </div>
                             ))}
                         </>
@@ -135,12 +125,11 @@ export function ScreenEffectSettingsModal({ onClose }: { onClose: () => void }) 
                 </div>
 
                 <div className="screen-fx-footer">
-                    <button
-                        className="screen-fx-reset-link"
-                        onClick={() => (tab === "rain" ? setRules(resetChatScreenEffectRules()) : setBuiltins(resetBuiltinScreenEffectSettings()))}
-                    >
-                        恢复默认{tab === "rain" ? "规则" : "触发词"}
-                    </button>
+                    {tab === "rain" && (
+                        <button className="screen-fx-reset-link" onClick={() => setRules(resetChatScreenEffectRules())}>
+                            恢复默认规则
+                        </button>
+                    )}
                     <button className="screen-fx-cta" onClick={onClose}>完成</button>
                 </div>
             </div>
