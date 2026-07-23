@@ -169,3 +169,65 @@
     animation: none !important;
   }
 }
+
+/* 聊天室全屏特效：表情雨 / 礼花（触发词命中时播放，不拦截交互） */
+.chat-screen-fx {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 90;
+}
+
+.chat-screen-fx-emoji {
+  position: absolute;
+  top: -60px;
+  line-height: 1;
+  animation: chatScreenFxFall linear forwards;
+  will-change: transform;
+}
+
+@keyframes chatScreenFxFall {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--fx-drift, 0px), calc(100vh + 120px)) rotate(var(--fx-spin, 0deg));
+    opacity: 0.9;
+  }
+}
+
+.chat-screen-fx-confetti {
+  position: absolute;
+  left: 50%;
+  bottom: -14px;
+  border-radius: 2px;
+  animation: chatScreenFxBurst ease-out forwards;
+  will-change: transform;
+}
+
+@keyframes chatScreenFxBurst {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  38% {
+    transform: translate(var(--fx-peak-x, 0vw), var(--fx-peak-y, -55vh)) rotate(calc(var(--fx-spin, 360deg) * 0.4));
+    opacity: 1;
+    animation-timing-function: ease-in;
+  }
+  100% {
+    transform: translate(var(--fx-end-x, 0vw), 12vh) rotate(var(--fx-spin, 360deg));
+    opacity: 0.85;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-screen-fx {
+    display: none;
+  }
+}

@@ -66,6 +66,8 @@ import {
 } from "@/lib/generated-image-retry";
 import { scrollElementWithinContainer } from "@/lib/dom-scroll";
 import { ChatFallbackAvatar } from "./chat-fallback-avatar";
+import { ChatScreenEffectOverlay, type ActiveScreenEffect } from "./chat-screen-effect";
+import { matchChatScreenEffectRule } from "@/lib/chat-screen-effects";
 import { abortableDelay, throwIfAborted } from "@/lib/abort-utils";
 import { GROUP_SELF_KEY, canGroupAdminAct, applyGroupAdminAction, buildGroupAdminNoticeText, getGroupMemberDisplayName, getGroupMuteRemainingMs, getGroupRole, isGroupMuted, formatMuteRemainingLabel, resolveGroupMemberKeyByName, type GroupAdminAction } from "@/lib/group-admin";
 
@@ -1067,6 +1069,30 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     const [bgLoading, setBgLoading] = useState(!!session.backgroundImage);
 
     const wrapperRef = useRef<HTMLDivElement>(null);
+
+    // 全屏特效：命中触发词的新消息播放表情雨/礼花（微信同款）
+    const [activeScreenEffect, setActiveScreenEffect] = useState<ActiveScreenEffect | null>(null);
+    const screenFxSeenRef = useRef<Set<string>>(new Set());
+    const screenFxMountedAtRef = useRef(Date.now());
+
+    useEffect(() => {
+        const seen = screenFxSeenRef.current;
+        let fired = activeScreenEffect !== null;
+        for (const msg of messages) {
+            if (seen.has(msg.id)) continue;
+            seen.add(msg.id);
+            if (fired) continue;
+            if (msg.role !== "user" && msg.role !== "assistant") continue;
+            if (msg.mediaType || !msg.content) continue;
+            // 只对本次打开聊天室之后产生的消息生效，历史加载/翻页不触发
+            if (new Date(msg.createdAt).getTime() < screenFxMountedAtRef.current) continue;
+            const rule = matchChatScreenEffectRule(msg.content);
+            if (!rule) continue;
+            setActiveScreenEffect({ runId: msg.id, effect: rule.effect, emojis: rule.emojis });
+            fired = true;
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [messages]);
 
     useEffect(() => {
         if (!session.backgroundImage) {
@@ -4858,6 +4884,9 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             {liveCSS && (
                 <style dangerouslySetInnerHTML={{ __html: scopeSessionCSS(liveCSS, `.session-${session.id}`) }} />
             )}
+
+            {/* 全屏特效层（表情雨/礼花），不拦截任何触摸操作 */}
+            <ChatScreenEffectOverlay active={activeScreenEffect} onDone={() => setActiveScreenEffect(null)} />
             {/* Header */}
             <header className="page-header chat-room-main-pane" data-ui="header">
                 <div className="page-header-safe-area" />
