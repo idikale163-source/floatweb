@@ -11,9 +11,9 @@
   --dw-ghost: rgba(255, 255, 255, 0.14);
   --dw-line: rgba(255, 255, 255, 0.22);
   --dw-line-strong: rgba(255, 255, 255, 0.45);
-  --dw-red: #b45a5f;
-  --dw-red-soft: rgba(180, 90, 95, 0.55);
-  --dw-panel: rgba(14, 14, 17, 0.96);
+  --dw-red: rgba(240, 238, 232, 0.5);
+  --dw-red-soft: rgba(240, 238, 232, 0.3);
+  --dw-panel: rgba(16, 16, 19, 0.78);
   --dw-serif: "Songti SC", "Noto Serif SC", "Noto Serif CJK SC", "SimSun", Georgia, serif;
   --dw-latin: "Didot", Georgia, "Times New Roman", serif;
 
@@ -375,7 +375,7 @@
   letter-spacing: 4px;
 }
 .dwelling-app[data-haspicker="true"] .dw2-badge { top: calc(var(--page-header-safe-top, 48px) + 145px); }
-.dw2-badge::before { content: "— "; color: rgba(158, 74, 80, 0.9); }
+.dw2-badge::before { content: "— "; color: rgba(255, 255, 255, 0.35); }
 .dw2-badge[data-kind="gen"] { animation: dw2-pulse 1.6s ease-in-out infinite; }
 @keyframes dw2-pulse { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.35; } }
 .dw2-badge[data-kind="fail"] {
@@ -535,6 +535,8 @@
   position: absolute;
   left: 0; right: 0; bottom: 0;
   background: var(--dw-panel);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
   border-top: 1px solid rgba(255, 255, 255, 0.14);
   padding: 14px 22px calc(22px + env(safe-area-inset-bottom, 0px));
   max-height: 72%;
@@ -624,7 +626,7 @@
   font-style: normal;
   font-size: 9px;
   font-weight: 400;
-  color: #c0666b;
+  color: var(--dw-dim);
   border: 1px solid var(--dw-red-soft);
   padding: 2px 7px;
   margin-left: 8px;
@@ -855,6 +857,8 @@
   width: 100%;
   max-height: 86%;
   background: var(--dw-panel);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
   border-top: 1px solid rgba(255, 255, 255, 0.14);
   display: flex;
   flex-direction: column;
@@ -923,6 +927,8 @@
   position: relative;
   width: min(78%, 300px);
   background: var(--dw-panel);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.14);
   padding: 24px 22px 20px;
   text-align: center;
