@@ -6,7 +6,7 @@ import type { PresetConfig } from "./settings-types";
 import { getCheckPhonePromptTags } from "./checkphone-config";
 
 export const BUILTIN_PRESET_ID = "builtin_default_v1";
-export const BUILTIN_PRESET_VERSION = 255; // 升版本会用出厂内容重写用户的内置预设副本（自定义会丢），非必要不升
+export const BUILTIN_PRESET_VERSION = 256; // 升版本会用出厂内容重写用户的内置预设副本（自定义会丢），非必要不升
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
@@ -1824,11 +1824,11 @@ export function createBuiltinPreset(): PresetConfig {
                     "- 可以补充角色手机里合理存在的其他 NPC 会话、没有用户参与的群聊、NPC 联系人，以及 NPC 的朋友圈动态和围绕真实朋友圈产生的评论/回复补充。",
                     "- 【NPC关系红线】除非真实会话、真实朋友圈或角色设定已经明确存在该 NPC 与{{char}}的暧昧关系，否则禁止新造暧昧对象、追求者、暗恋者、前任、约会对象、疑似对象或任何恋爱竞争关系。",
                     "- 所有补充内容都要延续上下文里已经出现的关系、氛围和近期状态，不要创造和真实部分冲突的事实。",
-                    "- supplementalConversations 只能是其他 NPC 与{{char}}的单聊，绝对不能生成用户与{{char}}的补充单聊，也不能生成系统里其他角色作为单聊对象。",
+                    "- supplementalConversations 只能是其他 NPC 与{{char}}的单聊，绝对不能生成用户与{{char}}的补充单聊。",
                     "- supplementalGroups 只能是没有用户参与的补充群聊；用户不能作为群成员、发言人或被直接提及为当前群聊参与者。",
                     "- 真实朋友圈里已经包含“用户自己”和“当前角色自己”的真实帖子，以及这些帖子下现有的全部真实评论与回复；你不要重复输出这些真实帖子。",
-                    "- supplementalMoments 只能是其他 NPC 的朋友圈动态，不包含{{char}}自己的新动态，不包含用户自己的新动态，也不包含系统里其他角色的新动态。",
-                    "- supplementalContacts 只能是 NPC 联系人，不包含用户，也不包含系统里其他角色。",
+                    "- supplementalMoments 只能是其他 NPC 的朋友圈动态，不包含{{char}}自己的新动态，不包含用户自己的新动态。",
+                    "- supplementalContacts 只能是 NPC 联系人，不包含用户。",
                     "",
                     "<phone_snapshot_summary>",
                     "{{phoneSnapshotSummary}}",
@@ -1897,9 +1897,9 @@ export function createBuiltinPreset(): PresetConfig {
                     "- #补充动态 尽量带评论，评论按 [评论N作者]、[评论N时间]、[评论N内容] 连续编号输出；如需楼中楼，使用 [评论N回复对象]评论M，其中 M 必须是前面已经出现过的评论编号；可多轮回复，例如评论3回复评论2。评论内容里不要写“XXX→XXX”或“回复XXX：”。",
                     "- #补充动态 如需 [媒体]，填写可直接展示在朋友圈里的图片画面描述，内容应像一张真实照片的画面说明。",
                     "- 所有 [时间]、[消息N时间]、[评论N时间] 统一使用 YYYY-MM-DD HH:mm 格式；[活跃] 如包含时间，也使用同一格式。",
-                    "- #补充会话 的 [名称] 必须是 NPC 名字，不能是用户，也不能是系统里其他角色。",
+                    "- #补充会话 的 [名称] 必须是 NPC 名字，不能是用户。",
                     "- #补充群聊 里不能出现用户发言，群消息也不要围绕用户作为当前参与者展开。",
-                    "- #补充动态 的 [作者] 只能是 NPC，不能是{{char}}、不能是用户、不能是系统里其他角色。",
+                    "- #补充动态 的 [作者] 只能是 NPC，不能是{{char}}、不能是用户。",
                     "- #补充联系人 只能是 NPC，且必须和补充会话、补充群聊、补充动态中的人有呼应。",
                     "- #补充会话、#补充群聊、#补充动态、#补充联系人中的 [标签]、[关系]、[备注]、消息正文和评论内容，都不能暗示 NPC 与{{char}}存在暧昧、单恋、旧情、约会、吃醋或恋爱竞争；NPC 关系优先使用家人、同学、同事、朋友、邻居、商家、同好、普通网友等生活关系。",
                     "- 如果使用 emoji，必须直接输出真实 emoji 字符，如 😏、😄。",
