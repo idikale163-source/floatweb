@@ -425,6 +425,8 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                             const next = !imageEnabled;
                             setImageEnabled(next);
                             saveDwellingImageEnabled(next);
+                            // 重新打开开关视为想再试一次：清掉失败记录，让自动生成重新触发
+                            if (next) cs.imageErrors = {};
                         }}
                         onRetryImage={() => { if (activeCharId) void handleGenerateRoomImage(activeCharId, activeRoom.id); }}
                     />
