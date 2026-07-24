@@ -360,6 +360,48 @@
   z-index: 5;
 }
 
+/* 生成中悬浮条（tab 栏下方） */
+.dw2-genbar {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(var(--page-header-safe-top, 48px) + 102px);
+  z-index: 14;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 16px;
+  background: rgba(16, 16, 19, 0.7);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--dw-line);
+  white-space: nowrap;
+}
+.dwelling-app[data-haspicker="true"] .dw2-genbar { top: calc(var(--page-header-safe-top, 48px) + 145px); }
+.dw2-genbar-spin {
+  width: 12px; height: 12px;
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--dw-dim);
+  border-radius: 50%;
+  animation: dw-spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+.dw2-genbar-text {
+  color: var(--dw-dim);
+  font-size: calc(11.5px*var(--app-text-scale,1));
+  letter-spacing: 2px;
+}
+.dw2-genbar-stop {
+  background: transparent;
+  border: 1px solid var(--dw-line);
+  color: var(--dw-ink);
+  font-family: var(--dw-serif);
+  font-size: calc(11px*var(--app-text-scale,1));
+  letter-spacing: 2px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
 /* status badge（位于玻璃栏之下） */
 .dw2-badge {
   position: absolute;

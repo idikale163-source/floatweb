@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Wand2 } from "lucide-react";
 import type { DwellingRoom, DwellingFurniture, DwellingFurnitureItem } from "@/lib/dwelling-storage";
 import { resolveFurnitureMarker } from "@/lib/dwelling-engine";
+import { DWELLING_IMAGE_CANCELED_ERROR } from "@/lib/dwelling-image";
 
 export type DwellingRoomImageStatus = "ambient" | "generating" | "ready" | "failed";
 
@@ -22,6 +23,7 @@ type RoomViewProps = {
     imageConfigured: boolean;
     onToggleImage: () => void;
     onRetryImage: () => void;
+    onCancelImage: () => void;
 };
 
 /** 与 dwelling-engine 的 clamp 范围保持一致：避开顶部玻璃栏区和底部引言区 */
@@ -44,7 +46,7 @@ export function RoomView({
     room, itemHtmlCache, loadingItemKeys, lastItemError,
     onExploreItem, onOpenItem, onMoveMarker,
     imageUrl, imageStatus, imageError, imageEnabled, imageConfigured,
-    onToggleImage, onRetryImage,
+    onToggleImage, onRetryImage, onCancelImage,
 }: RoomViewProps) {
     const [viewMode, setViewMode] = useState<"stage" | "list">("stage");
     const [sheetFurnitureId, setSheetFurnitureId] = useState<string | null>(null);
@@ -281,11 +283,18 @@ export function RoomView({
             <div className="dw2-scrim-bottom" />
             <div className="dw2-wall">DWELLING</div>
 
+            {/* 生成中悬浮条（每个房间独立） */}
+            {imageStatus === "generating" && (
+                <div className="dw2-genbar">
+                    <span className="dw2-genbar-spin" />
+                    <span className="dw2-genbar-text">房间生成中…</span>
+                    <button className="dw2-genbar-stop" onClick={onCancelImage}>停止</button>
+                </div>
+            )}
             {/* 状态徽标 */}
-            {imageStatus === "generating" && <div className="dw2-badge" data-kind="gen">GENERATING</div>}
             {imageStatus === "failed" && (
                 <button className="dw2-badge" data-kind="fail" onClick={onRetryImage} title={imageError ?? undefined}>
-                    生成失败 · 重试
+                    {imageError === DWELLING_IMAGE_CANCELED_ERROR ? "已停止 · 点击生成" : "生成失败 · 重试"}
                 </button>
             )}
             {imageStatus === "ambient" && !imageUrl && <div className="dw2-badge" data-kind="amb">AMBIENT</div>}

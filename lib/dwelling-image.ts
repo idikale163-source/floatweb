@@ -53,8 +53,22 @@ export function isDwellingRoomImageGenerating(characterId: string, roomId: strin
     return inflightByRoom.has(roomKey(characterId, roomId));
 }
 
-/** 生图请求硬超时：网络切换/切后台可能让请求永远挂起，不能让 GENERATING 卡死 */
-const ROOM_IMAGE_TIMEOUT_MS = 180_000;
+/** 生图请求硬超时兜底：网络切换/切后台可能让请求永远挂起（用户随时可手动停止） */
+const ROOM_IMAGE_TIMEOUT_MS = 600_000;
+
+/** 用户主动停止时的错误标记（UI 据此显示"已停止"而非"失败"） */
+export const DWELLING_IMAGE_CANCELED_ERROR = "已停止生成";
+
+const inflightControllers = new Map<string, { controller: AbortController; userCanceled: boolean }>();
+
+/** 手动停止某个房间的生图请求 */
+export function cancelDwellingRoomImage(characterId: string, roomId: string): void {
+    const entry = inflightControllers.get(roomKey(characterId, roomId));
+    if (entry) {
+        entry.userCanceled = true;
+        entry.controller.abort();
+    }
+}
 
 /**
  * 为房间生成主视觉图。图像 blob 由 generateImageFromConfiguredApi 存入媒体库，
@@ -71,6 +85,8 @@ export async function generateDwellingRoomImage(
 
     const run = (async (): Promise<DwellingRoomImageResult> => {
         const controller = new AbortController();
+        const entry = { controller, userCanceled: false };
+        inflightControllers.set(key, entry);
         const timer = setTimeout(() => controller.abort(), ROOM_IMAGE_TIMEOUT_MS);
         try {
             const availability = getDwellingImageAvailability();
@@ -82,12 +98,15 @@ export async function generateDwellingRoomImage(
             if (!result) return { assetId: null, error: "生图未配置或已关闭" };
             return { assetId: result.mediaRef };
         } catch (e) {
-            if (controller.signal.aborted) return { assetId: null, error: "生成超时，请重试" };
+            if (controller.signal.aborted) {
+                return { assetId: null, error: entry.userCanceled ? DWELLING_IMAGE_CANCELED_ERROR : "生成超时，请重试" };
+            }
             const msg = e instanceof Error ? e.message : "生成失败";
             return { assetId: null, error: msg };
         } finally {
             clearTimeout(timer);
             inflightByRoom.delete(key);
+            inflightControllers.delete(key);
         }
     })();
 

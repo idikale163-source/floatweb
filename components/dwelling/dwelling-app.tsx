@@ -17,7 +17,7 @@ import {
 } from "@/lib/dwelling-storage";
 import { generateDwellingLayout, generateItemHtml, type DwellingRefreshMode } from "@/lib/dwelling-engine";
 import { pinyin } from "pinyin-pro";
-import { getDwellingImageAvailability, generateDwellingRoomImage } from "@/lib/dwelling-image";
+import { getDwellingImageAvailability, generateDwellingRoomImage, cancelDwellingRoomImage } from "@/lib/dwelling-image";
 import { deleteMediaRef, loadMediaObjectUrl } from "@/lib/media-cache-storage";
 import { RoomView, type DwellingRoomImageStatus } from "./room-view";
 import { StoryHtmlRenderer } from "@/components/ui/story-html-renderer";
@@ -453,6 +453,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                             if (next) cs.imageErrors = {};
                         }}
                         onRetryImage={() => { if (activeCharId) void handleGenerateRoomImage(activeCharId, activeRoom.id); }}
+                        onCancelImage={() => { if (activeCharId) cancelDwellingRoomImage(activeCharId, activeRoom.id); }}
                     />
                 );
             })()}
