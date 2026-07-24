@@ -79,8 +79,9 @@
 /* ── Character picker ── */
 .dwelling-char-picker {
   display: flex;
+  align-items: stretch;
   gap: 8px;
-  padding: 10px 16px 6px;
+  padding: 0 16px;
   overflow-x: auto;
   scrollbar-width: none;
   flex-shrink: 0;
@@ -93,7 +94,7 @@
 .dwelling-char-picker::-webkit-scrollbar { display: none; }
 .dwelling-char-chip {
   flex-shrink: 0;
-  padding: 6px 14px;
+  padding: 12px 14px 10px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--dw-dim);
@@ -202,7 +203,7 @@
   display: flex;
   align-items: stretch;
   gap: 4px;
-  padding: 6px 12px 0;
+  padding: 0 12px;
   overflow-x: auto;
   scrollbar-width: none;
   flex-shrink: 0;
@@ -216,7 +217,7 @@
 .dwelling-room-tabs::-webkit-scrollbar { display: none; }
 .dwelling-room-tab {
   flex-shrink: 0;
-  padding: 7px 12px 6px;
+  padding: 11px 12px 9px;
   background: transparent;
   border: none;
   color: var(--dw-dim);
