@@ -53,6 +53,9 @@ export function isDwellingRoomImageGenerating(characterId: string, roomId: strin
     return inflightByRoom.has(roomKey(characterId, roomId));
 }
 
+/** 生图请求硬超时：网络切换/切后台可能让请求永远挂起，不能让 GENERATING 卡死 */
+const ROOM_IMAGE_TIMEOUT_MS = 180_000;
+
 /**
  * 为房间生成主视觉图。图像 blob 由 generateImageFromConfiguredApi 存入媒体库，
  * 返回 mediaRef（assetId）；把它写回布局并保存由调用方负责。
@@ -67,18 +70,23 @@ export async function generateDwellingRoomImage(
     if (existing) return existing;
 
     const run = (async (): Promise<DwellingRoomImageResult> => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), ROOM_IMAGE_TIMEOUT_MS);
         try {
             const availability = getDwellingImageAvailability();
             if (!availability.available) return { assetId: null, error: "生图未开启" };
             const result = await generateImageFromConfiguredApi({
                 description: buildRoomImagePrompt(room),
+                signal: controller.signal,
             });
             if (!result) return { assetId: null, error: "生图未配置或已关闭" };
             return { assetId: result.mediaRef };
         } catch (e) {
+            if (controller.signal.aborted) return { assetId: null, error: "生成超时，请重试" };
             const msg = e instanceof Error ? e.message : "生成失败";
             return { assetId: null, error: msg };
         } finally {
+            clearTimeout(timer);
             inflightByRoom.delete(key);
         }
     })();
