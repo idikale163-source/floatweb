@@ -30,7 +30,17 @@ const DWELLING_IMAGE_STYLE_SUFFIX =
 function buildRoomImagePrompt(room: DwellingRoom): string {
     const base = room.imagePrompt?.trim()
         || `${room.name}的室内场景，${(room.furniture || []).map(f => f.label).join("、")}自然分布在画面中`;
-    return `${base}。${DWELLING_IMAGE_STYLE_SUFFIX}`;
+    const details = (room.furniture || [])
+        .map(f => {
+            const names = (f.items || []).map(i => i.name).filter(Boolean).slice(0, 3);
+            return names.length ? `${f.label}上有${names.join("、")}` : "";
+        })
+        .filter(Boolean)
+        .join("；");
+    const detailLine = details
+        ? `画面细节参考（从中挑选有画面感的自然呈现，小物件只需模糊暗示，画面中不要出现任何可读的文字、字母或数字）：${details}。`
+        : "";
+    return `${base}。${detailLine}${DWELLING_IMAGE_STYLE_SUFFIX}`;
 }
 
 export type DwellingRoomImageResult = { assetId: string | null; error?: string };

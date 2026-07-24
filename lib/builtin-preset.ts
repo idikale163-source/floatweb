@@ -6,7 +6,7 @@ import type { PresetConfig } from "./settings-types";
 import { getCheckPhonePromptTags } from "./checkphone-config";
 
 export const BUILTIN_PRESET_ID = "builtin_default_v1";
-export const BUILTIN_PRESET_VERSION = 254; // 升版本会用出厂内容重写用户的内置预设副本（自定义会丢），非必要不升
+export const BUILTIN_PRESET_VERSION = 255; // 升版本会用出厂内容重写用户的内置预设副本（自定义会丢），非必要不升
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
@@ -3765,7 +3765,7 @@ export function createBuiltinPreset(): PresetConfig {
                     '      "name": "房间名称（中文）",',
                     '      "en": "房间英文名（大写，如 BEDROOM）",',
                     '      "description": "一句话描述推开门时的感受（中文，有氛围感，带感官细节）",',
-                    '      "imagePrompt": "这个房间的画面构图描述（一句中文，明确写出每件家具在画面中的方位，如：深夜的主卧，画面左侧是整齐的双人床，右侧墙边深色床头柜上亮着一盏小灯，左下角落着一块空地）",',
+                    '      "imagePrompt": "这个房间的画面构图描述（一两句中文，明确写出每件家具在画面中的方位，并自然融入一两件最有画面感的物品细节，如：深夜的主卧，画面左侧是整齐的双人床，被子凌乱地堆在一侧，右侧墙边深色床头柜上亮着一盏小灯，柜面上放着半杯水；只写视觉细节，不写文字类内容）",',
                     '      "furniture": [',
                     '        {',
                     '          "id": "唯一英文ID",',
