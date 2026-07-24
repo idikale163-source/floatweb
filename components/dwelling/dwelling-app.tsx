@@ -11,9 +11,14 @@ import {
     clearDwellingData,
     saveItemHtml,
     loadAllItemHtmlForChar,
+    loadDwellingImageEnabled,
+    saveDwellingImageEnabled,
+    collectRoomImageRefs,
 } from "@/lib/dwelling-storage";
 import { generateDwellingLayout, generateItemHtml, type DwellingRefreshMode } from "@/lib/dwelling-engine";
-import { RoomView } from "./room-view";
+import { getDwellingImageAvailability, generateDwellingRoomImage } from "@/lib/dwelling-image";
+import { deleteMediaRef, loadMediaObjectUrl } from "@/lib/media-cache-storage";
+import { RoomView, type DwellingRoomImageStatus } from "./room-view";
 import { StoryHtmlRenderer } from "@/components/ui/story-html-renderer";
 
 type DwellingAppProps = {
@@ -30,6 +35,10 @@ type CharState = {
     itemHtmlCache: Record<string, string>;
     loadingItemKeys: Set<string>;
     lastItemError: string | null;
+    /** roomId → 生图失败原因（存在时不再自动重试，需手动重试） */
+    imageErrors: Record<string, string>;
+    /** 正在生图的 roomId 集合 */
+    generatingImageRooms: Set<string>;
 };
 
 type ItemDetail = {
@@ -48,11 +57,14 @@ const charStates = new Map<string, CharState>();
 
 function getCharState(charId: string): CharState {
     let s = charStates.get(charId);
-    if (!s) { s = { layout: null, isGenerating: false, error: null, loaded: false, itemHtmlCache: {}, loadingItemKeys: new Set(), lastItemError: null }; charStates.set(charId, s); }
+    if (!s) { s = { layout: null, isGenerating: false, error: null, loaded: false, itemHtmlCache: {}, loadingItemKeys: new Set(), lastItemError: null, imageErrors: {}, generatingImageRooms: new Set() }; charStates.set(charId, s); }
     return s;
 }
 
 function itemKey(roomId: string, itemId: string) { return `${roomId}_${itemId}`; }
+
+/** mediaRef → object URL（会话级缓存，图不多，不主动 revoke） */
+const roomImageUrls = new Map<string, string>();
 
 export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
     const [characters, setCharacters] = useState<Character[]>([]);
@@ -63,8 +75,20 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [showRefreshConfirm, setShowRefreshConfirm] = useState(false);
     const [itemDetail, setItemDetail] = useState<ItemDetail | null>(null);
+    const [imageEnabled, setImageEnabled] = useState(true);
+    const [imageConfigured, setImageConfigured] = useState(false);
     const activeCharIdRef = useRef<string | null>(null);
     const activeRoomIdxRef = useRef(0);
+
+    useEffect(() => {
+        setImageEnabled(loadDwellingImageEnabled());
+        setImageConfigured(getDwellingImageAvailability().configured);
+    }, []);
+
+    useEffect(() => {
+        // 用户可能中途去设置里配置了生图，回到栖所时重新判定
+        if (visible) setImageConfigured(getDwellingImageAvailability().configured);
+    }, [visible]);
 
     useEffect(() => {
         activeCharIdRef.current = activeCharId;
@@ -167,7 +191,11 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
         const cs = getCharState(activeCharId);
         if (cs.isGenerating) return;
         setItemDetail(null);
-        if (mode === "full") await clearDwellingData(activeCharId);
+        if (mode === "full") {
+            for (const ref of collectRoomImageRefs(cs.layout)) void deleteMediaRef(ref);
+            cs.imageErrors = {};
+            await clearDwellingData(activeCharId);
+        }
         await doGenerate(activeCharId, mode);
     }
 
@@ -175,14 +203,85 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
         if (!activeCharId) return;
         const cs = getCharState(activeCharId);
         if (cs.isGenerating) return;
+        for (const ref of collectRoomImageRefs(cs.layout)) void deleteMediaRef(ref);
         await clearDwellingData(activeCharId);
         cs.layout = null;
         cs.itemHtmlCache = {};
         cs.error = null;
+        cs.imageErrors = {};
         setActiveRoomIdx(0);
         setItemDetail(null);
         rerender();
     }
+
+    // ── 房间生图 ──
+    const handleGenerateRoomImage = useCallback(async (charId: string, roomId: string) => {
+        const cs = getCharState(charId);
+        const layout = cs.layout;
+        if (!layout) return;
+        const room = layout.rooms.find(r => r.id === roomId);
+        if (!room) return;
+        if (cs.generatingImageRooms.has(roomId)) return;
+
+        cs.generatingImageRooms.add(roomId);
+        delete cs.imageErrors[roomId];
+        rerender();
+
+        const { assetId, error } = await generateDwellingRoomImage(charId, room);
+        cs.generatingImageRooms.delete(roomId);
+
+        // 生成期间布局被重建/删除：丢弃这张图
+        if (cs.layout !== layout) {
+            if (assetId) void deleteMediaRef(assetId);
+            rerender();
+            return;
+        }
+
+        if (assetId) {
+            const old = room.imageAssetId;
+            room.imageAssetId = assetId;
+            if (old && old !== assetId) void deleteMediaRef(old);
+            const url = await loadMediaObjectUrl(assetId);
+            if (url) roomImageUrls.set(assetId, url);
+            await saveDwellingLayout(charId, layout);
+        } else {
+            cs.imageErrors[roomId] = error || "生成失败";
+        }
+        rerender();
+    }, []);
+
+    // 进入房间：已有图则解析 URL；没有图且生图可用则自动生成
+    const csForImage = activeCharId ? getCharState(activeCharId) : null;
+    const roomForImage = csForImage?.layout?.rooms[activeRoomIdx] ?? null;
+    useEffect(() => {
+        if (visible === false) return;
+        if (!activeCharId || !csForImage?.layout || !roomForImage) return;
+        const cs = csForImage;
+        const room = roomForImage;
+
+        if (room.imageAssetId) {
+            const ref = room.imageAssetId;
+            if (roomImageUrls.has(ref)) return;
+            let cancelled = false;
+            (async () => {
+                const url = await loadMediaObjectUrl(ref);
+                if (cancelled) return;
+                if (url) {
+                    roomImageUrls.set(ref, url);
+                } else if (cs.layout && cs.layout.rooms.includes(room)) {
+                    // 媒体已丢失：清掉引用，回氛围底并允许重新生成
+                    room.imageAssetId = undefined;
+                    void saveDwellingLayout(activeCharId, cs.layout);
+                }
+                rerender();
+            })();
+            return () => { cancelled = true; };
+        }
+
+        if (imageEnabled && imageConfigured && !cs.generatingImageRooms.has(room.id) && !cs.imageErrors[room.id]) {
+            void handleGenerateRoomImage(activeCharId, room.id);
+        }
+    }, [activeCharId, activeRoomIdx, imageEnabled, imageConfigured, visible, csForImage, roomForImage, handleGenerateRoomImage]);
 
     function openItemDetail(room: DwellingRoom, furniture: DwellingFurniture, item: DwellingFurnitureItem, html: string) {
         setItemDetail({
@@ -230,7 +329,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
         <div className="dwelling-app">
             <div className="dwelling-header">
                 <button className="dw-back" onClick={onClose}><ChevronLeft size={18} /></button>
-                <h1>栖所</h1>
+                <h1>栖 所<span className="dw-title-en">DWELLING</span></h1>
             </div>
 
             {characters.length > 1 && (
@@ -277,6 +376,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                             data-active={activeRoomIdx === idx ? "true" : undefined}
                             onClick={() => { setActiveRoomIdx(idx); setItemDetail(null); }}>
                             {room.name}
+                            {room.en && <span className="dw-tab-en">{room.en}</span>}
                         </button>
                     ))}
                     <div className="dw-tabs-actions">
@@ -290,16 +390,34 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                 </div>
             )}
 
-            {activeRoom && cs && (
-                <RoomView
-                    room={activeRoom}
-                    itemHtmlCache={cs.itemHtmlCache}
-                    loadingItemKeys={cs.loadingItemKeys}
-                    lastItemError={cs.lastItemError}
-                    onExploreItem={(furniture, item) => handleExploreItem(activeCharId!, activeRoom.id, furniture, item)}
-                    onOpenItem={(furniture, item, html) => openItemDetail(activeRoom, furniture, item, html)}
-                />
-            )}
+            {activeRoom && cs && (() => {
+                const assetUrl = activeRoom.imageAssetId ? roomImageUrls.get(activeRoom.imageAssetId) ?? null : null;
+                let imageStatus: DwellingRoomImageStatus = "ambient";
+                if (cs.generatingImageRooms.has(activeRoom.id)) imageStatus = "generating";
+                else if (imageEnabled && assetUrl) imageStatus = "ready";
+                else if (imageEnabled && imageConfigured && cs.imageErrors[activeRoom.id]) imageStatus = "failed";
+                return (
+                    <RoomView
+                        room={activeRoom}
+                        itemHtmlCache={cs.itemHtmlCache}
+                        loadingItemKeys={cs.loadingItemKeys}
+                        lastItemError={cs.lastItemError}
+                        onExploreItem={(furniture, item) => handleExploreItem(activeCharId!, activeRoom.id, furniture, item)}
+                        onOpenItem={(furniture, item, html) => openItemDetail(activeRoom, furniture, item, html)}
+                        imageUrl={imageEnabled ? assetUrl : null}
+                        imageStatus={imageStatus}
+                        imageError={cs.imageErrors[activeRoom.id] ?? null}
+                        imageEnabled={imageEnabled}
+                        imageConfigured={imageConfigured}
+                        onToggleImage={() => {
+                            const next = !imageEnabled;
+                            setImageEnabled(next);
+                            saveDwellingImageEnabled(next);
+                        }}
+                        onRetryImage={() => { if (activeCharId) void handleGenerateRoomImage(activeCharId, activeRoom.id); }}
+                    />
+                );
+            })()}
             {itemDetail && (
                 <div className="dwelling-detail-overlay" data-show="true">
                     <div className="dwelling-items-shade" onClick={() => setItemDetail(null)} />

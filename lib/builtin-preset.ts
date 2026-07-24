@@ -6,7 +6,7 @@ import type { PresetConfig } from "./settings-types";
 import { getCheckPhonePromptTags } from "./checkphone-config";
 
 export const BUILTIN_PRESET_ID = "builtin_default_v1";
-export const BUILTIN_PRESET_VERSION = 253; // 升版本会用出厂内容重写用户的内置预设副本（自定义会丢），非必要不升
+export const BUILTIN_PRESET_VERSION = 254; // 升版本会用出厂内容重写用户的内置预设副本（自定义会丢），非必要不升
 
 export function createBuiltinPreset(): PresetConfig {
     const now = Date.now();
@@ -3763,13 +3763,17 @@ export function createBuiltinPreset(): PresetConfig {
                     '    {',
                     '      "id": "唯一英文ID",',
                     '      "name": "房间名称（中文）",',
+                    '      "en": "房间英文名（大写，如 BEDROOM）",',
                     '      "description": "一句话描述推开门时的感受（中文，有氛围感，带感官细节）",',
+                    '      "imagePrompt": "这个房间的画面构图描述（一句中文，明确写出每件家具在画面中的方位，如：深夜的主卧，画面左侧是整齐的双人床，右侧墙边深色床头柜上亮着一盏小灯，左下角落着一块空地）",',
                     '      "furniture": [',
                     '        {',
                     '          "id": "唯一英文ID",',
                     '          "icon": "一个emoji",',
                     '          "label": "家具名（中文）",',
+                    '          "en": "家具英文名（大写，如 DOUBLE BED）",',
                     '          "position": "九宫格位置",',
+                    '          "marker": { "x": 0.5, "y": 0.5 },',
                     '          "items": [',
                     '            { "id": "唯一英文ID", "name": "物品名", "preview": "一句话描述" }',
                     '          ]',
@@ -3784,6 +3788,7 @@ export function createBuiltinPreset(): PresetConfig {
                     "- 每个房间 2~5 件家具，每件家具 2~4 个物品",
                     "- position 只能是：top-left, top-center, top-right, center-left, center, center-right, bottom-left, bottom-center, bottom-right",
                     "- 同一房间内家具的 position 不能重复",
+                    "- marker 是该家具在房间画面里的标注点坐标（归一化 0~1，x 向右 y 向下），必须与 imagePrompt 描述的构图方位一致；各家具的 marker 之间保持距离，不要挤在一起",
                     "- 物品描述要体现角色的性格、生活习惯、故事线索，结合所有已知的记忆和世界观",
                     "- 如果 <dwellingContext> 中已有栖所数据，说明这是更新而非首次生成：",
                     "  - 根据时间推移和期间发生的事件/互动来更新房间状态",
@@ -3836,11 +3841,11 @@ export function createBuiltinPreset(): PresetConfig {
                     "物品：{{dwellingItem}}（{{dwellingItemPreview}}）",
                     "",
                     "输出格式：使用 ```html 代码块输出一个完整的自包含 HTML 页面，包含内联 CSS 和可选的 JS。",
-                    "- 页面应精美、有设计感，粉色/暖色调为主",
+                    "- 页面应精美、有设计感：深色底（近黑）、衬线字体（font-family: \"Songti SC\", \"Noto Serif SC\", Georgia, serif）、细线分隔、大字距标题、暗红色 #b45a5f 少量点缀，整体是高级杂志排印质感",
                     "- 描述物品的细节、来历、与角色的故事关联",
                     "- 可包含互动元素：点击翻开信件、展开日记内容、查看照片描述、翻阅书页等",
                     "- 保持文学性和氛围感，结合角色的所有已知信息",
-                    "- 页面宽度适配手机（max-width: 350px），背景透明或与粉色主题搭配",
+                    "- 页面宽度适配手机（max-width: 350px），背景透明或与深色主题搭配",
                     "- 移动端嵌入要求：请生成适合嵌入 iframe 的普通流式页面；不要给 html、body 或最外层容器设置 height: 100vh、100dvh、overflow: hidden、position: fixed 或 inset: 0；页面高度必须由内容自然撑开，并允许纵向滚动",
                     "- 只输出 ```html 代码块，不要其他内容",
                     "</dwelling_item_explore_instruction>",
