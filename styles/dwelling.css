@@ -946,6 +946,7 @@
   line-height: 1.9;
   letter-spacing: 1px;
   margin-top: 8px;
+  white-space: pre-line;
 }
 .dw-error-msg {
   text-align: left;

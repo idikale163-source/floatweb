@@ -212,12 +212,15 @@ export function RoomView({
         ? (room.furniture || []).find(f => f.id === sheetFurnitureId) ?? null
         : null;
 
+    /** 待确认的操作：重新生成图 / 切换生图开关 */
+    const [confirmAction, setConfirmAction] = useState<"regen" | "toggle" | null>(null);
+
     function handleToggleImage() {
         if (!imageConfigured) {
             setTip("请先在设置中配置并开启图像生成");
             return;
         }
-        onToggleImage();
+        setConfirmAction("toggle");
     }
 
     // ── 清单视图 ──
@@ -321,7 +324,7 @@ export function RoomView({
                     <span className="dw2-time">{formatStageTime()}</span>
                     <span className="dw2-ops">
                         {imageEnabled && imageConfigured && imageStatus === "ready" && (
-                            <button className="dw2-op" onClick={onRetryImage} title="重新生成房间图">↻</button>
+                            <button className="dw2-op" onClick={() => setConfirmAction("regen")} title="重新生成房间图">↻</button>
                         )}
                         <button className="dw2-op" data-on={imageEnabled && imageConfigured ? "true" : undefined}
                             onClick={handleToggleImage} title={imageEnabled ? "关闭生图" : "开启生图"}>✦</button>
@@ -330,6 +333,34 @@ export function RoomView({
             </div>
 
             {tip && <div className="dw2-tip">{tip}</div>}
+
+            {/* 重新生成 / 开关生图确认弹窗 */}
+            {confirmAction && (
+                <div className="dw-confirm-overlay">
+                    <div className="dw-confirm-shade" onClick={() => setConfirmAction(null)} />
+                    <div className="dw-confirm-card">
+                        <div className="dw-confirm-title">
+                            {confirmAction === "regen" ? "重新生成房间图" : imageEnabled ? "关闭生图" : "开启生图"}
+                        </div>
+                        <div className="dw-confirm-msg">
+                            {confirmAction === "regen"
+                                ? `将为「${room.name}」重新生成一张房间图\n并替换当前图片`
+                                : imageEnabled
+                                    ? "关闭后房间将显示氛围底图\n已生成的图片会保留"
+                                    : "开启后会自动为没有图的房间生成图片"}
+                        </div>
+                        <div className="dw-confirm-actions">
+                            <button className="dw-confirm-btn dw-confirm-btn-cancel" onClick={() => setConfirmAction(null)}>取消</button>
+                            <button className="dw-confirm-btn" onClick={() => {
+                                const action = confirmAction;
+                                setConfirmAction(null);
+                                if (action === "regen") onRetryImage();
+                                else onToggleImage();
+                            }}>确认</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* 家具底部弹窗 */}
             {sheetFurniture && (
