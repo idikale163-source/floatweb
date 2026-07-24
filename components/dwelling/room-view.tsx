@@ -440,7 +440,6 @@ function ListFurnitureCard({ room, furniture, itemHtmlCache, loadingItemKeys, la
     return (
         <div className="dw-fur-card" data-expanded={isExpanded ? "true" : undefined}>
             <button className="dw-fur-header" onClick={() => setCollapsed(c => !c)}>
-                <span className="dw-fur-emoji">{furniture.icon}</span>
                 <span className="dw-fur-label">{furniture.label}</span>
                 <span className="dw-fur-count">{furniture.items.length}</span>
                 <span className="dw-fur-chevron">{isExpanded ? "▾" : "▸"}</span>

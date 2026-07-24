@@ -352,7 +352,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                             <button key={c.id} className="dwelling-char-chip"
                                 data-active={activeCharId === c.id ? "true" : undefined}
                                 onClick={() => { setActiveCharId(c.id); setActiveRoomIdx(0); setItemDetail(null); }}>
-                                <span className="dw-chip-zh">{c.name}{s.isGenerating ? " ⏳" : s.layout ? " ✓" : ""}</span>
+                                <span className="dw-chip-zh">{c.name}{s.isGenerating ? " …" : s.layout ? " ✓" : ""}</span>
                                 {charChipEn(c.name) && <span className="dw-chip-en">{charChipEn(c.name)}</span>}
                             </button>
                         );
@@ -461,7 +461,6 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                     <div className="dwelling-items-shade" onClick={() => setItemDetail(null)} />
                     <div className="dwelling-detail-card" role="dialog" aria-modal="true" aria-label={itemDetail.itemName}>
                         <div className="dwelling-items-header">
-                            <span className="dwelling-items-icon">{itemDetail.furnitureIcon}</span>
                             <div className="dwelling-detail-heading">
                                 <div className="dwelling-detail-name">{itemDetail.itemName}</div>
                                 <div className="dwelling-detail-location">{itemDetail.roomName} · {itemDetail.furnitureLabel}</div>
