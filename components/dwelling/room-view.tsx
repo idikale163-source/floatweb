@@ -14,6 +14,7 @@ type RoomViewProps = {
     lastItemError: string | null;
     onExploreItem: (furniture: DwellingFurniture, item: DwellingFurnitureItem) => void;
     onOpenItem: (furniture: DwellingFurniture, item: DwellingFurnitureItem, html: string) => void;
+    onMoveMarker: (furnitureId: string, marker: { x: number; y: number }) => void;
     imageUrl: string | null;
     imageStatus: DwellingRoomImageStatus;
     imageError: string | null;
@@ -22,6 +23,11 @@ type RoomViewProps = {
     onToggleImage: () => void;
     onRetryImage: () => void;
 };
+
+/** 与 dwelling-engine 的 clamp 范围保持一致：避开顶部页签区和底部引言区 */
+const MK_X_MIN = 0.08, MK_X_MAX = 0.92, MK_Y_MIN = 0.16, MK_Y_MAX = 0.82;
+const LONG_PRESS_MS = 450;
+const LONG_PRESS_TOLERANCE = 10;
 
 function ikey(roomId: string, itemId: string) { return `${roomId}_${itemId}`; }
 
@@ -36,7 +42,7 @@ function formatStageTime(): string {
 
 export function RoomView({
     room, itemHtmlCache, loadingItemKeys, lastItemError,
-    onExploreItem, onOpenItem,
+    onExploreItem, onOpenItem, onMoveMarker,
     imageUrl, imageStatus, imageError, imageEnabled, imageConfigured,
     onToggleImage, onRetryImage,
 }: RoomViewProps) {
@@ -110,6 +116,97 @@ export function RoomView({
         }
         return base;
     }, [room, stageSize]);
+
+    // ── 长按拖动标注点 ──
+    const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(null);
+    const dragRef = useRef<{
+        id: string; pointerId: number; target: HTMLElement;
+        startX: number; startY: number; timer: number;
+        active: boolean; committed: { x: number; y: number } | null;
+    } | null>(null);
+    const suppressClickRef = useRef(false);
+
+    function stagePoint(clientX: number, clientY: number): { x: number; y: number } | null {
+        const el = stageRef.current;
+        if (!el) return null;
+        const rect = el.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        return {
+            x: Math.min(MK_X_MAX, Math.max(MK_X_MIN, (clientX - rect.left) / rect.width)),
+            y: Math.min(MK_Y_MAX, Math.max(MK_Y_MIN, (clientY - rect.top) / rect.height)),
+        };
+    }
+
+    function clearDragTimer() {
+        const st = dragRef.current;
+        if (st) window.clearTimeout(st.timer);
+    }
+
+    function handlePtDown(furnitureId: string, e: React.PointerEvent<HTMLButtonElement>) {
+        const target = e.currentTarget;
+        const { clientX, clientY, pointerId } = e;
+        clearDragTimer();
+        const st = {
+            id: furnitureId, pointerId, target: target as HTMLElement,
+            startX: clientX, startY: clientY, timer: 0,
+            active: false, committed: null,
+        };
+        st.timer = window.setTimeout(() => {
+            st.active = true;
+            suppressClickRef.current = true;
+            try { st.target.setPointerCapture(pointerId); } catch { /* ignore */ }
+            const p = stagePoint(clientX, clientY);
+            if (p) setDrag({ id: furnitureId, ...p });
+        }, LONG_PRESS_MS);
+        dragRef.current = st;
+    }
+
+    function handlePtMove(e: React.PointerEvent<HTMLButtonElement>) {
+        const st = dragRef.current;
+        if (!st || st.pointerId !== e.pointerId) return;
+        if (!st.active) {
+            // 还没触发长按：移动超过容差就当作普通滑动，取消长按
+            if (Math.hypot(e.clientX - st.startX, e.clientY - st.startY) > LONG_PRESS_TOLERANCE) {
+                clearDragTimer();
+                dragRef.current = null;
+            }
+            return;
+        }
+        const p = stagePoint(e.clientX, e.clientY);
+        if (p) {
+            st.committed = p;
+            setDrag({ id: st.id, ...p });
+        }
+    }
+
+    function handlePtUp(e: React.PointerEvent<HTMLButtonElement>) {
+        const st = dragRef.current;
+        if (!st || st.pointerId !== e.pointerId) return;
+        clearDragTimer();
+        if (st.active) {
+            const p = st.committed ?? stagePoint(e.clientX, e.clientY);
+            if (p) onMoveMarker(st.id, p);
+        }
+        dragRef.current = null;
+        setDrag(null);
+    }
+
+    function handlePtCancel(e: React.PointerEvent<HTMLButtonElement>) {
+        const st = dragRef.current;
+        if (!st || st.pointerId !== e.pointerId) return;
+        clearDragTimer();
+        dragRef.current = null;
+        setDrag(null);
+        suppressClickRef.current = false;
+    }
+
+    function handleMarkerTap(furnitureId: string) {
+        if (suppressClickRef.current) {
+            suppressClickRef.current = false;
+            return;
+        }
+        setSheetFurnitureId(furnitureId);
+    }
 
     const sheetFurniture = sheetFurnitureId
         ? (room.furniture || []).find(f => f.id === sheetFurnitureId) ?? null
@@ -190,14 +287,23 @@ export function RoomView({
             )}
             {imageStatus === "ambient" && !imageUrl && <div className="dw2-badge" data-kind="amb">AMBIENT</div>}
 
-            {/* 家具标注 */}
+            {/* 家具标注（长按可拖动微调位置） */}
             {markers.map(({ f, m, h, len }) => {
+                const isDragging = drag?.id === f.id;
+                const x = isDragging ? drag.x : m.x;
+                const y = isDragging ? drag.y : m.y;
                 return (
-                    <div key={f.id} className="dw2-mk" data-h={h}
-                        style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%`, "--mklen": `${len}px` } as React.CSSProperties}>
-                        <button className="dw2-pt" onClick={() => setSheetFurnitureId(f.id)} aria-label={f.label} />
+                    <div key={f.id} className="dw2-mk" data-h={h} data-drag={isDragging ? "true" : undefined}
+                        style={{ left: `${x * 100}%`, top: `${y * 100}%`, "--mklen": `${len}px` } as React.CSSProperties}>
+                        <button className="dw2-pt" aria-label={f.label}
+                            onClick={() => handleMarkerTap(f.id)}
+                            onPointerDown={e => handlePtDown(f.id, e)}
+                            onPointerMove={handlePtMove}
+                            onPointerUp={handlePtUp}
+                            onPointerCancel={handlePtCancel}
+                            onContextMenu={e => e.preventDefault()} />
                         <span className="dw2-hln" />
-                        <span className="dw2-lbl" onClick={() => setSheetFurnitureId(f.id)}>
+                        <span className="dw2-lbl" onClick={() => handleMarkerTap(f.id)}>
                             <span className="dw2-zh">{f.label}<i>{String(f.items.length).padStart(2, "0")}</i></span>
                             {f.en && <span className="dw2-en">{f.en}</span>}
                         </span>

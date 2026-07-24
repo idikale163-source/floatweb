@@ -368,7 +368,19 @@
   border: none;
   padding: 0;
   cursor: pointer;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
+/* 长按拖动中：星位放大提亮 */
+.dw2-mk[data-drag="true"] { z-index: 30; }
+.dw2-mk[data-drag="true"] .dw2-pt::before {
+  border-color: #fff;
+  box-shadow: 0 0 0 9px rgba(255, 255, 255, 0.1), 0 0 26px rgba(255, 255, 255, 0.35);
+}
+.dw2-mk[data-drag="true"] .dw2-hln,
+.dw2-mk[data-drag="true"] .dw2-lbl { opacity: 0.4; }
 .dw2-pt::before {
   content: "";
   position: absolute;

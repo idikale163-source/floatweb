@@ -404,6 +404,18 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                         lastItemError={cs.lastItemError}
                         onExploreItem={(furniture, item) => handleExploreItem(activeCharId!, activeRoom.id, furniture, item)}
                         onOpenItem={(furniture, item, html) => openItemDetail(activeRoom, furniture, item, html)}
+                        onMoveMarker={(furnitureId, marker) => {
+                            if (!activeCharId || !cs.layout) return;
+                            const roomIdx = cs.layout.rooms.indexOf(activeRoom);
+                            if (roomIdx < 0) return;
+                            // 不可变更新：房间对象换新引用，RoomView 才会立即重算标注布局
+                            cs.layout.rooms[roomIdx] = {
+                                ...activeRoom,
+                                furniture: activeRoom.furniture.map(f => f.id === furnitureId ? { ...f, marker } : f),
+                            };
+                            void saveDwellingLayout(activeCharId, cs.layout);
+                            rerender();
+                        }}
                         imageUrl={imageEnabled ? assetUrl : null}
                         imageStatus={imageStatus}
                         imageError={cs.imageErrors[activeRoom.id] ?? null}
