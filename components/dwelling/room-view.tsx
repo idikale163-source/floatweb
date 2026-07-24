@@ -24,8 +24,8 @@ type RoomViewProps = {
     onRetryImage: () => void;
 };
 
-/** 与 dwelling-engine 的 clamp 范围保持一致：避开顶部页签区和底部引言区 */
-const MK_X_MIN = 0.08, MK_X_MAX = 0.92, MK_Y_MIN = 0.16, MK_Y_MAX = 0.82;
+/** 与 dwelling-engine 的 clamp 范围保持一致：避开顶部玻璃栏区和底部引言区 */
+const MK_X_MIN = 0.08, MK_X_MAX = 0.92, MK_Y_MIN = 0.24, MK_Y_MAX = 0.82;
 const LONG_PRESS_MS = 450;
 const LONG_PRESS_TOLERANCE = 10;
 
@@ -320,7 +320,6 @@ export function RoomView({
                 <div className="dw2-meta">
                     <span className="dw2-time">{formatStageTime()}</span>
                     <span className="dw2-ops">
-                        <button className="dw2-op" onClick={() => setViewMode("list")} title="物品清单">☰</button>
                         {imageEnabled && imageConfigured && imageStatus === "ready" && (
                             <button className="dw2-op" onClick={onRetryImage} title="重新生成房间图">↻</button>
                         )}

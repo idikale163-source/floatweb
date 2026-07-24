@@ -115,9 +115,9 @@ function deduplicatePositions(rooms: DwellingLayout["rooms"]): void {
 
 // ── Marker sanitize + position fallback ───────
 
-/** 标注点安全范围：避开顶部页签区和底部引言区 */
+/** 标注点安全范围：避开顶部玻璃栏区和底部引言区 */
 const MARKER_X_MIN = 0.08, MARKER_X_MAX = 0.92;
-const MARKER_Y_MIN = 0.16, MARKER_Y_MAX = 0.82;
+const MARKER_Y_MIN = 0.24, MARKER_Y_MAX = 0.82;
 
 const POSITION_MARKERS: Record<DwellingPosition, DwellingMarker> = {
     "top-left": { x: 0.26, y: 0.3 }, "top-center": { x: 0.5, y: 0.26 }, "top-right": { x: 0.74, y: 0.3 },

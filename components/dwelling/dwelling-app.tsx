@@ -326,7 +326,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
     const activeRoom = cs?.layout?.rooms[activeRoomIdx] ?? null;
 
     return (
-        <div className="dwelling-app">
+        <div className="dwelling-app" data-haspicker={characters.length > 1 ? "true" : undefined}>
             <div className="dwelling-header">
                 <button className="dw-back" onClick={onClose}><ChevronLeft size={18} /></button>
                 <h1>栖 所<span className="dw-title-en">DWELLING</span></h1>
