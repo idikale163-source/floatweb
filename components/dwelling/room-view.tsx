@@ -321,6 +321,9 @@ export function RoomView({
                     <span className="dw2-time">{formatStageTime()}</span>
                     <span className="dw2-ops">
                         <button className="dw2-op" onClick={() => setViewMode("list")} title="物品清单">☰</button>
+                        {imageEnabled && imageConfigured && imageStatus === "ready" && (
+                            <button className="dw2-op" onClick={onRetryImage} title="重新生成房间图">↻</button>
+                        )}
                         <button className="dw2-op" data-on={imageEnabled && imageConfigured ? "true" : undefined}
                             onClick={handleToggleImage} title={imageEnabled ? "关闭生图" : "开启生图"}>✦</button>
                     </span>
