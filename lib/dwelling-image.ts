@@ -25,11 +25,15 @@ export function getDwellingImageAvailability(): DwellingImageAvailability {
 
 /** 统一风格后缀：保证各房间图色调一致、匹配栖所暗色 UI */
 const DWELLING_IMAGE_STYLE_SUFFIX =
-    "电影感室内空间摄影，低照度暗调，光影层次丰富，氛围沉静高级，构图简洁干净，画面中没有任何人物、动物和文字，真实材质细节";
+    "电影感室内空间摄影，广角镜头拍摄整个房间，低照度暗调，光影层次丰富，氛围沉静高级，构图简洁干净，画面中没有任何人物、动物和文字，真实材质细节";
 
 function buildRoomImagePrompt(room: DwellingRoom): string {
+    const labels = (room.furniture || []).map(f => f.label).filter(Boolean);
     const base = room.imagePrompt?.trim()
-        || `${room.name}的室内场景，${(room.furniture || []).map(f => f.label).join("、")}自然分布在画面中`;
+        || `${room.name}的室内场景，${labels.join("、")}自然分布在画面中`;
+    const mustLine = labels.length
+        ? `画面中必须同时出现以下家具，缺一不可：${labels.join("、")}；采用能看到整个房间的广角视角，禁止只拍某件家具的局部特写。`
+        : "";
     const details = (room.furniture || [])
         .map(f => {
             const names = (f.items || []).map(i => i.name).filter(Boolean).slice(0, 3);
@@ -40,7 +44,7 @@ function buildRoomImagePrompt(room: DwellingRoom): string {
     const detailLine = details
         ? `画面细节参考（从中挑选有画面感的自然呈现，小物件只需模糊暗示，画面中不要出现任何可读的文字、字母或数字）：${details}。`
         : "";
-    return `${base}。${detailLine}${DWELLING_IMAGE_STYLE_SUFFIX}`;
+    return `${base}。${mustLine}${detailLine}${DWELLING_IMAGE_STYLE_SUFFIX}`;
 }
 
 export type DwellingRoomImageResult = { assetId: string | null; error?: string };
