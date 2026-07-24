@@ -359,7 +359,18 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
             {cs?.isGenerating && cs.layout && (
                 <div className="dwelling-loading-bar"><span className="dwelling-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /><span>刷新中…</span></div>
             )}
-            {cs?.error && <div className="dwelling-error">{cs.error}</div>}
+            {cs && (cs.error || cs.lastItemError) && (
+                <div className="dw-confirm-overlay">
+                    <div className="dw-confirm-shade" onClick={() => { cs.error = null; cs.lastItemError = null; rerender(); }} />
+                    <div className="dw-confirm-card">
+                        <div className="dw-confirm-title">{cs.error ? "生成失败" : "探索失败"}</div>
+                        <div className="dw-confirm-msg dw-error-msg">{cs.error || cs.lastItemError}</div>
+                        <div className="dw-confirm-actions">
+                            <button className="dw-confirm-btn" onClick={() => { cs.error = null; cs.lastItemError = null; rerender(); }}>知道了</button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {activeCharId && cs?.loaded && !cs.layout && !cs.isGenerating && (
                 <div className="dwelling-empty">
                     <span>还未生成 ta 的房间</span>

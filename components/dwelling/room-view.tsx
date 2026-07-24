@@ -371,7 +371,6 @@ export function RoomView({
                                                 </div>
                                             ) : (
                                                 <>
-                                                    {lastItemError && <div className="dw2-serr">{lastItemError}</div>}
                                                     <button className="dw2-cta" onClick={() => onExploreItem(sheetFurniture, item)}>
                                                         开 始 探 索
                                                         <span className="dw2-cta-en">EXPLORE</span>

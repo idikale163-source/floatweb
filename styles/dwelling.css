@@ -931,6 +931,12 @@
   letter-spacing: 1px;
   margin-top: 8px;
 }
+.dw-error-msg {
+  text-align: left;
+  overflow-wrap: anywhere;
+  max-height: 40vh;
+  overflow-y: auto;
+}
 .dw-confirm-actions {
   display: flex;
   gap: 10px;
