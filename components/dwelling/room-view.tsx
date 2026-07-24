@@ -254,6 +254,19 @@ export function RoomView({
             <div className="dw2-ambient">
                 <div className="dw2-l1" /><div className="dw2-l2" /><div className="dw2-l3" />
                 <div className="dw2-grain" />
+                {!imageUrl && markers.length > 1 && (
+                    <svg className="dw2-cst" viewBox="0 0 100 100" preserveAspectRatio="none">
+                        {markers.slice(0, -1).map((mk, i) => {
+                            const next = markers[i + 1];
+                            return (
+                                <line key={mk.f.id}
+                                    x1={mk.m.x * 100} y1={mk.m.y * 100}
+                                    x2={next.m.x * 100} y2={next.m.y * 100}
+                                    vectorEffect="non-scaling-stroke" />
+                            );
+                        })}
+                    </svg>
+                )}
             </div>
 
             {/* 生成图 */}

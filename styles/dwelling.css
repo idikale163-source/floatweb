@@ -279,6 +279,18 @@
   opacity: 0.55;
   background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2"/><feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.045 0"/></filter><rect width="220" height="220" filter="url(%23n)"/></svg>');
 }
+.dw2-cst {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.dw2-cst line {
+  stroke: rgba(255, 255, 255, 0.09);
+  stroke-width: 1;
+  stroke-dasharray: 1 5;
+}
+
 /* generated image */
 .dw2-img {
   position: absolute;
