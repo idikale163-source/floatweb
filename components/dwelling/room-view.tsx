@@ -75,27 +75,38 @@ export function RoomView({
             const m = resolveFurnitureMarker(f);
             return {
                 f, m,
-                v: m.y > 0.42 ? "up" as const : "down" as const,
                 h: m.x <= 0.55 ? "right" as const : "left" as const,
-                lift: 40,
+                len: 38,
             };
         });
         if (!stageSize) return base;
-        // 标签避让：按 y 排序逐个放置，与已放标签在横向重叠且纵向过近时增大引线抬升
+        // 标签避让：引线始终是水平直线，冲突时先换方向、再加长引线错开
         const placed: Array<{ x1: number; x2: number; y: number }> = [];
+        const rectFor = (mk: typeof base[number], h: "left" | "right", len: number) => {
+            const px = mk.m.x * stageSize.w;
+            const labelW = mk.f.label.length * 17 + 40;
+            const x1 = h === "right" ? px + 20 + len : px - 20 - len - labelW;
+            return { x1, x2: x1 + labelW };
+        };
         const sorted = [...base].sort((a, b) => a.m.y - b.m.y);
         for (const mk of sorted) {
-            const px = mk.m.x * stageSize.w;
-            const labelW = mk.f.label.length * 17 + 56;
-            const x1 = mk.h === "right" ? px + 50 : px - 50 - labelW;
-            const x2 = x1 + labelW;
             const py = mk.m.y * stageSize.h;
-            for (let guard = 0; guard < 6; guard++) {
-                const ly = mk.v === "up" ? py - mk.lift - 22 : py + mk.lift + 22;
-                const clash = placed.find(p => !(x2 < p.x1 || x1 > p.x2) && Math.abs(ly - p.y) < 42);
-                if (!clash) { placed.push({ x1, x2, y: ly }); break; }
-                mk.lift += 42 - Math.abs(ly - clash.y) + 6;
+            const flip = mk.h === "right" ? "left" as const : "right" as const;
+            const attempts: Array<{ h: "left" | "right"; len: number }> = [
+                { h: mk.h, len: 38 }, { h: flip, len: 38 },
+                { h: mk.h, len: 104 }, { h: flip, len: 104 },
+            ];
+            let done = false;
+            for (const at of attempts) {
+                const { x1, x2 } = rectFor(mk, at.h, at.len);
+                if (x1 < 8 || x2 > stageSize.w - 8) continue;
+                if (placed.some(p => !(x2 < p.x1 || x1 > p.x2) && Math.abs(py - p.y) < 36)) continue;
+                mk.h = at.h; mk.len = at.len;
+                placed.push({ x1, x2, y: py });
+                done = true;
+                break;
             }
+            if (!done) placed.push({ ...rectFor(mk, mk.h, mk.len), y: py });
         }
         return base;
     }, [room, stageSize]);
@@ -180,12 +191,11 @@ export function RoomView({
             {imageStatus === "ambient" && !imageUrl && <div className="dw2-badge" data-kind="amb">AMBIENT</div>}
 
             {/* 家具标注 */}
-            {markers.map(({ f, m, v, h, lift }) => {
+            {markers.map(({ f, m, h, len }) => {
                 return (
-                    <div key={f.id} className="dw2-mk" data-v={v} data-h={h}
-                        style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%`, "--mklift": `${lift}px` } as React.CSSProperties}>
+                    <div key={f.id} className="dw2-mk" data-h={h}
+                        style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%`, "--mklen": `${len}px` } as React.CSSProperties}>
                         <button className="dw2-pt" onClick={() => setSheetFurnitureId(f.id)} aria-label={f.label} />
-                        <span className="dw2-vln" />
                         <span className="dw2-hln" />
                         <span className="dw2-lbl" onClick={() => setSheetFurnitureId(f.id)}>
                             <span className="dw2-zh">{f.label}<i>{String(f.items.length).padStart(2, "0")}</i></span>

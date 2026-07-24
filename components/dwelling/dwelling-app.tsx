@@ -348,10 +348,10 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
             )}
 
             {!activeCharId && characters.length > 1 && (
-                <div className="dwelling-empty"><span>🏠</span><span>选择一位角色，探索 ta 的栖所</span></div>
+                <div className="dwelling-empty"><span>选择一位角色，探索 ta 的栖所</span></div>
             )}
             {characters.length === 0 && (
-                <div className="dwelling-empty"><span>🏠</span><span>还没有角色，去创建一个吧</span></div>
+                <div className="dwelling-empty"><span>还没有角色，去创建一个吧</span></div>
             )}
             {cs?.isGenerating && !cs.layout && (
                 <div className="dwelling-loading"><div className="dwelling-spinner" /><span className="dwelling-loading-text">正在窥探房间…</span></div>
@@ -362,7 +362,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
             {cs?.error && <div className="dwelling-error">{cs.error}</div>}
             {activeCharId && cs?.loaded && !cs.layout && !cs.isGenerating && (
                 <div className="dwelling-empty">
-                    <span>🏠</span><span>还未生成 ta 的房间</span>
+                    <span>还未生成 ta 的房间</span>
                     <button className="dwelling-generate-btn" onClick={() => doGenerate(activeCharId)}>
                         <Wand2 size={16} />生成房间
                     </button>
@@ -448,19 +448,16 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                 <div className="dw-confirm-overlay">
                     <div className="dw-confirm-shade" onClick={() => setShowRefreshConfirm(false)} />
                     <div className="dw-confirm-card">
-                        <div className="dw-confirm-icon">✨</div>
                         <div className="dw-confirm-title">刷新房间</div>
                         <div className="dw-confirm-msg">选择刷新方式</div>
                         <div className="dw-confirm-actions-col">
                             <button className="dw-confirm-option" onClick={() => { setShowRefreshConfirm(false); handleRefresh("items"); }}>
-                                <span className="dw-confirm-option-icon">🔄</span>
                                 <span className="dw-confirm-option-text">
                                     <strong>刷新物品</strong>
                                     <small>保留房间和家具，只更新物品</small>
                                 </span>
                             </button>
                             <button className="dw-confirm-option" onClick={() => { setShowRefreshConfirm(false); handleRefresh("full"); }}>
-                                <span className="dw-confirm-option-icon">🏗</span>
                                 <span className="dw-confirm-option-text">
                                     <strong>完全重建</strong>
                                     <small>重新生成所有房间、家具和物品</small>
@@ -477,7 +474,6 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                 <div className="dw-confirm-overlay">
                     <div className="dw-confirm-shade" onClick={() => setShowDeleteConfirm(false)} />
                     <div className="dw-confirm-card">
-                        <div className="dw-confirm-icon">🏠</div>
                         <div className="dw-confirm-title">要离开这里吗？</div>
                         <div className="dw-confirm-msg">房间里的一切都会消失不见哦<br />包括已经探索过的物品</div>
                         <div className="dw-confirm-actions">
