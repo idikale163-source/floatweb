@@ -392,15 +392,6 @@
 .dw2-hln { position: absolute; background: var(--dw-line-strong); pointer-events: none; height: 1px; width: var(--mklen, 38px); top: -0.5px; }
 .dw2-mk[data-h="right"] .dw2-hln { left: 14px; }
 .dw2-mk[data-h="left"] .dw2-hln { right: 14px; }
-.dw2-hln::after {
-  content: "";
-  position: absolute;
-  top: -2.5px;
-  width: 1px; height: 6px;
-  background: rgba(255, 255, 255, 0.7);
-}
-.dw2-mk[data-h="right"] .dw2-hln::after { right: -1px; }
-.dw2-mk[data-h="left"] .dw2-hln::after { left: -1px; }
 .dw2-lbl { position: absolute; white-space: nowrap; cursor: pointer; top: -11px; }
 .dw2-mk[data-h="right"] .dw2-lbl { left: calc(var(--mklen, 38px) + 20px); }
 .dw2-mk[data-h="left"] .dw2-lbl { right: calc(var(--mklen, 38px) + 20px); text-align: right; }
