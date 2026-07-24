@@ -94,14 +94,23 @@
 .dwelling-char-picker::-webkit-scrollbar { display: none; }
 .dwelling-char-chip {
   flex-shrink: 0;
-  padding: 12px 14px 10px;
+  padding: 11px 14px 9px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--dw-dim);
   font-family: var(--dw-serif);
   font-size: calc(12.5px*var(--app-text-scale,1));
-  letter-spacing: 2px;
+  letter-spacing: 3px;
   cursor: pointer;
+  text-align: center;
+}
+.dw-chip-en {
+  display: block;
+  font-family: var(--dw-latin);
+  font-size: 7px;
+  letter-spacing: 2px;
+  opacity: 0.55;
+  margin-top: 3px;
 }
 .dwelling-char-chip[data-active="true"] {
   color: var(--dw-ink);

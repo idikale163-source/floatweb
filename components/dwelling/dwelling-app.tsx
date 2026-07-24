@@ -16,6 +16,7 @@ import {
     collectRoomImageRefs,
 } from "@/lib/dwelling-storage";
 import { generateDwellingLayout, generateItemHtml, type DwellingRefreshMode } from "@/lib/dwelling-engine";
+import { pinyin } from "pinyin-pro";
 import { getDwellingImageAvailability, generateDwellingRoomImage } from "@/lib/dwelling-image";
 import { deleteMediaRef, loadMediaObjectUrl } from "@/lib/media-cache-storage";
 import { RoomView, type DwellingRoomImageStatus } from "./room-view";
@@ -65,6 +66,17 @@ function itemKey(roomId: string, itemId: string) { return `${roomId}_${itemId}`;
 
 /** mediaRef → object URL（会话级缓存，图不多，不主动 revoke） */
 const roomImageUrls = new Map<string, string>();
+
+/** 角色名 → 大写拼音（chip 下行幽灵字） */
+const charEnCache = new Map<string, string>();
+function charChipEn(name: string): string {
+    let en = charEnCache.get(name);
+    if (en === undefined) {
+        try { en = pinyin(name, { toneType: "none" }).toUpperCase(); } catch { en = ""; }
+        charEnCache.set(name, en);
+    }
+    return en;
+}
 
 export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
     const [characters, setCharacters] = useState<Character[]>([]);
@@ -340,7 +352,8 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                             <button key={c.id} className="dwelling-char-chip"
                                 data-active={activeCharId === c.id ? "true" : undefined}
                                 onClick={() => { setActiveCharId(c.id); setActiveRoomIdx(0); setItemDetail(null); }}>
-                                {c.name}{s.isGenerating && " ⏳"}{!s.isGenerating && s.layout && " ✓"}
+                                <span className="dw-chip-zh">{c.name}{s.isGenerating ? " ⏳" : s.layout ? " ✓" : ""}</span>
+                                {charChipEn(c.name) && <span className="dw-chip-en">{charChipEn(c.name)}</span>}
                             </button>
                         );
                     })}
