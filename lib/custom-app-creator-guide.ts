@@ -497,6 +497,7 @@ const CUSTOM_APP_CREATOR_GUIDE_LINES = [
   "```",
   "",
   "* `messages` / `appMessages`：APP 自己维护的多轮记录，支持 `role: \"user\" | \"assistant\" | \"system\" | \"tool\"`、`content`、`createdAt`，也支持 `mediaType`、`rawResponseText`、`nativeToolCalls`、`nativeToolResult` 等工具上下文字段。不传时表示本 APP 没有私有多轮历史；宿主仍会通过短期记忆事件流补入该角色最近发生的聊天和其他 APP 事件。",
+  "* 消息可带 `image`（`data:image/...` 的 dataURL）走视觉通道让角色\"看到\"图片：单次生成最多 4 张、单张 dataURL 不超过 2MB，建议传压缩过的缩略图。用户模型不支持或关闭图像识别时自动降级为 `[图片]` 文本，APP 无需判断——但提示词里应写明\"看不到图片内容时不要臆测细节\"。",
   "* `instruction`：本轮任务说明，适合放当前状态、用户本轮操作、输出要求。不要把几十轮历史都拼进 `instruction`；多轮历史应放 `messages`。",
   "* `result.text`：本轮工具循环结束后的最终可显示回复文本。",
   "* `result.appendMessages`：本轮生成新增的上下文消息，包含中间工具调用、工具结果和最终 assistant 回复。剧情 APP 应把它们追加到自己的多轮记录里；下一轮再作为 `messages` 原样传回。文本协议工具结果会以 `role: \"user\"` + `mediaType: \"tool_result\"` 保存；原生工具结果会以 `role: \"tool\"` + `nativeToolResult` 保存。",
