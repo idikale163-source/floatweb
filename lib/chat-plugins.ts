@@ -105,6 +105,14 @@ export function setPluginVar(name: string, value: string, scope: "chat" | "globa
 
 const TAG_PATTERN = /^[一-龥A-Za-z0-9_]{1,16}$/;
 
+/** 内置系统占用的指令标签，插件不得使用（避免和状态值/富媒体/工具解析抢标签） */
+const RESERVED_TAGS = new Set([
+    "好感度", "占有欲", "焦虑值",
+    "获取指令", "执行动作",
+    "红包", "转账", "照片", "位置", "名片", "引用", "礼物", "表情包", "语音条",
+    "音乐", "音乐分享", "代付请求", "接受代付", "拒绝代付", "领取红包", "拒收红包", "拒收转账",
+]);
+
 export function validateChatPluginManifest(input: unknown): { manifest?: ChatPluginManifest; error?: string } {
     if (!input || typeof input !== "object") return { error: "不是有效的 JSON 对象" };
     const m = input as Record<string, unknown>;
@@ -120,6 +128,9 @@ export function validateChatPluginManifest(input: unknown): { manifest?: ChatPlu
             const dir = d as Record<string, unknown>;
             if (typeof dir?.tag !== "string" || !TAG_PATTERN.test(dir.tag)) {
                 return { error: `指令标签无效：${String(dir?.tag)}（1~16 位中英文/数字/下划线）` };
+            }
+            if (RESERVED_TAGS.has(dir.tag)) {
+                return { error: `指令标签「${dir.tag}」已被系统内置功能占用，请换一个名字` };
             }
             if (!Array.isArray(dir.effects) || dir.effects.length === 0) {
                 return { error: `指令「${dir.tag}」缺少 effects` };
@@ -313,17 +324,17 @@ function formatNumber(value: number): string {
 // ── 制作说明（管理页展示） ─────────────────────
 
 export const CHAT_PLUGIN_GUIDE_EXAMPLE = JSON.stringify({
-    id: "affection-demo",
-    name: "好感度系统",
+    id: "mood-demo",
+    name: "心情状态",
     version: "1.0",
-    description: "角色可通过指令调整好感度，气泡下方显示变化",
-    prompt: "当剧情让你的好感发生变化时，在回复末尾单独一行输出 [好感度:+N] 或 [好感度:-N]（N 为 1~5 的整数）。当前好感度：{{var:好感度}}。",
+    description: "角色心情变化时在气泡下方显示当前心情",
+    prompt: "当你的心情发生明显变化时，在回复末尾单独一行输出 [心情:一两个词]，如 [心情:雀跃] 或 [心情:有点低落]。上次记录的心情：{{var:心情}}。",
     directives: [
         {
-            tag: "好感度",
+            tag: "心情",
             effects: [
-                { type: "var", name: "好感度", op: "add" },
-                { type: "footer", text: "❤ 好感度 {{value}}（{{param}}）" },
+                { type: "var", name: "心情", op: "set" },
+                { type: "footer", text: "☁ 此刻心情：{{value}}" },
             ],
         },
     ],

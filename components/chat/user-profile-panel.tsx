@@ -418,7 +418,7 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
                             <Puzzle size={18} className="text-[var(--c-icon)] opacity-70" strokeWidth={1.25}/>
                             <div className="flex flex-col flex-1 text-left gap-0.5">
                                 <span className="ts-14 font-semibold text-[var(--c-text-title)]">扩展插件</span>
-                                <span className="ts-11 text-[var(--c-text)] opacity-70">导入插件为角色扩展新玩法，如好感度、状态指令</span>
+                                <span className="ts-11 text-[var(--c-text)] opacity-70">导入插件为角色扩展新玩法，如心情状态、自定义指令</span>
                             </div>
                             <ChevronRight size={16} className="text-[var(--c-icon)] opacity-50" />
                         </button>

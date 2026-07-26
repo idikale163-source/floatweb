@@ -61,7 +61,7 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                     <div className="flex flex-col items-center gap-2 py-10 text-[var(--c-text)] opacity-60">
                         <Puzzle size={28} strokeWidth={1.2} />
                         <span className="ts-13">还没有安装插件</span>
-                        <span className="ts-11 opacity-80">插件可以为角色扩展新玩法，如好感度、状态栏</span>
+                        <span className="ts-11 opacity-80">插件可以为角色扩展新玩法，如心情状态、自定义指令</span>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-2.5">
@@ -152,9 +152,9 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                                 <li><code>{`{"type":"notice","text":"…"}`}</code>：聊天里显示一条系统旁白</li>
                             </ul>
                             <p className="opacity-80">文本模板可用：<code>{"{{param}}"}</code> 指令参数、<code>{"{{value}}"}</code> 变量最新值、<code>{"{{var:名称}}"}</code> 任意变量。</p>
-                            <p className="font-semibold text-[var(--c-text-title)] mt-1">示例：好感度系统</p>
+                            <p className="font-semibold text-[var(--c-text-title)] mt-1">示例：心情状态</p>
                             <pre className="ts-11 font-mono bg-[color-mix(in_srgb,var(--c-card-border)_18%,transparent)] rounded-lg p-2.5 overflow-x-auto whitespace-pre">{CHAT_PLUGIN_GUIDE_EXAMPLE}</pre>
-                            <p className="opacity-60">安装后即对所有聊天生效；关闭开关可临时停用，卸载不会清除已产生的变量。</p>
+                            <p className="opacity-60">安装后即对所有聊天生效；关闭开关可临时停用，卸载不会清除已产生的变量。指令标签不能与系统内置标签（好感度、红包等）重名。</p>
                         </div>
                     )}
                 </div>
