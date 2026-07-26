@@ -13,6 +13,7 @@ import type { ChatMessage } from "./chat-storage";
 import type { StateValue } from "./chat-storage";
 import { parseStateValues, mergeStateValues } from "./state-value-parser";
 import { stripActionShells } from "./action-parser";
+import { stripTextToolDirectives } from "./text-tool-protocol";
 import {
     formatCustomAppDirectiveSummary,
     getCustomAppDirectiveSyntaxHead,
@@ -638,10 +639,7 @@ export function parseAIResponse(rawText: string, previousState: StateValue[]): P
     //    part empty → filtered out → inner monologue lands on the first real reply.
     const cleaned = parts.map(p => {
         if (p.mediaType) return p;
-        const display = restore(p.content)
-            .replace(/\[[^\]]*?(?:获取指令|获取工具)[：:][^\]]*\]/g, "")
-            .replace(/\[[^\]]*?(?:执行动作|工具调用)[：:][^\]]*?[（(][\s\S]*?[)）]\]/g, "")
-            .trim();
+        const display = stripTextToolDirectives(restore(p.content));
         return { ...p, content: display };
     }).filter(p => p.mediaType || p.content);
 

@@ -1059,7 +1059,7 @@ function shouldUploadLocalWeixinMessage(message: ChatMessage): boolean {
   if (message.role !== "user" && message.role !== "assistant") return false;
   if (message.origin && message.origin !== "chat") return false;
   if (!message.content.trim()) return false;
-  if (message.mediaType === "tool_notice" || message.mediaType === "tool_result" || message.mediaType === "memory_write_request") return false;
+  if (message.mediaType === "tool_notice" || message.mediaType === "tool_call" || message.mediaType === "tool_result" || message.mediaType === "memory_write_request") return false;
   if (message.nativeToolCalls?.length || message.nativeToolResult) return false;
   return Boolean(resolveWeixinCloudMessageTarget(message));
 }

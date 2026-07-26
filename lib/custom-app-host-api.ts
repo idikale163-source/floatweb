@@ -1870,18 +1870,23 @@ export async function generateCustomAppText(app: InstalledCustomApp, record: Rec
   }, {
     onTextPart: (text, _senderInfo, options) => {
       const content = cleanUnboundedText(text);
-      if (!content || options?.promptHidden) return;
-      pushContextMessage({ role: "assistant", content });
+      if (!content) return;
+      pushContextMessage({
+        role: "assistant",
+        content,
+        responseBatchId: options?.responseBatchId,
+        rawResponseText: options?.rawResponseText,
+      });
     },
-    onToolAssistantTurn: (content) => {
+    onToolAssistantTurn: (content, options) => {
       const text = cleanUnboundedText(content);
       if (!text) return;
-      pushContextMessage({ role: "assistant", content: text, mediaType: "tool_result" });
+      pushContextMessage({ role: "assistant", content: text, mediaType: "tool_call", responseBatchId: options?.responseBatchId });
     },
     onToolResult: (content) => {
       const text = cleanUnboundedText(content);
       if (!text) return;
-      pushContextMessage({ role: "user", content: text, mediaType: "tool_result" });
+      pushContextMessage({ role: "tool", content: text, mediaType: "tool_result" });
     },
     onNativeToolAssistantTurn: ({ content, rawContent, reasoning, openRouterReasoningDetails, toolCalls }) => {
       const visibleText = cleanUnboundedText(content);

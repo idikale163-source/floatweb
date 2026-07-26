@@ -15,7 +15,9 @@ import {
     saveChatSessions,
     getLatestCharacterStateValues,
     normalizeVisionImagePromptLimit,
+    createResponseBatchId,
 } from "./chat-storage";
+import { extractTextToolDirectiveText, stripTextToolDirectives } from "./text-tool-protocol";
 import type { ApiConfig, PresetConfig, Prompt, PromptOrderEntry, RegexConfig } from "./settings-types";
 import type { CustomAppPromptProfile } from "./custom-app-types";
 import {
@@ -1411,17 +1413,8 @@ export type ChatCompletionResult = {
 };
 
 /** Extract combined clean text from a ChatCompletionResult (for callers that need a plain string) */
-/** Strip tool tags from text for display/processing */
-function stripToolTags(text: string): string {
-    return text
-        .replace(/\[[^\]]*?(?:获取指令|获取工具)[:：][^\]]*\]/g, "")
-        .replace(/\[[^\]]*?(?:执行动作|工具调用)[:：][^\]]*?[（(][\s\S]*?[)）]\]/g, "")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
-}
-
 export function flattenCompletionResult(result: ChatCompletionResult): string {
-    return result.parts.map(p => stripToolTags(p.text)).filter(Boolean).join("\n\n");
+    return result.parts.map(p => stripTextToolDirectives(p.text)).filter(Boolean).join("\n\n");
 }
 
 const MAX_TOOL_ROUNDS = 5;
@@ -1922,11 +1915,17 @@ export type ChatCompletionCallbacks = {
         responseRoundId?: string;
         editableResponseText?: string;
     }, options?: {
-        promptHidden?: boolean;
+        responseBatchId?: string;
+        rawResponseText?: string;
     }) => void | Promise<void>;
     onToolNotice?: (notice: string) => void;
     onToolResult?: (content: string) => void;
-    onToolAssistantTurn?: (content: string) => void;
+    onToolAssistantTurn?: (content: string, options?: {
+        responseBatchId?: string;
+        responseRoundId?: string;
+        senderCharacterId?: string;
+        senderName?: string;
+    }) => void;
     /** 每轮 LLM 调用解析出思维链（reasoning）时触发，先于该轮 onTextPart */
     onReasoning?: (text: string) => void;
     onToolExecution?: (results: ToolResult[], historyContent?: string) => void;
@@ -2297,10 +2296,18 @@ export async function generateChatCompletion(
             break;
         }
 
-        // Save raw text as assistant message (with tool tags preserved)
+        // Store ordinary prose as normal assistant messages. The directive itself is a
+        // separate hidden tool_call record in the same response batch.
         throwIfAborted(options?.signal);
-        callbacks?.onToolAssistantTurn?.(filteredOutput);
-        await callbacks?.onTextPart?.(afterActionStrip, undefined, { promptHidden: true });
+        const responseBatchId = createResponseBatchId();
+        const toolDirectiveText = extractTextToolDirectiveText(afterActionStrip);
+        await callbacks?.onTextPart?.(afterActionStrip, undefined, {
+            responseBatchId,
+            rawResponseText: afterActionStrip,
+        });
+        if (toolDirectiveText) {
+            callbacks?.onToolAssistantTurn?.(toolDirectiveText, { responseBatchId });
+        }
         parts.push({ text: filteredOutput });
 
         // Helper: find insert index for injecting after history

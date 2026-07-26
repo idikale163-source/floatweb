@@ -1,7 +1,8 @@
 // lib/group-chat-engine.ts
 // Group chat engine: single API call for all characters.
 
-import { ChatSession, ChatMessage, loadChatAppSettings, createResponseRoundId, loadChatSessions, getLatestCharacterStateValues } from "./chat-storage";
+import { ChatSession, ChatMessage, loadChatAppSettings, createResponseBatchId, createResponseRoundId, loadChatSessions, getLatestCharacterStateValues } from "./chat-storage";
+import { extractTextToolDirectiveText } from "./text-tool-protocol";
 import type { ApiConfig, PresetConfig, RegexConfig } from "./settings-types";
 import { loadCharacters } from "./character-storage";
 import { buildScreenEffectPromptHint } from "./chat-screen-effects";
@@ -825,12 +826,25 @@ export async function generateGroupChatCompletion(
             for (const r of intermediateResults) {
                 throwIfAborted(options?.signal);
                 if (r.responseText.trim()) {
+                    const responseBatchId = createResponseBatchId();
                     await callbacks.onTextPart(r.responseText, {
                         characterId: r.characterId,
                         characterName: r.characterName,
                         responseRoundId,
                         editableResponseText,
-                    }, { promptHidden: true });
+                    }, {
+                        responseBatchId,
+                        rawResponseText: r.responseText,
+                    });
+                    const directiveText = extractTextToolDirectiveText(r.responseText);
+                    if (directiveText) {
+                        callbacks.onToolAssistantTurn?.(directiveText, {
+                            responseBatchId,
+                            responseRoundId,
+                            senderCharacterId: r.characterId,
+                            senderName: r.characterName,
+                        });
+                    }
                 }
             }
         }

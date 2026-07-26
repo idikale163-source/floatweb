@@ -10,6 +10,7 @@ import { resolveUserIdentity } from "./settings-storage";
 import { loadCharacters } from "./character-storage";
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import { emitChatPluginEvent, runChatPluginTransformSync } from "./chat-plugin-hooks";
+import { extractTextToolDirectiveText } from "./text-tool-protocol";
 
 export const DEFAULT_VISION_IMAGE_PROMPT_LIMIT = 1;
 export const MAX_VISION_IMAGE_PROMPT_LIMIT = 20;
@@ -99,6 +100,7 @@ export type ChatMessage = {
         | "contact_card"
         | "app_card"
         | "tool_notice"
+        | "tool_call"
         | "tool_result"
         | "memory_write_request"
         | "reading_discuss"
@@ -291,7 +293,7 @@ export function getChatMessagePreview(msg: ChatMessage): string {
     // Retracted: "你/对方撤回了一条消息"
     if (msg.isRetracted) return (msg.role === "user" ? "你" : "对方") + "撤回了一条消息";
 
-    if (msg.mediaType === "tool_result") return "";
+    if (msg.mediaType === "tool_result" || msg.mediaType === "tool_call") return "";
     if (msg.mediaType === "quote" && msg.content) return msg.content;
     if (msg.mediaType === "music_notify") return msg.content;
     if (msg.mediaType === "memory_write_request") {
@@ -400,7 +402,7 @@ function hasPreviewText(text: string | undefined): boolean {
 
 function isSessionPreviewCandidate(msg: ChatMessage): boolean {
     if (isReadingDiscussMessage(msg)) return false;
-    if (msg.mediaType === "tool_result") return false;
+    if (msg.mediaType === "tool_result" || msg.mediaType === "tool_call") return false;
     if (msg.mediaType === "tool_notice") return false;
     if (msg.mediaType === "memory_write_request") return false;
     if (msg.role === "tool") return false;
@@ -703,6 +705,148 @@ function redirectMessagesToPreferredSessions(redirects: Map<string, string>): nu
     return changedMessages.length;
 }
 
+function normalizeLegacyTextToolHistory(messages: ChatMessage[]): {
+    items: ChatMessage[];
+    changedMessages: ChatMessage[];
+} {
+    const byId = new Map(messages.map(message => [message.id, message]));
+    const changed = new Map<string, ChatMessage>();
+    const added: ChatMessage[] = [];
+    const sorted = [...messages].sort(compareChatMessages);
+
+    for (const original of sorted) {
+        const current = byId.get(original.id) || original;
+
+        if (current.role === "user" && current.mediaType === "tool_result" && !current.nativeToolResult) {
+            const normalized = { ...current, role: "tool" as const };
+            byId.set(current.id, normalized);
+            changed.set(current.id, normalized);
+            continue;
+        }
+
+        if (current.role !== "assistant" || current.mediaType !== "tool_result" || current.nativeToolResult) continue;
+        const directiveText = extractTextToolDirectiveText(current.content);
+        if (!directiveText) continue;
+
+        const currentTime = parseIsoTime(current.createdAt);
+        const candidateCopies = sorted
+            .map(message => byId.get(message.id) || message)
+            .filter(message => {
+                if (
+                    message.sessionId !== current.sessionId
+                    || message.role !== "assistant"
+                    || message.mediaType !== "tool_notice"
+                    || !message.rawResponseText
+                ) return false;
+                if (message.rawResponseText === current.content) return true;
+                const copyTime = parseIsoTime(message.createdAt);
+                return Math.abs(copyTime - currentTime) < 60_000
+                    && extractTextToolDirectiveText(message.rawResponseText) === directiveText;
+            });
+        const copyGroups = new Map<string, ChatMessage[]>();
+        for (const copy of candidateCopies) {
+            if (!copy.responseBatchId) continue;
+            const group = copyGroups.get(copy.responseBatchId) || [];
+            group.push(copy);
+            copyGroups.set(copy.responseBatchId, group);
+        }
+        const currentOrder = getStableMessageOrder(current);
+        const matchingCopies = [...copyGroups.values()].sort((left, right) => {
+            const score = (group: ChatMessage[]) => Math.min(...group.map(copy => {
+                const copyOrder = getStableMessageOrder(copy);
+                if (currentOrder !== null && copyOrder !== null) {
+                    return copyOrder >= currentOrder
+                        ? copyOrder - currentOrder
+                        : 1_000_000 + currentOrder - copyOrder;
+                }
+                return Math.abs(parseIsoTime(copy.createdAt) - currentTime);
+            }));
+            return score(left) - score(right);
+        })[0] || [];
+
+        const responseBatchId = matchingCopies[0]?.responseBatchId || current.responseBatchId || createResponseBatchId();
+        const copyOrders = matchingCopies
+            .map(message => getStableMessageOrder(message))
+            .filter((order): order is number => order !== null);
+        const nextOrder = copyOrders.length > 0
+            ? Math.max(...copyOrders) + 0.0001
+            : current.order;
+        const normalizedCall: ChatMessage = {
+            ...current,
+            content: directiveText,
+            mediaType: "tool_call",
+            responseBatchId,
+            rawResponseText: undefined,
+            order: nextOrder,
+        };
+        byId.set(current.id, normalizedCall);
+        changed.set(current.id, normalizedCall);
+
+        for (const copy of matchingCopies) {
+            const normalizedCopy: ChatMessage = {
+                ...copy,
+                mediaType: undefined,
+                responseBatchId,
+            };
+            byId.set(copy.id, normalizedCopy);
+            changed.set(copy.id, normalizedCopy);
+        }
+    }
+
+    for (const original of sorted) {
+        const current = byId.get(original.id) || original;
+        if (
+            current.role !== "assistant"
+            || current.mediaType !== "tool_notice"
+            || !current.rawResponseText
+            || !current.responseBatchId
+        ) continue;
+        const directiveText = extractTextToolDirectiveText(current.rawResponseText);
+        if (!directiveText) continue;
+
+        const batchCopies = sorted
+            .map(message => byId.get(message.id) || message)
+            .filter(message =>
+                message.sessionId === current.sessionId
+                && message.responseBatchId === current.responseBatchId
+                && message.role === "assistant"
+                && message.mediaType === "tool_notice"
+            );
+        for (const copy of batchCopies) {
+            const normalizedCopy: ChatMessage = { ...copy, mediaType: undefined };
+            byId.set(copy.id, normalizedCopy);
+            changed.set(copy.id, normalizedCopy);
+        }
+
+        const copyOrders = batchCopies
+            .map(message => getStableMessageOrder(message))
+            .filter((order): order is number => order !== null);
+        const toolCall: ChatMessage = {
+            id: createMessageId(),
+            sessionId: current.sessionId,
+            role: "assistant",
+            content: directiveText,
+            status: current.status,
+            createdAt: current.createdAt,
+            order: copyOrders.length > 0 ? Math.max(...copyOrders) + 0.0001 : current.order,
+            responseBatchId: current.responseBatchId,
+            responseRoundId: current.responseRoundId,
+            editableResponseText: current.editableResponseText,
+            mediaType: "tool_call",
+            senderCharacterId: current.senderCharacterId,
+            senderName: current.senderName,
+        };
+        added.push(toolCall);
+        byId.set(toolCall.id, toolCall);
+        changed.set(toolCall.id, toolCall);
+    }
+
+    return {
+        items: [...messages.map(message => byId.get(message.id) || message), ...added],
+        changedMessages: [...changed.values()],
+    };
+}
+
 function refreshSessionPreviewMetadata(sessions: ChatSession[]): NormalizedList<ChatSession> {
     let changed = false;
     const items = sessions.map(session => {
@@ -737,7 +881,11 @@ export function hydrateChatStorage(): Promise<void> {
     if (_hydrated || typeof window === "undefined") return Promise.resolve();
     if (_hydratePromise) return _hydratePromise;
     _hydratePromise = initChatDb().then(data => {
-        _messagesCache = data.messages;
+        const normalizedToolHistory = normalizeLegacyTextToolHistory(data.messages);
+        _messagesCache = normalizedToolHistory.items;
+        if (normalizedToolHistory.changedMessages.length > 0) {
+            dbPutMessages(normalizedToolHistory.changedMessages);
+        }
         let normalizedContacts = normalizeChatContacts(data.contacts);
         const normalizedSessions = normalizeChatSessions(data.sessions);
         const redirectedMessages = redirectMessagesToPreferredSessions(normalizedSessions.redirects);
@@ -967,12 +1115,105 @@ export function upsertImportedChatMessage(msg: ChatMessage): { message: ChatMess
     return { message: newMsg, inserted: true };
 }
 
+function removeFirstExactResponsePart(rawResponseText: string, content: string): string {
+    const part = content.trim();
+    if (!part) return rawResponseText;
+    const index = rawResponseText.indexOf(part);
+    if (index === -1) return rawResponseText;
+    return `${rawResponseText.slice(0, index)}${rawResponseText.slice(index + part.length)}`
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+}
+
+function syncDeletedResponseBatchMetadata(deletedMessages: ChatMessage[]): void {
+    const deletedByBatch = new Map<string, ChatMessage[]>();
+    const deletedByRound = new Map<string, ChatMessage[]>();
+    for (const message of deletedMessages) {
+        if (message.responseBatchId) {
+            const key = `${message.sessionId}\u0000${message.responseBatchId}`;
+            const batch = deletedByBatch.get(key) || [];
+            batch.push(message);
+            deletedByBatch.set(key, batch);
+        }
+        if (message.responseRoundId) {
+            const key = `${message.sessionId}\u0000${message.responseRoundId}`;
+            const round = deletedByRound.get(key) || [];
+            round.push(message);
+            deletedByRound.set(key, round);
+        }
+    }
+
+    const changed = new Map<string, ChatMessage>();
+    for (const [key, deletedBatch] of deletedByBatch) {
+        const separatorIndex = key.indexOf("\u0000");
+        const sessionId = key.slice(0, separatorIndex);
+        const responseBatchId = key.slice(separatorIndex + 1);
+        const remainingBatch = _messagesCache.filter(message =>
+            message.sessionId === sessionId && message.responseBatchId === responseBatchId
+        );
+        const rawCarrier = remainingBatch.find(message => message.rawResponseText !== undefined)
+            || deletedBatch.find(message => message.rawResponseText !== undefined);
+        if (rawCarrier?.rawResponseText === undefined) continue;
+
+        let nextRaw = rawCarrier.rawResponseText;
+        for (const deleted of [...deletedBatch].sort(compareChatMessages)) {
+            if (
+                deleted.role !== "assistant"
+                || deleted.mediaType === "tool_notice"
+                || deleted.mediaType === "tool_result"
+            ) continue;
+            nextRaw = removeFirstExactResponsePart(nextRaw, deleted.content);
+        }
+        if (nextRaw === rawCarrier.rawResponseText) continue;
+
+        for (const message of remainingBatch) {
+            if (message.rawResponseText === undefined || message.rawResponseText === nextRaw) continue;
+            changed.set(message.id, { ...message, rawResponseText: nextRaw });
+        }
+    }
+
+    for (const [key, deletedRound] of deletedByRound) {
+        const separatorIndex = key.indexOf("\u0000");
+        const sessionId = key.slice(0, separatorIndex);
+        const responseRoundId = key.slice(separatorIndex + 1);
+        const remainingRound = _messagesCache.filter(message =>
+            message.sessionId === sessionId && message.responseRoundId === responseRoundId
+        );
+        const editableCarrier = remainingRound.find(message => message.editableResponseText !== undefined)
+            || deletedRound.find(message => message.editableResponseText !== undefined);
+        if (editableCarrier?.editableResponseText === undefined) continue;
+
+        let nextEditable = editableCarrier.editableResponseText;
+        for (const deleted of [...deletedRound].sort(compareChatMessages)) {
+            if (
+                deleted.role !== "assistant"
+                || deleted.mediaType === "tool_notice"
+                || deleted.mediaType === "tool_result"
+            ) continue;
+            nextEditable = removeFirstExactResponsePart(nextEditable, deleted.content);
+        }
+        if (nextEditable === editableCarrier.editableResponseText) continue;
+
+        for (const message of remainingRound) {
+            if (message.editableResponseText === undefined || message.editableResponseText === nextEditable) continue;
+            const current = changed.get(message.id) || message;
+            changed.set(message.id, { ...current, editableResponseText: nextEditable });
+        }
+    }
+
+    if (changed.size === 0) return;
+    _messagesCache = _messagesCache.map(message => changed.get(message.id) || message);
+    dbPutMessages([...changed.values()]);
+}
+
 export function deleteChatMessage(messageId: string) {
     const targetMsg = _messagesCache.find(m => m.id === messageId);
     if (!targetMsg) return;
     const sessionId = targetMsg.sessionId;
 
     _messagesCache = _messagesCache.filter(m => m.id !== messageId);
+    syncDeletedResponseBatchMetadata([targetMsg]);
     dbDeleteMessage(messageId);
 
     // Recalculate the last message for the session to update the preview
@@ -1008,6 +1249,7 @@ export function deleteChatMessagesFrom(messageId: string) {
     _messagesCache = _messagesCache.filter(m =>
         m.sessionId !== sessionId || compareChatMessages(m, targetMsg) < 0
     );
+    syncDeletedResponseBatchMetadata(deletedMessages);
     dbDeleteMessagesByIds(deletedIds);
 
     const lastMsg = getLastVisibleSessionMessage(sessionId);
@@ -1040,6 +1282,7 @@ export function deleteChatMessagesByIds(sessionId: string, messageIds: string[])
 
     const deletedIdSet = new Set(deletedIds);
     _messagesCache = _messagesCache.filter(m => m.sessionId !== sessionId || !deletedIdSet.has(m.id));
+    syncDeletedResponseBatchMetadata(deletedMessages);
     dbDeleteMessagesByIds(deletedIds);
     reindexSessionMessageOrders(sessionId);
 
@@ -1130,6 +1373,7 @@ export type ClearChatSessionToolHistoryResult = {
 
 function isToolHistoryMessage(msg: ChatMessage): boolean {
     return msg.role === "tool"
+        || msg.mediaType === "tool_call"
         || msg.mediaType === "tool_result"
         || msg.mediaType === "tool_notice"
         || !!msg.nativeToolResult;
@@ -1144,7 +1388,7 @@ function hasNativeToolReplayMetadata(msg: ChatMessage): boolean {
 function hasVisibleMessagePayload(msg: ChatMessage): boolean {
     return !!msg.content.trim()
         || !!msg.mediaUrl
-        || (!!msg.mediaType && msg.mediaType !== "tool_result" && msg.mediaType !== "tool_notice")
+        || (!!msg.mediaType && msg.mediaType !== "tool_call" && msg.mediaType !== "tool_result" && msg.mediaType !== "tool_notice")
         || !!msg.statusPanel?.trim()
         || !!msg.innerMonologue?.trim()
         || !!msg.reasoningText?.trim()
@@ -1185,6 +1429,10 @@ export function clearChatSessionToolHistory(sessionId: string): ClearChatSession
     _messagesCache = _messagesCache
         .filter(msg => msg.sessionId !== sessionId || !deletedIds.has(msg.id))
         .map(msg => cleanedById.get(msg.id) || msg);
+
+    if (deletedIds.size > 0) {
+        syncDeletedResponseBatchMetadata(sessionMessages.filter(message => deletedIds.has(message.id)));
+    }
 
     if (deletedIds.size > 0) dbDeleteMessagesByIds([...deletedIds]);
     if (cleanedMessages.length > 0) dbPutMessages(cleanedMessages);
@@ -1445,6 +1693,7 @@ export function replaceResponseBatchWithParts(
         reasoningText?: string;
         stateValues?: StateValue[];
         freshStateValues?: StateValue[];
+        toolCallContent?: string;
     },
 ): ChatMessage[] {
     if (parts.length === 0) return [];
@@ -1464,7 +1713,7 @@ export function replaceResponseBatchWithParts(
     dbDeleteMessagesByIds(deletedIds);
 
     const baseTime = new Date(firstMessage.createdAt).getTime();
-    const newMessages: ChatMessage[] = parts.map((part, index) => ({
+    const visibleMessages: ChatMessage[] = parts.map((part, index) => ({
         id: createMessageId(),
         sessionId,
         role: firstMessage.role,
@@ -1488,6 +1737,26 @@ export function replaceResponseBatchWithParts(
         senderCharacterId: firstMessage.senderCharacterId,
         senderName: firstMessage.senderName,
     }));
+    const toolCallContent = options?.toolCallContent?.trim();
+    const toolCallMessage: ChatMessage | undefined = toolCallContent
+        ? {
+            id: createMessageId(),
+            sessionId,
+            role: "assistant",
+            content: toolCallContent,
+            mediaType: "tool_call",
+            status: firstMessage.status,
+            createdAt: new Date(baseTime + parts.length).toISOString(),
+            order: baseOrder + parts.length * 0.001,
+            responseBatchId,
+            responseRoundId: firstMessage.responseRoundId,
+            editableResponseText: firstMessage.editableResponseText,
+            followUpIndex: firstMessage.followUpIndex,
+            senderCharacterId: firstMessage.senderCharacterId,
+            senderName: firstMessage.senderName,
+        }
+        : undefined;
+    const newMessages = toolCallMessage ? [...visibleMessages, toolCallMessage] : visibleMessages;
 
     _messagesCache.splice(insertIdx, 0, ...newMessages);
     dbPutMessages(newMessages);

@@ -75,6 +75,7 @@ import {
 } from "@/lib/chat-screen-effects";
 import { abortableDelay, throwIfAborted } from "@/lib/abort-utils";
 import { GROUP_SELF_KEY, canGroupAdminAct, applyGroupAdminAction, buildGroupAdminNoticeText, getGroupMemberDisplayName, getGroupMuteRemainingMs, getGroupRole, isGroupMuted, formatMuteRemainingLabel, resolveGroupMemberKeyByName, type GroupAdminAction } from "@/lib/group-admin";
+import { extractTextToolDirectiveText } from "@/lib/text-tool-protocol";
 import { emitChatPluginEvent, getChatPluginHookBus, runChatPluginTransform } from "@/lib/chat-plugin-hooks";
 import { CHAT_PLUGIN_TOAST_EVENT, getChatPluginRuntime } from "@/lib/chat-plugin-runtime";
 import { ChatPluginSlot } from "@/components/chat/chat-plugin-slot";
@@ -258,7 +259,7 @@ function reasoningPreviewLine(text: string): string {
 }
 
 function isHiddenChatFlowMessage(msg: ChatMessage, displayContent?: string): boolean {
-    if (msg.mediaType === "tool_result") return true;
+    if (msg.mediaType === "tool_result" || msg.mediaType === "tool_call") return true;
     return !isChatVisualMedia(msg)
         && !getChatFlowVisibleContent(msg, displayContent)
         && uiRole(msg) !== "system"
@@ -2654,10 +2655,15 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     // Returns { hasVisible, stateValues, hasDecline } — hasVisible is false if the AI chose [静默].
     const splitAndSaveAIMessages = async (
         aiResponseText: string,
-        options?: { promptHidden?: boolean; reasoningText?: string } & GenerationRunGuard,
+        options?: {
+            responseBatchId?: string;
+            rawResponseText?: string;
+            reasoningText?: string;
+        } & GenerationRunGuard,
     ): Promise<{ hasVisible: boolean; stateValues: StateValue[]; triggerCall?: "voice" | "video"; hasDecline?: boolean }> => {
         throwIfGenerationStopped(options);
-        const responseBatchId = createResponseBatchId();
+        const responseBatchId = options?.responseBatchId || createResponseBatchId();
+        const rawResponseText = options?.rawResponseText ?? aiResponseText;
         const previousState = session.isGroup
             ? getLatestStateValues(session.id)
             : getLatestCharacterStateValues(session.contactId);
@@ -2725,7 +2731,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     role: "assistant",
                     content: "",
                     responseBatchId,
-                    rawResponseText: aiResponseText,
+                    rawResponseText,
                     statusPanel,
                     innerMonologue,
                     reasoningText: options?.reasoningText,
@@ -2743,9 +2749,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         for (let idx = 0; idx < filteredParts.length; idx += 1) {
             throwIfGenerationStopped(options);
             const part = filteredParts[idx];
-            const mediaType = part.mediaType === "poke"
-                ? "poke"
-                : options?.promptHidden ? "tool_notice" : part.mediaType;
+            const mediaType = part.mediaType;
             const draft = buildAssistantMessageDraft(part, {
                 sessionId: session.id,
                 role: "assistant",
@@ -2753,7 +2757,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 mediaType,
                 mediaData: part.mediaData,
                 responseBatchId,
-                rawResponseText: aiResponseText,
+                rawResponseText,
                 statusPanel: idx === 0 && statusPanel ? statusPanel : undefined,
                 innerMonologue: idx === 0 && innerMonologue ? innerMonologue : undefined,
                 reasoningText: idx === 0 ? options?.reasoningText : undefined,
@@ -2801,7 +2805,6 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             return mediaLabels[m.mediaType] || "";
         };
         const dispatchVisibleNotice = (m: ChatMessage): void => {
-            if (options?.promptHidden) return;
             const body = getNoticeBody(m);
             if (!body) return;
             dispatchChatMessageNotice({
@@ -2856,19 +2859,28 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         if (!content) return;
         pushChatMessage({
             sessionId: session.id,
-            role: "user",
+            role: "tool",
             content,
             mediaType: "tool_result",
         });
     };
 
-    const persistHiddenAssistantToolTurn = (content?: string) => {
+    const persistHiddenAssistantToolCall = (content?: string, options?: {
+        responseBatchId?: string;
+        responseRoundId?: string;
+        senderCharacterId?: string;
+        senderName?: string;
+    }) => {
         if (!content) return;
         pushChatMessage({
             sessionId: session.id,
             role: "assistant",
             content,
-            mediaType: "tool_result",
+            mediaType: "tool_call",
+            responseBatchId: options?.responseBatchId,
+            responseRoundId: options?.responseRoundId,
+            senderCharacterId: options?.senderCharacterId,
+            senderName: options?.senderName,
         });
     };
 
@@ -3360,7 +3372,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         if (!cleanedEditableText) return;
                         const roundReasoning = pendingGroupReasoning;
                         pendingGroupReasoning = undefined;
-                        const responseBatchId = createResponseBatchId();
+                        const responseBatchId = options?.responseBatchId || createResponseBatchId();
+                        const rawResponseText = options?.rawResponseText ?? text;
                         const responseRoundId = senderInfo.responseRoundId || createResponseRoundId();
                         const editableResponseText = senderInfo.editableResponseText || `[${senderInfo.characterName}]: ${cleanedEditableText}`;
                         const previousState = getLatestCharacterStateValues(senderInfo.characterId);
@@ -3375,10 +3388,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                 sessionId: session.id,
                                 role: "assistant",
                                 content: part.content,
-                                mediaType: options?.promptHidden ? "tool_notice" : part.mediaType,
+                                mediaType: part.mediaType,
                                 mediaData: part.mediaData,
                                 responseBatchId,
-                                rawResponseText: text,
+                                rawResponseText,
                                 responseRoundId,
                                 editableResponseText,
                                 statusPanel: !attachedState && statusPanel ? statusPanel : undefined,
@@ -3402,9 +3415,9 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                 sessionId: session.id,
                                 role: "assistant",
                                 content: "",
-                                mediaType: options?.promptHidden ? "tool_notice" : undefined,
+                                mediaType: undefined,
                                 responseBatchId,
-                                rawResponseText: text,
+                                rawResponseText,
                                 responseRoundId,
                                 editableResponseText,
                                 statusPanel,
@@ -3424,11 +3437,11 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     },
                     onToolResult: (content) => {
                         if (!isCurrentGeneration()) return;
-                        pushChatMessage({ sessionId: session.id, role: "user", content, mediaType: "tool_result" });
+                        pushChatMessage({ sessionId: session.id, role: "tool", content, mediaType: "tool_result" });
                     },
-                    onToolAssistantTurn: (content) => {
+                    onToolAssistantTurn: (content, options) => {
                         if (!isCurrentGeneration()) return;
-                        persistHiddenAssistantToolTurn(content);
+                        persistHiddenAssistantToolCall(content, options);
                     },
                     onToolExecution: (results) => {
                         if (!isCurrentGeneration()) return;
@@ -3509,9 +3522,9 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         // Persist to history for future LLM context, hidden from UI
                         persistHiddenToolResult(content);
                     },
-                    onToolAssistantTurn: (content) => {
+                    onToolAssistantTurn: (content, options) => {
                         if (!isCurrentGeneration()) return;
-                        persistHiddenAssistantToolTurn(content);
+                        persistHiddenAssistantToolCall(content, options);
                     },
                     onNativeToolAssistantTurn: async ({ content, rawContent, reasoning, openRouterReasoningDetails, toolCalls }) => {
                         if (!isCurrentGeneration()) return;
@@ -4289,6 +4302,16 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     });
                     attachedState = true;
                 }
+                const toolCallContent = extractTextToolDirectiveText(segment.responseText);
+                if (toolCallContent) {
+                    replacementMessages.push({
+                        content: toolCallContent,
+                        mediaType: "tool_call",
+                        responseBatchId,
+                        senderCharacterId: segment.characterId,
+                        senderName: segment.characterName,
+                    });
+                }
                 if (stateValues.length > 0) {
                     currentStateByCharacter.set(segment.characterId, stateValues);
                 }
@@ -4357,6 +4380,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 innerMonologue,
                 stateValues: stateValues.length > 0 ? stateValues : undefined,
                 freshStateValues,
+                toolCallContent: extractTextToolDirectiveText(editedResponseContent),
             },
         );
         syncMessagesFromStorage();
