@@ -320,6 +320,7 @@ function serializeVoiceConfig(config: VoiceApiConfig): Record<string, unknown> {
     model: config.model,
     sttModel: config.sttModel,
     defaultVoice: config.defaultVoice,
+    languageBoost: config.languageBoost,
     enableTTS: config.enableTTS,
     enableSTT: config.enableSTT,
     customVoices: (config.customVoices ?? []).map(voice => ({
