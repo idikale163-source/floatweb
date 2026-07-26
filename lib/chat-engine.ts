@@ -16,6 +16,7 @@ import {
     getLatestCharacterStateValues,
     normalizeVisionImagePromptLimit,
     createResponseBatchId,
+    createToolExecutionId,
 } from "./chat-storage";
 import { extractTextToolDirectiveText, stripTextToolDirectives } from "./text-tool-protocol";
 import type { ApiConfig, PresetConfig, Prompt, PromptOrderEntry, RegexConfig } from "./settings-types";
@@ -1919,7 +1920,7 @@ export type ChatCompletionCallbacks = {
         rawResponseText?: string;
     }) => void | Promise<void>;
     onToolNotice?: (notice: string) => void;
-    onToolResult?: (content: string) => void;
+    onToolResult?: (content: string, options?: { toolExecutionId?: string }) => void;
     onToolAssistantTurn?: (content: string, options?: {
         responseBatchId?: string;
         responseRoundId?: string;
@@ -1928,7 +1929,7 @@ export type ChatCompletionCallbacks = {
     }) => void;
     /** 每轮 LLM 调用解析出思维链（reasoning）时触发，先于该轮 onTextPart */
     onReasoning?: (text: string) => void;
-    onToolExecution?: (results: ToolResult[], historyContent?: string) => void;
+    onToolExecution?: (results: ToolResult[], historyContent?: string, options?: { toolExecutionId?: string }) => void;
     onNativeToolAssistantTurn?: (turn: {
         content: string;
         rawContent: string;
@@ -1940,6 +1941,7 @@ export type ChatCompletionCallbacks = {
         toolCallId: string;
         name: string;
         content: string;
+        toolExecutionId?: string;
     }) => void;
 };
 
@@ -2173,6 +2175,7 @@ async function generateNativeChatCompletion(
             openRouterReasoningDetails: result.openRouterReasoningDetails,
             toolCalls: result.toolCalls,
         });
+        const toolExecutionId = createToolExecutionId();
         for (const outcome of outcomes) {
             throwIfAborted(options?.signal);
             const nativeCall = outcome.nativeCall;
@@ -2180,6 +2183,7 @@ async function generateNativeChatCompletion(
                 toolCallId: nativeCall.id,
                 name: nativeCall.name,
                 content: outcome.formattedContent,
+                toolExecutionId,
             });
             requestMessages.push({
                 role: "tool",
@@ -2192,7 +2196,9 @@ async function generateNativeChatCompletion(
         const resultsForHistory = realResults.filter(r => r.persistToHistory !== false);
         const toolResultContent = resultsForHistory.length > 0 ? formatToolResults(resultsForHistory) : "";
         throwIfAborted(options?.signal);
-        if (realResults.length > 0) callbacks?.onToolExecution?.(realResults, toolResultContent || undefined);
+        if (realResults.length > 0) {
+            callbacks?.onToolExecution?.(realResults, toolResultContent || undefined, { toolExecutionId });
+        }
 
         for (const r of realResults) {
             for (const att of r.mediaAttachments || []) {
@@ -2379,11 +2385,12 @@ export async function generateChatCompletion(
             const resultsForContinuation = results.filter(r => r.continueConversation !== false);
             const toolResultContent = resultsForHistory.length > 0 ? formatToolResults(resultsForHistory) : "";
             throwIfAborted(options?.signal);
-            callbacks?.onToolExecution?.(results, toolResultContent || undefined);
+            const toolExecutionId = createToolExecutionId();
+            callbacks?.onToolExecution?.(results, toolResultContent || undefined, { toolExecutionId });
 
             if (toolResultContent && resultsForContinuation.length > 0) {
                 throwIfAborted(options?.signal);
-                callbacks?.onToolResult?.(toolResultContent);
+                callbacks?.onToolResult?.(toolResultContent, { toolExecutionId });
                 const idx = findInsertIdx();
                 const insertions: LLMMessage[] = [
                     { role: "assistant", content: assistantForToolContext, _debugMeta: { _fromHistory: true } },

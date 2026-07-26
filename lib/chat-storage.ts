@@ -10,6 +10,7 @@ import { resolveUserIdentity } from "./settings-storage";
 import { loadCharacters } from "./character-storage";
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import { emitChatPluginEvent, runChatPluginTransformSync } from "./chat-plugin-hooks";
+import { parseAIResponse } from "./rich-message-parser";
 import { extractTextToolDirectiveText } from "./text-tool-protocol";
 
 export const DEFAULT_VISION_IMAGE_PROMPT_LIMIT = 1;
@@ -86,6 +87,7 @@ export type ChatMessage = {
     responseBatchId?: string; // Assistant raw-response batch id
     rawResponseText?: string; // Assistant raw response before parsing/splitting
     responseRoundId?: string; // Group-chat whole-round id shared across all bubbles in one assistant turn
+    toolExecutionId?: string; // Links visible tool attachments to their persisted tool result
     editableResponseText?: string; // Processed text shown in the reply editor
     isRetracted?: boolean;
     mediaType?: "image" | "audio" | "video"
@@ -1046,6 +1048,10 @@ export function createResponseRoundId(): string {
     return `round_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+export function createToolExecutionId(): string {
+    return `toolrun_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
 export function pushChatMessage(msg: Omit<ChatMessage, "id" | "createdAt" | "status"> & { status?: ChatMessageStatus }): ChatMessage {
     let newMsg: ChatMessage = {
         ...msg,
@@ -1126,6 +1132,77 @@ function removeFirstExactResponsePart(rawResponseText: string, content: string):
         .trim();
 }
 
+function formatStateValuesForRaw(stateValues?: StateValue[]): string {
+    if (!stateValues || stateValues.length === 0) return "";
+    return stateValues.map(item => `[${item.name}:${item.value}]`).join("");
+}
+
+function messageToEditableRawPart(message: ChatMessage): string {
+    if (message.mediaType === "tool_notice" || message.mediaType === "tool_result") return "";
+    if (message.mediaType === "poke") {
+        const sender = message.mediaData?.pokeSender?.trim();
+        const target = message.mediaData?.pokeTarget?.trim();
+        if (sender && target) return `[${sender}拍了拍${target}]`;
+    }
+    if (message.mediaType === "image") {
+        const label = message.mediaData?.label?.trim() || message.content.trim();
+        if (label) return `[照片:${label}]`;
+    }
+    return message.content.trim();
+}
+
+function rebuildEditableRawFromRemainingBatch(messages: ChatMessage[]): string {
+    const sorted = [...messages]
+        .filter(message => message.role === "assistant")
+        .sort(compareChatMessages);
+    if (sorted.length === 0) return "";
+
+    const metaCarrier = sorted.find(message =>
+        (message.stateValues && message.stateValues.length > 0)
+        || message.statusPanel
+        || message.innerMonologue
+    );
+    const headerParts = [
+        formatStateValuesForRaw(metaCarrier?.stateValues),
+        metaCarrier?.statusPanel ? `[状态栏]${metaCarrier.statusPanel}[/状态栏]` : "",
+        metaCarrier?.innerMonologue ? `[内心]${metaCarrier.innerMonologue}[/内心]` : "",
+    ].filter(Boolean);
+    const bodyParts = sorted
+        .map(messageToEditableRawPart)
+        .filter(part => part.length > 0);
+
+    return [...headerParts, ...bodyParts].join("\n\n").trim();
+}
+
+function normalizeParsedRawPartForCompare(part: ReturnType<typeof parseAIResponse>["parts"][number]): string {
+    if (part.mediaType === "poke") {
+        const sender = part.mediaData?.pokeSender?.trim();
+        const target = part.mediaData?.pokeTarget?.trim();
+        return sender && target ? `${sender} 拍了拍 ${target}` : "";
+    }
+    if (part.mediaType === "image") {
+        return part.mediaData?.label?.trim() || part.content.trim();
+    }
+    return part.content.trim();
+}
+
+function rawTextStillContainsDeletedPart(rawText: string, deleted: ChatMessage): boolean {
+    const deletedText = deleted.content.trim();
+    if (deletedText && rawText.includes(deletedText)) return true;
+    try {
+        return parseAIResponse(rawText, []).parts.some(part => {
+            if (deleted.mediaType === "poke" && part.mediaType === "poke") return true;
+            const normalized = normalizeParsedRawPartForCompare(part);
+            if (!normalized) return false;
+            return normalized === deletedText
+                || (!!deletedText && normalized.includes(deletedText))
+                || (!!deleted.mediaData?.label && normalized.includes(String(deleted.mediaData.label)));
+        });
+    } catch {
+        return false;
+    }
+}
+
 function syncDeletedResponseBatchMetadata(deletedMessages: ChatMessage[]): void {
     const deletedByBatch = new Map<string, ChatMessage[]>();
     const deletedByRound = new Map<string, ChatMessage[]>();
@@ -1156,14 +1233,23 @@ function syncDeletedResponseBatchMetadata(deletedMessages: ChatMessage[]): void 
             || deletedBatch.find(message => message.rawResponseText !== undefined);
         if (rawCarrier?.rawResponseText === undefined) continue;
 
+        const assistantDeleted = [...deletedBatch].sort(compareChatMessages).filter(deleted =>
+            deleted.role === "assistant"
+            && deleted.mediaType !== "tool_notice"
+            && deleted.mediaType !== "tool_result"
+        );
         let nextRaw = rawCarrier.rawResponseText;
-        for (const deleted of [...deletedBatch].sort(compareChatMessages)) {
-            if (
-                deleted.role !== "assistant"
-                || deleted.mediaType === "tool_notice"
-                || deleted.mediaType === "tool_result"
-            ) continue;
+        let needsRebuild = remainingBatch.some(message => message.role === "assistant") && assistantDeleted.length > 0;
+        for (const deleted of assistantDeleted) {
+            const before = nextRaw;
             nextRaw = removeFirstExactResponsePart(nextRaw, deleted.content);
+            if (nextRaw === before && rawTextStillContainsDeletedPart(nextRaw, deleted)) {
+                needsRebuild = true;
+            }
+        }
+        if (needsRebuild) {
+            const rebuilt = rebuildEditableRawFromRemainingBatch(remainingBatch);
+            if (rebuilt) nextRaw = rebuilt;
         }
         if (nextRaw === rawCarrier.rawResponseText) continue;
 
@@ -1207,14 +1293,40 @@ function syncDeletedResponseBatchMetadata(deletedMessages: ChatMessage[]): void 
     dbPutMessages([...changed.values()]);
 }
 
+function expandToolExecutionDeleteSet(messages: ChatMessage[]): ChatMessage[] {
+    const toolExecutionIds = new Set(
+        messages
+            .map(message => message.toolExecutionId)
+            .filter((id): id is string => !!id),
+    );
+    if (toolExecutionIds.size === 0) return messages;
+
+    const messageIds = new Set(messages.map(message => message.id));
+    const sessionIds = new Set(messages.map(message => message.sessionId));
+    const expanded = [...messages];
+    for (const message of _messagesCache) {
+        if (
+            messageIds.has(message.id)
+            || !sessionIds.has(message.sessionId)
+            || !message.toolExecutionId
+            || !toolExecutionIds.has(message.toolExecutionId)
+        ) continue;
+        messageIds.add(message.id);
+        expanded.push(message);
+    }
+    return expanded;
+}
+
 export function deleteChatMessage(messageId: string) {
     const targetMsg = _messagesCache.find(m => m.id === messageId);
     if (!targetMsg) return;
     const sessionId = targetMsg.sessionId;
 
-    _messagesCache = _messagesCache.filter(m => m.id !== messageId);
-    syncDeletedResponseBatchMetadata([targetMsg]);
-    dbDeleteMessage(messageId);
+    const deletedMessages = expandToolExecutionDeleteSet([targetMsg]);
+    const deletedIds = new Set(deletedMessages.map(message => message.id));
+    _messagesCache = _messagesCache.filter(message => !deletedIds.has(message.id));
+    syncDeletedResponseBatchMetadata(deletedMessages);
+    dbDeleteMessagesByIds([...deletedIds]);
 
     // Recalculate the last message for the session to update the preview
     const lastMsg = getLastVisibleSessionMessage(sessionId);
@@ -1233,7 +1345,7 @@ export function deleteChatMessage(messageId: string) {
         saveChatSessions(sessions);
     }
 
-    dispatchDeletedMessages([targetMsg]);
+    dispatchDeletedMessages(deletedMessages);
 }
 
 /** Delete a message and all messages after it in the same session. */
@@ -1242,13 +1354,13 @@ export function deleteChatMessagesFrom(messageId: string) {
     if (!targetMsg) return;
     const sessionId = targetMsg.sessionId;
 
-    const deletedMessages = _messagesCache
-        .filter(m => m.sessionId === sessionId && compareChatMessages(m, targetMsg) >= 0);
-    const deletedIds = deletedMessages.map(m => m.id);
-
-    _messagesCache = _messagesCache.filter(m =>
-        m.sessionId !== sessionId || compareChatMessages(m, targetMsg) < 0
+    const deletedMessages = expandToolExecutionDeleteSet(
+        _messagesCache.filter(m => m.sessionId === sessionId && compareChatMessages(m, targetMsg) >= 0),
     );
+    const deletedIds = deletedMessages.map(m => m.id);
+    const deletedIdSet = new Set(deletedIds);
+
+    _messagesCache = _messagesCache.filter(m => !deletedIdSet.has(m.id));
     syncDeletedResponseBatchMetadata(deletedMessages);
     dbDeleteMessagesByIds(deletedIds);
 
@@ -1275,8 +1387,9 @@ export function deleteChatMessagesByIds(sessionId: string, messageIds: string[])
     const targetIds = new Set(messageIds);
     if (targetIds.size === 0) return 0;
 
-    const deletedMessages = _messagesCache
-        .filter(m => m.sessionId === sessionId && targetIds.has(m.id));
+    const deletedMessages = expandToolExecutionDeleteSet(
+        _messagesCache.filter(m => m.sessionId === sessionId && targetIds.has(m.id)),
+    );
     const deletedIds = deletedMessages.map(m => m.id);
     if (deletedIds.length === 0) return 0;
 
@@ -1693,6 +1806,8 @@ export function replaceResponseBatchWithParts(
         reasoningText?: string;
         stateValues?: StateValue[];
         freshStateValues?: StateValue[];
+        /** 面板挂在第几条（缺省第 0 条；调用方跳过拍一拍/通话留痕这类不显示面板的消息） */
+        metaPartIndex?: number;
         toolCallContent?: string;
     },
 ): ChatMessage[] {
@@ -1728,11 +1843,11 @@ export function replaceResponseBatchWithParts(
         rawResponseText,
         responseRoundId: firstMessage.responseRoundId,
         editableResponseText: firstMessage.editableResponseText,
-        statusPanel: index === 0 ? options?.statusPanel : undefined,
-        innerMonologue: index === 0 ? options?.innerMonologue : undefined,
-        reasoningText: index === 0 ? options?.reasoningText : undefined,
-        stateValues: index === 0 ? options?.stateValues : undefined,
-        freshStateValues: index === 0 ? options?.freshStateValues : undefined,
+        statusPanel: index === (options?.metaPartIndex ?? 0) ? options?.statusPanel : undefined,
+        innerMonologue: index === (options?.metaPartIndex ?? 0) ? options?.innerMonologue : undefined,
+        reasoningText: index === (options?.metaPartIndex ?? 0) ? options?.reasoningText : undefined,
+        stateValues: index === (options?.metaPartIndex ?? 0) ? options?.stateValues : undefined,
+        freshStateValues: index === (options?.metaPartIndex ?? 0) ? options?.freshStateValues : undefined,
         followUpIndex: firstMessage.followUpIndex,
         senderCharacterId: firstMessage.senderCharacterId,
         senderName: firstMessage.senderName,

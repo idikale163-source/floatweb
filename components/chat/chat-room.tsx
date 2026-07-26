@@ -89,6 +89,12 @@ function isCallSysMsg(msg: ChatMessage): boolean {
 }
 /** Returns the effective UI role: call messages render as "system" regardless of stored role */
 const ACTION_MEDIA_TYPES = new Set(["poke", "accept_red_packet", "decline_red_packet", "accept_transfer", "decline_transfer", "accept_payment_request", "decline_payment_request", "group_admin_notice"]);
+// 拍一拍/群管理通知/通话留痕渲染成灰色系统小字，没有 💭 面板入口——
+// 状态栏/内心独白/状态值挂上去会被显示层吞掉，挂载时必须跳过它们
+function canCarryFoldedPanel(part: { content?: string; mediaType?: ChatMessage["mediaType"] }): boolean {
+    if (part.mediaType === "poke" || part.mediaType === "group_admin_notice") return false;
+    return !CALL_SYS_RE.test(part.content || "");
+}
 function uiRole(msg: ChatMessage): string {
     if (msg.role === "system" || ACTION_MEDIA_TYPES.has(msg.mediaType || "")) return "system";
     if (isCallSysMsg(msg)) return "system";
@@ -2351,14 +2357,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         rawResponseText: r.responseText,
                         responseRoundId,
                         editableResponseText,
-                        statusPanel: !attachedState && statusPanel ? statusPanel : undefined,
-                        innerMonologue: !attachedState && innerMonologue ? innerMonologue : undefined,
-                        reasoningText: takeRoundReasoning(),
-                        stateValues: !attachedState && stateValues.length > 0 ? stateValues : undefined,
+                        // 系统小字样式不显示面板，不在这里挂载（见 canCarryFoldedPanel）
                         senderCharacterId: r.characterId,
                         senderName: applied.senderName,
                     });
-                    attachedState = true;
                     savedAnyPart = true;
                     msgsSetter(prev => [...prev, msg]);
                     continue;
@@ -2379,14 +2381,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         rawResponseText: r.responseText,
                         responseRoundId,
                         editableResponseText,
-                        statusPanel: !attachedState && statusPanel ? statusPanel : undefined,
-                        innerMonologue: !attachedState && innerMonologue ? innerMonologue : undefined,
-                        reasoningText: takeRoundReasoning(),
-                        stateValues: !attachedState && stateValues.length > 0 ? stateValues : undefined,
+                        // 系统小字样式不显示面板，不在这里挂载（见 canCarryFoldedPanel）
                         senderCharacterId: r.characterId,
                         senderName: pokeSender,
                     });
-                    attachedState = true;
                     savedAnyPart = true;
                     msgsSetter(prev => [...prev, msg]);
                     dispatchChatMessageNotice({
@@ -2400,6 +2398,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 if (!isFirst) await abortableDelay(800, guard?.signal);
                 throwIfGenerationStopped(guard);
                 isFirst = false;
+                const attachHere = !attachedState && canCarryFoldedPanel(part);
                 const draft = buildAssistantMessageDraft(part, {
                     sessionId: session.id,
                     role: "assistant",
@@ -2410,18 +2409,18 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     rawResponseText: r.responseText,
                     responseRoundId,
                     editableResponseText,
-                    statusPanel: !attachedState && statusPanel ? statusPanel : undefined,
-                    innerMonologue: !attachedState && innerMonologue ? innerMonologue : undefined,
+                    statusPanel: attachHere && statusPanel ? statusPanel : undefined,
+                    innerMonologue: attachHere && innerMonologue ? innerMonologue : undefined,
                     reasoningText: takeRoundReasoning(),
-                    stateValues: !attachedState && stateValues.length > 0 ? stateValues : undefined,
-                    freshStateValues: !attachedState ? freshStateValues : undefined,
+                    stateValues: attachHere && stateValues.length > 0 ? stateValues : undefined,
+                    freshStateValues: attachHere ? freshStateValues : undefined,
                     senderCharacterId: r.characterId,
                     senderName: r.characterName,
                 }, guard);
                 throwIfGenerationStopped(guard);
                 const msg = pushChatMessage(draft);
                 imageReplacementTasks.push(scheduleGeneratedImageReplacement(msg, r.characterId, guard));
-                attachedState = true;
+                if (attachHere) attachedState = true;
                 savedAnyPart = true;
                 msgsSetter(prev => [...prev, msg]);
                 const body = msg.content.trim()
@@ -2435,7 +2434,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     isGroup: true,
                 });
             }
-            if (!savedAnyPart && (statusPanel || innerMonologue)) {
+            // 面板没落到任何正常气泡上（纯静默，或整段只有拍一拍/群管理通知）→ 补空消息驮面板
+            if (!attachedState && (statusPanel || innerMonologue || stateValues.length > 0)) {
                 throwIfGenerationStopped(guard);
                 const msg = pushChatMessage({
                     sessionId: session.id,
@@ -2746,6 +2746,12 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         // Build rich-media drafts first, then publish them in the same order as the UI display.
         const messageDrafts: Array<{ draft: AssistantMessageDraft; afterPublish?: (message: ChatMessage) => Promise<unknown> | void }> = [];
         const imageReplacementTasks: Promise<unknown>[] = [];
+        // 面板挂到第一条能显示它的消息上；全是拍一拍等系统样式时补空消息驮面板
+        let metaIdx = filteredParts.findIndex(canCarryFoldedPanel);
+        if (metaIdx === -1 && (statusPanel || innerMonologue || stateValues.length > 0)) {
+            pushFilteredPart({ content: "" });
+            metaIdx = filteredParts.length - 1;
+        }
         for (let idx = 0; idx < filteredParts.length; idx += 1) {
             throwIfGenerationStopped(options);
             const part = filteredParts[idx];
@@ -2758,11 +2764,11 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 mediaData: part.mediaData,
                 responseBatchId,
                 rawResponseText,
-                statusPanel: idx === 0 && statusPanel ? statusPanel : undefined,
-                innerMonologue: idx === 0 && innerMonologue ? innerMonologue : undefined,
-                reasoningText: idx === 0 ? options?.reasoningText : undefined,
-                stateValues: idx === 0 && stateValues.length > 0 ? stateValues : undefined,
-                freshStateValues: idx === 0 ? freshStateValues : undefined,
+                statusPanel: idx === metaIdx && statusPanel ? statusPanel : undefined,
+                innerMonologue: idx === metaIdx && innerMonologue ? innerMonologue : undefined,
+                reasoningText: idx === metaIdx ? options?.reasoningText : undefined,
+                stateValues: idx === metaIdx && stateValues.length > 0 ? stateValues : undefined,
+                freshStateValues: idx === metaIdx ? freshStateValues : undefined,
             }, options);
             throwIfGenerationStopped(options);
             messageDrafts.push({
@@ -2855,13 +2861,14 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         else setShowVideoCall(true);
     };
 
-    const persistHiddenToolResult = (content?: string) => {
+    const persistHiddenToolResult = (content?: string, toolExecutionId?: string) => {
         if (!content) return;
         pushChatMessage({
             sessionId: session.id,
             role: "tool",
             content,
             mediaType: "tool_result",
+            toolExecutionId,
         });
     };
 
@@ -2922,7 +2929,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         setTransientMessages(prev => prev.filter(msg => msg.id !== msgId));
     };
 
-    const handleToolExecution = (results: ToolResult[], guard?: GenerationRunGuard) => {
+    const handleToolExecution = (results: ToolResult[], guard?: GenerationRunGuard, toolExecutionId?: string) => {
         throwIfGenerationStopped(guard);
         const pending = results.find(result => result.pendingApproval && result.pendingRequest);
         if (pending?.pendingRequest) {
@@ -2944,6 +2951,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     mediaType: "media_file",
                     mediaUrl: att.url,
                     mediaData: { fileType: att.type, fileName: att.title },
+                    toolExecutionId,
                     ...(session.isGroup ? {
                         senderCharacterId: result.actorCharacterId,
                         senderName: result.actorName,
@@ -3435,17 +3443,23 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         if (!isCurrentGeneration()) return;
                         persistToolNotice(notice);
                     },
-                    onToolResult: (content) => {
+                    onToolResult: (content, options) => {
                         if (!isCurrentGeneration()) return;
-                        pushChatMessage({ sessionId: session.id, role: "tool", content, mediaType: "tool_result" });
+                        pushChatMessage({
+                            sessionId: session.id,
+                            role: "tool",
+                            content,
+                            mediaType: "tool_result",
+                            toolExecutionId: options?.toolExecutionId,
+                        });
                     },
                     onToolAssistantTurn: (content, options) => {
                         if (!isCurrentGeneration()) return;
                         persistHiddenAssistantToolCall(content, options);
                     },
-                    onToolExecution: (results) => {
+                    onToolExecution: (results, _historyContent, options) => {
                         if (!isCurrentGeneration()) return;
-                        handleToolExecution(results, generationGuard);
+                        handleToolExecution(results, generationGuard, options?.toolExecutionId);
                     },
                     onNativeToolAssistantTurn: async ({ content, rawContent, reasoning, openRouterReasoningDetails, toolCalls }) => {
                         if (!isCurrentGeneration()) return;
@@ -3474,13 +3488,14 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         });
                         trackNativeToolCalls(session.id, generationRunId, toolCalls.map(call => ({ id: call.id, name: call.name })));
                     },
-                    onNativeToolResult: ({ toolCallId, name, content }) => {
+                    onNativeToolResult: ({ toolCallId, name, content, toolExecutionId }) => {
                         if (!isCurrentGeneration()) return;
                         pushChatMessage({
                             sessionId: session.id,
                             role: "tool",
                             content,
                             mediaType: "tool_result",
+                            toolExecutionId,
                             nativeToolResult: { toolCallId, name, content },
                         });
                         resolveNativeToolCall(session.id, generationRunId, toolCallId);
@@ -3517,10 +3532,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         if (!isCurrentGeneration()) return;
                         persistToolNotice(notice);
                     },
-                    onToolResult: (content) => {
+                    onToolResult: (content, options) => {
                         if (!isCurrentGeneration()) return;
                         // Persist to history for future LLM context, hidden from UI
-                        persistHiddenToolResult(content);
+                        persistHiddenToolResult(content, options?.toolExecutionId);
                     },
                     onToolAssistantTurn: (content, options) => {
                         if (!isCurrentGeneration()) return;
@@ -3549,21 +3564,22 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         setMessages(prev => [...prev, carrier]);
                         trackNativeToolCalls(session.id, generationRunId, toolCalls.map(call => ({ id: call.id, name: call.name })));
                     },
-                    onNativeToolResult: ({ toolCallId, name, content }) => {
+                    onNativeToolResult: ({ toolCallId, name, content, toolExecutionId }) => {
                         if (!isCurrentGeneration()) return;
                         const msg = pushChatMessage({
                             sessionId: session.id,
                             role: "tool",
                             content,
                             mediaType: "tool_result",
+                            toolExecutionId,
                             nativeToolResult: { toolCallId, name, content },
                         });
                         setMessages(prev => [...prev, msg]);
                         resolveNativeToolCall(session.id, generationRunId, toolCallId);
                     },
-                    onToolExecution: (results) => {
+                    onToolExecution: (results, _historyContent, options) => {
                         if (!isCurrentGeneration()) return;
-                        handleToolExecution(results, generationGuard);
+                        handleToolExecution(results, generationGuard, options?.toolExecutionId);
                     },
                 });
                 if (!isCurrentGeneration()) return;
@@ -4273,22 +4289,24 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 let attachedState = false;
                 for (const part of normalizedParts) {
                     if (!part.content.trim() && !part.mediaType && (!(statusPanel || innerMonologue) || attachedState)) continue;
+                    // 面板只挂到能显示它的正常气泡上（拍一拍/通话留痕是系统小字）
+                    const attachHere = !attachedState && canCarryFoldedPanel(part);
                     replacementMessages.push({
                         content: part.content,
                         mediaType: part.mediaType,
                         mediaData: part.mediaData,
                         rawResponseText: segment.responseText,
                         responseBatchId,
-                        statusPanel: !attachedState && statusPanel ? statusPanel : undefined,
-                        innerMonologue: !attachedState && innerMonologue ? innerMonologue : undefined,
-                        stateValues: !attachedState && stateValues.length > 0 ? stateValues : undefined,
-                        freshStateValues: !attachedState ? freshStateValues : undefined,
+                        statusPanel: attachHere && statusPanel ? statusPanel : undefined,
+                        innerMonologue: attachHere && innerMonologue ? innerMonologue : undefined,
+                        stateValues: attachHere && stateValues.length > 0 ? stateValues : undefined,
+                        freshStateValues: attachHere ? freshStateValues : undefined,
                         senderCharacterId: segment.characterId,
                         senderName: segment.characterName,
                     });
-                    attachedState = true;
+                    if (attachHere) attachedState = true;
                 }
-                if (!attachedState && (statusPanel || innerMonologue)) {
+                if (!attachedState && (statusPanel || innerMonologue || stateValues.length > 0)) {
                     replacementMessages.push({
                         content: "",
                         rawResponseText: segment.responseText,
@@ -4369,6 +4387,17 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             showChatToast("编辑后的回复没有可显示内容");
             return;
         }
+        // 面板挂到第一条能显示它的消息上（编辑后第一条可能是拍一拍或通话留痕，
+        // 那类系统小字不显示面板）；全是系统样式时补空消息驮面板
+        let metaPartIndex = normalizedParts.findIndex(canCarryFoldedPanel);
+        if (metaPartIndex === -1) {
+            if (statusPanel || innerMonologue || stateValues.length > 0) {
+                normalizedParts.push({ content: "" });
+                metaPartIndex = normalizedParts.length - 1;
+            } else {
+                metaPartIndex = 0;
+            }
+        }
 
         replaceResponseBatchWithParts(
             session.id,
@@ -4380,6 +4409,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 innerMonologue,
                 stateValues: stateValues.length > 0 ? stateValues : undefined,
                 freshStateValues,
+                metaPartIndex,
                 toolCallContent: extractTextToolDirectiveText(editedResponseContent),
             },
         );
@@ -4766,26 +4796,51 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             }
             const parsed = parseAIResponse(displayRaw, []);
             const parts = normalizeDisplayParts(parsed.parts);
+            // 面板投影到第一条能显示它的消息上（拍一拍/通话留痕是系统小字，没有面板入口）
+            const displayMetaIdx = parts.findIndex(canCarryFoldedPanel);
+            const storedMeta = batch.find(m => m.statusPanel || m.innerMonologue || m.reasoningText || (m.stateValues && m.stateValues.length > 0));
+            let metaProjected = false;
             parts.forEach((part, index) => {
                 const base = batch[Math.min(index, batch.length - 1)] || batch[0];
                 if (!base) return;
                 const sourceId = base.id;
                 const id = index < batch.length ? sourceId : `${batch[0].id}__display_${index}`;
+                const isMetaSlot = index === displayMetaIdx;
+                const statusPanelHere = isMetaSlot ? (parsed.statusPanel || storedMeta?.statusPanel) : undefined;
+                const innerMonologueHere = isMetaSlot ? (parsed.innerMonologue || storedMeta?.innerMonologue) : undefined;
+                const reasoningTextHere = isMetaSlot ? storedMeta?.reasoningText : undefined;
+                const stateValuesHere = isMetaSlot ? storedMeta?.stateValues : undefined;
+                const freshStateValuesHere = isMetaSlot ? storedMeta?.freshStateValues : undefined;
+                if (isMetaSlot && (statusPanelHere || innerMonologueHere || reasoningTextHere || (stateValuesHere && stateValuesHere.length > 0))) {
+                    metaProjected = true;
+                }
                 projected.push({
                     ...base,
                     id,
                     content: part.content,
                     mediaType: part.mediaType,
                     mediaData: part.mediaData,
-                    statusPanel: index === 0 && parsed.statusPanel ? parsed.statusPanel : (index < batch.length ? base.statusPanel : undefined),
-                    innerMonologue: index === 0 && parsed.innerMonologue ? parsed.innerMonologue : (index < batch.length ? base.innerMonologue : undefined),
-                    reasoningText: index === 0 ? batch[0].reasoningText : undefined,
-                    stateValues: index === 0 ? base.stateValues : undefined,
-                    freshStateValues: index === 0 ? base.freshStateValues : undefined,
+                    statusPanel: statusPanelHere,
+                    innerMonologue: innerMonologueHere,
+                    reasoningText: reasoningTextHere,
+                    stateValues: stateValuesHere,
+                    freshStateValues: freshStateValuesHere,
                     displayProjected: true,
                     displaySourceId: sourceId,
                 });
             });
+            // 投影后没有任何消息驮面板（比如整段只剩拍一拍/通话留痕）→ 补一条空投影消息
+            if (!metaProjected && storedMeta) {
+                projected.push({
+                    ...storedMeta,
+                    id: `${batch[0].id}__display_meta`,
+                    content: "",
+                    mediaType: undefined,
+                    mediaData: undefined,
+                    displayProjected: true,
+                    displaySourceId: storedMeta.id,
+                });
+            }
         }
         return projected;
     }, [dedupedMessages, normalizeDisplayParts, renderDisplayText]);

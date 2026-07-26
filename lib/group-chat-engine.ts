@@ -1,7 +1,7 @@
 // lib/group-chat-engine.ts
 // Group chat engine: single API call for all characters.
 
-import { ChatSession, ChatMessage, loadChatAppSettings, createResponseBatchId, createResponseRoundId, loadChatSessions, getLatestCharacterStateValues } from "./chat-storage";
+import { ChatSession, ChatMessage, loadChatAppSettings, createResponseBatchId, createResponseRoundId, createToolExecutionId, loadChatSessions, getLatestCharacterStateValues } from "./chat-storage";
 import { extractTextToolDirectiveText } from "./text-tool-protocol";
 import type { ApiConfig, PresetConfig, RegexConfig } from "./settings-types";
 import { loadCharacters } from "./character-storage";
@@ -710,12 +710,14 @@ async function runNativeGroupToolLoop(params: {
             openRouterReasoningDetails: result.openRouterReasoningDetails,
             toolCalls: result.toolCalls,
         });
+        const toolExecutionId = createToolExecutionId();
         for (const outcome of outcomes) {
             throwIfAborted(signal);
             callbacks?.onNativeToolResult?.({
                 toolCallId: outcome.nativeCall.id,
                 name: outcome.nativeCall.name,
                 content: outcome.formattedContent,
+                toolExecutionId,
             });
             requestMessages.push({
                 role: "tool",
@@ -728,7 +730,9 @@ async function runNativeGroupToolLoop(params: {
         const resultsForHistory = realResults.filter(result => result.persistToHistory !== false);
         const toolResultContent = resultsForHistory.length > 0 ? formatToolResults(resultsForHistory) : "";
         throwIfAborted(signal);
-        if (realResults.length > 0) callbacks?.onToolExecution?.(realResults, toolResultContent || undefined);
+        if (realResults.length > 0) {
+            callbacks?.onToolExecution?.(realResults, toolResultContent || undefined, { toolExecutionId });
+        }
 
         await appendNativeMediaContext(requestMessages, realResults, config.enableImageRecognition, signal);
 
@@ -920,11 +924,12 @@ export async function generateGroupChatCompletion(
             const resultsForContinuation = results.filter(r => r.continueConversation !== false);
             const toolResultContent = resultsForHistory.length > 0 ? formatToolResults(resultsForHistory) : "";
             throwIfAborted(options?.signal);
-            callbacks?.onToolExecution?.(results, toolResultContent || undefined);
+            const toolExecutionId = createToolExecutionId();
+            callbacks?.onToolExecution?.(results, toolResultContent || undefined, { toolExecutionId });
 
             if (toolResultContent && resultsForContinuation.length > 0) {
                 throwIfAborted(options?.signal);
-                callbacks?.onToolResult?.(toolResultContent);
+                callbacks?.onToolResult?.(toolResultContent, { toolExecutionId });
                 const idx = findInsertIdx();
                 llmMessages.splice(idx, 0,
                     { role: "assistant", content: assistantForToolContext, _debugMeta: { _fromHistory: true } },
@@ -1083,8 +1088,9 @@ export async function previewGroupPromptPayload(
 export async function previewGroupPromptRequestSnapshot(
     session: ChatSession,
     history: ChatMessage[],
+    options?: GroupChatPromptBuildOptions,
 ): Promise<DebugPromptSnapshot> {
-    const { llmMessages, config, preset, memberNames, enabledTools, userName, appTags } = await buildGroupChatPromptMessages(session, history);
+    const { llmMessages, config, preset, memberNames, enabledTools, userName, appTags } = await buildGroupChatPromptMessages(session, history, options);
     const requestMessages = toLlmRequestMessages(llmMessages);
     const meta = { characterName: `群聊:${session.groupName || "群聊"}`, userName };
 
