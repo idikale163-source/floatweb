@@ -5293,3 +5293,23 @@
     color: var(--c-text-soft, #b3b8c2);
     flex: none;
 }
+
+/* 记忆库时间线：分批加载按钮 */
+.mem-tl-load-more {
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 40px;
+  margin: 8px auto 4px;
+  padding: 0 18px;
+  border-radius: 20px;
+  background: #000;
+  color: #fff;
+  font-size: calc(12px*var(--app-text-scale,1));
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
