@@ -73,6 +73,7 @@ import {
     matchChatScreenEffectRule,
     rollChatDiceFace,
 } from "@/lib/chat-screen-effects";
+import { loadChatPlugins, mayContainPluginDirective, processChatPluginDirectives } from "@/lib/chat-plugins";
 import { abortableDelay, throwIfAborted } from "@/lib/abort-utils";
 import { GROUP_SELF_KEY, canGroupAdminAct, applyGroupAdminAction, buildGroupAdminNoticeText, getGroupMemberDisplayName, getGroupMuteRemainingMs, getGroupRole, isGroupMuted, formatMuteRemainingLabel, resolveGroupMemberKeyByName, type GroupAdminAction } from "@/lib/group-admin";
 
@@ -1134,6 +1135,40 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             if (fired) continue;
             setActiveScreenEffect({ runId: msg.id, ...hit });
             fired = true;
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [messages]);
+
+    // 扩展插件：解析角色消息中的插件指令（剥离指令 + 系统旁白 + 气泡附加行 + 变量写入）
+    const pluginSeenRef = useRef<Set<string>>(new Set());
+    useEffect(() => {
+        const enabledPlugins = loadChatPlugins().filter(p => p.enabled);
+        if (enabledPlugins.length === 0) return;
+        // 只处理最早安装时间之后的消息，避免安装后回放历史指令导致变量重复计数
+        const earliestInstall = Math.min(...enabledPlugins.map(p => new Date(p.installedAt).getTime() || 0));
+        const seen = pluginSeenRef.current;
+        for (const msg of messages) {
+            if (seen.has(msg.id)) continue;
+            seen.add(msg.id);
+            if (msg.role !== "assistant" || msg.mediaType || !msg.content) continue;
+            if (new Date(msg.createdAt).getTime() < earliestInstall) continue;
+            if (!mayContainPluginDirective(msg.content)) continue;
+            const result = processChatPluginDirectives(msg.content, { sessionId: session.id, author: msg.senderName || undefined });
+            if (!result.changed) continue;
+            const patch: Partial<ChatMessage> = { content: result.text };
+            if (result.footers.length > 0) {
+                patch.mediaData = { ...msg.mediaData, pluginFooters: result.footers };
+            }
+            updateChatMessage(msg.id, patch);
+            setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, ...patch } : m)));
+            for (const notice of result.notices) {
+                const aside = pushChatMessage({
+                    sessionId: session.id,
+                    role: "system",
+                    content: notice,
+                });
+                setMessages(prev => [...prev, aside]);
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [messages]);
