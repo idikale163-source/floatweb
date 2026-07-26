@@ -16,7 +16,6 @@ import { PageShell } from "@/components/ui/page-shell";
 import { CHAT_APP_CSS_EXAMPLE } from "@/lib/css-examples";
 import { Toggle } from "@/components/ui/form";
 import { StickerManager } from "./sticker-manager";
-import { ChatPluginManager } from "./chat-plugin-manager";
 import { WalletPanel } from "./wallet-panel";
 import { loadMomentsConfig, saveMomentsConfig, DEFAULT_MOMENTS_CONFIG, type MomentsInteractionConfig, getAllPosts } from "@/lib/moments-storage";
 import { loadChatContacts } from "@/lib/chat-storage";
@@ -36,7 +35,6 @@ import {
     MessageSquare,
     MessageSquareDashed,
     Palette,
-    Puzzle,
     Keyboard,
     Radio,
     RotateCcw,
@@ -135,7 +133,6 @@ function isBrowserNotificationGranted(): boolean {
    ══════════════════════════════════════════ */
 export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) {
     const [showFollowUpEditor, setShowFollowUpEditor] = useState(false);
-    const [showPluginManager, setShowPluginManager] = useState(false);
     const [showApiLog, setShowApiLog] = useState(false);
     const [showStickerManager, setShowStickerManager] = useState(false);
     const [showCSSEditor, setShowCSSEditor] = useState(false);
@@ -236,9 +233,6 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
     }
     if (showCSSEditor) {
         return <ChatCSSEditor onBack={() => { setShowCSSEditor(false); }} />;
-    }
-    if (showPluginManager) {
-        return <ChatPluginManager onBack={() => { window.dispatchEvent(new CustomEvent("chat-hide-tabbar", { detail: false })); setShowPluginManager(false); }} />;
     }
     if (showStickerManager) {
         return <StickerManager onBack={() => { window.dispatchEvent(new CustomEvent("chat-hide-tabbar", { detail: false })); setShowStickerManager(false); }} />;
@@ -405,7 +399,7 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
                             <Toggle checked={enterToSendEnabled} onChange={handleEnterToSendToggle} />
                         </div>
 
-                        <div className="flex items-center gap-3 py-3 w-full border-b border-[color-mix(in_srgb,var(--c-card-border)_20%,transparent)]">
+                        <div className="flex items-center gap-3 py-3 w-full">
                             <Bell size={18} className="text-[var(--c-icon)] opacity-70" strokeWidth={1.25}/>
                             <div className="flex flex-col flex-1 text-left gap-0.5">
                                 <span className="ts-14 font-semibold text-[var(--c-text-title)]">浏览器后台通知</span>
@@ -413,15 +407,6 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
                             </div>
                             <Toggle checked={notifEnabled} disabled={notifChecking} onChange={handleNotificationToggle} />
                         </div>
-
-                        <button className="flex items-center gap-3 py-3.5 w-full" onClick={() => { window.dispatchEvent(new CustomEvent("chat-hide-tabbar", { detail: true })); setShowPluginManager(true); }}>
-                            <Puzzle size={18} className="text-[var(--c-icon)] opacity-70" strokeWidth={1.25}/>
-                            <div className="flex flex-col flex-1 text-left gap-0.5">
-                                <span className="ts-14 font-semibold text-[var(--c-text-title)]">扩展插件</span>
-                                <span className="ts-11 text-[var(--c-text)] opacity-70">导入插件为角色扩展新玩法，如心情状态、自定义指令</span>
-                            </div>
-                            <ChevronRight size={16} className="text-[var(--c-icon)] opacity-50" />
-                        </button>
                     </div>
                 </div>
             </PageShell>

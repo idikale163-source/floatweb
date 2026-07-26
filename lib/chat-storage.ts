@@ -116,7 +116,6 @@ export type ChatMessage = {
         quoteRole?: ChatMessageRole; // 引用消息的 role
         stickerUrl?: string;      // 表情包图片路径
         diceFace?: number;        // 骰子点数（1-6），气泡翻滚后定格并与全屏动效一致
-        pluginFooters?: string[]; // 扩展插件生成的气泡底部附加行
         pokeSender?: string;      // 拍一拍发起人名字
         pokeTarget?: string;      // 拍一拍目标名字
         contactCardName?: string; // 名片被推荐人名字（渲染时按推荐人同世界实时解析，未建档也可成卡）

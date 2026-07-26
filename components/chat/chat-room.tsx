@@ -73,8 +73,6 @@ import {
     matchChatScreenEffectRule,
     rollChatDiceFace,
 } from "@/lib/chat-screen-effects";
-import { loadChatPlugins } from "@/lib/chat-plugins";
-import { getChatPluginRuntime, CHAT_PLUGIN_TOAST_EVENT } from "@/lib/chat-plugin-runtime";
 import { abortableDelay, throwIfAborted } from "@/lib/abort-utils";
 import { GROUP_SELF_KEY, canGroupAdminAct, applyGroupAdminAction, buildGroupAdminNoticeText, getGroupMemberDisplayName, getGroupMuteRemainingMs, getGroupRole, isGroupMuted, formatMuteRemainingLabel, resolveGroupMemberKeyByName, type GroupAdminAction } from "@/lib/group-admin";
 
@@ -1081,26 +1079,6 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         setTheaterMode(kvGet(CHAT_THEATER_MODE_PREFIX + session.id) === "1");
     }, [session.id]);
 
-    // 扩展插件：进入聊天触发 sessionOpened
-    useEffect(() => {
-        const runtime = getChatPluginRuntime();
-        if (runtime.enabledCount() === 0) return;
-        runtime.fireEvent("sessionOpened", { sessionId: session.id, isGroup: !!session.isGroup });
-    }, [session.id, session.isGroup]);
-
-    // 扩展插件：监听插件 toast
-    useEffect(() => {
-        const handler = (e: Event) => {
-            const text = (e as CustomEvent<{ text: string }>).detail?.text;
-            if (!text) return;
-            clearTimeout(chatToastTimer.current);
-            setChatToast(text);
-            chatToastTimer.current = setTimeout(() => setChatToast(null), 2400);
-        };
-        window.addEventListener(CHAT_PLUGIN_TOAST_EVENT, handler);
-        return () => window.removeEventListener(CHAT_PLUGIN_TOAST_EVENT, handler);
-    }, []);
-
     const [bgImageResolved, setBgImageResolved] = useState<string | null>(null);
     const [bgLoading, setBgLoading] = useState(!!session.backgroundImage);
 
@@ -1156,46 +1134,6 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             if (fired) continue;
             setActiveScreenEffect({ runId: msg.id, ...hit });
             fired = true;
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [messages]);
-
-    // 扩展插件：把角色/用户消息交给沙箱插件运行时处理（改写文本 / 气泡附加行 / 系统旁白）
-    const pluginSeenRef = useRef<Set<string>>(new Set());
-    useEffect(() => {
-        const runtime = getChatPluginRuntime();
-        if (runtime.enabledCount() === 0) return;
-        const installedAt = Math.min(...loadChatPlugins().filter(p => p.enabled).map(p => new Date(p.installedAt).getTime() || 0));
-        const seen = pluginSeenRef.current;
-        for (const msg of messages) {
-            if (seen.has(msg.id)) continue;
-            seen.add(msg.id);
-            const isUser = msg.role === "user";
-            const isAssistant = msg.role === "assistant";
-            if ((!isUser && !isAssistant) || msg.mediaType || !msg.content) continue;
-            if (new Date(msg.createdAt).getTime() < installedAt) continue;
-            const evt = isAssistant ? "assistantMessage" : "userMessage";
-            void runtime.dispatchEvent(evt, {
-                id: msg.id,
-                text: msg.content,
-                author: msg.senderName || undefined,
-                sessionId: session.id,
-                isGroup: !!session.isGroup,
-            }).then(result => {
-                const hasText = typeof result.text === "string" && result.text !== msg.content;
-                if (!hasText && result.footers.length === 0 && result.notices.length === 0) return;
-                const patch: Partial<ChatMessage> = {};
-                if (hasText) patch.content = result.text;
-                if (result.footers.length > 0) patch.mediaData = { ...msg.mediaData, pluginFooters: result.footers };
-                if (Object.keys(patch).length > 0) {
-                    updateChatMessage(msg.id, patch);
-                    setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, ...patch } : m)));
-                }
-                for (const notice of result.notices) {
-                    const aside = pushChatMessage({ sessionId: session.id, role: "system", content: notice });
-                    setMessages(prev => [...prev, aside]);
-                }
-            });
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [messages]);

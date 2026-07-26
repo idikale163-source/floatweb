@@ -76,19 +76,8 @@ export const MessageBubble = memo(function MessageBubble({ msg, onUpdate, charNa
             return <XiaohongshuShareBubble msg={msg} />;
         case "audio":
             return <VoiceMessageBubble msg={msg} characterId={characterId} onUpdate={onUpdate} defaultTranslationExpanded={defaultTranslationExpanded} />;
-        default: {
-            const textBubble = <TextBubble content={displayContent ?? msg.content} onActionSelect={onActionSelect} defaultTranslationExpanded={defaultTranslationExpanded} />;
-            const pluginFooters = msg.mediaData?.pluginFooters;
-            if (!pluginFooters?.length) return textBubble;
-            return (
-                <>
-                    {textBubble}
-                    <div className="plugin-footers">
-                        {pluginFooters.map((line, i) => <div key={i} className="plugin-footer-line">{line}</div>)}
-                    </div>
-                </>
-            );
-        }
+        default:
+            return <TextBubble content={displayContent ?? msg.content} onActionSelect={onActionSelect} defaultTranslationExpanded={defaultTranslationExpanded} />;
     }
 }, (prev, next) => {
     // Skip function props (onUpdate, onSystemMessage, onShowDetail) — they're inline and always new
@@ -99,7 +88,6 @@ export const MessageBubble = memo(function MessageBubble({ msg, onUpdate, charNa
         if (prev.msg.isRetracted !== next.msg.isRetracted) return false;
         if (prev.msg.isTyping !== next.msg.isTyping) return false;
         if (prev.msg.mediaData?.status !== next.msg.mediaData?.status) return false;
-        if (prev.msg.mediaData?.pluginFooters !== next.msg.mediaData?.pluginFooters) return false;
         if (prev.msg.mediaData?.label !== next.msg.mediaData?.label) return false;
         if (prev.msg.mediaData?.claimedBy?.length !== next.msg.mediaData?.claimedBy?.length) return false;
         if (prev.msg.mediaData?.appName !== next.msg.mediaData?.appName) return false;
