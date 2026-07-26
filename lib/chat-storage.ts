@@ -9,6 +9,7 @@ import {
 import { resolveUserIdentity } from "./settings-storage";
 import { loadCharacters } from "./character-storage";
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
+import { emitChatPluginEvent, runChatPluginTransformSync } from "./chat-plugin-hooks";
 
 export const DEFAULT_VISION_IMAGE_PROMPT_LIMIT = 1;
 export const MAX_VISION_IMAGE_PROMPT_LIMIT = 20;
@@ -103,7 +104,8 @@ export type ChatMessage = {
         | "reading_discuss"
         | "system_instruction"
         | "group_admin_notice"
-        | "media_file";
+        | "media_file"
+        | `plugin:${string}`; // 聊天插件自定义消息类型（由注册该 kind 的插件渲染气泡）
     origin?: "chat" | "reading_discuss" | "custom_app" | "custom_app_background";
     mediaUrl?: string;
     mediaData?: {
@@ -897,13 +899,19 @@ export function createResponseRoundId(): string {
 }
 
 export function pushChatMessage(msg: Omit<ChatMessage, "id" | "createdAt" | "status"> & { status?: ChatMessageStatus }): ChatMessage {
-    const newMsg: ChatMessage = {
+    let newMsg: ChatMessage = {
         ...msg,
         id: createMessageId(),
         createdAt: new Date().toISOString(),
         order: getNextMessageOrder(msg.sessionId),
         status: msg.status || "sent"
     };
+
+    // 聊天插件织入点：消息落库前同步改写（全部消息路径都会经过这里）
+    const pluginResult = runChatPluginTransformSync("message.beforePersist", { message: newMsg });
+    if (pluginResult.message && typeof pluginResult.message === "object" && pluginResult.message.id === newMsg.id) {
+        newMsg = pluginResult.message;
+    }
 
     _messagesCache.push(newMsg);
     dbPutMessage(newMsg);
@@ -924,6 +932,7 @@ export function pushChatMessage(msg: Omit<ChatMessage, "id" | "createdAt" | "sta
     if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent(CHAT_MESSAGE_PUSHED_EVENT, { detail: { message: newMsg } }));
     }
+    emitChatPluginEvent("message.persisted", { message: newMsg });
 
     return newMsg;
 }
@@ -1109,6 +1118,9 @@ export function clearChatSessionMessages(sessionId: string) {
 function dispatchDeletedMessages(messages: ChatMessage[]): void {
     if (typeof window === "undefined" || messages.length === 0) return;
     window.dispatchEvent(new CustomEvent(CHAT_MESSAGES_DELETED_EVENT, { detail: { messages } }));
+    for (const message of messages) {
+        emitChatPluginEvent("message.deleted", { id: message.id, sessionId: message.sessionId });
+    }
 }
 
 export type ClearChatSessionToolHistoryResult = {
@@ -1298,6 +1310,8 @@ export function updateChatMessage(
         sessions[sessIdx].updatedAt = updated.createdAt;
         saveChatSessions(sessions);
     }
+
+    emitChatPluginEvent("message.updated", { id: messageId, patch });
 
     return updated;
 }

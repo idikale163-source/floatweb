@@ -5,6 +5,8 @@ import { ChatSession, ChatMessage, loadChatAppSettings, createResponseRoundId, l
 import type { ApiConfig, PresetConfig, RegexConfig } from "./settings-types";
 import { loadCharacters } from "./character-storage";
 import { buildScreenEffectPromptHint } from "./chat-screen-effects";
+import { runChatPluginTransform } from "./chat-plugin-hooks";
+import { buildChatPluginPromptFragments } from "./chat-plugin-storage";
 import {
     sendLLMRequest,
     sendLLMToolRequest,
@@ -411,7 +413,13 @@ async function buildGroupChatPromptMessages(
         ? activeMemberSchedules.map(item => `${item.name}：${item.schedule}`).join("；")
         : "无";
     const musicOnlineHint = isNeteaseConfigured() ? "- 你可以推荐任何歌曲，系统会在线搜索并播放。不局限于用户本地音乐库。\n" : "\n";
-    const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt({ group: true }) + buildScreenEffectPromptHint();
+    const pluginPrompt = await runChatPluginTransform("prompt.system", {
+        sessionId: session.id,
+        isGroup: true,
+        hint: buildChatPluginPromptFragments(session.id),
+    });
+    const pluginPromptHint = pluginPrompt.hint?.trim() ? `\n\n### 扩展插件\n${pluginPrompt.hint.trim()}\n` : "";
+    const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt({ group: true }) + buildScreenEffectPromptHint() + pluginPromptHint;
     const toolsPrompt = usesNativeActions
         ? "需要动作时使用可用动作接口。"
         : formatToolsForPrompt(enabledTools);

@@ -75,6 +75,9 @@ import {
 } from "@/lib/chat-screen-effects";
 import { abortableDelay, throwIfAborted } from "@/lib/abort-utils";
 import { GROUP_SELF_KEY, canGroupAdminAct, applyGroupAdminAction, buildGroupAdminNoticeText, getGroupMemberDisplayName, getGroupMuteRemainingMs, getGroupRole, isGroupMuted, formatMuteRemainingLabel, resolveGroupMemberKeyByName, type GroupAdminAction } from "@/lib/group-admin";
+import { emitChatPluginEvent, getChatPluginHookBus, runChatPluginTransform } from "@/lib/chat-plugin-hooks";
+import { CHAT_PLUGIN_TOAST_EVENT, getChatPluginRuntime } from "@/lib/chat-plugin-runtime";
+import { ChatPluginSlot } from "@/components/chat/chat-plugin-slot";
 
 // ── Call system message detection ──────────────────────────
 // Call messages are stored with user/assistant role for correct prompt alternation,
@@ -830,6 +833,9 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
                     ))}
                 </div>
             )}
+            {showPlusMenu && (
+                <ChatPluginSlot name="chat.inputToolbar" slotProps={{ isGroup }} className="chat-plugin-input-toolbar" />
+            )}
 
             {showEmojiPanel && (
                 <EmojiPanel
@@ -1078,6 +1084,41 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
     useEffect(() => {
         setTheaterMode(kvGet(CHAT_THEATER_MODE_PREFIX + session.id) === "1");
     }, [session.id]);
+
+    // 聊天插件：进入聊天广播 session.opened
+    useEffect(() => {
+        emitChatPluginEvent("session.opened", { sessionId: session.id, isGroup: !!session.isGroup });
+    }, [session.id, session.isGroup]);
+
+    // 聊天插件：监听插件 toast（支持常驻加载态 + 手动关闭）
+    const chatToastIdRef = useRef<string | null>(null);
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const detail = (e as CustomEvent<{ id?: string; text: string; durationMs?: number; close?: boolean }>).detail || { text: "" };
+            // 关闭请求：仅当关闭的是当前正在显示的那条时才清除
+            if (detail.close) {
+                if (chatToastIdRef.current === detail.id) {
+                    clearTimeout(chatToastTimer.current);
+                    setChatToast(null);
+                    chatToastIdRef.current = null;
+                }
+                return;
+            }
+            if (!detail.text) return;
+            clearTimeout(chatToastTimer.current);
+            chatToastIdRef.current = detail.id ?? null;
+            setChatToast(detail.text);
+            // durationMs <= 0 表示常驻（加载态），不自动消失；缺省用 2400ms
+            if (detail.durationMs === undefined || detail.durationMs > 0) {
+                chatToastTimer.current = setTimeout(() => {
+                    setChatToast(null);
+                    chatToastIdRef.current = null;
+                }, detail.durationMs ?? 2400);
+            }
+        };
+        window.addEventListener(CHAT_PLUGIN_TOAST_EVENT, handler);
+        return () => window.removeEventListener(CHAT_PLUGIN_TOAST_EVENT, handler);
+    }, []);
 
     const [bgImageResolved, setBgImageResolved] = useState<string | null>(null);
     const [bgLoading, setBgLoading] = useState(!!session.backgroundImage);
@@ -3616,8 +3657,6 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         // Cancel any pending follow-up for this session
         cancelFollowUp(session.id);
 
-        const currentText = trimmed;
-
         // If quoting a message, send as quote type
         const isQuoting = !!quotingMessage;
         const quoteData = quotingMessage ? {
@@ -3627,29 +3666,48 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         } : undefined;
         setQuotingMessage(null);
 
-        // 掷骰子：整条消息就是骰子图标时，发骰子气泡（内容仅图标），
-        // 点数由系统旁白公布——避免结果挂在 user 消息上被角色模仿格式
-        const diceOnly = !isQuoting && isDiceOnlyMessage(currentText);
-        const diceFace = diceOnly ? rollChatDiceFace() : 0;
+        const commitSendText = (currentText: string) => {
+            // 掷骰子：整条消息就是骰子图标时，发骰子气泡（内容仅图标），
+            // 点数由系统旁白公布——避免结果挂在 user 消息上被角色模仿格式
+            const diceOnly = !isQuoting && isDiceOnlyMessage(currentText);
+            const diceFace = diceOnly ? rollChatDiceFace() : 0;
 
-        const newMsg = pushChatMessage({
-            sessionId: session.id,
-            role: "user",
-            content: currentText,
-            mediaType: diceOnly ? "dice" : isQuoting ? "quote" : undefined,
-            mediaData: diceOnly ? { diceFace } : isQuoting ? quoteData : undefined,
-        });
-
-        setMessages(prev => [...prev, newMsg]);
-        if (diceOnly) {
-            const diceAside = pushChatMessage({
+            const newMsg = pushChatMessage({
                 sessionId: session.id,
-                role: "system",
-                content: formatChatDiceResultMessage(diceFace),
+                role: "user",
+                content: currentText,
+                mediaType: diceOnly ? "dice" : isQuoting ? "quote" : undefined,
+                mediaData: diceOnly ? { diceFace } : isQuoting ? quoteData : undefined,
             });
-            setMessages(prev => [...prev, diceAside]);
+
+            setMessages(prev => [...prev, newMsg]);
+            if (diceOnly) {
+                const diceAside = pushChatMessage({
+                    sessionId: session.id,
+                    role: "system",
+                    content: formatChatDiceResultMessage(diceFace),
+                });
+                setMessages(prev => [...prev, diceAside]);
+            }
+            setPendingGenerate(true);
+        };
+
+        // 聊天插件织入点 user.beforeSend：无插件时走原同步路径，
+        // 有插件时输入框先清空，改写/取消在异步续体里完成
+        if (getChatPluginHookBus().hasHandlers("user.beforeSend")) {
+            void runChatPluginTransform("user.beforeSend", {
+                text: trimmed,
+                sessionId: session.id,
+                isGroup: !!session.isGroup,
+                cancelled: false,
+            }).then(payload => {
+                if (payload.cancelled) return;
+                const finalText = typeof payload.text === "string" ? payload.text.trim() : trimmed;
+                if (finalText) commitSendText(finalText);
+            });
+        } else {
+            commitSendText(trimmed);
         }
-        setPendingGenerate(true);
         return true;
     };
 
@@ -4501,6 +4559,25 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     <button onClick={() => handleDeleteMessage(m.id)} className="ctx-menu-btn ctx-menu-btn-danger">删除</button>
                     <button onClick={() => handleDeleteMessagesFrom(m.id)} className="ctx-menu-btn ctx-menu-btn-danger">删除以下</button>
                 </div>
+                {(() => {
+                    // 聊天插件注册的消息操作菜单项
+                    const pluginActions = getChatPluginRuntime().getMessageActions(m);
+                    if (pluginActions.length === 0) return null;
+                    return (
+                        <div className="flex">
+                            {pluginActions.map(action => (
+                                <button
+                                    key={`${action.pluginId}:${action.id}`}
+                                    className="ctx-menu-btn"
+                                    onClick={() => {
+                                        getChatPluginRuntime().runMessageAction(action, m);
+                                        setActiveMessageId(null);
+                                    }}
+                                >{action.label}</button>
+                            ))}
+                        </div>
+                    );
+                })()}
                 <div data-menu-triangle className="ctx-menu-triangle absolute -top-[6px] w-0 h-0" />
             </div>
         );
@@ -4980,6 +5057,11 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     </span>
                 </div>
             </header>
+            <ChatPluginSlot
+                name="chat.header"
+                slotProps={{ sessionId: session.id, isGroup: !!session.isGroup }}
+                className="chat-plugin-header chat-room-main-pane"
+            />
 
             {/* Message List */}
             <div
