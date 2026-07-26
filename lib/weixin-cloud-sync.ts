@@ -1186,6 +1186,7 @@ function importCloudAssistantMessage(
       statusPanel: index === 0 && parsed.statusPanel ? parsed.statusPanel : undefined,
       innerMonologue: index === 0 && parsed.innerMonologue ? parsed.innerMonologue : undefined,
       stateValues: index === 0 && parsed.stateValues.length > 0 ? parsed.stateValues : undefined,
+      freshStateValues: index === 0 ? parsed.freshStateValues : undefined,
     }));
   });
 
@@ -1196,6 +1197,7 @@ function importCloudAssistantMessage(
       statusPanel: parsed.statusPanel || undefined,
       innerMonologue: parsed.innerMonologue || undefined,
       stateValues: parsed.stateValues.length > 0 ? parsed.stateValues : undefined,
+      freshStateValues: parsed.freshStateValues,
     }));
   }
   if (messages.length === 0) {

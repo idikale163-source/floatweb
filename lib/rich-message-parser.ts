@@ -31,7 +31,10 @@ export interface ParsedMessagePart {
 
 export interface ParsedAIResponse {
     parts: ParsedMessagePart[];
+    /** 与历史合并后的完整状态快照（用于状态链传递与下一轮提示词） */
     stateValues: StateValue[];
+    /** 本轮回复实际输出的状态值（未合并历史；漏输出时为空，内心卡片按此渲染） */
+    freshStateValues: StateValue[];
     statusPanel: string;
     innerMonologue: string;
 }
@@ -645,6 +648,7 @@ export function parseAIResponse(rawText: string, previousState: StateValue[]): P
     return {
         parts: cleaned,
         stateValues,
+        freshStateValues: parsedSV.stateValues,
         statusPanel: restore(status.content),
         innerMonologue: restore(mono.content),
     };

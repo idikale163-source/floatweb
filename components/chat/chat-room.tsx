@@ -2227,7 +2227,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             if (!(session.participantIds || []).includes(r.characterId)) continue;
             if (isGroupMuted(session, r.characterId)) continue;
             const responseBatchId = createResponseBatchId();
-            const { parts: rawParts, stateValues, statusPanel, innerMonologue } = parseAIResponse(r.responseText, getCurrentStateForCharacter(r.characterId));
+            const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(r.responseText, getCurrentStateForCharacter(r.characterId));
             const parts = stripInvalidStickerParts(rawParts, r.characterId);
             let attachedState = false;
             let savedAnyPart = false;
@@ -2372,6 +2372,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     innerMonologue: !attachedState && innerMonologue ? innerMonologue : undefined,
                     reasoningText: takeRoundReasoning(),
                     stateValues: !attachedState && stateValues.length > 0 ? stateValues : undefined,
+                    freshStateValues: !attachedState ? freshStateValues : undefined,
                     senderCharacterId: r.characterId,
                     senderName: r.characterName,
                 }, guard);
@@ -2406,6 +2407,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     innerMonologue,
                     reasoningText: takeRoundReasoning(),
                     stateValues: stateValues.length > 0 ? stateValues : undefined,
+                    freshStateValues,
                     senderCharacterId: r.characterId,
                     senderName: r.characterName,
                 });
@@ -2619,7 +2621,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             ? getLatestStateValues(session.id)
             : getLatestCharacterStateValues(session.contactId);
 
-        const { parts: rawParts, stateValues, statusPanel, innerMonologue } = parseAIResponse(aiResponseText, previousState);
+        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(aiResponseText, previousState);
         const parts = stripInvalidStickerParts(rawParts);
         throwIfGenerationStopped(options);
 
@@ -2687,6 +2689,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     innerMonologue,
                     reasoningText: options?.reasoningText,
                     stateValues: stateValues.length > 0 ? stateValues : undefined,
+                    freshStateValues,
                 });
                 setMessages(prev => [...prev, aiMsg]);
             }
@@ -2714,6 +2717,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 innerMonologue: idx === 0 && innerMonologue ? innerMonologue : undefined,
                 reasoningText: idx === 0 ? options?.reasoningText : undefined,
                 stateValues: idx === 0 && stateValues.length > 0 ? stateValues : undefined,
+                freshStateValues: idx === 0 ? freshStateValues : undefined,
             }, options);
             throwIfGenerationStopped(options);
             messageDrafts.push({
@@ -3319,7 +3323,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         const responseRoundId = senderInfo.responseRoundId || createResponseRoundId();
                         const editableResponseText = senderInfo.editableResponseText || `[${senderInfo.characterName}]: ${cleanedEditableText}`;
                         const previousState = getLatestCharacterStateValues(senderInfo.characterId);
-                        const { parts: rawParts, stateValues, statusPanel, innerMonologue } = parseAIResponse(text, previousState);
+                        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(text, previousState);
                         const parts = stripInvalidStickerParts(rawParts, senderInfo.characterId);
                         let attachedState = false;
                         let savedAnyPart = false;
@@ -3340,6 +3344,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                 innerMonologue: !attachedState && innerMonologue ? innerMonologue : undefined,
                                 reasoningText: !attachedState ? roundReasoning : undefined,
                                 stateValues: !attachedState && stateValues.length > 0 ? stateValues : undefined,
+                                freshStateValues: !attachedState ? freshStateValues : undefined,
                                 senderCharacterId: senderInfo.characterId,
                                 senderName: senderInfo.characterName,
                             }, generationGuard);
@@ -3365,6 +3370,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                 innerMonologue,
                                 reasoningText: roundReasoning,
                                 stateValues: stateValues.length > 0 ? stateValues : undefined,
+                                freshStateValues,
                                 senderCharacterId: senderInfo.characterId,
                                 senderName: senderInfo.characterName,
                             });
@@ -4173,6 +4179,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 statusPanel?: string;
                 innerMonologue?: string;
                 stateValues?: StateValue[];
+                freshStateValues?: StateValue[];
                 senderCharacterId?: string;
                 senderName?: string;
             }> = [];
@@ -4187,7 +4194,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             };
             for (const segment of segments) {
                 const responseBatchId = createResponseBatchId();
-                const { parts: rawParts, stateValues, statusPanel, innerMonologue } = parseAIResponse(segment.responseText, getCurrentStateForCharacter(segment.characterId));
+                const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(segment.responseText, getCurrentStateForCharacter(segment.characterId));
                 const parts = stripInvalidStickerParts(rawParts, segment.characterId);
                 const normalizedParts = normalizeEditedAssistantParts(parts, segment.characterName, {
                     omitHandledFinancialActions: true,
@@ -4204,6 +4211,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         statusPanel: !attachedState && statusPanel ? statusPanel : undefined,
                         innerMonologue: !attachedState && innerMonologue ? innerMonologue : undefined,
                         stateValues: !attachedState && stateValues.length > 0 ? stateValues : undefined,
+                        freshStateValues: !attachedState ? freshStateValues : undefined,
                         senderCharacterId: segment.characterId,
                         senderName: segment.characterName,
                     });
@@ -4217,6 +4225,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         statusPanel,
                         innerMonologue,
                         stateValues: stateValues.length > 0 ? stateValues : undefined,
+                        freshStateValues,
                         senderCharacterId: segment.characterId,
                         senderName: segment.characterName,
                     });
@@ -4269,7 +4278,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             ? getLatestStateValues(session.id)
             : getLatestCharacterStateValues(session.contactId, stateCutoff ? { before: stateCutoff } : undefined);
 
-        const { parts: rawParts, stateValues, statusPanel, innerMonologue } = parseAIResponse(editedResponseContent, previousState);
+        const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(editedResponseContent, previousState);
         const parts = stripInvalidStickerParts(rawParts);
         const normalizedParts = normalizeEditedAssistantParts(parts);
         if (normalizedParts.length === 0 && (statusPanel || innerMonologue)) {
@@ -4289,6 +4298,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 statusPanel,
                 innerMonologue,
                 stateValues: stateValues.length > 0 ? stateValues : undefined,
+                freshStateValues,
             },
         );
         syncMessagesFromStorage();
@@ -4670,6 +4680,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     innerMonologue: index === 0 && parsed.innerMonologue ? parsed.innerMonologue : (index < batch.length ? base.innerMonologue : undefined),
                     reasoningText: index === 0 ? batch[0].reasoningText : undefined,
                     stateValues: index === 0 ? base.stateValues : undefined,
+                    freshStateValues: index === 0 ? base.freshStateValues : undefined,
                     displayProjected: true,
                     displaySourceId: sourceId,
                 });
@@ -5290,6 +5301,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     const isVisualMedia = isChatVisualMedia(renderMsg);
                     const hiddenEmpty = isHiddenChatFlowMessage(renderMsg, bubbleDisplayContent);
                     const hasFoldedPanel = !!(renderMsg.statusPanel || renderMsg.innerMonologue);
+                    // 内心卡片只展示本轮实际输出的状态值；旧数据没有 freshStateValues 时回退到合并快照
+                    const cardStateValues = msg.freshStateValues ?? msg.stateValues;
                     const isSilentThought = !visibleContent && !renderMsg.mediaType && hasFoldedPanel && msg.role !== "user";
                     const isStandaloneHtmlPreview = !renderMsg.mediaType && isStandaloneHtmlPreviewContent(bubbleDisplayContent);
                     const isMediaBubble = (renderMsg.mediaType && CHAT_MEDIA_BUBBLE_TYPES.has(renderMsg.mediaType)) || isStandaloneHtmlPreview;
@@ -5576,8 +5589,8 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                         💭 {renderMsg.innerMonologue ? "内心独白" : "状态栏"}
                                     </div>
                                     {/* State values panel */}
-                                    {msg.stateValues && msg.stateValues.length > 0 && (
-                                        <StateValuesPanel stateValues={msg.stateValues} />
+                                    {cardStateValues && cardStateValues.length > 0 && (
+                                        <StateValuesPanel stateValues={cardStateValues} />
                                     )}
                                     {renderMsg.statusPanel && (
                                         <div className="chat-thought-body">

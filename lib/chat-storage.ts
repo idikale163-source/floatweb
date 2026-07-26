@@ -221,6 +221,9 @@ export type ChatMessage = {
     innerMonologue?: string; // AI inner monologue content from [内心] tags
     reasoningText?: string; // 模型思维链（reasoning/CoT）内容，挂在回复批次的第一条气泡上
     stateValues?: StateValue[]; // parsed character state values from inner monologue
+    // 本轮回复实际输出的状态值（未合并历史）。undefined = 旧数据（渲染时回退到 stateValues）；
+    // [] = 本轮明确没输出（内心卡片不显示状态面板）。stateValues 仍存合并快照供状态链读取。
+    freshStateValues?: StateValue[];
     followUpIndex?: number; // which follow-up round produced this message (1 = first follow-up)
     nativeToolCalls?: NativeToolCallRecord[]; // assistant native function/tool calls for prompt replay
     nativeToolResult?: NativeToolResultRecord; // tool result paired with an assistant native tool call
@@ -1402,6 +1405,7 @@ export function replaceMessageWithParts(
             innerMonologue: i === 0 ? original.innerMonologue : undefined,
             reasoningText: i === 0 ? original.reasoningText : undefined,
             stateValues: i === 0 ? original.stateValues : undefined,
+            freshStateValues: i === 0 ? original.freshStateValues : undefined,
             followUpIndex: original.followUpIndex,
             senderCharacterId: original.senderCharacterId,
             senderName: original.senderName,
@@ -1426,6 +1430,7 @@ export function replaceResponseBatchWithParts(
         innerMonologue?: string;
         reasoningText?: string;
         stateValues?: StateValue[];
+        freshStateValues?: StateValue[];
     },
 ): ChatMessage[] {
     if (parts.length === 0) return [];
@@ -1464,6 +1469,7 @@ export function replaceResponseBatchWithParts(
         innerMonologue: index === 0 ? options?.innerMonologue : undefined,
         reasoningText: index === 0 ? options?.reasoningText : undefined,
         stateValues: index === 0 ? options?.stateValues : undefined,
+        freshStateValues: index === 0 ? options?.freshStateValues : undefined,
         followUpIndex: firstMessage.followUpIndex,
         senderCharacterId: firstMessage.senderCharacterId,
         senderName: firstMessage.senderName,
@@ -1505,6 +1511,7 @@ export function replaceGroupResponseRound(
         innerMonologue?: string;
         reasoningText?: string;
         stateValues?: StateValue[];
+        freshStateValues?: StateValue[];
         senderCharacterId?: string;
         senderName?: string;
     }>,
@@ -1545,6 +1552,7 @@ export function replaceGroupResponseRound(
         innerMonologue: msg.innerMonologue,
         reasoningText: msg.reasoningText,
         stateValues: msg.stateValues,
+        freshStateValues: msg.freshStateValues,
         followUpIndex: firstMessage.followUpIndex,
         senderCharacterId: msg.senderCharacterId,
         senderName: msg.senderName,

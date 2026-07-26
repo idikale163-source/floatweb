@@ -592,7 +592,7 @@ async function parseAndSaveResponse(
     const sess = sessions.find(s => s.id === sessionId);
     const previousState = sess && !sess.isGroup ? getLatestCharacterStateValues(sess.contactId) : [];
 
-    const { parts, stateValues, statusPanel, innerMonologue } = parseAIResponse(rawText, previousState);
+    const { parts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(rawText, previousState);
 
     // Detect call triggers and AI media actions, filter them out (not stored as messages)
     let triggerCall: "voice" | "video" | undefined;
@@ -654,6 +654,7 @@ async function parseAndSaveResponse(
                 innerMonologue,
                 reasoningText,
                 stateValues: stateValues.length > 0 ? stateValues : undefined,
+                freshStateValues,
                 ...(followUpIndex ? { followUpIndex } : {}),
             });
         }
@@ -681,6 +682,7 @@ async function parseAndSaveResponse(
             innerMonologue: i === 0 && innerMonologue ? innerMonologue : undefined,
             reasoningText: i === 0 ? reasoningText : undefined,
             stateValues: i === 0 && stateValues.length > 0 ? stateValues : undefined,
+            freshStateValues: i === 0 ? freshStateValues : undefined,
             ...(followUpIndex ? { followUpIndex } : {}),
         });
         if (isPendingChatGeneratedImageMessage(saved)) {
