@@ -8,15 +8,13 @@ import { Puzzle, ChevronDown, ChevronUp } from "lucide-react";
 import { PageShell } from "@/components/ui/page-shell";
 import { Toggle } from "@/components/ui/form";
 import {
-    CHAT_PLUGIN_FULL_DOC,
-    CHAT_PLUGIN_GUIDE_EXAMPLE,
-    CHAT_PLUGIN_GUIDE_EXAMPLE_2,
     installChatPlugin,
     loadChatPlugins,
     setChatPluginEnabled,
     uninstallChatPlugin,
     type InstalledChatPlugin,
 } from "@/lib/chat-plugins";
+import { CHAT_PLUGIN_FULL_DOC, CHAT_PLUGIN_EXAMPLE_MOOD, CHAT_PLUGIN_EXAMPLE_BOND } from "@/lib/chat-plugin-docs";
 
 export function ChatPluginManager({ onBack }: { onBack: () => void }) {
     const [plugins, setPlugins] = useState<InstalledChatPlugin[]>(() => loadChatPlugins());
@@ -94,9 +92,7 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                                 </div>
                                 <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-[color-mix(in_srgb,var(--c-card-border)_35%,transparent)]">
                                     <span className="ts-11 text-[var(--c-text)] opacity-45">
-                                        {(p.manifest.directives || []).length > 0
-                                            ? `指令：${(p.manifest.directives || []).map(d => d.tag).join("、")}`
-                                            : "仅提示词注入"}
+                                        {p.manifest.author ? `作者：${p.manifest.author}` : "JavaScript 插件"}
                                     </span>
                                     <button
                                         className={`ts-12 px-2 py-0.5 rounded-md ${confirmDeleteId === p.manifest.id ? "text-white bg-red-500" : "text-red-400"}`}
@@ -136,11 +132,11 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                                 >安装</button>
                                 <button
                                     className="ts-13 px-3 py-2 rounded-lg border border-[var(--c-card-border)] text-[var(--c-text)]"
-                                    onClick={() => setImportText(CHAT_PLUGIN_GUIDE_EXAMPLE)}
+                                    onClick={() => setImportText(CHAT_PLUGIN_EXAMPLE_MOOD)}
                                 >示例·心情</button>
                                 <button
                                     className="ts-13 px-3 py-2 rounded-lg border border-[var(--c-card-border)] text-[var(--c-text)]"
-                                    onClick={() => setImportText(CHAT_PLUGIN_GUIDE_EXAMPLE_2)}
+                                    onClick={() => setImportText(CHAT_PLUGIN_EXAMPLE_BOND)}
                                 >示例·羁绊</button>
                             </div>
                         </div>
@@ -155,33 +151,35 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                     </button>
                     {showGuide && (
                         <div className="px-3.5 pb-3.5 flex flex-col gap-2 ts-12 text-[var(--c-text)] leading-relaxed">
-                            <p className="opacity-80">插件是一段 JSON，描述「角色输出什么格式的指令 → 界面上发生什么效果」。</p>
+                            <p className="opacity-80">插件是一段在<b>独立沙箱</b>里执行的 JavaScript，通过全局 <code>float</code> 对象与聊天交互。</p>
                             <button
                                 className="ts-13 py-2.5 rounded-lg bg-[var(--c-accent,#4a7c59)] text-white font-medium"
                                 onClick={handleCopyDoc}
                             >{docCopied ? "已复制 ✓" : "复制完整开发文档"}</button>
-                            <p className="opacity-60">不会写代码？把完整文档粘贴给任意 AI，告诉它你想要的玩法，让它直接生成插件 JSON 回来安装。</p>
+                            <p className="opacity-60">不会写代码？把完整文档粘贴给任意 AI，描述你想要的玩法，让它生成插件 JSON 回来安装。</p>
 
-                            <p className="font-semibold text-[var(--c-text-title)] mt-1.5">工作原理</p>
+                            <p className="font-semibold text-[var(--c-text-title)] mt-1.5">运行模型</p>
                             <ul className="opacity-80 flex flex-col gap-1 list-disc pl-4">
-                                <li><code>prompt</code> 会注入所有单聊/群聊的提示词，教角色何时输出指令</li>
-                                <li>角色输出 <code>[标签:参数]</code> → 从消息中隐藏 → 依次执行效果</li>
-                                <li>只处理角色消息，且只处理插件安装之后的新消息</li>
+                                <li>脚本启用时执行一次，通常在顶层 <code>float.on(事件, 处理函数)</code> 注册监听</li>
+                                <li>事件发生时你的函数被调用（可 async），报错只影响该插件</li>
                             </ul>
 
-                            <p className="font-semibold text-[var(--c-text-title)] mt-1.5">三种效果</p>
+                            <p className="font-semibold text-[var(--c-text-title)] mt-1.5">事件</p>
                             <ul className="opacity-80 flex flex-col gap-1 list-disc pl-4">
-                                <li><code>var</code>：写变量。<code>op: set</code> 直接写入 / <code>add</code> 数值累加；<code>scope: chat</code> 按会话隔离（默认）/ <code>global</code> 全局</li>
-                                <li><code>footer</code>：这条气泡下方显示一行小字</li>
-                                <li><code>notice</code>：聊天流里插入一条系统灰条</li>
+                                <li><code>assistantMessage</code> / <code>userMessage</code>：一条文字消息，可改写 / 加附加行 / 加旁白</li>
+                                <li><code>sessionOpened</code>：进入聊天时触发，常用来按变量更新提示词</li>
                             </ul>
 
-                            <p className="font-semibold text-[var(--c-text-title)] mt-1.5">模板变量</p>
-                            <p className="opacity-80"><code>{"{{param}}"}</code> 指令参数 · <code>{"{{value}}"}</code> 变量最新值 · <code>{"{{author}}"}</code> 发言角色名 · <code>{"{{var:名称}}"}</code> 读任意变量（prompt 里也可用）</p>
+                            <p className="font-semibold text-[var(--c-text-title)] mt-1.5">float API</p>
+                            <ul className="opacity-80 flex flex-col gap-1 list-disc pl-4">
+                                <li>变量：<code>await float.get/set/update/unset</code>，scope 为 chat（默认按会话隔离）/ global</li>
+                                <li>消息：<code>float.setMessageText</code>、<code>float.ui.footer</code>、<code>float.ui.notice</code></li>
+                                <li>其它：<code>float.ui.toast</code>、<code>float.prompt.set</code>（注入提示词）</li>
+                            </ul>
 
                             <p className="font-semibold text-[var(--c-text-title)] mt-1.5">示例：心情状态</p>
-                            <pre className="ts-11 font-mono bg-[color-mix(in_srgb,var(--c-card-border)_18%,transparent)] rounded-lg p-2.5 overflow-x-auto whitespace-pre">{CHAT_PLUGIN_GUIDE_EXAMPLE}</pre>
-                            <p className="opacity-60">标签不能与系统内置指令重名（好感度、红包、获取指令等，安装时会校验提示）；同 id 重复导入视为升级覆盖；卸载不清除已产生的变量。更多细节（效果全部字段、第二个示例）都在完整文档里。</p>
+                            <pre className="ts-11 font-mono bg-[color-mix(in_srgb,var(--c-card-border)_18%,transparent)] rounded-lg p-2.5 overflow-x-auto whitespace-pre">{CHAT_PLUGIN_EXAMPLE_MOOD}</pre>
+                            <p className="opacity-60">同 id 重复导入视为升级覆盖；卸载不清除已产生的变量。完整 API 与第二个示例见开发文档。</p>
                         </div>
                     )}
                 </div>
