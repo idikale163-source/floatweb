@@ -8,7 +8,9 @@ import { Puzzle, ChevronDown, ChevronUp } from "lucide-react";
 import { PageShell } from "@/components/ui/page-shell";
 import { Toggle } from "@/components/ui/form";
 import {
+    CHAT_PLUGIN_FULL_DOC,
     CHAT_PLUGIN_GUIDE_EXAMPLE,
+    CHAT_PLUGIN_GUIDE_EXAMPLE_2,
     installChatPlugin,
     loadChatPlugins,
     setChatPluginEnabled,
@@ -23,6 +25,17 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
     const [importText, setImportText] = useState("");
     const [hint, setHint] = useState<{ ok: boolean; text: string } | null>(null);
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+    const [docCopied, setDocCopied] = useState(false);
+
+    const handleCopyDoc = async () => {
+        try {
+            await navigator.clipboard.writeText(CHAT_PLUGIN_FULL_DOC);
+            setDocCopied(true);
+            setTimeout(() => setDocCopied(false), 2000);
+        } catch {
+            setDocCopied(false);
+        }
+    };
 
     const refresh = () => setPlugins(loadChatPlugins());
 
@@ -122,9 +135,13 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                                     onClick={handleInstall}
                                 >安装</button>
                                 <button
-                                    className="ts-13 px-4 py-2 rounded-lg border border-[var(--c-card-border)] text-[var(--c-text)]"
+                                    className="ts-13 px-3 py-2 rounded-lg border border-[var(--c-card-border)] text-[var(--c-text)]"
                                     onClick={() => setImportText(CHAT_PLUGIN_GUIDE_EXAMPLE)}
-                                >填入示例</button>
+                                >示例·心情</button>
+                                <button
+                                    className="ts-13 px-3 py-2 rounded-lg border border-[var(--c-card-border)] text-[var(--c-text)]"
+                                    onClick={() => setImportText(CHAT_PLUGIN_GUIDE_EXAMPLE_2)}
+                                >示例·羁绊</button>
                             </div>
                         </div>
                     )}
@@ -138,23 +155,33 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                     </button>
                     {showGuide && (
                         <div className="px-3.5 pb-3.5 flex flex-col gap-2 ts-12 text-[var(--c-text)] leading-relaxed">
-                            <p className="opacity-80">插件是一段 JSON，描述「角色输出什么格式 → 界面上发生什么」。把这份说明连同示例发给 AI，让它帮你写插件。</p>
-                            <p className="font-semibold text-[var(--c-text-title)] mt-1">字段</p>
+                            <p className="opacity-80">插件是一段 JSON，描述「角色输出什么格式的指令 → 界面上发生什么效果」。</p>
+                            <button
+                                className="ts-13 py-2.5 rounded-lg bg-[var(--c-accent,#4a7c59)] text-white font-medium"
+                                onClick={handleCopyDoc}
+                            >{docCopied ? "已复制 ✓" : "复制完整开发文档"}</button>
+                            <p className="opacity-60">不会写代码？把完整文档粘贴给任意 AI，告诉它你想要的玩法，让它直接生成插件 JSON 回来安装。</p>
+
+                            <p className="font-semibold text-[var(--c-text-title)] mt-1.5">工作原理</p>
                             <ul className="opacity-80 flex flex-col gap-1 list-disc pl-4">
-                                <li><code>id / name / version / description</code>：基本信息，id 唯一（字母数字横线）</li>
-                                <li><code>prompt</code>：注入给角色的说明，教它输出格式；<code>{"{{var:名称}}"}</code> 可读取变量当前值</li>
-                                <li><code>directives</code>：指令列表。角色输出 <code>[标签:参数]</code> 时触发，指令会从消息中隐藏</li>
+                                <li><code>prompt</code> 会注入所有单聊/群聊的提示词，教角色何时输出指令</li>
+                                <li>角色输出 <code>[标签:参数]</code> → 从消息中隐藏 → 依次执行效果</li>
+                                <li>只处理角色消息，且只处理插件安装之后的新消息</li>
                             </ul>
-                            <p className="font-semibold text-[var(--c-text-title)] mt-1">指令效果（effects）</p>
+
+                            <p className="font-semibold text-[var(--c-text-title)] mt-1.5">三种效果</p>
                             <ul className="opacity-80 flex flex-col gap-1 list-disc pl-4">
-                                <li><code>{`{"type":"var","name":"变量名","op":"set|add","scope":"chat|global"}`}</code>：写变量，add 时参数当数值累加，chat 作用域按会话隔离</li>
-                                <li><code>{`{"type":"footer","text":"…"}`}</code>：气泡下方显示一行小字</li>
-                                <li><code>{`{"type":"notice","text":"…"}`}</code>：聊天里显示一条系统旁白</li>
+                                <li><code>var</code>：写变量。<code>op: set</code> 直接写入 / <code>add</code> 数值累加；<code>scope: chat</code> 按会话隔离（默认）/ <code>global</code> 全局</li>
+                                <li><code>footer</code>：这条气泡下方显示一行小字</li>
+                                <li><code>notice</code>：聊天流里插入一条系统灰条</li>
                             </ul>
-                            <p className="opacity-80">文本模板可用：<code>{"{{param}}"}</code> 指令参数、<code>{"{{value}}"}</code> 变量最新值、<code>{"{{var:名称}}"}</code> 任意变量。</p>
-                            <p className="font-semibold text-[var(--c-text-title)] mt-1">示例：心情状态</p>
+
+                            <p className="font-semibold text-[var(--c-text-title)] mt-1.5">模板变量</p>
+                            <p className="opacity-80"><code>{"{{param}}"}</code> 指令参数 · <code>{"{{value}}"}</code> 变量最新值 · <code>{"{{author}}"}</code> 发言角色名 · <code>{"{{var:名称}}"}</code> 读任意变量（prompt 里也可用）</p>
+
+                            <p className="font-semibold text-[var(--c-text-title)] mt-1.5">示例：心情状态</p>
                             <pre className="ts-11 font-mono bg-[color-mix(in_srgb,var(--c-card-border)_18%,transparent)] rounded-lg p-2.5 overflow-x-auto whitespace-pre">{CHAT_PLUGIN_GUIDE_EXAMPLE}</pre>
-                            <p className="opacity-60">安装后即对所有聊天生效；关闭开关可临时停用，卸载不会清除已产生的变量。指令标签不能与系统内置标签（好感度、红包等）重名。</p>
+                            <p className="opacity-60">标签不能与系统内置指令重名（好感度、红包、获取指令等，安装时会校验提示）；同 id 重复导入视为升级覆盖；卸载不清除已产生的变量。更多细节（效果全部字段、第二个示例）都在完整文档里。</p>
                         </div>
                     )}
                 </div>
