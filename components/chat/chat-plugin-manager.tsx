@@ -316,10 +316,6 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                                 <span className="menu-desc" style={{ color: hint.ok ? "var(--c-success)" : "var(--c-danger)" }}>{hint.text}</span>
                             </div>
                         )}
-                        <p className="menu-desc" style={{ lineHeight: 1.6, padding: "10px 16px 14px", margin: 0 }}>
-                            插件与应用同环境运行，拥有完整能力（含你的 API 配置与聊天数据）。只安装信任来源的插件；
-                            出问题时给地址加 <code>?plugin-safe-mode=1</code> 可跳过全部插件启动。
-                        </p>
                         <input ref={fileInputRef} type="file" accept=".js,.mjs,text/javascript" className="hidden" onChange={e => { void handleFileChosen(e.target.files?.[0]); }} />
                     </div>
                 </div>
