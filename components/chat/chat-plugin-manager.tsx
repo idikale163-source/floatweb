@@ -22,7 +22,7 @@ import {
 import { installChatPluginFromCode } from "@/lib/chat-plugin-loader";
 import { getChatPluginRuntime, isChatPluginSafeMode, setChatPluginSafeMode } from "@/lib/chat-plugin-runtime";
 import { ChatPluginSlot } from "@/components/chat/chat-plugin-slot";
-import { CHAT_PLUGIN_FULL_DOC, CHAT_PLUGIN_EXAMPLE_MOOD } from "@/lib/chat-plugin-docs";
+import { CHAT_PLUGIN_FULL_DOC } from "@/lib/chat-plugin-docs";
 
 const INSTALL_WARNING = "插件将与应用本身拥有相同的能力（包括访问你的 API 配置与全部聊天数据）。只安装你信任来源的插件。确认安装吗？";
 
@@ -309,13 +309,6 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                                 <Download size={17} strokeWidth={1.6} />
                             </div>
                             <div className="menu-label-group"><span className="menu-label">{installing ? "安装中…" : "导入插件"}</span><span className="menu-desc">选择 .js 插件文件</span></div>
-                            <div className="menu-right"><ChevronRight size={16} /></div>
-                        </button>
-                        <button className="menu-item" disabled={installing} onClick={() => { setHint(null); void handleInstall(CHAT_PLUGIN_EXAMPLE_MOOD); }}>
-                            <div className="menu-icon" style={iconWrap("#34d399")}>
-                                <Puzzle size={17} strokeWidth={1.6} />
-                            </div>
-                            <div className="menu-label-group"><span className="menu-label">安装示例插件</span><span className="menu-desc">心情状态小组件，装上即可体验插件玩法</span></div>
                             <div className="menu-right"><ChevronRight size={16} /></div>
                         </button>
                         {hint && (
