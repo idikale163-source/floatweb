@@ -181,6 +181,9 @@ class ChatPluginRuntime {
         // 注册坑位时管理页的 ChatPluginSlot 可能还没挂好监听、漏掉那次事件；这里在
         // 加载完成、UI 早已渲染就位后再发一次，确保 settings.section 等坑位稳定显示。
         emitDom(CHAT_PLUGIN_SLOTS_CHANGED_EVENT);
+        // 慢设备兜底再补一发：iOS 等设备上模块编译/React 提交可能比上面这发还慢，
+        // 事件是幂等的（Slot 只是重读注册表），多发无副作用。
+        setTimeout(() => emitDom(CHAT_PLUGIN_SLOTS_CHANGED_EVENT), 600);
     }
 
     private async startPlugin(installed: InstalledChatPlugin): Promise<void> {
