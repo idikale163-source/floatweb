@@ -6812,3 +6812,16 @@
 .chat-offline-text q::after {
   content: none;
 }
+
+/* ── 线下模式头像占位 ──
+   每条 .chat-offline-entry 的第一个子元素，默认隐藏、零布局占用。
+   自定义 CSS 里写 .chat-offline-avatar { display: block; ... } 即可显示。 */
+.chat-offline-avatar {
+  display: none;
+}
+.chat-offline-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
