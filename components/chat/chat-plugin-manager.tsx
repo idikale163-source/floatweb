@@ -41,6 +41,12 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
     const [installing, setInstalling] = useState(false);
     const [hint, setHint] = useState<{ ok: boolean; text: string } | null>(null);
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+    const [updateOpenId, setUpdateOpenId] = useState<string | null>(null);
+    const [updateText, setUpdateText] = useState("");
+    const [updateHint, setUpdateHint] = useState<{ ok: boolean; text: string } | null>(null);
+    const [updating, setUpdating] = useState(false);
+    /** 隐藏文件选择框当前服务的目标："import"（导入面板）或某个插件 id（更新） */
+    const fileTargetRef = useRef<string>("import");
     const [settingsOpenId, setSettingsOpenId] = useState<string | null>(null);
     const [docCopied, setDocCopied] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -101,13 +107,38 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
         }
     };
 
-    const handlePickFile = () => fileInputRef.current?.click();
+    const handlePickFile = (target: string = "import") => {
+        fileTargetRef.current = target;
+        fileInputRef.current?.click();
+    };
 
     const handleFileChosen = async (file: File | undefined) => {
         if (!file) return;
         const text = await file.text();
-        await handleInstall(text);
+        if (fileTargetRef.current === "import") await handleInstall(text);
+        else await handleUpdate(fileTargetRef.current, text);
         if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
+    /** 就地更新：同 id 覆盖安装（配置与数据保留），并校验源码 id 与本插件一致 */
+    const handleUpdate = async (id: string, code: string) => {
+        if (!code.trim()) return;
+        if (!window.confirm(INSTALL_WARNING)) return;
+        setUpdating(true);
+        try {
+            const result = await installChatPluginFromCode(code, { expectedId: id });
+            if (result.ok) {
+                const vers = result.fromVersion && result.toVersion && result.fromVersion !== result.toVersion
+                    ? ` v${result.fromVersion} → v${result.toVersion}`
+                    : "";
+                setUpdateHint({ ok: true, text: `已更新${vers}，配置与数据已保留` });
+                setUpdateText("");
+            } else {
+                setUpdateHint({ ok: false, text: result.error || "更新失败" });
+            }
+        } finally {
+            setUpdating(false);
+        }
     };
 
     const handleDelete = (id: string) => {
@@ -190,9 +221,8 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                                                 <span className="menu-label" style={{ fontWeight: 600 }}>
                                                     {p.manifest.name}
                                                     {p.manifest.version && <span style={{ opacity: 0.5, fontWeight: 400, marginLeft: 6 }}>v{p.manifest.version}</span>}
-                                                    {running && <span style={{ color: "var(--c-success)", fontWeight: 400, marginLeft: 6 }}>运行中</span>}
+                                                    {p.manifest.author && <span style={{ opacity: 0.5, fontWeight: 400, marginLeft: 6 }}>{p.manifest.author}</span>}
                                                     {notRunning && <span style={{ color: "var(--c-danger)", fontWeight: 400, marginLeft: 6 }}>未运行</span>}
-                                                    {errorCount > 0 && <span style={{ color: "var(--c-danger)", fontWeight: 400, marginLeft: 6 }}>{errorCount} 次报错</span>}
                                                 </span>
                                                 {p.manifest.description && <span className="menu-desc">{p.manifest.description}</span>}
                                                 {!!p.manifest.permissions?.length && <span className="menu-desc" style={{ opacity: 0.6 }}>声明用途：{p.manifest.permissions.join("、")}</span>}
@@ -233,25 +263,60 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                                             className="chat-plugin-settings-section"
                                         />
 
-                                        {/* 底部：作者 + 卸载 */}
-                                        <div className="menu-item" style={{ cursor: "default" }}>
-                                            <div className="menu-label-group">
-                                                <span className="menu-desc" style={confirmDeleteId === p.manifest.id ? { color: "var(--c-danger)" } : undefined}>
-                                                    {confirmDeleteId === p.manifest.id
-                                                        ? "卸载将清除配置与数据；升级请直接导入新版覆盖（配置保留）"
-                                                        : (p.manifest.author ? `作者：${p.manifest.author}` : "JavaScript 插件")}
-                                                </span>
+                                        {/* 就地更新面板 */}
+                                        {updateOpenId === p.manifest.id && (
+                                            <div style={{ padding: "12px 16px 0", display: "flex", flexDirection: "column", gap: 10, borderTop: "1px solid color-mix(in srgb, var(--c-card-border) 20%, transparent)" }}>
+                                                <span className="menu-desc">粘贴该插件的新版本源码（或选择 .js 文件），配置与数据会保留</span>
+                                                <Textarea
+                                                    value={updateText}
+                                                    onChange={e => setUpdateText(e.target.value)}
+                                                    placeholder="粘贴新版本插件源码…"
+                                                    style={{ height: 110, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12 }}
+                                                />
+                                                {updateHint && <span style={{ fontSize: 12, color: updateHint.ok ? "var(--c-success)" : "var(--c-danger)" }}>{updateHint.text}</span>}
+                                                <div style={{ display: "flex", gap: 10 }}>
+                                                    <button
+                                                        className="ui-btn ui-btn-primary"
+                                                        style={{ flex: 1, minHeight: 40, fontWeight: 600 }}
+                                                        disabled={!updateText.trim() || updating}
+                                                        onClick={() => void handleUpdate(p.manifest.id, updateText)}
+                                                    >
+                                                        {updating ? "更新中…" : "安装更新"}
+                                                    </button>
+                                                    <button className="ui-btn ui-btn-outline" style={{ flex: 1, minHeight: 40 }} onClick={() => handlePickFile(p.manifest.id)}>选择 .js 文件</button>
+                                                </div>
                                             </div>
-                                            <div className="menu-right">
-                                                <button
-                                                    className={`ui-btn ${confirmDeleteId === p.manifest.id ? "ui-btn-danger" : "ui-btn-ghost"}`}
-                                                    style={{ padding: "6px 12px", color: confirmDeleteId === p.manifest.id ? undefined : "var(--c-danger)" }}
-                                                    onClick={() => handleDelete(p.manifest.id)}
-                                                    onBlur={() => setConfirmDeleteId(null)}
-                                                >
-                                                    {confirmDeleteId === p.manifest.id ? "确认卸载" : "卸载"}
-                                                </button>
+                                        )}
+
+                                        {/* 卸载确认警示 */}
+                                        {confirmDeleteId === p.manifest.id && (
+                                            <div style={{ padding: "10px 16px 0" }}>
+                                                <span className="menu-desc" style={{ color: "var(--c-danger)" }}>卸载将清除该插件的配置与数据；只是升级请点「更新」，配置会保留</span>
                                             </div>
+                                        )}
+
+                                        {/* 底部：更新 + 卸载，双按钮撑满一排 */}
+                                        <div style={{ display: "flex", gap: 10, padding: "12px 16px 14px" }}>
+                                            <button
+                                                className={`ui-btn ${updateOpenId === p.manifest.id ? "ui-btn-primary" : "ui-btn-outline"}`}
+                                                style={{ flex: 1, minHeight: 40, fontWeight: 600 }}
+                                                onClick={() => {
+                                                    setUpdateOpenId(updateOpenId === p.manifest.id ? null : p.manifest.id);
+                                                    setUpdateText("");
+                                                    setUpdateHint(null);
+                                                    setConfirmDeleteId(null);
+                                                }}
+                                            >
+                                                {updateOpenId === p.manifest.id ? "收起更新" : "更新"}
+                                            </button>
+                                            <button
+                                                className={`ui-btn ${confirmDeleteId === p.manifest.id ? "ui-btn-danger" : "ui-btn-outline"}`}
+                                                style={{ flex: 1, minHeight: 40, fontWeight: 600, ...(confirmDeleteId === p.manifest.id ? {} : { color: "var(--c-danger)", borderColor: "color-mix(in srgb, var(--c-danger) 45%, transparent)" }) }}
+                                                onClick={() => handleDelete(p.manifest.id)}
+                                                onBlur={() => setConfirmDeleteId(null)}
+                                            >
+                                                {confirmDeleteId === p.manifest.id ? "确认卸载" : "卸载"}
+                                            </button>
                                         </div>
                                     </div>
                                 );
@@ -284,7 +349,7 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                                     <button className="ui-btn ui-btn-primary" style={{ flex: 1, minWidth: 120 }} disabled={!importText.trim() || installing} onClick={() => handleInstall(importText)}>
                                         {installing ? "安装中…" : "安装"}
                                     </button>
-                                    <button className="ui-btn ui-btn-outline" onClick={handlePickFile}>选择 .js 文件</button>
+                                    <button className="ui-btn ui-btn-outline" onClick={() => handlePickFile()}>选择 .js 文件</button>
                                     <button className="ui-btn ui-btn-outline" onClick={() => setImportText(CHAT_PLUGIN_EXAMPLE_MOOD)}>填入示例</button>
                                 </div>
                                 <input ref={fileInputRef} type="file" accept=".js,.mjs,text/javascript" className="hidden" onChange={e => { void handleFileChosen(e.target.files?.[0]); }} />
