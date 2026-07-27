@@ -41,9 +41,7 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
     const [installing, setInstalling] = useState(false);
     const [hint, setHint] = useState<{ ok: boolean; text: string } | null>(null);
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-    const [updateOpenId, setUpdateOpenId] = useState<string | null>(null);
-    const [updateText, setUpdateText] = useState("");
-    const [updateHint, setUpdateHint] = useState<{ ok: boolean; text: string } | null>(null);
+    const [updateHint, setUpdateHint] = useState<{ id: string; ok: boolean; text: string } | null>(null);
     const [updating, setUpdating] = useState(false);
     /** 隐藏文件选择框当前服务的目标："import"（导入面板）或某个插件 id（更新） */
     const fileTargetRef = useRef<string>("import");
@@ -131,10 +129,10 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                 const vers = result.fromVersion && result.toVersion && result.fromVersion !== result.toVersion
                     ? ` v${result.fromVersion} → v${result.toVersion}`
                     : "";
-                setUpdateHint({ ok: true, text: `已更新${vers}，配置与数据已保留` });
-                setUpdateText("");
+                setUpdateHint({ id, ok: true, text: `已更新${vers}，配置与数据已保留` });
+                window.setTimeout(() => setUpdateHint(cur => (cur?.id === id && cur.ok ? null : cur)), 5000);
             } else {
-                setUpdateHint({ ok: false, text: result.error || "更新失败" });
+                setUpdateHint({ id, ok: false, text: result.error || "更新失败" });
             }
         } finally {
             setUpdating(false);
@@ -263,51 +261,31 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                                             className="chat-plugin-settings-section"
                                         />
 
-                                        {/* 就地更新面板 */}
-                                        {updateOpenId === p.manifest.id && (
-                                            <div style={{ padding: "12px 16px 0", display: "flex", flexDirection: "column", gap: 10, borderTop: "1px solid color-mix(in srgb, var(--c-card-border) 20%, transparent)" }}>
-                                                <span className="menu-desc">粘贴该插件的新版本源码（或选择 .js 文件），配置与数据会保留</span>
-                                                <Textarea
-                                                    value={updateText}
-                                                    onChange={e => setUpdateText(e.target.value)}
-                                                    placeholder="粘贴新版本插件源码…"
-                                                    style={{ height: 110, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12 }}
-                                                />
-                                                {updateHint && <span style={{ fontSize: 12, color: updateHint.ok ? "var(--c-success)" : "var(--c-danger)" }}>{updateHint.text}</span>}
-                                                <div style={{ display: "flex", gap: 10 }}>
-                                                    <button
-                                                        className="ui-btn ui-btn-primary"
-                                                        style={{ flex: 1, minHeight: 40, fontWeight: 600 }}
-                                                        disabled={!updateText.trim() || updating}
-                                                        onClick={() => void handleUpdate(p.manifest.id, updateText)}
-                                                    >
-                                                        {updating ? "更新中…" : "安装更新"}
-                                                    </button>
-                                                    <button className="ui-btn ui-btn-outline" style={{ flex: 1, minHeight: 40 }} onClick={() => handlePickFile(p.manifest.id)}>选择 .js 文件</button>
-                                                </div>
+                                        {/* 更新/卸载的行内提示 */}
+                                        {updateHint?.id === p.manifest.id && (
+                                            <div style={{ padding: "10px 16px 0" }}>
+                                                <span className="menu-desc" style={{ color: updateHint.ok ? "var(--c-success)" : "var(--c-danger)" }}>{updateHint.text}</span>
                                             </div>
                                         )}
-
-                                        {/* 卸载确认警示 */}
                                         {confirmDeleteId === p.manifest.id && (
                                             <div style={{ padding: "10px 16px 0" }}>
                                                 <span className="menu-desc" style={{ color: "var(--c-danger)" }}>卸载将清除该插件的配置与数据；只是升级请点「更新」，配置会保留</span>
                                             </div>
                                         )}
 
-                                        {/* 底部：更新 + 卸载，双按钮撑满一排 */}
+                                        {/* 底部：更新 + 卸载，双按钮撑满一排。更新 = 直接选新版 .js 文件 */}
                                         <div style={{ display: "flex", gap: 10, padding: "12px 16px 14px" }}>
                                             <button
-                                                className={`ui-btn ${updateOpenId === p.manifest.id ? "ui-btn-primary" : "ui-btn-outline"}`}
+                                                className="ui-btn ui-btn-outline"
                                                 style={{ flex: 1, minHeight: 40, fontWeight: 600 }}
+                                                disabled={updating}
                                                 onClick={() => {
-                                                    setUpdateOpenId(updateOpenId === p.manifest.id ? null : p.manifest.id);
-                                                    setUpdateText("");
-                                                    setUpdateHint(null);
                                                     setConfirmDeleteId(null);
+                                                    setUpdateHint(null);
+                                                    handlePickFile(p.manifest.id);
                                                 }}
                                             >
-                                                {updateOpenId === p.manifest.id ? "收起更新" : "更新"}
+                                                {updating ? "更新中…" : "更新"}
                                             </button>
                                             <button
                                                 className={`ui-btn ${confirmDeleteId === p.manifest.id ? "ui-btn-danger" : "ui-btn-outline"}`}
