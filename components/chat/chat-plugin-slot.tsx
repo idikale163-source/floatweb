@@ -5,9 +5,9 @@
 // 插件永远不直接触碰宿主 React 树 —— 只在坑位容器内自由发挥。
 // 坑位注册变化（插件启停）时自动重挂载；无插件认领时不产生任何 DOM。
 
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useSyncExternalStore } from "react";
 import type { ChatPluginSlotName, ChatPluginSlotProps } from "@/lib/chat-plugin-types";
-import { CHAT_PLUGIN_SLOTS_CHANGED_EVENT, getChatPluginRuntime } from "@/lib/chat-plugin-runtime";
+import { getChatPluginRuntime } from "@/lib/chat-plugin-runtime";
 
 type Props = {
     name: ChatPluginSlotName;
@@ -19,15 +19,16 @@ type Props = {
 
 export const ChatPluginSlot = memo(function ChatPluginSlot({ name, slotProps, className, pluginId }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
-    const [slotVersion, setSlotVersion] = useState(0);
-
-    useEffect(() => {
-        const bump = () => setSlotVersion(v => v + 1);
-        window.addEventListener(CHAT_PLUGIN_SLOTS_CHANGED_EVENT, bump);
-        return () => window.removeEventListener(CHAT_PLUGIN_SLOTS_CHANGED_EVENT, bump);
-    }, []);
-
     const runtime = getChatPluginRuntime();
+
+    // useSyncExternalStore 订阅运行时的坑位版本号：订阅瞬间自动补读当前值，
+    // 注册发生在本组件挂载之前/之间都不会漏（window 事件方案在 iOS 上会漏）。
+    const slotVersion = useSyncExternalStore(
+        runtime.subscribeSlotsChanged,
+        () => runtime.getSlotsVersion(),
+        () => 0,
+    );
+
     const hasPlugins = runtime.getSlotRegistrations(name, pluginId).length > 0;
 
     // slotProps 逐字段参与依赖，避免调用方每次渲染传新对象导致无谓重挂载

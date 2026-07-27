@@ -84,6 +84,8 @@ class ChatPluginRuntime {
     private messageKinds = new Map<string, { pluginId: string; renderer: ChatPluginMessageKindRenderer }>();
     private busTopics = new Map<string, Set<{ pluginId: string; fn: (data: unknown) => void }>>();
     private toastSeq = 0;
+    private slotsVersion = 0;
+    private slotSubscribers = new Set<() => void>();
     private startPromise: Promise<void> | null = null;
     private started = false;
     private reloading = Promise.resolve();
@@ -180,10 +182,7 @@ class ChatPluginRuntime {
         // 全部插件（重）加载完成后再补发一次坑位变更：安装/启用是异步的，插件 setup 里
         // 注册坑位时管理页的 ChatPluginSlot 可能还没挂好监听、漏掉那次事件；这里在
         // 加载完成、UI 早已渲染就位后再发一次，确保 settings.section 等坑位稳定显示。
-        emitDom(CHAT_PLUGIN_SLOTS_CHANGED_EVENT);
-        // 慢设备兜底再补一发：iOS 等设备上模块编译/React 提交可能比上面这发还慢，
-        // 事件是幂等的（Slot 只是重读注册表），多发无副作用。
-        setTimeout(() => emitDom(CHAT_PLUGIN_SLOTS_CHANGED_EVENT), 600);
+        this.notifySlotsChanged();
     }
 
     private async startPlugin(installed: InstalledChatPlugin): Promise<void> {
@@ -225,8 +224,27 @@ class ChatPluginRuntime {
         activePlugin.disposables.length = 0;
         activePlugin.settingsListeners.clear();
         getChatPluginHookBus().removePlugin(pluginId);
+        this.notifySlotsChanged();
+    }
+
+    // ── 坑位变更通知：版本号 + 订阅回调 + window 事件三管齐下 ──
+    // 版本号供 useSyncExternalStore 订阅：订阅瞬间自动补读当前版本，
+    // 彻底消除"注册发生在监听挂载之前、事件被漏掉"的时序问题（iOS 上尤其常见）。
+    private notifySlotsChanged(): void {
+        this.slotsVersion += 1;
+        for (const cb of [...this.slotSubscribers]) {
+            try { cb(); } catch { /* 订阅方异常不影响运行时 */ }
+        }
         emitDom(CHAT_PLUGIN_SLOTS_CHANGED_EVENT);
     }
+
+    getSlotsVersion(): number { return this.slotsVersion; }
+
+    /** 稳定绑定（箭头属性），可直接作 useSyncExternalStore 的 subscribe */
+    subscribeSlotsChanged = (cb: () => void): (() => void) => {
+        this.slotSubscribers.add(cb);
+        return () => { this.slotSubscribers.delete(cb); };
+    };
 
     // ── UI 注册表查询（供 PluginSlot / message-bubble / 菜单使用） ──
 
@@ -384,14 +402,14 @@ class ChatPluginRuntime {
                     const list = this.slots.get(name) ?? [];
                     list.push(registration);
                     this.slots.set(name, list);
-                    emitDom(CHAT_PLUGIN_SLOTS_CHANGED_EVENT);
+                    this.notifySlotsChanged();
                     return track(() => {
                         const cur = this.slots.get(name);
                         if (cur) {
                             const idx = cur.indexOf(registration);
                             if (idx >= 0) cur.splice(idx, 1);
                         }
-                        emitDom(CHAT_PLUGIN_SLOTS_CHANGED_EVENT);
+                        this.notifySlotsChanged();
                     });
                 },
                 messageAction: (action) => {
