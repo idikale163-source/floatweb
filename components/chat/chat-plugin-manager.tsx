@@ -83,7 +83,15 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
         try {
             const result = await installChatPluginFromCode(code);
             if (result.ok) {
-                setHint({ ok: true, text: `已安装「${result.name}」` });
+                const vers = result.upgraded && result.fromVersion && result.toVersion && result.fromVersion !== result.toVersion
+                    ? ` v${result.fromVersion} → v${result.toVersion}`
+                    : "";
+                setHint({
+                    ok: true,
+                    text: result.upgraded
+                        ? `已升级「${result.name}」${vers}，配置与数据已保留`
+                        : `已安装「${result.name}」`,
+                });
                 setImportText("");
             } else {
                 setHint({ ok: false, text: result.error || "安装失败" });
@@ -228,7 +236,11 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                                         {/* 底部：作者 + 卸载 */}
                                         <div className="menu-item" style={{ cursor: "default" }}>
                                             <div className="menu-label-group">
-                                                <span className="menu-desc">{p.manifest.author ? `作者：${p.manifest.author}` : "JavaScript 插件"}</span>
+                                                <span className="menu-desc" style={confirmDeleteId === p.manifest.id ? { color: "var(--c-danger)" } : undefined}>
+                                                    {confirmDeleteId === p.manifest.id
+                                                        ? "卸载将清除配置与数据；升级请直接导入新版覆盖（配置保留）"
+                                                        : (p.manifest.author ? `作者：${p.manifest.author}` : "JavaScript 插件")}
+                                                </span>
                                             </div>
                                             <div className="menu-right">
                                                 <button
