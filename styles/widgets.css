@@ -3419,15 +3419,16 @@
 
 .wg-pc-body {
   position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   top: 38%;
-  border-radius: 18px;
+  /* 通宽铺到组件底边，与上层背景同宽；底部两角由容器 24px 圆角裁剪 */
+  border-radius: 18px 18px 0 0;
   background-color: #ffffff;
   background-size: cover;
   background-position: center;
-  box-shadow: 0 6px 18px rgb(0 0 0 / calc(0.1 * var(--desktop-shadow-strength, 0)));
+  box-shadow: 0 -4px 14px rgb(0 0 0 / calc(0.08 * var(--desktop-shadow-strength, 0)));
   cursor: pointer;
 }
 
