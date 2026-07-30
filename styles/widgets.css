@@ -37,6 +37,7 @@
 
 .widget-label {
   font-size: calc(11.7px*var(--app-text-scale,1));
+  font-weight: 500;
   color: var(--c-home-label);
   text-align: center;
   line-height: 1.1;
