@@ -88,6 +88,9 @@ create index if not exists custom_app_package_downloads_account_idx
 create index if not exists custom_app_package_downloads_app_idx
   on public.custom_app_package_downloads (app_row_id, created_at desc);
 
+-- 留痕表只由服务端(service key)读写:开 RLS 且不配策略 = 默认拒绝一切前端直连
+alter table public.custom_app_package_downloads enable row level security;
+
 create index if not exists custom_app_market_apps_review_idx
   on public.custom_app_market_apps (review_status, updated_at desc)
   where deleted_at is null;
