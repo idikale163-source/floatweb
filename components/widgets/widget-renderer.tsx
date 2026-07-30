@@ -567,10 +567,10 @@ function FreestyleFrame90Widget({ config, widgetId, onConfigChange, preview }: a
 //   Profile Card Widget (Freestyle 3x4 主页名片)
 // ----------------------------------------------------
 const PROFILE_CARD_DEFAULTS = {
-  name: "小满",
+  name: "こはる",
   handle: "SLOW DAYS",
-  motto: "慢慢来，日子会替我们记住的",
-  location: "云端",
+  motto: "のんびり いこうね",
+  location: "雲の上",
 };
 
 function ProfileCardWidget({ config, widgetId, onConfigChange, preview }: any) {

@@ -3443,11 +3443,13 @@
   text-align: center;
   overflow: hidden;
   cursor: pointer;
+  /* 日系圆体（复用游戏大厅字体资产），中文缺字时回退全局字体 */
+  font-family: "Game Hall Zen Maru Gothic", var(--app-font-family);
 }
 
 .wg-pc-name {
   font-size: calc(15.5px*var(--app-text-scale,1));
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.14em;
   color: #2f2f31;
   line-height: 1.2;
@@ -3460,7 +3462,7 @@
 .wg-pc-handle {
   margin-top: 5px;
   font-size: calc(9.5px*var(--app-text-scale,1));
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: #a9a9ae;
