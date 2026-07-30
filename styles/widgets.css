@@ -3410,15 +3410,19 @@
   height: 100%;
   border-radius: 24px;
   overflow: hidden;
-  background-color: #eceae8;
-  box-shadow:
-    inset 0 1px 2px rgba(255, 255, 255, 0.45),
-    0 8px 24px rgb(0 0 0 / calc(0.12 * var(--desktop-shadow-strength, 0)));
+  /* 容器透明：下半玻璃卡的 backdrop 是桌面壁纸而非组件自己的底色 */
+  background-color: transparent;
+  box-shadow: 0 8px 24px rgb(0 0 0 / calc(0.12 * var(--desktop-shadow-strength, 0)));
 }
 
 .wg-pc-cover {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* 背景图只占上半（多探 18px 垫在下卡圆角缺口后面），不再铺满整卡——
+     下半玻璃因此透出的是桌面壁纸，而不是这张图 */
+  height: calc(50% + 18px);
   background-color: #eceae8;
   background-image: linear-gradient(160deg, #f4f2f0 0%, #e3e1e2 55%, #d8d7da 100%);
   background-size: cover;
@@ -3434,10 +3438,10 @@
   top: 50%;
   /* 通宽铺到组件底边，与上层背景同宽；底部两角由容器 24px 圆角裁剪 */
   border-radius: 18px 18px 0 0;
-  /* 半透明毛玻璃：透出上层背景图并模糊，白度保底文字可读性 */
-  background-color: rgba(255, 255, 255, 0.68);
-  backdrop-filter: blur(14px) saturate(130%);
-  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  /* 半透明毛玻璃：背后没有背景图，透出并模糊的是桌面壁纸 */
+  background-color: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
   background-size: cover;
   background-position: center;
   box-shadow: 0 -4px 14px rgb(0 0 0 / calc(0.08 * var(--desktop-shadow-strength, 0)));
