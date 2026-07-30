@@ -336,14 +336,16 @@
   padding: 0 0 var(--home-grid-bottom-trim);
 }
 
+/* 三种网格模式统一使用 --home-grid-bottom-trim：此前这里硬编码 1px，
+   把变量在首页/组件页架空，导致底部留白只对纯图标翻页生效。 */
 .icon-grid-page1 {
-  padding-bottom: 1px;
+  padding-bottom: var(--home-grid-bottom-trim);
 }
 
 
 /* Explicit grid mode (used when widgets present) */
 .icon-grid-explicit {
-  padding-bottom: 1px;
+  padding-bottom: var(--home-grid-bottom-trim);
 }
 
 .icon-grid .widget-glass {

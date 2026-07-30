@@ -58,6 +58,27 @@
   z-index: 1;
 }
 
+/* ── 跨行组件高度自适应 ──
+   网格行高是「可用高度 ÷ 6」的弹性值，随设备屏幕与底部留白变化；
+   旧的固定步长公式（图标 62px + 行距 3px）只在行高恰为 65px 时与图标行对齐，
+   屏幕更高或调整行距后组件就与行错位。改为：外层 wrap 撑满所占网格行，
+   玻璃卡片吃满 wrap 剩余高度（底部 label 保留原位），任何设备下都随行对齐。
+   宽度公式不变；单行组件不受影响；自由脱轨(freestyle)/DIY 组件按美术
+   比例设计，保持原固定尺寸不拉伸（wrap 撑满仅影响其 label 落点）。 */
+.icon-grid .widget-wrap:is(.widget-2x1-wrap, .widget-2x2-wrap, .widget-2x3-wrap, .widget-2x4-wrap,
+  .widget-3x2-wrap, .widget-3x4-wrap, .widget-4x2-wrap, .widget-4x3-wrap,
+  .widget-4x4-wrap, .widget-5x4-wrap, .widget-6x4-wrap) {
+  align-self: stretch;
+}
+
+.icon-grid .widget-wrap .widget-glass:not(.widget-freestyle):is(.widget-2x1, .widget-2x2, .widget-2x3, .widget-2x4,
+  .widget-3x2, .widget-3x4, .widget-4x2, .widget-4x3,
+  .widget-4x4, .widget-5x4, .widget-6x4) {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .widget-full-bleed {
   padding: 0 !important;
 }
