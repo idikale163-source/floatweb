@@ -3395,6 +3395,15 @@
    上层背景图与下层白卡各占一半、通宽平齐，头像圆环骑缝悬浮；
    阴影跟随 --desktop-shadow-strength 主题开关，字号跟随 --app-text-scale。
 ---------------------------------------------------- */
+/* 占位仍按 4x4 整行，但卡片本体压到约 3.5 行高（整四行太高），
+   第四行剩余半行留白；比 4x4 公式多一个类名权重以覆盖通用高度 */
+.icon-grid .widget-glass[data-widget-type="profileCard"] {
+  height: calc(var(--slot-icon-height) + (2.5 * var(--slot-row-step)));
+}
+
+.widget-preview-mode[data-widget-type="profileCard"] {
+  height: 307px;
+}
 .wg-profile-card {
   position: relative;
   width: 100%;
