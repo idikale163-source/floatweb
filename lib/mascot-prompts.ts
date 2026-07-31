@@ -712,6 +712,7 @@ export const WIDGET_PROMPT = `===== 桌面组件写作规范 =====
   - 页面里的 <input type="file" accept="image/*"> 会被自动接线：用户选图后自动压缩、存入配置，并回填到就近的 <img> 或背景元素；配置键取 input 的 data-config-key / name / id
   - iframe 加载时配置已注入完毕，脚本里直接同步读取即可
 · 点击、动画、定时器都可用；动画优先 CSS 实现，注意省电
+· 宿主会给组件注入默认样式：文本不可选中、长按不弹系统菜单（保证桌面长按拖拽体验）。确需可选中复制的文本给元素加 data-selectable 属性；input/textarea 输入不受影响
 
 ===== 工作流 =====
 1. 「创建DIY组件」默认自动摆上目标页第一个空位（autoPlace=false 只建模板不上桌）

@@ -11,6 +11,18 @@ type Props = {
 
 const CODE_WIDGET_BRIDGE_SOURCE = "ai-phone-diy-widget";
 
+/** 注入 iframe 文档的守护样式：iframe 是独立文档，宿主工作区的 user-select:none
+ *  管不进来——不禁掉的话长按组件文字会选中并呼出系统菜单，打断长按拖拽。
+ *  需要可选文本的元素用 input/textarea/[contenteditable]/[data-selectable] 豁免。 */
+export const DIY_WIDGET_GUARD_STYLE = `<style>
+:root { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea, [contenteditable], [data-selectable] {
+  -webkit-user-select: auto;
+  user-select: auto;
+  -webkit-touch-callout: default;
+}
+</style>`;
+
 function inlineJson(value: unknown): string {
   try {
     return (JSON.stringify(value) ?? "null")
@@ -23,7 +35,7 @@ function inlineJson(value: unknown): string {
 }
 
 function injectCodeWidgetBridge(html: string, widgetId: string, config: Record<string, unknown> | undefined): string {
-  const bridge = `<script>
+  const bridge = `${DIY_WIDGET_GUARD_STYLE}<script>
 (function(){
   var SOURCE = ${inlineJson(CODE_WIDGET_BRIDGE_SOURCE)};
   var HOST_SOURCE = SOURCE + "-host";
@@ -271,6 +283,13 @@ function injectCodeWidgetBridge(html: string, widgetId: string, config: Record<s
     setTimeout(autoWireImageUploads, 100);
     setTimeout(autoWireImageUploads, 1000);
   }
+
+  // 安卓长按会走 contextmenu 呼出系统菜单，同样会打断宿主的长按拖拽
+  document.addEventListener("contextmenu", function(event) {
+    var target = event.target;
+    if (target && target.closest && target.closest("input, textarea, [contenteditable], [data-selectable]")) return;
+    event.preventDefault();
+  }, true);
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", start);

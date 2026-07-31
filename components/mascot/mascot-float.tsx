@@ -14,6 +14,7 @@ import {
 } from "@/lib/mascot-state";
 import { getMascotContext, subscribeMascotContext } from "@/lib/mascot-context";
 import { mascotNavigate, DIY_WIDGET_PREVIEW_EVENT, type DiyWidgetPreviewEventDetail, type DiyWidgetPreviewRequest } from "@/lib/mascot-events";
+import { DIY_WIDGET_GUARD_STYLE } from "@/components/widgets/diy-widget-renderer";
 import {
   clearMascotToolHistoryMessages,
   deleteMascotMessageWithLinkedTools,
@@ -168,7 +169,7 @@ function DiyWidgetPreviewDialog({ request, onClose }: { request: DiyWidgetPrevie
         <div style={{ width: w * scale, height: h * scale, margin: "0 auto", borderRadius: 18, overflow: "hidden", background: "rgba(255,255,255,0.06)" }}>
           <div style={{ width: w, height: h, transform: `scale(${scale})`, transformOrigin: "top left" }}>
             <iframe
-              srcDoc={request.htmlString}
+              srcDoc={DIY_WIDGET_GUARD_STYLE + request.htmlString}
               sandbox="allow-scripts"
               style={{ width: "100%", height: "100%", border: "none", display: "block", background: "transparent" }}
               title="DIY 组件预览"
