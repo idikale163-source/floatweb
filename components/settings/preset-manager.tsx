@@ -476,6 +476,112 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
 
     const { containerRef: promptListRef, onTouchStart: onPromptTouchStart, onTouchMove: onPromptTouchMove, onTouchEnd: onPromptTouchEnd } = useTouchSort(handlePromptReorder);
 
+    // ── 条目左滑操作（微信式：左滑露出「新增/删除」） ──
+    const SWIPE_ACTIONS_WIDTH = 144; // 两个 72px 按钮
+    const [swipingPromptId, setSwipingPromptId] = useState<string | null>(null);
+    const [openSwipePromptId, setOpenSwipePromptId] = useState<string | null>(null);
+    const swipeGesture = useRef<{ id: string; pointerId: number; startX: number; startY: number; base: number; locked: boolean; offset: number } | null>(null);
+    const suppressEntryClickRef = useRef(false);
+
+    const closeSwipe = () => {
+        setOpenSwipePromptId(null);
+        setSwipingPromptId(null);
+    };
+
+    const getSwipeCard = (wrapper: HTMLElement) =>
+        wrapper.querySelector(":scope > .ui-entry-card") as HTMLElement | null;
+
+    const handleSwipePointerDown = (e: React.PointerEvent<HTMLDivElement>, id: string) => {
+        suppressEntryClickRef.current = false;
+        if (editingPromptId === id) return;
+        if (openSwipePromptId && openSwipePromptId !== id) closeSwipe();
+        const base = openSwipePromptId === id ? -SWIPE_ACTIONS_WIDTH : 0;
+        swipeGesture.current = { id, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, base, locked: false, offset: base };
+    };
+
+    const handleSwipePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        const g = swipeGesture.current;
+        if (!g || g.pointerId !== e.pointerId) return;
+        const dx = e.clientX - g.startX;
+        const dy = e.clientY - g.startY;
+        if (!g.locked) {
+            // 竖向意图（滚动/长按排序）时放弃左滑；横向超过阈值才锁定
+            if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) {
+                swipeGesture.current = null;
+                return;
+            }
+            if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) return;
+            g.locked = true;
+            setSwipingPromptId(g.id);
+            try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+        }
+        if (e.cancelable) e.preventDefault();
+        const card = getSwipeCard(e.currentTarget);
+        if (!card) return;
+        g.offset = Math.min(0, Math.max(-SWIPE_ACTIONS_WIDTH, g.base + dx));
+        card.style.transition = "none";
+        card.style.transform = `translateX(${g.offset}px)`;
+    };
+
+    const handleSwipePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+        const g = swipeGesture.current;
+        if (!g || g.pointerId !== e.pointerId) return;
+        swipeGesture.current = null;
+        if (!g.locked) return;
+        suppressEntryClickRef.current = true;
+        const open = g.offset < -SWIPE_ACTIONS_WIDTH / 2;
+        const card = getSwipeCard(e.currentTarget);
+        if (card) {
+            card.style.transition = "transform 0.2s ease";
+            card.style.transform = `translateX(${open ? -SWIPE_ACTIONS_WIDTH : 0}px)`;
+        }
+        if (open) {
+            setOpenSwipePromptId(g.id);
+        } else {
+            const id = g.id;
+            setOpenSwipePromptId(null);
+            // 等回弹动画结束再卸载按钮，避免闪烁
+            window.setTimeout(() => setSwipingPromptId(cur => (cur === id ? null : cur)), 220);
+        }
+    };
+
+    const insertPromptAfter = (preset: PresetConfig, afterIdentifier: string) => {
+        const newPrompt = {
+            identifier: `prompt-${Date.now()}`,
+            name: "新提示词",
+            role: "system" as const,
+            content: "",
+            injection_depth: 0,
+            enabled: true,
+        };
+        // 与渲染一致的显示顺序（prompt_order + 孤儿条目）
+        const ordered = preset.prompt_order && preset.prompt_order.length > 0
+            ? preset.prompt_order.map(entry => preset.prompts.find(p => p.identifier === entry.identifier)).filter((p): p is Prompt => !!p)
+            : [...(preset.prompts || [])];
+        const orderedIds = new Set(ordered.map(p => p.identifier));
+        const orphans = (preset.prompts || []).filter(p => !orderedIds.has(p.identifier));
+        const displayed = [...ordered, ...orphans];
+        const idx = displayed.findIndex(p => p.identifier === afterIdentifier);
+        if (idx >= 0) displayed.splice(idx + 1, 0, newPrompt);
+        else displayed.push(newPrompt);
+        const newOrder = displayed.map(p => ({
+            identifier: p.identifier,
+            enabled: p.identifier === newPrompt.identifier
+                ? true
+                : (preset.prompt_order
+                    ? (preset.prompt_order.find(o => o.identifier === p.identifier)?.enabled ?? p.enabled)
+                    : p.enabled),
+        }));
+        updatePreset(preset.id, { prompts: displayed, prompt_order: newOrder });
+        closeSwipe();
+        setEditingPromptId(newPrompt.identifier);
+        window.setTimeout(() => {
+            promptListRef.current
+                ?.querySelector(`[data-prompt-id="${newPrompt.identifier}"]`)
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 80);
+    };
+
     const removePreset = (id: string) => {
         const remaining = presets.filter(p => p.id !== id);
         persist(remaining);
@@ -825,10 +931,44 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                             const selectedTagGroup = matchedTagGroup ?? tagGroups[0];
                                             const selectedTagMinor = matchedTagGroup ? getPromptTagMinor(prompt, selectedTagGroup) : selectedTagGroup.minors[0];
 
+                                            const isSwipeRevealed = swipingPromptId === prompt.identifier || openSwipePromptId === prompt.identifier;
                                             return (
                                                 <div
                                                     key={prompt.identifier}
+                                                    data-prompt-id={prompt.identifier}
+                                                    className="ui-swipe-wrap"
                                                     onTouchStart={isEditing ? undefined : (e) => onPromptTouchStart(index, e)}
+                                                    onPointerDown={isEditing ? undefined : (e) => handleSwipePointerDown(e, prompt.identifier)}
+                                                    onPointerMove={isEditing ? undefined : handleSwipePointerMove}
+                                                    onPointerUp={isEditing ? undefined : handleSwipePointerEnd}
+                                                    onPointerCancel={isEditing ? undefined : handleSwipePointerEnd}
+                                                >
+                                                    {isSwipeRevealed && (
+                                                        <div className="ui-swipe-actions">
+                                                            <button
+                                                                type="button"
+                                                                className="ui-swipe-action"
+                                                                data-variant="insert"
+                                                                onClick={() => insertPromptAfter(preset, prompt.identifier)}
+                                                            >
+                                                                <Plus size={18} strokeWidth={2} />
+                                                                <span>新增</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="ui-swipe-action"
+                                                                data-variant="delete"
+                                                                onClick={() => {
+                                                                    setConfirmDeleteEntry(prompt.identifier);
+                                                                    closeSwipe();
+                                                                }}
+                                                            >
+                                                                <Trash2 size={18} strokeWidth={2} />
+                                                                <span>删除</span>
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                    <div
                                                     className="ui-entry-card"
                                                     data-active={isEditing}
                                                     data-disabled={!effectiveEnabled}
@@ -836,11 +976,23 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                         gap: isEditing ? "12px" : "0px",
                                                         userSelect: isEditing ? undefined : "none",
                                                         WebkitUserSelect: isEditing ? undefined : "none",
+                                                        transform: `translateX(${openSwipePromptId === prompt.identifier ? -SWIPE_ACTIONS_WIDTH : 0}px)`,
+                                                        transition: "transform 0.2s ease",
                                                     }}
                                                 >
                                                     {/* Summary Row */}
                                                     <div
-                                                        onClick={() => setEditingPromptId(isEditing ? null : prompt.identifier)}
+                                                        onClick={() => {
+                                                            if (suppressEntryClickRef.current) {
+                                                                suppressEntryClickRef.current = false;
+                                                                return;
+                                                            }
+                                                            if (openSwipePromptId || swipingPromptId) {
+                                                                closeSwipe();
+                                                                return;
+                                                            }
+                                                            setEditingPromptId(isEditing ? null : prompt.identifier);
+                                                        }}
                                                         className="flex justify-between items-start gap-2 cursor-pointer"
                                                     >
                                                         <div className="flex gap-3 flex-1 min-w-0 items-start" style={{ cursor: isEditing ? "default" : "grab" }}>
@@ -914,15 +1066,6 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                                 />
                                                                 <span className="ui-mini-toggle-thumb" />
                                                             </label>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setConfirmDeleteEntry(prompt.identifier);
-                                                                }}
-                                                                className="ui-link-btn p-1" data-variant="danger"
-                                                            >
-                                                                <Trash2 size={16} />
-                                                            </button>
                                                         </div>
                                                     </div>
 
@@ -1107,6 +1250,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                             </div>
                                                         </div>
                                                     )}
+                                                    </div>
                                                 </div>
                                             );
                                         })}
