@@ -6,7 +6,7 @@ import { useRef, useState, type ReactNode } from "react";
 // 横向快滑露出操作按钮；竖向滚动、长按拖动等手势不受影响。
 // 一个列表共享一个 controller，保证同时只有一行处于展开状态。
 
-const DEFAULT_ACTIONS_WIDTH = 144; // 两个 72px 按钮
+const DEFAULT_ACTIONS_WIDTH = 248; // 四个 62px 按钮
 
 interface SwipeGesture {
     id: string;
