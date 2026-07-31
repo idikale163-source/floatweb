@@ -2888,6 +2888,23 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     }
   }, [editMode]);
 
+  // DIY code 组件的长按发生在沙箱 iframe 里，宿主收不到指针事件；
+  // 桥接脚本检测到长按后 postMessage，这里代为进入编辑态。
+  // 进入编辑态后 iframe 会放弃指针事件（CSS），后续拖拽走宿主正常链路。
+  useEffect(() => {
+    function handleDiyLongPress(event: MessageEvent) {
+      const data = event.data as { source?: unknown; type?: unknown; widgetId?: unknown } | null;
+      if (!data || typeof data !== "object") return;
+      if (data.source !== "ai-phone-diy-widget" || data.type !== "longPress") return;
+      if (typeof data.widgetId !== "string") return;
+      if (!widgetsRef.current.some((w) => w.id === data.widgetId)) return;
+      setEditMode(true);
+      try { navigator.vibrate?.(30); } catch { /* ignore */ }
+    }
+    window.addEventListener("message", handleDiyLongPress);
+    return () => window.removeEventListener("message", handleDiyLongPress);
+  }, []);
+
   // Build a map of icon skins (icon ID -> data URL) for the theme app preview
   const iconSkinUrls = useMemo(() => {
     const map: Record<string, string | null> = {};

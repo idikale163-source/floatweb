@@ -291,6 +291,33 @@ function injectCodeWidgetBridge(html: string, widgetId: string, config: Record<s
     event.preventDefault();
   }, true);
 
+  // 长按进入桌面编辑态：指针事件被本 iframe 吃掉、宿主检测不到长按，
+  // 这里代为检测（500ms 内位移 <10px），命中后通知宿主。
+  // 输入/可选中元素与标了 data-no-longpress 的交互区不参与。
+  var lpTimer = null;
+  var lpX = 0;
+  var lpY = 0;
+  function cancelLongPress() {
+    if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+  }
+  document.addEventListener("pointerdown", function(event) {
+    var target = event.target;
+    if (target && target.closest && target.closest("input, textarea, [contenteditable], [data-selectable], [data-no-longpress]")) return;
+    lpX = event.clientX;
+    lpY = event.clientY;
+    cancelLongPress();
+    lpTimer = setTimeout(function() {
+      lpTimer = null;
+      parent.postMessage({ source: SOURCE, type: "longPress", widgetId: widgetId }, "*");
+    }, 500);
+  }, true);
+  document.addEventListener("pointermove", function(event) {
+    if (!lpTimer) return;
+    if (Math.abs(event.clientX - lpX) > 10 || Math.abs(event.clientY - lpY) > 10) cancelLongPress();
+  }, true);
+  document.addEventListener("pointerup", cancelLongPress, true);
+  document.addEventListener("pointercancel", cancelLongPress, true);
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", start);
   } else {
