@@ -18,6 +18,7 @@ import { CUSTOM_APPS_UPDATED_EVENT, loadInstalledCustomApps } from "@/lib/custom
 import type { InstalledCustomApp } from "@/lib/custom-app-types";
 import { SettingsContext } from "../phone-settings-app";
 import { ConfirmDialog, TextExpandModal } from "@/components/ui/modal";
+import { SwipeActionRow, useSwipeActions } from "@/components/ui/swipe-actions";
 import { notifyMascotPageContext } from "@/lib/mascot-events";
 
 function getRuleTags(rule: Pick<RegexRule, "tags">): string[] {
@@ -261,19 +262,41 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
 
     const visibleRules = activeGroup?.rules || [];
 
+    // ── 规则左滑操作（微信式：左滑露出「新增/删除」） ──
+    const swipe = useSwipeActions();
+
+    const makeNewRule = (): RegexRule => ({
+        id: `regex-rule-${Date.now()}`,
+        scriptName: "新正则规则",
+        findRegex: "",
+        replaceString: "",
+        disabled: false,
+        placement: [1],
+        tags: [...DEFAULT_REGEX_TAGS],
+    });
+
     const addRule = () => {
         if (!activeGroup) return;
-        const newRule: RegexRule = {
-            id: `regex-rule-${Date.now()}`,
-            scriptName: "新正则规则",
-            findRegex: "",
-            replaceString: "",
-            disabled: false,
-            placement: [1],
-            tags: [...DEFAULT_REGEX_TAGS],
-        };
+        const newRule = makeNewRule();
         updateGroup(activeGroup.id, { rules: [newRule, ...(activeGroup.rules || [])] });
         setEditingRuleId(newRule.id);
+    };
+
+    const insertRuleAfter = (afterId: string) => {
+        if (!activeGroup) return;
+        const newRule = makeNewRule();
+        const rules = [...(activeGroup.rules || [])];
+        const idx = rules.findIndex(r => r.id === afterId);
+        if (idx >= 0) rules.splice(idx + 1, 0, newRule);
+        else rules.push(newRule);
+        updateGroup(activeGroup.id, { rules });
+        swipe.close();
+        setEditingRuleId(newRule.id);
+        window.setTimeout(() => {
+            rxContainerRef.current
+                ?.querySelector(`[data-swipe-id="${CSS.escape(newRule.id)}"]`)
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 80);
     };
 
     const updateRule = (id: string, updates: Partial<RegexRule>) => {
@@ -495,8 +518,38 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                         const isEditing = editingRuleId === rule.id;
 
                                         return (
-                                            <div
+                                            <SwipeActionRow
                                                 key={rule.id}
+                                                controller={swipe}
+                                                id={rule.id}
+                                                disabled={isEditing}
+                                                actions={
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            className="ui-swipe-action"
+                                                            data-variant="insert"
+                                                            onClick={() => insertRuleAfter(rule.id)}
+                                                        >
+                                                            <Plus size={18} strokeWidth={2} />
+                                                            <span>新增</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="ui-swipe-action"
+                                                            data-variant="delete"
+                                                            onClick={() => {
+                                                                setConfirmDeleteTarget({ type: 'rule', id: rule.id });
+                                                                swipe.close();
+                                                            }}
+                                                        >
+                                                            <Trash2 size={18} strokeWidth={2} />
+                                                            <span>删除</span>
+                                                        </button>
+                                                    </>
+                                                }
+                                            >
+                                            <div
                                                 className="ui-entry-card"
                                                 data-active={isEditing ? "true" : undefined}
                                                 data-disabled={rule.disabled && !isEditing ? "true" : undefined}
@@ -504,7 +557,14 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                             >
                                                 <div className="flex justify-between items-start">
                                                     <button
-                                                        onClick={() => setEditingRuleId(isEditing ? null : rule.id)}
+                                                        onClick={() => {
+                                                            if (swipe.consumeClickSuppression()) return;
+                                                            if (swipe.openId || swipe.swipingId) {
+                                                                swipe.close();
+                                                                return;
+                                                            }
+                                                            setEditingRuleId(isEditing ? null : rule.id);
+                                                        }}
                                                         className="flex gap-3 flex-1 bg-none border-none text-left cursor-pointer p-0"
                                                     >
                                                         <div className="mt-0.5 ui-entry-icon">
@@ -540,13 +600,6 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                             />
                                                             <span className="ui-mini-toggle-thumb" />
                                                         </label>
-                                                        <button
-                                                            onClick={() => setConfirmDeleteTarget({ type: 'rule', id: rule.id })}
-                                                            className="ui-link-btn"
-                                                            data-variant="danger"
-                                                        >
-                                                            <Trash2 size={18} />
-                                                        </button>
                                                     </div>
                                                 </div>
 
@@ -753,6 +806,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                     </div>
                                                 )}
                                             </div>
+                                            </SwipeActionRow>
                                         )
                                     })
                                 )}

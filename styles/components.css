@@ -3861,7 +3861,7 @@
   overflow: hidden;
   touch-action: pan-y;
 }
-.ui-swipe-wrap > .ui-entry-card {
+.ui-swipe-content {
   position: relative;
   z-index: 1;
 }

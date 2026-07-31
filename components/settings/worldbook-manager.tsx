@@ -14,6 +14,7 @@ import { loadCharacters } from "@/lib/character-storage";
 import type { WorldBookConfig, WorldBookEntry } from "@/lib/settings-types";
 import { SettingsContext } from "../phone-settings-app";
 import { ConfirmDialog, TextExpandModal } from "@/components/ui/modal";
+import { SwipeActionRow, useSwipeActions } from "@/components/ui/swipe-actions";
 import { notifyMascotPageContext } from "@/lib/mascot-events";
 
 export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {}) {
@@ -323,25 +324,47 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
 
     const visibleEntries = activeBook?.entries || [];
 
+    // ── 条目左滑操作（微信式：左滑露出「新增/删除」） ──
+    const swipe = useSwipeActions();
+
+    const makeNewEntry = (): WorldBookEntry => ({
+        uid: `wb-entry-${Date.now()}`,
+        key: "",
+        content: "",
+        comment: "",
+        use_regex: false,
+        disable: false,
+        constant: false,
+        position: 4,
+        depth: 4,
+        probability: 100,
+        useProbability: false,
+        role: 0,
+        insertion_order: 50,
+    });
+
     const addEntry = () => {
         if (!activeBook) return;
-        const newEntry: WorldBookEntry = {
-            uid: `wb-entry-${Date.now()}`,
-            key: "",
-            content: "",
-            comment: "",
-            use_regex: false,
-            disable: false,
-            constant: false,
-            position: 4,
-            depth: 4,
-            probability: 100,
-            useProbability: false,
-            role: 0,
-            insertion_order: 50,
-        };
+        const newEntry = makeNewEntry();
         updateBook(activeBook.id, { entries: [newEntry, ...(activeBook.entries || [])] });
         setEditingUid(newEntry.uid);
+    };
+
+    const insertEntryAfter = (afterUid: string) => {
+        if (!activeBook) return;
+        const newEntry = makeNewEntry();
+        const entries = [...(activeBook.entries || [])];
+        const idx = entries.findIndex(e => e.uid === afterUid);
+        if (idx >= 0) entries.splice(idx + 1, 0, newEntry);
+        else entries.push(newEntry);
+        updateBook(activeBook.id, { entries });
+        swipe.close();
+        setEditingUid(newEntry.uid);
+        window.setTimeout(() => {
+            wbContainerRef.current
+                ?.querySelector(`[data-swipe-id="${CSS.escape(newEntry.uid)}"]`)
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 80);
     };
 
     const updateEntry = (uid: string, updates: Partial<WorldBookEntry>) => {
@@ -480,8 +503,38 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                         const isEditing = editingUid === entry.uid;
 
                                         return (
-                                            <div
+                                            <SwipeActionRow
                                                 key={entry.uid}
+                                                controller={swipe}
+                                                id={entry.uid}
+                                                disabled={isEditing}
+                                                actions={
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            className="ui-swipe-action"
+                                                            data-variant="insert"
+                                                            onClick={() => insertEntryAfter(entry.uid)}
+                                                        >
+                                                            <Plus size={18} strokeWidth={2} />
+                                                            <span>新增</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="ui-swipe-action"
+                                                            data-variant="delete"
+                                                            onClick={() => {
+                                                                setConfirmDeleteTarget({ type: 'entry', id: entry.uid });
+                                                                swipe.close();
+                                                            }}
+                                                        >
+                                                            <Trash2 size={18} strokeWidth={2} />
+                                                            <span>删除</span>
+                                                        </button>
+                                                    </>
+                                                }
+                                            >
+                                            <div
                                                 className="ui-entry-card"
                                                 data-active={isEditing ? "true" : undefined}
                                                 data-disabled={entry.disable && !isEditing ? "true" : undefined}
@@ -490,7 +543,14 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                                 {/* Summary Row */}
                                                 <div className="flex justify-between items-start">
                                                     <button
-                                                        onClick={() => setEditingUid(isEditing ? null : entry.uid)}
+                                                        onClick={() => {
+                                                            if (swipe.consumeClickSuppression()) return;
+                                                            if (swipe.openId || swipe.swipingId) {
+                                                                swipe.close();
+                                                                return;
+                                                            }
+                                                            setEditingUid(isEditing ? null : entry.uid);
+                                                        }}
                                                         className="flex gap-3 flex-1 bg-none border-none text-left cursor-pointer p-0"
                                                     >
                                                         <div className="mt-0.5 ui-entry-icon">
@@ -526,13 +586,6 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                                             />
                                                             <div className="ui-mini-toggle-thumb" />
                                                         </label>
-                                                        <button
-                                                            onClick={() => setConfirmDeleteTarget({ type: 'entry', id: entry.uid })}
-                                                            className="ui-link-btn"
-                                                            data-variant="danger"
-                                                        >
-                                                            <Trash2 size={18} />
-                                                        </button>
                                                     </div>
                                                 </div>
 
@@ -665,6 +718,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                                     </div>
                                                 )}
                                             </div>
+                                            </SwipeActionRow>
                                         )
                                     })
                                 )}
