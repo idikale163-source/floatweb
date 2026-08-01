@@ -205,8 +205,13 @@ async function downloadIncomingWeixinImage(mediaItem) {
   if (cipherBytes.length === 0 || cipherBytes.length % 16 !== 0) throw new Error("incoming_image_bad_cipher");
   if (cipherBytes.length > INCOMING_IMAGE_MAX_BYTES) throw new Error("incoming_image_too_large");
 
-  const decipher = createDecipheriv("aes-128-ecb", key, null);
-  const bytes = Buffer.concat([decipher.update(cipherBytes), decipher.final()]);
+  // Supabase edge-runtime 的 node:crypto 兼容层不接受 iv=null / Buffer 子类，
+  // 统一传纯 Uint8Array + 零长度 IV（Node 与 Deno 均兼容）。
+  const decipher = createDecipheriv("aes-128-ecb", new Uint8Array(key), new Uint8Array(0));
+  const bytes = Buffer.concat([
+    Buffer.from(decipher.update(new Uint8Array(cipherBytes))),
+    Buffer.from(decipher.final()),
+  ]);
   const mimeType = sniffImageMimeType(bytes);
   if (!mimeType) throw new Error("incoming_image_not_image");
   return { bytes, mimeType };
@@ -1481,8 +1486,12 @@ function md5(data) {
 }
 
 function encryptAesEcb(plaintext, key) {
-  const cipher = createCipheriv("aes-128-ecb", key, null);
-  return Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  // 同 downloadIncomingWeixinImage：纯 Uint8Array + 零长度 IV，兼容 Supabase edge-runtime
+  const cipher = createCipheriv("aes-128-ecb", new Uint8Array(key), new Uint8Array(0));
+  return Buffer.concat([
+    Buffer.from(cipher.update(new Uint8Array(plaintext))),
+    Buffer.from(cipher.final()),
+  ]);
 }
 
 function aesEcbPaddedSize(plaintextSize) {
