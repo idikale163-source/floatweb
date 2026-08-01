@@ -39,7 +39,8 @@ import type { MemoryConfig, MemoryEntry } from "./memory-types";
 import { retrieveCoreMemoriesForPrompt, retrieveMemoriesForPrompt } from "./memory-service";
 import { formatCoreMemories, formatLongTermMemories } from "./memory-injector";
 import { prepareShortTermContext, type RecentBlock, type UnifiedRecentItem } from "./short-term-assembler";
-import { assemblePromptPayload, type LLMMessage } from "./llm-prompt-assembler";
+import { applyEditRegex, assemblePromptPayload, type LLMMessage } from "./llm-prompt-assembler";
+import { MacroEngine } from "./macro-engine";
 import {
   appendEmptyGenerateGuardMessage,
   applyVisionImagePromptLimit,
@@ -916,7 +917,7 @@ export async function syncAllWeixinBotRuntimesToCloud(
 export async function pullWeixinCloudMessagesFromCloud(
   options?: { cloudConfig?: CloudBackupConfig; botId?: string; limitPerBot?: number },
 ): Promise<WeixinCloudMessagePullResult> {
-  await hydrateChatStorage();
+  await Promise.all([hydrateChatStorage(), ensureSettingsStorageHydrated()]);
   const cloudConfig = options?.cloudConfig ?? loadCloudBackupConfig();
   if (!isCloudBackupConfigured(cloudConfig)) {
     throw new Error("请先在数据管理里配置 Supabase 云端备份。");
@@ -1271,6 +1272,24 @@ function importCloudStoredMessage(stored: WeixinCloudStoredMessage): { inserted:
   return { inserted: upsertImportedChatMessage(msg).inserted, sessionId: session.id };
 }
 
+/** 导入前按角色绑定的正则脚本整形（编辑类、placement=2），与聊天室生成/编辑路径同一套处理。 */
+function normalizeCloudAssistantContentForImport(stored: WeixinCloudStoredMessage, characterName: string): string {
+  const content = stored.content;
+  try {
+    const bindings = loadBindingConfig();
+    const slot = resolveBinding(bindings, stored.characterId, "chat");
+    const allRegexes = loadRegexes();
+    const regexes = (slot.regexIds || [])
+      .map(id => allRegexes.find(item => item.id === id))
+      .filter((item): item is RegexConfig => Boolean(item));
+    if (regexes.length === 0) return content;
+    const macroEngine = new MacroEngine(characterName, resolveUserIdentity(stored.characterId)?.name || "你");
+    return applyEditRegex(content, regexes, 2, { macroEngine, activeTags: ["chat", "text"] });
+  } catch {
+    return content;
+  }
+}
+
 function importCloudAssistantMessage(
   stored: WeixinCloudStoredMessage,
   session: ChatSession,
@@ -1284,7 +1303,10 @@ function importCloudAssistantMessage(
   if (existing) return { inserted: false, sessionId: session.id };
 
   const characterName = loadCharacters().find(item => item.id === stored.characterId)?.name || "对方";
-  const parsed = parseAIResponse(stored.content, getLatestCharacterStateValues(stored.characterId));
+  // 与聊天室编辑/生成路径保持一致：先跑角色绑定的编辑类正则整形，再解析。
+  // 否则状态栏等内容与正则美化脚本期望的格式对不上（导入的消息会显示成纯文本）。
+  const normalizedContent = normalizeCloudAssistantContentForImport(stored, characterName);
+  const parsed = parseAIResponse(normalizedContent, getLatestCharacterStateValues(stored.characterId));
   const visibleParts = parsed.parts.filter(part =>
     part.mediaType !== "voice_call"
     && part.mediaType !== "video_call"
@@ -1334,7 +1356,7 @@ function importCloudAssistantMessage(
   if (messages.length === 0) {
     messages.push(makeCloudImportedMessage(stored, session.id, createdAt, 0, {
       role: "assistant",
-      content: stored.content,
+      content: normalizedContent,
     }));
   }
 
@@ -1359,6 +1381,10 @@ function makeCloudImportedMessage(
     sessionId,
     status: "sent",
     createdAt: new Date(safeTime + index).toISOString(),
+    // 同一条云端回复的所有分段共享批次：长按编辑时可以像普通消息一样
+    // 编辑整个批次的原始输出（含状态栏），保存后重新分段。
+    responseBatchId: `wxcloud_batch_${cloudMessageId(stored)}`,
+    rawResponseText: stored.content,
     ...patch,
     cloudSync: {
       source: "weixin-cloud",
