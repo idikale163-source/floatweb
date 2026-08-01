@@ -37,6 +37,15 @@
 select cron.unschedule('ai-phone-weixin-assistant');
 ```
 
+## 自更新机制
+
+云函数是「加载器 + 内置逻辑」结构：每次运行优先动态加载备份桶里的
+`weixin-cloud/function-core.mjs`（小手机每次同步运行包时自动上传的最新
+`assistant-core.mjs`，60 秒内存缓存），加载失败回退到函数内置的拼接版本。
+因此**函数只需部署一次**，后续核心逻辑更新随小手机同步自动生效；只有
+HTTP 入口层（cloud-function-wrapper.mjs）本身变更时才需要重新粘贴部署。
+心跳与轮询响应里的 `codeSource` 字段标明当前用的是 bucket 还是 bundled 版本。
+
 ## 运行细节
 
 - **冷启动**：Bot 长时间无人轮询时，微信服务器会把它标记为离线（微信里显示

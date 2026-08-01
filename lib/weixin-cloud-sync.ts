@@ -279,6 +279,8 @@ export type WeixinCloudAssistantHeartbeat = {
   stored?: number;
   sent?: number;
   elapsedMs?: number;
+  /** bucket = 正在使用小手机同步的最新核心；bundled = 使用函数内置版本 */
+  codeSource?: string;
 };
 
 function requireCloudBackupConfig(): CloudBackupConfig {
@@ -943,7 +945,24 @@ export async function syncAllWeixinBotRuntimesToCloud(
   for (const bot of bots) {
     results.push(await syncWeixinBotRuntimeToCloud(bot.id, options));
   }
+  // 顺带把最新核心逻辑传到桶里：云函数的自更新加载器会优先使用它，
+  // 这样函数部署一次之后，逻辑更新随同步自动生效。失败不阻塞运行包同步。
+  await syncWeixinCloudFunctionCore(options?.cloudConfig).catch(() => {});
   return results;
+}
+
+const WEIXIN_CLOUD_CORE_CODE_PATH = `${WEIXIN_CLOUD_PREFIX}/function-core.mjs`;
+
+/** 把站点携带的 assistant-core.mjs 上传到备份桶，供云函数运行时动态加载。 */
+export async function syncWeixinCloudFunctionCore(cloudConfig?: CloudBackupConfig): Promise<void> {
+  if (typeof window === "undefined") return;
+  const config = cloudConfig ?? loadCloudBackupConfig();
+  if (!isCloudBackupConfigured(config)) return;
+  const res = await fetch("/weixin-local-assistant/assistant-core.mjs", { cache: "no-store" });
+  if (!res.ok) return;
+  const code = await res.text();
+  if (!code.includes("export async function pollOnce")) return;
+  await putObject(config, WEIXIN_CLOUD_CORE_CODE_PATH, code, "text/javascript");
 }
 
 export async function pullWeixinCloudMessagesFromCloud(

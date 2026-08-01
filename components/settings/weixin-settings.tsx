@@ -712,6 +712,7 @@ export function WeixinSettings() {
                                 <span className="menu-desc !mt-0">① 打开 Supabase 控制台 → 左侧「Edge Functions」→ 点绿色「Deploy a new function」→ 选「Via Editor」；</span>
                                 <span className="menu-desc !mt-0">② 先把函数名改成 <b>{WEIXIN_CLOUD_FUNCTION_SLUG}</b>（不要用自动生成的随机名，部署后改名无效，只能删掉重建）；</span>
                                 <span className="menu-desc !mt-0">③ 清空编辑器里的示例代码，粘贴下方复制的代码，点「Deploy」。</span>
+                                <span className="menu-desc !mt-0">📌 只需部署这一次：之后小手机每次同步运行包都会把最新逻辑传到云端，函数自动使用，无需再改代码。建议在电脑上操作（手机浏览器里代码编辑器很难用）。</span>
                                 <button
                                     type="button"
                                     className="ui-btn ui-btn-outline mt-0.5 self-start whitespace-nowrap !gap-1.5 !px-3 !text-[12px]"

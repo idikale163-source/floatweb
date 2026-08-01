@@ -11,6 +11,9 @@
 //    生成的定时任务密钥做校验，与离线推送函数同一套做法；
 // 3. 回到小手机「微信设置」点「开启云端轮询」（函数会自己创建定时任务；
 //    如失败可用「手动方式：复制定时 SQL」到 SQL Editor 执行）。
+//
+// 本函数只需部署一次：运行时会优先动态加载备份桶里由小手机同步的最新核心
+// 逻辑（weixin-cloud/function-core.mjs），失败才回退到本文件内置版本。
 
 // 微信助手核心逻辑：本地助手（assistant.mjs）与云端助手（Supabase Edge Function）
 // 共用这一份代码。这里只依赖 fetch 与 node:crypto/node:buffer（Node 20+ 与 Deno 均支持），
@@ -1360,6 +1363,41 @@ export function errorMessage(err) {
 const CLOUD_CRON_SECRET_PATH = "weixin-cloud/cron-secret.json";
 const CLOUD_ASSISTANT_STATE_PATH = "weixin-cloud/state/cloud-assistant.json";
 const CLOUD_CRON_JOB_NAME = "ai-phone-weixin-assistant";
+const CLOUD_CORE_CODE_PATH = "weixin-cloud/function-core.mjs";
+
+// ── 自更新加载器 ──
+// 小手机同步运行包时会把最新的 assistant-core.mjs 上传到桶里；这里每次运行
+// 优先动态加载桶里的核心逻辑（60 秒内存缓存），失败则回退到本文件内置的
+// 拼接版本。这样部署一次之后，后续逻辑更新随小手机同步自动生效，
+// 用户无需再到 Supabase 里改代码。
+let cachedBucketCore = null;
+let cachedBucketCoreAt = 0;
+
+async function loadBucketCore(env) {
+  const now = Date.now();
+  if (cachedBucketCore && now - cachedBucketCoreAt < 60_000) return cachedBucketCore;
+  try {
+    const res = await fetch(storageObjectUrl(env, CLOUD_CORE_CODE_PATH), {
+      headers: supabaseHeaders(env),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const code = await res.text();
+    if (!code.includes("export async function pollOnce")) return null;
+    const bytes = new TextEncoder().encode(code);
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
+    const mod = await import(`data:application/javascript;base64,${btoa(bin)}`);
+    if (typeof mod.pollOnce !== "function" || typeof mod.setMediaReplyEnabled !== "function") return null;
+    cachedBucketCore = mod;
+    cachedBucketCoreAt = now;
+    return mod;
+  } catch {
+    return null;
+  }
+}
 // 单次调用的时间预算：Edge Function 免费档墙钟上限 150s，留足回复一个 Bot 的余量。
 const CLOUD_POLL_BUDGET_MS = 120_000;
 
@@ -1480,14 +1518,18 @@ Deno.serve(async (req) => {
     }
   }
 
+  // 优先使用桶里的最新核心逻辑，失败回退到内置版本。
+  const bucketCore = await loadBucketCore(env);
+  const core = bucketCore || { pollOnce, setMediaReplyEnabled };
+
   // 媒体路径（生图/TTS/CDN 上传加密）尚未在 Deno 环境实测，默认降级为文字；
   // 定时 SQL 里传 {"media": true} 可显式开启。
-  setMediaReplyEnabled(body?.media === true);
+  core.setMediaReplyEnabled(body?.media === true);
 
   const startedAt = Date.now();
   const targetBotId = typeof body?.bot === "string" && body.bot.trim() ? body.bot.trim() : undefined;
   try {
-    const result = await pollOnce(env, targetBotId, {
+    const result = await core.pollOnce(env, targetBotId, {
       deadlineAt: startedAt + CLOUD_POLL_BUDGET_MS,
       debug: body?.debug === true,
     });
@@ -1499,6 +1541,7 @@ Deno.serve(async (req) => {
       sent: rows.reduce((sum, row) => sum + Number(row.autoReply?.sent || 0), 0),
       skippedForDeadline: Number(result?.skippedForDeadline || 0),
       elapsedMs: Date.now() - startedAt,
+      codeSource: bucketCore ? "bucket" : "bundled",
       bots: rows.map(row => ({
         botId: row.botId,
         characterId: row.characterId,
