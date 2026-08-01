@@ -725,7 +725,8 @@ export function WeixinSettings() {
                             <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">4</span>
                             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                                 <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">验证部署</span>
-                                <span className="menu-desc !mt-0">点下方按钮立刻触发一轮「拉消息 → 生成 → 回复」；提示成功后，给 Bot 的微信发条消息，10～60 秒内应收到自动回复。</span>
+                                <span className="menu-desc !mt-0">点下方按钮立刻触发一轮「拉消息 → 生成 → 回复」；提示成功后，给 Bot 的微信发条消息试试。</span>
+                                <span className="menu-desc !mt-0">⏳ 刚部署（或停用较久后重新开启）时，微信恢复 Bot 在线状态需要几分钟：第一条回复可能要等上几分钟，期间 Bot 可能显示「暂无法连接」，都是正常现象。恢复后回复会稳定在 10～60 秒内。</span>
                                 <button
                                     type="button"
                                     className="ui-btn ui-btn-outline mt-0.5 self-start whitespace-nowrap !gap-1.5 !px-3 !text-[12px]"
@@ -793,6 +794,7 @@ export function WeixinSettings() {
                     </button>
                     {showCloudAssistantNotes && (
                         <div className="flex flex-col gap-2 rounded-[18px] bg-black/[0.03] p-3">
+                            <span className="menu-desc !mt-0">· 冷启动：刚部署或停用较久后重新开启时，微信侧要几分钟才把 Bot 恢复为在线，期间回复慢、可能显示「暂无法连接」；停用期间收到的消息不会补发。让定时任务一直跑着就不会再遇到。</span>
                             <span className="menu-desc !mt-0">· 与本地助手共用同一套逻辑和防重复锁，可同时开启互为备份。</span>
                             <span className="menu-desc !mt-0">· 目前云端版把照片、语音等媒体协议降级为文字发送。</span>
                             <span className="menu-desc !mt-0">· 微信 token 过期后仍需回到小手机重新扫码。</span>
