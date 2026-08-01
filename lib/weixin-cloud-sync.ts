@@ -396,33 +396,21 @@ export async function deployWeixinCloudFunction(accessToken: string): Promise<vo
   if (!codeRes.ok) throw new Error("获取云函数代码失败，请刷新页面重试。");
   const code = await codeRes.text();
 
-  const buildForm = () => {
-    const form = new FormData();
-    form.append("metadata", JSON.stringify({
-      name: WEIXIN_CLOUD_FUNCTION_SLUG,
-      entrypoint_path: "index.ts",
-      verify_jwt: false,
-    }));
-    form.append("file", new Blob([code], { type: "application/typescript" }), "index.ts");
-    return form;
-  };
-
-  const deployUrl = `https://api.supabase.com/v1/projects/${ref}/functions/deploy?slug=${WEIXIN_CLOUD_FUNCTION_SLUG}`;
-  // 已知问题：部分环境下浏览器直连 api.supabase.com 会被 CORS 拦截
-  // （请求格式已在服务端验证正确），失败自动重试两次以覆盖网络波动；
-  // 仍失败时引导用户走「手动部署方式」。
-  let res: Response | null = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    if (attempt > 0) await new Promise(resolve => setTimeout(resolve, attempt * 1500));
-    try {
-      res = await fetch(deployUrl, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: buildForm() });
-      break;
-    } catch {
-      // 网络/CORS 失败，进入下一次重试
-    }
+  // 经站点服务端代理转发（/api/weixin/deploy-function）：api.supabase.com
+  // 不对第三方站点来源返回 CORS 放行头，浏览器直连会被拦截，与 iLink
+  // 走 /api/weixin 代理是同一类问题。token 仅透传，服务端不存储不记录。
+  let res: Response;
+  try {
+    res = await fetch("/api/weixin/deploy-function", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ref, token, code }),
+    });
+  } catch {
+    throw new Error("无法访问站点部署接口，请检查网络后重试；也可改用下方「手动部署方式」。");
   }
-  if (!res) {
-    throw new Error("浏览器无法连接 Supabase 管理接口（部分网络/浏览器环境会被拦截）。请改用下方「手动部署方式」完成部署。");
+  if (res.status === 502) {
+    throw new Error("服务器暂时连不上 Supabase 管理接口，请稍后重试；也可改用下方「手动部署方式」。");
   }
 
   if (res.status === 401) {

@@ -758,7 +758,7 @@ export function WeixinSettings({ onOpenDataManagement }: { onOpenDataManagement?
                             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                                 <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">一键部署云函数</span>
                                 <span className="menu-desc !mt-0">① 打开 supabase.com → 点右上角<b>头像</b> → 选「Account」进入账户设置 → 再点右上角<b>三横线（☰）菜单</b> → 「Access Tokens」→ 点「Generate new token」（名字随意）→ 复制生成的 token。也可以直接访问 supabase.com/dashboard/account/tokens；</span>
-                                <span className="menu-desc !mt-0">② 粘贴到下方，点「一键部署」。Token 只用这一次、不会被保存，部署时会自动关闭 JWT 校验。</span>
+                                <span className="menu-desc !mt-0">② 粘贴到下方，点「一键部署」。Token 只用这一次，经本站点服务端转发给 Supabase（不存储、不记录），部署时会自动关闭 JWT 校验。用完可随时在 Supabase 里 Revoke。</span>
                                 <span className="menu-desc !mt-0">📌 只需部署这一次：之后小手机每次同步运行包都会把最新逻辑传到云端，函数自动使用。</span>
                                 <input
                                     type="password"
