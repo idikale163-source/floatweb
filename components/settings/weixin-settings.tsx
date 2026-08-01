@@ -790,8 +790,8 @@ export function WeixinSettings() {
                         <div className="flex items-start gap-3">
                             <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">2</span>
                             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                                <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">开启定时轮询</span>
-                                <span className="menu-desc !mt-0">点下方按钮，云端会自动创建每 10 秒一次的定时任务，无需再去 Supabase 操作。</span>
+                                <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">开启 / 停用轮询</span>
+                                <span className="menu-desc !mt-0">开启后云端每 10 秒自动轮询回复；停用立刻生效、零配额消耗，随时可再开启，都不用去 Supabase 操作。</span>
                                 <div className="flex flex-wrap items-center gap-2">
                                     <button
                                         type="button"
@@ -802,6 +802,16 @@ export function WeixinSettings() {
                                         {cloudAssistantBusy === "enable"
                                             ? <><Loader2 size={14} className="animate-spin" /> 开启中…</>
                                             : <><Power size={14} /> 开启云端轮询</>}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="ui-btn ui-btn-outline mt-0.5 self-start whitespace-nowrap !gap-1.5 !px-3 !text-[12px]"
+                                        disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
+                                        onClick={() => void handleSetCloudSchedule(false)}
+                                    >
+                                        {cloudAssistantBusy === "disable"
+                                            ? <><Loader2 size={14} className="animate-spin" /> 停用中…</>
+                                            : <><PowerOff size={14} /> 停用</>}
                                     </button>
                                     <button
                                         type="button"
@@ -866,16 +876,6 @@ export function WeixinSettings() {
                         >
                             {cloudAssistantBusy === "heartbeat" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                         </button>
-                        <button
-                            type="button"
-                            className="ui-link-btn shrink-0"
-                            data-variant="muted"
-                            disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
-                            onClick={() => void handleSetCloudSchedule(false)}
-                            title="停用云端轮询（停止定时任务，零配额消耗）"
-                        >
-                            {cloudAssistantBusy === "disable" ? <Loader2 size={14} className="animate-spin" /> : <PowerOff size={14} />}
-                        </button>
                     </div>
 
                     {!cloudSupabaseReady && (
@@ -906,7 +906,7 @@ export function WeixinSettings() {
                             <span className="menu-desc !mt-0">· 目前云端版把照片、语音等媒体协议降级为文字发送。</span>
                             <span className="menu-desc !mt-0">· 微信 token 过期后仍需回到小手机重新扫码。</span>
                             <span className="menu-desc !mt-0">· 角色、API、预设等变更后，记得重新同步运行包。</span>
-                            <span className="menu-desc !mt-0">· 停用：点心跳行右侧的电源按钮即可，停用后零配额消耗；也可在 SQL Editor 执行 select cron.unschedule(&apos;{WEIXIN_CLOUD_CRON_JOB_NAME}&apos;);</span>
+                            <span className="menu-desc !mt-0">· 停用：步骤②的「停用」按钮，停用后零配额消耗；也可在 SQL Editor 执行 select cron.unschedule(&apos;{WEIXIN_CLOUD_CRON_JOB_NAME}&apos;);</span>
                         </div>
                     )}
                 </div>
