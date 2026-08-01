@@ -27,10 +27,11 @@ const banner = `// @ts-nocheck -- 本文件由核心 JS 模块拼接生成，不
 // 源文件：tools/weixin-local-assistant/assistant-core.mjs + cloud-function-wrapper.mjs。
 //
 // 部署方法（在你自己的 Supabase 项目里）：
-// 1. Dashboard → Edge Functions → Deploy a new function → 命名为 weixin-assistant，
-//    粘贴本文件全部内容并部署；
-// 2. 在该函数的设置里关闭「Enforce JWT verification」（本函数用小手机生成的
-//    定时任务密钥做校验，与离线推送函数同一套做法）；
+// 1. Dashboard → Edge Functions → Deploy a new function → Via Editor，
+//    先把函数名改成 weixin-assistant（部署后改名无效），再粘贴本文件全部内容并 Deploy；
+// 2. 进入该函数的 Settings 标签，关掉「Verify JWT with legacy secret」开关
+//    （部分版本叫 Enforce JWT verification）并 Save changes——本函数用小手机
+//    生成的定时任务密钥做校验，与离线推送函数同一套做法；
 // 3. 回到小手机「微信设置」复制定时 SQL，在 Dashboard → SQL Editor 里执行。
 
 `;

@@ -679,14 +679,14 @@ export function WeixinSettings() {
                     <div className="flex flex-col gap-4 rounded-[18px] bg-black/[0.03] p-4">
                         <div className="flex items-start gap-3">
                             <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">1</span>
-                            <div className="flex min-w-0 flex-1 flex-col gap-2">
+                            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                                 <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">部署云函数</span>
-                                <span className="menu-desc !mt-0">
-                                    Supabase 控制台 → Edge Functions → 新建函数，名字必须是 <b>{WEIXIN_CLOUD_FUNCTION_SLUG}</b>，粘贴代码部署后，在函数设置里关闭「Enforce JWT verification」。
-                                </span>
+                                <span className="menu-desc !mt-0">① 打开 Supabase 控制台 → 左侧「Edge Functions」→ 点绿色「Deploy a new function」→ 选「Via Editor」；</span>
+                                <span className="menu-desc !mt-0">② 先把函数名改成 <b>{WEIXIN_CLOUD_FUNCTION_SLUG}</b>（不要用自动生成的随机名，部署后改名无效，只能删掉重建）；</span>
+                                <span className="menu-desc !mt-0">③ 清空编辑器里的示例代码，粘贴下方复制的代码，点「Deploy」。</span>
                                 <button
                                     type="button"
-                                    className="ui-btn ui-btn-outline self-start whitespace-nowrap !gap-1.5 !px-3 !text-[12px]"
+                                    className="ui-btn ui-btn-outline mt-0.5 self-start whitespace-nowrap !gap-1.5 !px-3 !text-[12px]"
                                     disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
                                     onClick={() => void handleCopyCloudFunctionCode()}
                                 >
@@ -698,14 +698,20 @@ export function WeixinSettings() {
                         </div>
                         <div className="flex items-start gap-3">
                             <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">2</span>
-                            <div className="flex min-w-0 flex-1 flex-col gap-2">
+                            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                                <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">关闭 JWT 校验</span>
+                                <span className="menu-desc !mt-0">① 进入刚部署的 {WEIXIN_CLOUD_FUNCTION_SLUG} 函数页 → 点「Settings」标签；</span>
+                                <span className="menu-desc !mt-0">② 关掉「Verify JWT with legacy secret」开关（部分版本叫 Enforce JWT verification）→ 点「Save changes」。</span>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                            <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">3</span>
+                            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                                 <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">开启定时轮询</span>
-                                <span className="menu-desc !mt-0">
-                                    到 SQL Editor 里整段执行（已自动填好你的项目地址和密钥）。
-                                </span>
+                                <span className="menu-desc !mt-0">左侧「SQL Editor」→ 新建查询，粘贴下方 SQL → 点「Run」。SQL 已自动填好你的项目地址和密钥，不用改任何内容。</span>
                                 <button
                                     type="button"
-                                    className="ui-btn ui-btn-outline self-start whitespace-nowrap !gap-1.5 !px-3 !text-[12px]"
+                                    className="ui-btn ui-btn-outline mt-0.5 self-start whitespace-nowrap !gap-1.5 !px-3 !text-[12px]"
                                     disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
                                     onClick={() => void handleCopyCloudCronSql()}
                                 >
@@ -716,15 +722,13 @@ export function WeixinSettings() {
                             </div>
                         </div>
                         <div className="flex items-start gap-3">
-                            <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">3</span>
-                            <div className="flex min-w-0 flex-1 flex-col gap-2">
+                            <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">4</span>
+                            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                                 <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">验证部署</span>
-                                <span className="menu-desc !mt-0">
-                                    立刻触发一轮「拉消息 → 生成 → 回复」，确认整条链路可用。
-                                </span>
+                                <span className="menu-desc !mt-0">点下方按钮立刻触发一轮「拉消息 → 生成 → 回复」；提示成功后，给 Bot 的微信发条消息，10～60 秒内应收到自动回复。</span>
                                 <button
                                     type="button"
-                                    className="ui-btn ui-btn-outline self-start whitespace-nowrap !gap-1.5 !px-3 !text-[12px]"
+                                    className="ui-btn ui-btn-outline mt-0.5 self-start whitespace-nowrap !gap-1.5 !px-3 !text-[12px]"
                                     disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
                                     onClick={() => void handleTestCloudAssistant()}
                                 >

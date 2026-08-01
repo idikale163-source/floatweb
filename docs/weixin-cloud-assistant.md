@@ -14,15 +14,17 @@
 ## 用户部署步骤（小手机内引导，约 3 分钟）
 
 1. 小手机「微信设置 → 微信云端助手」点「复制云函数代码」（会先自动同步运行包并生成密钥）。
-2. Supabase Dashboard → Edge Functions → Deploy a new function：
-   - 函数名必须是 `weixin-assistant`（决定函数 URL）；
-   - 粘贴代码并部署；
-   - 在该函数的设置里关闭「Enforce JWT verification」。函数改用小手机生成的定时任务
-     密钥做校验（与离线推送函数同一套做法），密钥存在用户自己的备份桶
-     `weixin-cloud/cron-secret.json`。
-3. 回到小手机点「复制定时 SQL」，到 Dashboard → SQL Editor 整段执行。
+2. Supabase Dashboard → Edge Functions → Deploy a new function → **Via Editor**：
+   - **先把函数名改成 `weixin-assistant`**（函数名决定 URL；编辑器默认给随机名，
+     部署后改名无效，只能删掉重建）；
+   - 清空示例代码，粘贴复制的代码，点 Deploy。
+3. 进入该函数的 **Settings** 标签，关掉「**Verify JWT with legacy secret**」开关
+   （部分版本叫 Enforce JWT verification），点 Save changes。函数改用小手机生成的
+   定时任务密钥做校验（与离线推送函数同一套做法），密钥存在用户自己的备份桶
+   `weixin-cloud/cron-secret.json`。
+4. 回到小手机点「复制定时 SQL」，到 Dashboard → SQL Editor 新建查询粘贴后点 Run。
    SQL 已自动填好该用户的项目 URL 与密钥，无需修改。
-4. 点「云端测试一次」验证部署；「刷新云端心跳」可查看最近一次轮询时间与错误。
+5. 点「云端测试一次」验证部署；「刷新云端心跳」可查看最近一次轮询时间与错误。
 
 ## 停用
 

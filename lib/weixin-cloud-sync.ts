@@ -384,7 +384,7 @@ export async function testWeixinCloudAssistantOnce(): Promise<{ ok: boolean; sen
   if (res.status === 401) {
     throw new Error(data?.error === "invalid_token"
       ? "云函数密钥不匹配，请重新复制定时 SQL 并在 SQL Editor 里重新执行。"
-      : "云函数拒绝访问（401）。请在函数设置里关闭「Enforce JWT verification」后重试。");
+      : "云函数拒绝访问（401）。请在函数的 Settings 里关掉「Verify JWT with legacy secret」（部分版本叫 Enforce JWT verification）并保存后重试。");
   }
   if (!res.ok || !data?.ok) {
     throw new Error(data?.error || `云函数返回 HTTP ${res.status}`);
