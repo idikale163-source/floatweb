@@ -147,7 +147,7 @@ function buildLocalAssistantReadme(): string {
 `;
 }
 
-export function WeixinSettings() {
+export function WeixinSettings({ onOpenDataManagement }: { onOpenDataManagement?: () => void } = {}) {
     const [bots, setBots] = useState<WeixinBotConfig[]>([]);
     const [characters, setCharacters] = useState<Character[]>([]);
     const [statusTick, setStatusTick] = useState(0);
@@ -734,7 +734,27 @@ export function WeixinSettings() {
                     {/* 三步部署引导（参考现实桥快捷指令教程的分步样式） */}
                     <div className="flex flex-col gap-4 rounded-[18px] bg-black/[0.03] p-4">
                         <div className="flex items-start gap-3">
-                            <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">1</span>
+                            <span className={`mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold text-white ${cloudSupabaseReady ? "bg-green-500" : "bg-black"}`}>{cloudSupabaseReady ? "✓" : "1"}</span>
+                            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                                <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">配置 Supabase</span>
+                                {cloudSupabaseReady ? (
+                                    <span className="menu-desc !mt-0 text-green-600">已检测到 Supabase 云端备份配置，这一步完成了。</span>
+                                ) : (
+                                    <>
+                                        <span className="menu-desc !mt-0">云端助手的数据和函数都放在你自己的 Supabase 项目里（免费注册）。请先到「数据管理」配置并测试 Supabase 云端备份，完成前下面的按钮不可用。</span>
+                                        <button
+                                            type="button"
+                                            className="ui-btn ui-btn-outline mt-0.5 self-start whitespace-nowrap !gap-1.5 !px-3 !text-[12px]"
+                                            onClick={() => onOpenDataManagement?.()}
+                                        >
+                                            去数据管理配置
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                            <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">2</span>
                             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                                 <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">一键部署云函数</span>
                                 <span className="menu-desc !mt-0">① 打开 supabase.com → 右上角头像 → Account Settings → 「Access Tokens」→ 点「Generate new token」（名字随意）→ 复制生成的 token；</span>
@@ -788,7 +808,7 @@ export function WeixinSettings() {
                             </div>
                         </div>
                         <div className="flex items-start gap-3">
-                            <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">2</span>
+                            <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">3</span>
                             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                                 <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">开启 / 停用轮询</span>
                                 <span className="menu-desc !mt-0">开启后云端每 10 秒自动轮询回复；停用立刻生效、零配额消耗，随时可再开启，都不用去 Supabase 操作。</span>
@@ -829,7 +849,7 @@ export function WeixinSettings() {
                             </div>
                         </div>
                         <div className="flex items-start gap-3">
-                            <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">3</span>
+                            <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">4</span>
                             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                                 <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">验证部署</span>
                                 <span className="menu-desc !mt-0">点下方按钮立刻触发一轮「拉消息 → 生成 → 回复」；提示成功后，给 Bot 的微信发条消息试试。</span>
@@ -878,9 +898,6 @@ export function WeixinSettings() {
                         </button>
                     </div>
 
-                    {!cloudSupabaseReady && (
-                        <Alert variant="warning">请先到「数据管理」配置并测试 Supabase 云端备份。</Alert>
-                    )}
                     {cloudAssistantNotice && (
                         <Alert variant={cloudAssistantNotice.ok ? "success" : "danger"}>{cloudAssistantNotice.text}</Alert>
                     )}
