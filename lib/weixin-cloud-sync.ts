@@ -214,6 +214,9 @@ export type WeixinCloudStoredMessage = {
   createdAt?: string;
   role: "user" | "assistant" | "system";
   content: string;
+  /** 微信收到的图片（已解密）在备份桶里的存储路径与类型，由助手写入 */
+  imagePath?: string;
+  imageMime?: string;
   raw?: unknown;
   needsReply?: boolean;
   repliedAt?: string;
@@ -1079,17 +1082,16 @@ export async function pullWeixinCloudMessagesFromCloud(
       }
     }
 
-    storedMessages
-      .sort((a, b) => cloudStoredMessageTime(a).localeCompare(cloudStoredMessageTime(b)))
-      .forEach((stored) => {
-        const imported = importCloudStoredMessage(stored);
-        if (imported.inserted) {
-          result.added += 1;
-          touchedSessionIds.add(imported.sessionId);
-        } else {
-          result.skipped += 1;
-        }
-      });
+    storedMessages.sort((a, b) => cloudStoredMessageTime(a).localeCompare(cloudStoredMessageTime(b)));
+    for (const stored of storedMessages) {
+      const imported = await importCloudStoredMessage(cloudConfig, stored);
+      if (imported.inserted) {
+        result.added += 1;
+        touchedSessionIds.add(imported.sessionId);
+      } else {
+        result.skipped += 1;
+      }
+    }
   }
 
   for (const sessionId of touchedSessionIds) {
@@ -1387,7 +1389,10 @@ function sanitizePathPart(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
-function importCloudStoredMessage(stored: WeixinCloudStoredMessage): { inserted: boolean; sessionId: string } {
+async function importCloudStoredMessage(
+  cloudConfig: CloudBackupConfig,
+  stored: WeixinCloudStoredMessage,
+): Promise<{ inserted: boolean; sessionId: string }> {
   if (!isCloudStoredMessage(stored)) return { inserted: false, sessionId: "" };
   if (isLocalUploadedCloudMessage(stored)) return { inserted: false, sessionId: "" };
   const session = createOrGetSession(stored.characterId);
@@ -1399,11 +1404,19 @@ function importCloudStoredMessage(stored: WeixinCloudStoredMessage): { inserted:
     return importCloudAssistantMessage(stored, session, createdAt);
   }
   const id = cloudMessageId(stored);
+  if (loadChatMessages(session.id).some(message => message.id === id)) {
+    return { inserted: false, sessionId: session.id };
+  }
+  // 微信收到的图片：去重之后才下载，转成 data URL 以图片气泡展示
+  const imageDataUrl = stored.imagePath
+    ? await loadCloudStoredMessageImage(cloudConfig, stored).catch(() => undefined)
+    : undefined;
   const msg: ChatMessage = {
     id,
     sessionId: session.id,
     role: stored.role,
-    content: stored.content,
+    content: imageDataUrl ? "" : stored.content,
+    ...(imageDataUrl ? { mediaType: "image" as const, mediaUrl: imageDataUrl } : {}),
     status: "sent",
     createdAt,
     cloudSync: {
@@ -1415,6 +1428,23 @@ function importCloudStoredMessage(stored: WeixinCloudStoredMessage): { inserted:
     },
   };
   return { inserted: upsertImportedChatMessage(msg).inserted, sessionId: session.id };
+}
+
+async function loadCloudStoredMessageImage(
+  cloudConfig: CloudBackupConfig,
+  stored: WeixinCloudStoredMessage,
+): Promise<string | undefined> {
+  if (!stored.imagePath || !stored.imagePath.startsWith("weixin-cloud/media/")) return undefined;
+  const blob = await getObject(cloudConfig, stored.imagePath);
+  if (!blob) return undefined;
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  if (bytes.length === 0) return undefined;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  const mime = stored.imageMime || blob.type || "image/jpeg";
+  return `data:${mime};base64,${btoa(binary)}`;
 }
 
 /** 导入前按角色绑定的正则脚本整形（编辑类、placement=2），与聊天室生成/编辑路径同一套处理。 */

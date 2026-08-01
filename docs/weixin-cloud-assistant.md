@@ -60,7 +60,15 @@ HTTP 入口层（cloud-function-wrapper.mjs）本身变更时才需要重新粘�
   自动回复锁保证同一个 Bot 同时只有一个实例在回复。
 - 心跳：每次运行后写 `weixin-cloud/state/cloud-assistant.json`
   （lastRunAt / lastError / 轮询统计），小手机据此显示云端状态。
-- 媒体降级：云端版目前把照片、语音等媒体协议降级为文字发送
+- 收到的图片：助手会从微信 CDN 下载并按上传路径的逆操作 AES-128-ECB 解密，
+  存到桶里 `weixin-cloud/media/<botId>/<externalId>`，消息里记 `imagePath/imageMime`；
+  API 配置开启图像识别（`enableImageRecognition` → 运行包 `promptContext.enableVision`）
+  时，按会话的传入图片数（`session.visionImagePromptLimit`，默认 1，只取最近 N 张）
+  以 `image_url` 多模态内容交给模型；小手机拉取时把图片转回 data URL 以图片气泡展示。
+  下载/解密失败时降级为「[对方发来一张图片，但未能下载查看]」占位文本（仍会触发回复）。
+  注意：下载端点是按上传协议推断的（`/download?encrypted_query_param=`），需线上实测。
+  收到的语音/文件暂以占位文本提示。
+- 发出的媒体降级：云端版目前把照片、语音等媒体协议降级为文字发送
   （`setMediaReplyEnabled(false)`；定时 SQL body 里传 `"media": true` 可显式开启，
   等 Deno 环境媒体上传路径实测过再默认放开）。
 - Token 过期：微信 bot token 过期后云端无法续期，仍需用户回小手机重新扫码；

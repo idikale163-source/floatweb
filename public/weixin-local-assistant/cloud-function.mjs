@@ -20,13 +20,15 @@
 // 不要在本文件里引入 fs、path 等只有本地才有意义的模块。
 
 import { Buffer } from "node:buffer";
-import { createCipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 
 export const DEFAULT_BUCKET = "ai-phone-backup";
 export const DEFAULT_INTERVAL_SECONDS = 5;
 const INDEX_PATH = "weixin-cloud/index.json";
 const STATE_PREFIX = "weixin-cloud/state";
 const MESSAGE_PREFIX = "weixin-cloud/messages";
+const INCOMING_MEDIA_PREFIX = "weixin-cloud/media";
+const INCOMING_IMAGE_MAX_BYTES = 6_000_000;
 const LOCK_PREFIX = "weixin-cloud/locks";
 const ILINK_BASE = "https://ilinkai.weixin.qq.com";
 const CDN_BASE_URL = "https://novac2c.cdn.weixin.qq.com/c2c";
@@ -115,12 +117,35 @@ export async function pollOnce(env, targetBotId, options = {}) {
 
 async function storeIncomingMessage(env, runtime, raw, receivedAt) {
   const text = extractText(raw);
-  if (!text) return false;
+  const mediaItem = extractIncomingMediaItem(raw);
+  if (!text && !mediaItem) return false;
 
   const externalId = raw.message_id ? String(raw.message_id) : await sha256Hex(JSON.stringify(raw));
   const path = `${MESSAGE_PREFIX}/${runtime.bot.id}/${sanitizePathPart(externalId)}.json`;
   const existing = await getObjectJson(env, path).catch(() => null);
   if (existing?.format === "ai-phone-weixin-cloud-message") return false;
+
+  let content = text;
+  let imagePath;
+  let imageMime;
+  if (mediaItem?.kind === "image") {
+    const image = await downloadIncomingWeixinImage(mediaItem).catch((err) => {
+      console.warn(`[weixin-assistant] 收图下载失败 bot=${runtime.bot.id}: ${errorMessage(err)}`);
+      return null;
+    });
+    if (image) {
+      imageMime = image.mimeType;
+      imagePath = `${INCOMING_MEDIA_PREFIX}/${sanitizePathPart(runtime.bot.id)}/${sanitizePathPart(externalId)}`;
+      await putObject(env, imagePath, image.bytes, image.mimeType);
+      content = content || "[图片]";
+    } else {
+      content = content || "[对方发来一张图片，但未能下载查看]";
+    }
+  } else if (mediaItem?.kind === "voice") {
+    content = content || "[对方发来一条语音，暂时听不了]";
+  } else if (mediaItem?.kind === "file") {
+    content = content || `[对方发来一个文件${mediaItem.name ? `：${mediaItem.name}` : ""}]`;
+  }
 
   await putObject(env, path, JSON.stringify({
     format: "ai-phone-weixin-cloud-message",
@@ -132,11 +157,65 @@ async function storeIncomingMessage(env, runtime, raw, receivedAt) {
     externalId,
     receivedAt,
     role: "user",
-    content: text,
+    content,
+    ...(imagePath ? { imagePath, imageMime } : {}),
     raw,
     needsReply: true,
   }, null, 2), "application/json");
   return true;
+}
+
+function extractIncomingMediaItem(raw) {
+  const items = Array.isArray(raw?.item_list) ? raw.item_list : [];
+  for (const item of items) {
+    if (item?.type === 2 && item.image_item?.media) {
+      return { kind: "image", media: item.image_item.media };
+    }
+    if (item?.type === 3) return { kind: "voice" };
+    if (item?.type === 4 && item.file_item) {
+      const name = typeof item.file_item.file_name === "string" ? item.file_item.file_name : "";
+      const ext = String(item.file_item.file_ext || name.split(".").pop() || "").toLowerCase();
+      if (["mp3", "silk", "amr", "wav", "m4a"].includes(ext)) return { kind: "voice" };
+      return { kind: "file", name };
+    }
+  }
+  return null;
+}
+
+// 下载并解密收到的微信图片：与上传路径互逆（CDN + AES-128-ECB）。
+async function downloadIncomingWeixinImage(mediaItem) {
+  const param = mediaItem?.media?.encrypt_query_param;
+  const aesKeyEncoded = mediaItem?.media?.aes_key;
+  if (!param || !aesKeyEncoded) throw new Error("missing_incoming_image_params");
+
+  const keyHex = Buffer.from(String(aesKeyEncoded), "base64").toString("utf8").trim();
+  const key = /^[0-9a-fA-F]{32}$/.test(keyHex) ? Buffer.from(keyHex, "hex") : null;
+  if (!key) throw new Error("invalid_incoming_image_key");
+
+  const res = await fetchWithTimeout(
+    `${CDN_BASE_URL}/download?encrypted_query_param=${encodeURIComponent(String(param))}`,
+    {},
+    60_000,
+  );
+  if (!res.ok) throw new Error(`incoming_image_http_${res.status}`);
+  const cipherBytes = Buffer.from(await res.arrayBuffer());
+  if (cipherBytes.length === 0 || cipherBytes.length % 16 !== 0) throw new Error("incoming_image_bad_cipher");
+  if (cipherBytes.length > INCOMING_IMAGE_MAX_BYTES) throw new Error("incoming_image_too_large");
+
+  const decipher = createDecipheriv("aes-128-ecb", key, null);
+  const bytes = Buffer.concat([decipher.update(cipherBytes), decipher.final()]);
+  const mimeType = sniffImageMimeType(bytes);
+  if (!mimeType) throw new Error("incoming_image_not_image");
+  return { bytes, mimeType };
+}
+
+function sniffImageMimeType(bytes) {
+  if (bytes.length < 12) return "";
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
+  if (bytes.slice(0, 4).toString("latin1") === "GIF8") return "image/gif";
+  if (bytes.slice(0, 4).toString("latin1") === "RIFF" && bytes.slice(8, 12).toString("latin1") === "WEBP") return "image/webp";
+  return "";
 }
 
 async function autoReplyPendingMessages(env, runtime) {
@@ -262,7 +341,8 @@ async function generateReply(env, runtime, cloudMessages, pendingMessages) {
     })
     .sort((a, b) => messageTime(a).localeCompare(messageTime(b)));
 
-  const messages = normalizeLlmMessages(buildRuntimePromptMessages(runtime, cloudHistory, pendingMessages));
+  const imageAttachments = await loadVisionImageAttachments(env, runtime, [...cloudHistory, ...pendingMessages]);
+  const messages = normalizeLlmMessages(buildRuntimePromptMessages(runtime, cloudHistory, pendingMessages, imageAttachments));
 
   const request = buildChatCompletionRequest(apiConfig, preset, messages);
   const res = await fetch(request.url, {
@@ -281,7 +361,49 @@ async function generateReply(env, runtime, cloudMessages, pendingMessages) {
   return cleanReplyText(extractOpenAiCompatibleText(data));
 }
 
-function buildRuntimePromptMessages(runtime, cloudHistory, pendingMessages) {
+// 视觉附件：遵循 API 设置的图像识别开关（runtime.promptContext.enableVision）
+// 与聊天信息页的传入图片数（runtime.session.visionImagePromptLimit，默认 1）。
+// 只给最近的 N 条带图消息加载图片，其余按占位文本处理。
+async function loadVisionImageAttachments(env, runtime, mergedMessages) {
+  const attachments = new Map();
+  if (runtime.promptContext?.enableVision !== true) return attachments;
+  const limit = clampVisionImagePromptLimit(runtime.session?.visionImagePromptLimit);
+  if (limit <= 0) return attachments;
+
+  const seen = new Set();
+  const candidates = [];
+  for (const message of mergedMessages) {
+    if (!message?.imagePath || !message.externalId || seen.has(message.externalId)) continue;
+    seen.add(message.externalId);
+    candidates.push(message);
+  }
+  candidates.sort((a, b) => messageTime(a).localeCompare(messageTime(b)));
+
+  for (const message of candidates.slice(-limit)) {
+    try {
+      const res = await fetch(storageObjectUrl(env, message.imagePath), {
+        headers: supabaseHeaders(env),
+        cache: "no-store",
+      });
+      if (!res.ok) continue;
+      const bytes = Buffer.from(await res.arrayBuffer());
+      if (bytes.length === 0) continue;
+      const mime = message.imageMime || "image/jpeg";
+      attachments.set(message.externalId, `data:${mime};base64,${bytes.toString("base64")}`);
+    } catch {
+      // 单张图加载失败不影响整体回复
+    }
+  }
+  return attachments;
+}
+
+function clampVisionImagePromptLimit(value) {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n) || n < 0) return 1;
+  return Math.min(10, n);
+}
+
+function buildRuntimePromptMessages(runtime, cloudHistory, pendingMessages, imageAttachments = new Map()) {
   const template = runtime.promptContext?.promptTemplate;
   if (!template || !Array.isArray(template.beforeMessages) || !Array.isArray(template.afterMessages)) {
     throw new Error("runtime_missing_prompt_template: 运行包缺少轻量提示词模板，请先在小手机内重新同步运行包。");
@@ -292,14 +414,14 @@ function buildRuntimePromptMessages(runtime, cloudHistory, pendingMessages) {
   for (const message of cloudHistory) {
     if (!message?.externalId || seenExternalIds.has(message.externalId)) continue;
     seenExternalIds.add(message.externalId);
-    const promptMessage = cloudStoredMessageToPromptMessage(runtime, message);
+    const promptMessage = cloudStoredMessageToPromptMessage(runtime, message, imageAttachments);
     if (promptMessage) historyMessages.push(promptMessage);
   }
 
   for (const message of pendingMessages) {
     if (!message?.externalId || seenExternalIds.has(message.externalId)) continue;
     seenExternalIds.add(message.externalId);
-    const promptMessage = cloudStoredMessageToPromptMessage(runtime, message);
+    const promptMessage = cloudStoredMessageToPromptMessage(runtime, message, imageAttachments);
     if (promptMessage) historyMessages.push(promptMessage);
   }
 
@@ -317,13 +439,19 @@ function buildRuntimePromptMessages(runtime, cloudHistory, pendingMessages) {
   ];
 }
 
-function cloudStoredMessageToPromptMessage(runtime, message) {
+function cloudStoredMessageToPromptMessage(runtime, message, imageAttachments = new Map()) {
   const role = message.role === "assistant" ? "assistant" : message.role === "system" ? "system" : "user";
   const content = formatCloudPromptMessageContent(runtime, message);
-  if (!content.trim()) return null;
+  const imageDataUrl = message.externalId ? imageAttachments.get(message.externalId) : undefined;
+  if (!content.trim() && !imageDataUrl) return null;
   return {
     role,
-    content,
+    content: imageDataUrl
+      ? [
+        ...(content.trim() ? [{ type: "text", text: content }] : []),
+        { type: "image_url", image_url: { url: imageDataUrl, detail: "low" } },
+      ]
+      : content,
     _createdAt: messageTime(message) || new Date().toISOString(),
     _externalId: message.externalId || "",
   };
@@ -407,16 +535,31 @@ function normalizeLlmMessages(messages) {
     .map(message => {
       const role = message?.role === "assistant" ? "assistant" : message?.role === "system" ? "system" : "user";
       const content = normalizeMessageContent(message?.content);
-      return content ? { role, content } : null;
+      const hasContent = typeof content === "string" ? Boolean(content) : content.length > 0;
+      return hasContent ? { role, content } : null;
     })
     .filter(Boolean);
 }
 
+// 字符串原样返回；数组内容保留 text 与 image_url 两类合法分段
+// （多模态视觉消息），若数组里没有图片则压平成纯文本以兼容更多模型。
 function normalizeMessageContent(content) {
   if (typeof content === "string") return content.trim();
   if (!Array.isArray(content)) return "";
-  return content
-    .map(part => part?.type === "text" && typeof part.text === "string" ? part.text.trim() : "")
+  const parts = content
+    .map(part => {
+      if (part?.type === "text" && typeof part.text === "string" && part.text.trim()) {
+        return { type: "text", text: part.text };
+      }
+      if (part?.type === "image_url" && typeof part.image_url?.url === "string" && part.image_url.url) {
+        return { type: "image_url", image_url: part.image_url };
+      }
+      return null;
+    })
+    .filter(Boolean);
+  if (parts.some(part => part.type === "image_url")) return parts;
+  return parts
+    .map(part => part.text.trim())
     .filter(Boolean)
     .join("\n")
     .trim();
