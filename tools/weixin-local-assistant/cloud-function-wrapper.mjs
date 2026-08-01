@@ -41,8 +41,10 @@ async function loadBucketCore(env) {
     return null;
   }
 }
-// 单次调用的时间预算：Edge Function 免费档墙钟上限 150s，留足回复一个 Bot 的余量。
-const CLOUD_POLL_BUDGET_MS = 120_000;
+// 单次调用的时间预算：Edge Function 免费档墙钟上限 150s。只留 10s 给
+// 收尾动作（状态回写/心跳/响应），把尽量多的时间让给 LLM 与媒体生成，
+// 减少"预算不足降级模板卡"的频率；各环节的内层预留见 assistant-core。
+const CLOUD_POLL_BUDGET_MS = 140_000;
 
 const CLOUD_CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
