@@ -33,12 +33,24 @@ const LOCK_PREFIX = "weixin-cloud/locks";
 const ILINK_BASE = "https://ilinkai.weixin.qq.com";
 const CDN_BASE_URL = "https://novac2c.cdn.weixin.qq.com/c2c";
 const BASE_INFO = { channel_version: "1.0.2" };
-const AUTO_REPLY_LOCK_TTL_MS = 15 * 60 * 1000;
+// 锁 TTL 必须远小于「函数被平台掐掉后到下次可重试」的可接受等待：
+// 云函数被墙钟杀掉时 finally 不会执行、锁无法主动释放，只能等 TTL 过期。
+const AUTO_REPLY_LOCK_TTL_MS = 3 * 60 * 1000;
+
+// 单轮回复的截止时间（云端由 pollOnce options.deadlineAt 下发；本地 CLI 无限制）。
+// 用于给 LLM/生图/TTS 分配剩余预算，保证整轮在云函数墙钟内完成。
+let replyDeadlineAt = 0;
+
+function remainingReplyBudgetMs() {
+  if (!replyDeadlineAt) return Number.POSITIVE_INFINITY;
+  return Math.max(0, replyDeadlineAt - Date.now());
+}
 
 const assistantInstanceId = randomUUID();
 
 export async function pollOnce(env, targetBotId, options = {}) {
   const deadlineAt = Number(options?.deadlineAt) || 0;
+  replyDeadlineAt = deadlineAt;
   let skippedForDeadline = 0;
   const index = await loadRuntimeIndex(env);
   const targets = targetBotId
@@ -391,11 +403,17 @@ async function generateReply(env, runtime, cloudMessages, pendingMessages) {
   const messages = normalizeLlmMessages(buildRuntimePromptMessages(runtime, cloudHistory, pendingMessages, imageAttachments));
 
   const request = buildChatCompletionRequest(apiConfig, preset, messages);
-  const res = await fetch(request.url, {
+  // LLM 调用必须有超时：预留 ~30s 给后续的媒体生成与发送。
+  // 超时会抛错并正常释放锁（好过被平台掐掉后锁滞留）。
+  const budget = remainingReplyBudgetMs();
+  const llmTimeoutMs = Number.isFinite(budget)
+    ? Math.min(120_000, Math.max(20_000, budget - 30_000))
+    : 150_000;
+  const res = await fetchWithTimeout(request.url, {
     method: "POST",
     headers: request.headers,
     body: JSON.stringify(request.body),
-  });
+  }, llmTimeoutMs);
   const text = await res.text();
   if (!res.ok) throw new Error(`LLM HTTP ${res.status}: ${text.slice(0, 500)}`);
   let data;
@@ -760,11 +778,22 @@ async function generateLocalImageReplyDataUrl(media, runtime) {
   const description = String(media?.label || "").trim();
   if (!config || !description) return "";
 
+  // 剩余预算不足以完成一次生图时直接跳过（外层会降级为照片模板卡），
+  // 保证整轮回复在云函数墙钟内完成、锁能正常释放。
+  const budget = remainingReplyBudgetMs();
+  if (budget < 50_000) {
+    console.warn(`[weixin-assistant] 剩余预算不足（${Math.round(budget / 1000)}s），本轮跳过真实生图，改用照片模板卡`);
+    return "";
+  }
+  const timeoutMs = Number.isFinite(budget)
+    ? Math.min(IMAGE_GENERATION_TIMEOUT_MS, Math.max(20_000, budget - 20_000))
+    : IMAGE_GENERATION_TIMEOUT_MS;
+
   const prompt = mergeImagePrompt(description, config.extraPrompt);
   const referenceImageDataUrl = media.useReferenceImage === true
     ? String(config.referenceImageDataUrl || "").trim()
     : "";
-  return generateImageDataUrlDirect({ config, prompt, referenceImageDataUrl });
+  return generateImageDataUrlDirect({ config, prompt, referenceImageDataUrl, timeoutMs });
 }
 
 function getRuntimeImageGenerationConfig(runtime) {
@@ -791,7 +820,7 @@ function mergeImagePrompt(description, extraPrompt) {
   return extra ? `${main}\n\n${extra}` : main;
 }
 
-async function generateImageDataUrlDirect({ config, prompt, referenceImageDataUrl }) {
+async function generateImageDataUrlDirect({ config, prompt, referenceImageDataUrl, timeoutMs = IMAGE_GENERATION_TIMEOUT_MS }) {
   const hasReference = Boolean(referenceImageDataUrl);
   const url = buildImageGenerationUrl(config.baseUrl, hasReference ? "edits" : "generations");
   const headers = { Authorization: `Bearer ${config.apiKey}` };
@@ -817,7 +846,7 @@ async function generateImageDataUrlDirect({ config, prompt, referenceImageDataUr
     });
   }
 
-  const response = await fetchWithTimeout(url, { method: "POST", headers, body }, IMAGE_GENERATION_TIMEOUT_MS);
+  const response = await fetchWithTimeout(url, { method: "POST", headers, body }, timeoutMs);
   return parseImageGenerationResponseDataUrl(response);
 }
 
@@ -963,6 +992,8 @@ const IMAGE_GENERATION_TIMEOUT_MS = 90_000;
 async function synthesizeVoiceDataUrl(text, voiceConfig) {
   const cleanText = String(text || "").trim();
   if (!cleanText || !voiceConfig || voiceConfig.enableTTS !== true) return "";
+  // 预算不足时跳过 TTS（外层降级为语音模板卡），保证整轮在墙钟内完成
+  if (remainingReplyBudgetMs() < 30_000) return "";
   const provider = String(voiceConfig.provider || "").trim();
   if (provider === "Minimax") return synthesizeMinimaxVoiceDataUrl(cleanText, voiceConfig);
   if (provider === "OpenAI") return synthesizeOpenAIVoiceDataUrl(cleanText, voiceConfig);
