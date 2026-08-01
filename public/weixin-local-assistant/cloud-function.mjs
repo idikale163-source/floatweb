@@ -992,15 +992,20 @@ const IMAGE_GENERATION_TIMEOUT_MS = 90_000;
 async function synthesizeVoiceDataUrl(text, voiceConfig) {
   const cleanText = String(text || "").trim();
   if (!cleanText || !voiceConfig || voiceConfig.enableTTS !== true) return "";
-  // 预算不足时跳过 TTS（外层降级为语音模板卡），保证整轮在墙钟内完成
-  if (remainingReplyBudgetMs() < 30_000) return "";
+  // 预算不足时跳过 TTS（外层降级为语音模板卡），保证整轮在墙钟内完成；
+  // 实际请求超时同样按剩余预算收紧（预留 15s 给上传发送），避免擦到墙钟。
+  const budget = remainingReplyBudgetMs();
+  if (budget < 30_000) return "";
+  const timeoutMs = Number.isFinite(budget)
+    ? Math.min(TTS_TIMEOUT_MS, Math.max(10_000, budget - 15_000))
+    : TTS_TIMEOUT_MS;
   const provider = String(voiceConfig.provider || "").trim();
-  if (provider === "Minimax") return synthesizeMinimaxVoiceDataUrl(cleanText, voiceConfig);
-  if (provider === "OpenAI") return synthesizeOpenAIVoiceDataUrl(cleanText, voiceConfig);
+  if (provider === "Minimax") return synthesizeMinimaxVoiceDataUrl(cleanText, voiceConfig, timeoutMs);
+  if (provider === "OpenAI") return synthesizeOpenAIVoiceDataUrl(cleanText, voiceConfig, timeoutMs);
   return "";
 }
 
-async function synthesizeMinimaxVoiceDataUrl(text, config) {
+async function synthesizeMinimaxVoiceDataUrl(text, config, timeoutMs = TTS_TIMEOUT_MS) {
   const apiKey = String(config.apiKey || "").trim();
   if (!apiKey) return "";
   const baseUrl = String(config.baseUrl || "https://api.minimaxi.com/v1").replace(/\/+$/, "");
@@ -1028,7 +1033,7 @@ async function synthesizeMinimaxVoiceDataUrl(text, config) {
         channel: 1,
       },
     }),
-  });
+  }, timeoutMs);
   if (!response.ok) return "";
   const data = await response.json().catch(() => null);
   const hex = typeof data?.data?.audio === "string" ? data.data.audio : "";
@@ -1041,7 +1046,7 @@ async function synthesizeMinimaxVoiceDataUrl(text, config) {
   return `data:audio/mpeg;base64,${audio.toString("base64")}`;
 }
 
-async function synthesizeOpenAIVoiceDataUrl(text, config) {
+async function synthesizeOpenAIVoiceDataUrl(text, config, timeoutMs = TTS_TIMEOUT_MS) {
   const apiKey = String(config.apiKey || "").trim();
   if (!apiKey) return "";
   const baseUrl = String(config.baseUrl || "https://api.openai.com/v1").replace(/\/+$/, "");
@@ -1057,7 +1062,7 @@ async function synthesizeOpenAIVoiceDataUrl(text, config) {
       voice: config.defaultVoice || "alloy",
       response_format: "mp3",
     }),
-  });
+  }, timeoutMs);
   if (!response.ok) return "";
   const bytes = Buffer.from(await response.arrayBuffer());
   if (bytes.length === 0) return "";
