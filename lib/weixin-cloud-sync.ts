@@ -363,6 +363,38 @@ export async function fetchWeixinCloudAssistantHeartbeat(): Promise<WeixinCloudA
   }
 }
 
+/** 在线开启/停用云端定时轮询：由云函数直连数据库执行 cron.schedule / cron.unschedule。 */
+export async function setWeixinCloudAssistantScheduled(enabled: boolean): Promise<{ scheduled: boolean }> {
+  const config = requireCloudBackupConfig();
+  const token = await ensureWeixinCloudCronSecret();
+  const url = buildWeixinCloudAssistantFunctionUrl(config);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, bucket: CLOUD_BACKUP_BUCKET, action: enabled ? "enable" : "disable" }),
+    });
+  } catch {
+    throw new Error("无法访问云函数。请先完成①②两步（部署 weixin-assistant 函数并关闭 JWT 校验）。");
+  }
+
+  const data = await res.json().catch(() => null) as { ok?: boolean; scheduled?: boolean; error?: string } | null;
+  if (res.status === 401) {
+    throw new Error(data?.error === "invalid_token"
+      ? "云函数密钥不匹配，请重新部署最新的云函数代码后重试。"
+      : "云函数拒绝访问（401）。请在函数的 Settings 里关掉「Verify JWT with legacy secret」（部分版本叫 Enforce JWT verification）并保存后重试。");
+  }
+  if (!res.ok || !data?.ok) {
+    throw new Error(data?.error || `云函数返回 HTTP ${res.status}`);
+  }
+  if (typeof data.scheduled !== "boolean") {
+    throw new Error("云函数版本较旧，不支持在线开关。请点「复制云函数代码」，到函数的 Code 标签替换为最新代码重新部署；或使用「复制定时 SQL」手动操作。");
+  }
+  return { scheduled: data.scheduled };
+}
+
 /** 从浏览器直接调用一次云函数，验证部署是否成功。 */
 export async function testWeixinCloudAssistantOnce(): Promise<{ ok: boolean; sent: number; error?: string }> {
   const config = requireCloudBackupConfig();

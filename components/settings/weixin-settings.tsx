@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Wifi, WifiOff, AlertCircle, MessageSquare, Loader2, RefreshCw, Cloud, CloudUpload, Copy, Download, ChevronDown, PlayCircle } from "lucide-react";
+import { Plus, Trash2, Wifi, WifiOff, AlertCircle, MessageSquare, Loader2, RefreshCw, Cloud, CloudUpload, Copy, Download, ChevronDown, PlayCircle, Power, PowerOff } from "lucide-react";
 import QRCode from "qrcode";
 import {
     loadWeixinBots,
@@ -18,6 +18,7 @@ import {
     buildWeixinCloudAssistantCronSql,
     ensureWeixinCloudCronSecret,
     fetchWeixinCloudAssistantHeartbeat,
+    setWeixinCloudAssistantScheduled,
     loadWeixinCloudSyncConfig,
     pullWeixinCloudMessagesFromCloud,
     saveWeixinCloudSyncConfig,
@@ -403,6 +404,33 @@ export function WeixinSettings() {
         }
     };
 
+    const handleSetCloudSchedule = async (enabled: boolean) => {
+        if (cloudAssistantBusy) return;
+        setCloudAssistantNotice(null);
+        setCloudAssistantBusy(enabled ? "enable" : "disable");
+        try {
+            if (enabled) {
+                const results = await syncAllWeixinBotRuntimesToCloud();
+                if (results.length === 0) {
+                    setCloudAssistantNotice({ ok: false, text: "没有可同步的已启用微信 Bot，请先添加并启用微信 Bot。" });
+                    return;
+                }
+                setCloudSyncConfig(loadWeixinCloudSyncConfig());
+            }
+            await setWeixinCloudAssistantScheduled(enabled);
+            setCloudAssistantNotice({
+                ok: true,
+                text: enabled
+                    ? "云端轮询已开启，每 10 秒一次。刚开启时微信恢复在线可能需要几分钟，之后回复稳定在 10～60 秒。"
+                    : "云端轮询已停用，不再消耗任何配额。想恢复时点「开启云端轮询」即可，无需重新部署。",
+            });
+        } catch (err) {
+            setCloudAssistantNotice({ ok: false, text: err instanceof Error ? err.message : String(err) });
+        } finally {
+            setCloudAssistantBusy(null);
+        }
+    };
+
     const handleRefreshCloudHeartbeat = async () => {
         if (cloudAssistantBusy) return;
         setCloudAssistantNotice(null);
@@ -708,17 +736,31 @@ export function WeixinSettings() {
                             <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">3</span>
                             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                                 <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">开启定时轮询</span>
-                                <span className="menu-desc !mt-0">左侧「SQL Editor」→ 新建查询，粘贴下方 SQL → 点「Run」。SQL 已自动填好你的项目地址和密钥，不用改任何内容。</span>
-                                <button
-                                    type="button"
-                                    className="ui-btn ui-btn-outline mt-0.5 self-start whitespace-nowrap !gap-1.5 !px-3 !text-[12px]"
-                                    disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
-                                    onClick={() => void handleCopyCloudCronSql()}
-                                >
-                                    {cloudAssistantBusy === "sql"
-                                        ? <><Loader2 size={14} className="animate-spin" /> 生成中…</>
-                                        : <><Copy size={14} /> 复制定时 SQL</>}
-                                </button>
+                                <span className="menu-desc !mt-0">点下方按钮，云端会自动创建每 10 秒一次的定时任务，无需再去 Supabase 操作。</span>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <button
+                                        type="button"
+                                        className="ui-btn ui-btn-outline mt-0.5 self-start whitespace-nowrap !gap-1.5 !px-3 !text-[12px]"
+                                        disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
+                                        onClick={() => void handleSetCloudSchedule(true)}
+                                    >
+                                        {cloudAssistantBusy === "enable"
+                                            ? <><Loader2 size={14} className="animate-spin" /> 开启中…</>
+                                            : <><Power size={14} /> 开启云端轮询</>}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="ui-link-btn mt-0.5 shrink-0 !text-[11px]"
+                                        data-variant="muted"
+                                        disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
+                                        onClick={() => void handleCopyCloudCronSql()}
+                                        title="在线开启失败时的手动方式：复制 SQL 到 SQL Editor 执行"
+                                    >
+                                        {cloudAssistantBusy === "sql"
+                                            ? <><Loader2 size={12} className="animate-spin" /> 生成中…</>
+                                            : "手动方式：复制定时 SQL"}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div className="flex items-start gap-3">
@@ -769,6 +811,16 @@ export function WeixinSettings() {
                         >
                             {cloudAssistantBusy === "heartbeat" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                         </button>
+                        <button
+                            type="button"
+                            className="ui-link-btn shrink-0"
+                            data-variant="muted"
+                            disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
+                            onClick={() => void handleSetCloudSchedule(false)}
+                            title="停用云端轮询（停止定时任务，零配额消耗）"
+                        >
+                            {cloudAssistantBusy === "disable" ? <Loader2 size={14} className="animate-spin" /> : <PowerOff size={14} />}
+                        </button>
                     </div>
 
                     {!cloudSupabaseReady && (
@@ -799,7 +851,7 @@ export function WeixinSettings() {
                             <span className="menu-desc !mt-0">· 目前云端版把照片、语音等媒体协议降级为文字发送。</span>
                             <span className="menu-desc !mt-0">· 微信 token 过期后仍需回到小手机重新扫码。</span>
                             <span className="menu-desc !mt-0">· 角色、API、预设等变更后，记得重新同步运行包。</span>
-                            <span className="menu-desc !mt-0">· 停用：在 SQL Editor 执行 select cron.unschedule(&apos;{WEIXIN_CLOUD_CRON_JOB_NAME}&apos;);</span>
+                            <span className="menu-desc !mt-0">· 停用：点心跳行右侧的电源按钮即可，停用后零配额消耗；也可在 SQL Editor 执行 select cron.unschedule(&apos;{WEIXIN_CLOUD_CRON_JOB_NAME}&apos;);</span>
                         </div>
                     )}
                 </div>

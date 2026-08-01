@@ -9,7 +9,8 @@
 // 2. 进入该函数的 Settings 标签，关掉「Verify JWT with legacy secret」开关
 //    （部分版本叫 Enforce JWT verification）并 Save changes——本函数用小手机
 //    生成的定时任务密钥做校验，与离线推送函数同一套做法；
-// 3. 回到小手机「微信设置」复制定时 SQL，在 Dashboard → SQL Editor 里执行。
+// 3. 回到小手机「微信设置」点「开启云端轮询」（函数会自己创建定时任务；
+//    如失败可用「手动方式：复制定时 SQL」到 SQL Editor 执行）。
 
 // 微信助手核心逻辑：本地助手（assistant.mjs）与云端助手（Supabase Edge Function）
 // 共用这一份代码。这里只依赖 fetch 与 node:crypto/node:buffer（Node 20+ 与 Deno 均支持），
@@ -1358,6 +1359,7 @@ export function errorMessage(err) {
 
 const CLOUD_CRON_SECRET_PATH = "weixin-cloud/cron-secret.json";
 const CLOUD_ASSISTANT_STATE_PATH = "weixin-cloud/state/cloud-assistant.json";
+const CLOUD_CRON_JOB_NAME = "ai-phone-weixin-assistant";
 // 单次调用的时间预算：Edge Function 免费档墙钟上限 150s，留足回复一个 Bot 的余量。
 const CLOUD_POLL_BUDGET_MS = 120_000;
 
@@ -1400,6 +1402,45 @@ async function verifyCloudCronToken(env, body) {
   return { ok: true };
 }
 
+// 在线开关定时任务：小手机传 action=enable/disable/status，函数直连数据库
+// 执行 cron.schedule / cron.unschedule（SUPABASE_DB_URL 由平台自动注入）。
+// postgres 驱动按需动态加载，正常轮询路径不引入额外依赖。
+async function runCloudScheduleAction(env, action) {
+  const dbUrl = Deno.env.get("SUPABASE_DB_URL") || "";
+  if (!dbUrl) {
+    throw new Error("missing_SUPABASE_DB_URL: 当前环境读不到数据库连接串，无法在线开关定时任务，请改用手动 SQL。");
+  }
+  const { default: postgres } = await import("npm:postgres@3.4.7");
+  const sql = postgres(dbUrl, { prepare: false });
+  try {
+    if (action === "enable") {
+      const secret = await getObjectJson(env, CLOUD_CRON_SECRET_PATH).catch(() => null);
+      const token = typeof secret?.token === "string" ? secret.token.trim() : "";
+      if (!token) throw new Error("missing_cron_secret: 请回到小手机重新点「开启云端轮询」。");
+      const functionUrl = `${env.SUPABASE_URL.replace(/\/+$/, "")}/functions/v1/weixin-assistant`;
+      await sql.unsafe("create extension if not exists pg_cron");
+      await sql.unsafe("create extension if not exists pg_net");
+      await sql.unsafe(`select cron.schedule('${CLOUD_CRON_JOB_NAME}', '10 seconds', $CRON$
+  select net.http_post(
+    url     := '${functionUrl}',
+    headers := jsonb_build_object('Content-Type', 'application/json'),
+    body    := jsonb_build_object('token', '${token}', 'bucket', '${env.SUPABASE_BUCKET}'),
+    timeout_milliseconds := 8000
+  );
+$CRON$)`);
+      return { scheduled: true };
+    }
+    if (action === "disable") {
+      await sql.unsafe(`select cron.unschedule('${CLOUD_CRON_JOB_NAME}')`).catch(() => {});
+      return { scheduled: false };
+    }
+    const rows = await sql.unsafe(`select active from cron.job where jobname = '${CLOUD_CRON_JOB_NAME}'`);
+    return { scheduled: rows.length > 0 && rows[0].active !== false };
+  } finally {
+    await sql.end({ timeout: 5 }).catch(() => {});
+  }
+}
+
 async function writeCloudHeartbeat(env, state) {
   await putObject(env, CLOUD_ASSISTANT_STATE_PATH, JSON.stringify({
     format: "ai-phone-weixin-cloud-assistant-state",
@@ -1427,6 +1468,16 @@ Deno.serve(async (req) => {
   const auth = await verifyCloudCronToken(env, body);
   if (!auth.ok) {
     return cloudJsonResponse(auth.status, { ok: false, error: auth.error });
+  }
+
+  const action = typeof body?.action === "string" ? body.action.trim() : "";
+  if (action === "enable" || action === "disable" || action === "status") {
+    try {
+      const result = await runCloudScheduleAction(env, action);
+      return cloudJsonResponse(200, { ok: true, action, ...result });
+    } catch (err) {
+      return cloudJsonResponse(500, { ok: false, action, error: errorMessage(err) });
+    }
   }
 
   // 媒体路径（生图/TTS/CDN 上传加密）尚未在 Deno 环境实测，默认降级为文字；

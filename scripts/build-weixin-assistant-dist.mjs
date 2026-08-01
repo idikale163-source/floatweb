@@ -32,7 +32,8 @@ const banner = `// @ts-nocheck -- 本文件由核心 JS 模块拼接生成，不
 // 2. 进入该函数的 Settings 标签，关掉「Verify JWT with legacy secret」开关
 //    （部分版本叫 Enforce JWT verification）并 Save changes——本函数用小手机
 //    生成的定时任务密钥做校验，与离线推送函数同一套做法；
-// 3. 回到小手机「微信设置」复制定时 SQL，在 Dashboard → SQL Editor 里执行。
+// 3. 回到小手机「微信设置」点「开启云端轮询」（函数会自己创建定时任务；
+//    如失败可用「手动方式：复制定时 SQL」到 SQL Editor 执行）。
 
 `;
 

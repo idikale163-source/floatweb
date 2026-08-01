@@ -22,13 +22,16 @@
    （部分版本叫 Enforce JWT verification），点 Save changes。函数改用小手机生成的
    定时任务密钥做校验（与离线推送函数同一套做法），密钥存在用户自己的备份桶
    `weixin-cloud/cron-secret.json`。
-4. 回到小手机点「复制定时 SQL」，到 Dashboard → SQL Editor 新建查询粘贴后点 Run。
-   SQL 已自动填好该用户的项目 URL 与密钥，无需修改。
+4. 回到小手机点「开启云端轮询」：云函数会直连数据库（平台注入的
+   `SUPABASE_DB_URL`）自行执行 `cron.schedule`，创建每 10 秒一次的定时任务。
+   在线开启失败时（例如旧版函数），可用步骤旁的「手动方式：复制定时 SQL」
+   到 SQL Editor 执行——SQL 已自动填好项目 URL 与密钥。
 5. 点「云端测试一次」验证部署；「刷新云端心跳」可查看最近一次轮询时间与错误。
 
 ## 停用
 
-SQL Editor 执行：
+小手机「微信云端助手」心跳行右侧的电源按钮即可在线停用（云函数执行
+`cron.unschedule`，停用后零配额消耗）。手动方式：SQL Editor 执行：
 
 ```sql
 select cron.unschedule('ai-phone-weixin-assistant');
