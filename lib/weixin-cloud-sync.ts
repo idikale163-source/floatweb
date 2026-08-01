@@ -51,7 +51,6 @@ import {
 } from "./chat-engine";
 import { nativeToolProtocolForConfig } from "./llm-provider-adapter";
 import { getEnabledTools } from "./tool-storage";
-import { formatToolsForPrompt } from "./tool-prompt";
 import { getCustomStickerExample, getCustomStickerNames, resolveCustomStickerMap } from "./custom-sticker-storage";
 import { getChatImageFromIndexedDB } from "./chat-asset-storage";
 import { buildCalendarScheduleMarker, getCurrentCalendarScheduleForPrompt } from "./calendar-storage";
@@ -862,9 +861,10 @@ async function buildWeixinCloudPromptContext(params: {
   ]);
 
   const now = new Date();
-  const toolsPrompt = usesNativeActions
-    ? "<available_actions>\n需要动作时，可展开对应类别的动作说明；已有具体动作说明时，直接调用具体动作。\n</available_actions>"
-    : formatToolsForPrompt(enabledTools);
+  // 微信链路没有工具执行引擎（原生 tool_calls 不解析、文本指令会被清理），
+  // 不下发工具清单/动作横幅，改为明确声明不可用；历史中的工具调用回合
+  // 保留在上下文里（承载剧情连续性），靠声明约束模型不去模仿。
+  const toolsPrompt = "<tool_availability>当前对话正通过微信进行：工具/动作系统不可用。不要输出「获取指令」「执行动作」或任何工具调用格式的内容，也不要模仿历史消息中的工具调用记录，直接以普通对话完成回应。</tool_availability>";
 
   const promptContext: WeixinCloudPromptContext = {
     appId,
