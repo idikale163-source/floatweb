@@ -396,22 +396,33 @@ export async function deployWeixinCloudFunction(accessToken: string): Promise<vo
   if (!codeRes.ok) throw new Error("获取云函数代码失败，请刷新页面重试。");
   const code = await codeRes.text();
 
-  const form = new FormData();
-  form.append("metadata", JSON.stringify({
-    name: WEIXIN_CLOUD_FUNCTION_SLUG,
-    entrypoint_path: "index.ts",
-    verify_jwt: false,
-  }));
-  form.append("file", new Blob([code], { type: "application/typescript" }), "index.ts");
+  const buildForm = () => {
+    const form = new FormData();
+    form.append("metadata", JSON.stringify({
+      name: WEIXIN_CLOUD_FUNCTION_SLUG,
+      entrypoint_path: "index.ts",
+      verify_jwt: false,
+    }));
+    form.append("file", new Blob([code], { type: "application/typescript" }), "index.ts");
+    return form;
+  };
 
-  let res: Response;
-  try {
-    res = await fetch(
-      `https://api.supabase.com/v1/projects/${ref}/functions/deploy?slug=${WEIXIN_CLOUD_FUNCTION_SLUG}`,
-      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form },
-    );
-  } catch {
-    throw new Error("无法访问 Supabase 管理接口，请检查网络后重试。");
+  const deployUrl = `https://api.supabase.com/v1/projects/${ref}/functions/deploy?slug=${WEIXIN_CLOUD_FUNCTION_SLUG}`;
+  // 已知问题：部分环境下浏览器直连 api.supabase.com 会被 CORS 拦截
+  // （请求格式已在服务端验证正确），失败自动重试两次以覆盖网络波动；
+  // 仍失败时引导用户走「手动部署方式」。
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt > 0) await new Promise(resolve => setTimeout(resolve, attempt * 1500));
+    try {
+      res = await fetch(deployUrl, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: buildForm() });
+      break;
+    } catch {
+      // 网络/CORS 失败，进入下一次重试
+    }
+  }
+  if (!res) {
+    throw new Error("浏览器无法连接 Supabase 管理接口（部分网络/浏览器环境会被拦截）。请改用下方「手动部署方式」完成部署。");
   }
 
   if (res.status === 401) {
