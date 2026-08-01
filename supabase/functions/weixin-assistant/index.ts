@@ -56,9 +56,18 @@ export async function pollOnce(env, targetBotId, options = {}) {
     );
 
     const messages = Array.isArray(data.msgs) ? data.msgs : [];
+    const ilinkErrorCode = typeof data.error_code === "number" && data.error_code !== 0 ? data.error_code : undefined;
+    if (ilinkErrorCode !== undefined) {
+      console.warn(`[weixin-assistant] getupdates error_code=${ilinkErrorCode} bot=${item.botId} 响应字段=${Object.keys(data).join(",")}`);
+    }
+    if (options?.debug) {
+      console.log(`[weixin-assistant][debug] getupdates bot=${item.botId} 原始响应：${JSON.stringify(data).slice(0, 800)}`);
+    }
     if (data.get_updates_buf) state.getUpdatesBuf = data.get_updates_buf;
     state.lastPolledAt = polledAt;
-    state.lastError = data.error_code === -14 ? "Token 已过期，请重新扫码" : undefined;
+    state.lastError = data.error_code === -14
+      ? "Token 已过期，请重新扫码"
+      : ilinkErrorCode !== undefined ? `iLink error_code ${ilinkErrorCode}` : undefined;
     await saveBotState(env, item.botId, state);
 
     let storedMessages = 0;
@@ -86,6 +95,7 @@ export async function pollOnce(env, targetBotId, options = {}) {
       received: messages.length,
       stored: storedMessages,
       tokenExpired: data.error_code === -14,
+      ilinkErrorCode,
       autoReply,
     });
   }
@@ -1425,7 +1435,10 @@ Deno.serve(async (req) => {
   const startedAt = Date.now();
   const targetBotId = typeof body?.bot === "string" && body.bot.trim() ? body.bot.trim() : undefined;
   try {
-    const result = await pollOnce(env, targetBotId, { deadlineAt: startedAt + CLOUD_POLL_BUDGET_MS });
+    const result = await pollOnce(env, targetBotId, {
+      deadlineAt: startedAt + CLOUD_POLL_BUDGET_MS,
+      debug: body?.debug === true,
+    });
     const rows = Array.isArray(result?.results) ? result.results : [];
     const summary = {
       polled: rows.length,
@@ -1434,8 +1447,20 @@ Deno.serve(async (req) => {
       sent: rows.reduce((sum, row) => sum + Number(row.autoReply?.sent || 0), 0),
       skippedForDeadline: Number(result?.skippedForDeadline || 0),
       elapsedMs: Date.now() - startedAt,
-      error: rows.map(row => row.autoReply?.error || (row.tokenExpired ? "Token 已过期，请重新扫码" : "")).find(Boolean),
+      bots: rows.map(row => ({
+        botId: row.botId,
+        characterId: row.characterId,
+        received: row.received,
+        ilinkErrorCode: row.ilinkErrorCode,
+        autoReplyStatus: row.autoReply?.status,
+      })),
+      error: rows.map(row =>
+        row.autoReply?.error
+        || (row.tokenExpired ? "Token 已过期，请重新扫码" : "")
+        || (row.ilinkErrorCode !== undefined ? `iLink error_code ${row.ilinkErrorCode}` : ""),
+      ).find(Boolean),
     };
+    console.log(`[weixin-assistant] ${JSON.stringify(summary)}`);
     await writeCloudHeartbeat(env, {
       lastRunAt: new Date().toISOString(),
       lastError: summary.error,

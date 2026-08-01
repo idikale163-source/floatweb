@@ -83,7 +83,10 @@ Deno.serve(async (req) => {
   const startedAt = Date.now();
   const targetBotId = typeof body?.bot === "string" && body.bot.trim() ? body.bot.trim() : undefined;
   try {
-    const result = await pollOnce(env, targetBotId, { deadlineAt: startedAt + CLOUD_POLL_BUDGET_MS });
+    const result = await pollOnce(env, targetBotId, {
+      deadlineAt: startedAt + CLOUD_POLL_BUDGET_MS,
+      debug: body?.debug === true,
+    });
     const rows = Array.isArray(result?.results) ? result.results : [];
     const summary = {
       polled: rows.length,
@@ -92,8 +95,20 @@ Deno.serve(async (req) => {
       sent: rows.reduce((sum, row) => sum + Number(row.autoReply?.sent || 0), 0),
       skippedForDeadline: Number(result?.skippedForDeadline || 0),
       elapsedMs: Date.now() - startedAt,
-      error: rows.map(row => row.autoReply?.error || (row.tokenExpired ? "Token 已过期，请重新扫码" : "")).find(Boolean),
+      bots: rows.map(row => ({
+        botId: row.botId,
+        characterId: row.characterId,
+        received: row.received,
+        ilinkErrorCode: row.ilinkErrorCode,
+        autoReplyStatus: row.autoReply?.status,
+      })),
+      error: rows.map(row =>
+        row.autoReply?.error
+        || (row.tokenExpired ? "Token 已过期，请重新扫码" : "")
+        || (row.ilinkErrorCode !== undefined ? `iLink error_code ${row.ilinkErrorCode}` : ""),
+      ).find(Boolean),
     };
+    console.log(`[weixin-assistant] ${JSON.stringify(summary)}`);
     await writeCloudHeartbeat(env, {
       lastRunAt: new Date().toISOString(),
       lastError: summary.error,
