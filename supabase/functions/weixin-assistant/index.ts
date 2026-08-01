@@ -277,6 +277,25 @@ async function autoReplyPendingMessages(env, runtime) {
     const replyItems = await buildLocalReplyOutbox(replyText, runtime);
     if (replyItems.length === 0) return { status: "skipped_empty_reply", pending: pending.length, sent: 0 };
 
+    const replyExternalId = `reply_${Date.now()}_raw_${Math.random().toString(36).slice(2)}`;
+    // 首条送达后立刻把待回复消息标记为已回复：媒体回复耗时长，若函数在
+    // 中途被平台掐断，下一轮不会把整段回复重新生成再发一遍（宁可丢
+    // 后续分段，也不重复轰炸对方）。
+    let markedReplied = false;
+    const markPendingReplied = async () => {
+      if (markedReplied) return;
+      markedReplied = true;
+      const repliedAt = new Date().toISOString();
+      for (const item of pending) {
+        await putObject(env, item.path, JSON.stringify({
+          ...item.message,
+          repliedAt,
+          replyExternalId,
+          replyExternalIds: [replyExternalId],
+        }, null, 2), "application/json");
+      }
+    };
+
     const sendResults = [];
     const sendErrors = [];
     for (let i = 0; i < replyItems.length; i += 1) {
@@ -285,6 +304,7 @@ async function autoReplyPendingMessages(env, runtime) {
         const item = replyItems[i];
         const sendResult = await sendLocalReplyItem(runtime.bot?.botToken, latest.raw, item);
         sendResults.push(sendResult);
+        if (sendResults.length === 1) await markPendingReplied();
       } catch (err) {
         sendErrors.push(`第${i + 1}条发送失败: ${errorMessage(err)}`);
       }
@@ -292,22 +312,11 @@ async function autoReplyPendingMessages(env, runtime) {
 
     if (sendResults.length === 0) throw new Error(sendErrors[0] || "send_weixin_reply_failed");
 
-    const replyExternalId = `reply_${Date.now()}_raw_${Math.random().toString(36).slice(2)}`;
     await storeOutgoingMessage(env, runtime, replyExternalId, replyText, {
       sentCount: sendResults.length,
       failedCount: sendErrors.length,
       sendResults,
     });
-
-    const repliedAt = new Date().toISOString();
-    for (const item of pending) {
-      await putObject(env, item.path, JSON.stringify({
-        ...item.message,
-        repliedAt,
-        replyExternalId,
-        replyExternalIds: [replyExternalId],
-      }, null, 2), "application/json");
-    }
 
     return {
       status: sendErrors.length ? "partial_sent" : "sent",
@@ -640,7 +649,10 @@ async function buildLocalReplyItemsFromSegment(segment, runtime) {
   const media = findFirstLocalMediaProtocol(value);
   if (!media) return [{ kind: "text", text: value }];
 
-  if (!mediaReplyEnabled) {
+  // 媒体开关：本地 CLI 用 setMediaReplyEnabled（默认开）；云端由运行包
+  // promptContext.mediaReply 下发（随小手机同步自动生效，无需改函数）。
+  const mediaAllowed = mediaReplyEnabled || runtime?.promptContext?.mediaReply === true;
+  if (!mediaAllowed) {
     const out = [];
     const before = value.slice(0, media.index).trim();
     const after = value.slice(media.index + media.raw.length).trim();
@@ -943,8 +955,10 @@ function estimateVoiceDuration(text) {
   return Math.max(2, Math.ceil(String(text || "").length / 4));
 }
 
-const TTS_TIMEOUT_MS = 120_000;
-const IMAGE_GENERATION_TIMEOUT_MS = 180_000;
+// 云函数免费档墙钟上限 150s、单轮预算 120s，媒体生成超时必须压在预算内；
+// 本地助手同用此值（常见生图/TTS 服务 90s 内足够返回）。
+const TTS_TIMEOUT_MS = 60_000;
+const IMAGE_GENERATION_TIMEOUT_MS = 90_000;
 
 async function synthesizeVoiceDataUrl(text, voiceConfig) {
   const cleanText = String(text || "").trim();
@@ -1706,8 +1720,8 @@ Deno.serve(async (req) => {
   const bucketCore = await loadBucketCore(env);
   const core = bucketCore || { pollOnce, setMediaReplyEnabled };
 
-  // 媒体路径（生图/TTS/CDN 上传加密）尚未在 Deno 环境实测，默认降级为文字；
-  // 定时 SQL 里传 {"media": true} 可显式开启。
+  // 媒体回复开关以运行包 promptContext.mediaReply 为准（随小手机同步下发）；
+  // 请求体传 {"media": true} 可在旧运行包上强制开启。
   core.setMediaReplyEnabled(body?.media === true);
 
   const startedAt = Date.now();

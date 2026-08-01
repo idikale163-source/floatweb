@@ -150,6 +150,8 @@ export type WeixinCloudPromptContext = {
   offlineBilingualInstruction: string;
   offlineSummaryTag: string;
   enableVision: boolean;
+  /** 云端助手是否发送媒体回复（生图/表情包/语音卡）；核心模块按此开关执行 */
+  mediaReply?: boolean;
   timeAware: boolean;
   nativeToolHistory: boolean;
 };
@@ -903,6 +905,7 @@ async function buildWeixinCloudPromptContext(params: {
       ),
     offlineSummaryTag: params.preset?.story_summary_tag?.trim() || "summary",
     enableVision: params.apiConfig.enableImageRecognition === true,
+    mediaReply: true,
     timeAware: params.chatAppSettings.timeAware !== false,
     nativeToolHistory: usesNativeActions,
   };

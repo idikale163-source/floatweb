@@ -165,8 +165,8 @@ Deno.serve(async (req) => {
   const bucketCore = await loadBucketCore(env);
   const core = bucketCore || { pollOnce, setMediaReplyEnabled };
 
-  // 媒体路径（生图/TTS/CDN 上传加密）尚未在 Deno 环境实测，默认降级为文字；
-  // 定时 SQL 里传 {"media": true} 可显式开启。
+  // 媒体回复开关以运行包 promptContext.mediaReply 为准（随小手机同步下发）；
+  // 请求体传 {"media": true} 可在旧运行包上强制开启。
   core.setMediaReplyEnabled(body?.media === true);
 
   const startedAt = Date.now();

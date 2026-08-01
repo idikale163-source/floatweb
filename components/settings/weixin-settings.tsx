@@ -921,7 +921,7 @@ export function WeixinSettings({ onOpenDataManagement }: { onOpenDataManagement?
                             <span className="menu-desc !mt-0">· 冷启动：刚部署或停用较久后重新开启时，微信侧要几分钟才把 Bot 恢复为在线，期间回复慢、可能显示「暂无法连接」；停用期间收到的消息不会补发。让定时任务一直跑着就不会再遇到。</span>
                             <span className="menu-desc !mt-0">· 与本地助手共用同一套逻辑和防重复锁，可同时开启互为备份。</span>
                             <span className="menu-desc !mt-0">· 对方发来的图片：在 API 设置开启「图像识别」后角色可以看到并回应（遵循聊天信息页的传入图片数），图片也会同步回小手机显示；语音和文件暂以文字占位提示。</span>
-                            <span className="menu-desc !mt-0">· 角色发出的媒体：目前云端版把照片、语音等媒体协议降级为文字发送。</span>
+                            <span className="menu-desc !mt-0">· 角色发出的媒体：支持生图照片（遵循小手机「图像生成」设置）、表情包与语音（遵循语音配置），与本地助手一致。</span>
                             <span className="menu-desc !mt-0">· 微信 token 过期后仍需回到小手机重新扫码。</span>
                             <span className="menu-desc !mt-0">· 角色、API、预设等变更后，记得重新同步运行包。</span>
                             <span className="menu-desc !mt-0">· 停用：步骤②的「停用」按钮，停用后零配额消耗；也可在 SQL Editor 执行 select cron.unschedule(&apos;{WEIXIN_CLOUD_CRON_JOB_NAME}&apos;);</span>
