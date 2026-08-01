@@ -365,6 +365,61 @@ export async function fetchWeixinCloudAssistantHeartbeat(): Promise<WeixinCloudA
   }
 }
 
+/**
+ * 通过 Supabase 管理 API 一键部署云函数（等价于 supabase functions deploy --use-api）。
+ * 需要用户提供账号 Access Token（supabase.com/dashboard/account/tokens 生成）；
+ * token 只在本次请求中使用，不做任何持久化。部署时直接指定 verify_jwt=false，
+ * 用户无需再去函数设置里关 JWT 开关。
+ */
+export async function deployWeixinCloudFunction(accessToken: string): Promise<void> {
+  const config = requireCloudBackupConfig();
+  const token = accessToken.trim();
+  if (!token) throw new Error("请先粘贴 Supabase Access Token。");
+
+  const base = normalizeBackupUrl(config.url);
+  const ref = (() => {
+    try {
+      return new URL(base).hostname.split(".")[0] || "";
+    } catch {
+      return "";
+    }
+  })();
+  if (!ref) throw new Error("无法从云端备份地址解析项目标识，请检查数据管理里的 Supabase URL。");
+
+  const codeRes = await fetch("/weixin-local-assistant/cloud-function.mjs", { cache: "no-store" });
+  if (!codeRes.ok) throw new Error("获取云函数代码失败，请刷新页面重试。");
+  const code = await codeRes.text();
+
+  const form = new FormData();
+  form.append("metadata", JSON.stringify({
+    name: WEIXIN_CLOUD_FUNCTION_SLUG,
+    entrypoint_path: "index.ts",
+    verify_jwt: false,
+  }));
+  form.append("file", new Blob([code], { type: "application/typescript" }), "index.ts");
+
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://api.supabase.com/v1/projects/${ref}/functions/deploy?slug=${WEIXIN_CLOUD_FUNCTION_SLUG}`,
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form },
+    );
+  } catch {
+    throw new Error("无法访问 Supabase 管理接口，请检查网络后重试。");
+  }
+
+  if (res.status === 401) {
+    throw new Error("Access Token 无效或已过期，请到 supabase.com → Account → Access Tokens 重新生成。");
+  }
+  if (res.status === 403) {
+    throw new Error("这个 Access Token 没有该项目的权限，请确认它来自和云端备份同一个 Supabase 账号。");
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`部署失败（HTTP ${res.status}）：${text.slice(0, 200) || "未知错误"}`);
+  }
+}
+
 /** 在线开启/停用云端定时轮询：由云函数直连数据库执行 cron.schedule / cron.unschedule。 */
 export async function setWeixinCloudAssistantScheduled(enabled: boolean): Promise<{ scheduled: boolean }> {
   const config = requireCloudBackupConfig();

@@ -16,6 +16,7 @@ import {
     isWeixinCloudSupabaseReady,
     buildWeixinLocalAssistantConfigCode,
     buildWeixinCloudAssistantCronSql,
+    deployWeixinCloudFunction,
     ensureWeixinCloudCronSecret,
     fetchWeixinCloudAssistantHeartbeat,
     setWeixinCloudAssistantScheduled,
@@ -158,6 +159,8 @@ export function WeixinSettings() {
     const [showLocalAssistantAdvanced, setShowLocalAssistantAdvanced] = useState(false);
     const [cloudAssistantBusy, setCloudAssistantBusy] = useState<string | null>(null);
     const [showCloudAssistantNotes, setShowCloudAssistantNotes] = useState(false);
+    const [showManualCloudDeploy, setShowManualCloudDeploy] = useState(false);
+    const [cloudDeployToken, setCloudDeployToken] = useState("");
     const [cloudAssistantNotice, setCloudAssistantNotice] = useState<{ ok: boolean; text: string } | null>(null);
     const [cloudHeartbeat, setCloudHeartbeat] = useState<WeixinCloudAssistantHeartbeat | null>(null);
     const [cloudHeartbeatCheckedAt, setCloudHeartbeatCheckedAt] = useState<string | null>(null);
@@ -396,6 +399,31 @@ export function WeixinSettings() {
                 text: result.error
                     ? `云函数已运行，但轮询报错：${result.error}`
                     : "云端测试成功！云函数已正常轮询微信消息。定时 SQL 执行后即可 24 小时自动回复。",
+            });
+        } catch (err) {
+            setCloudAssistantNotice({ ok: false, text: err instanceof Error ? err.message : String(err) });
+        } finally {
+            setCloudAssistantBusy(null);
+        }
+    };
+
+    const handleDeployCloudFunction = async () => {
+        if (cloudAssistantBusy) return;
+        setCloudAssistantNotice(null);
+        setCloudAssistantBusy("deploy");
+        try {
+            const results = await syncAllWeixinBotRuntimesToCloud();
+            if (results.length === 0) {
+                setCloudAssistantNotice({ ok: false, text: "没有可同步的已启用微信 Bot，请先添加并启用微信 Bot。" });
+                return;
+            }
+            await ensureWeixinCloudCronSecret();
+            await deployWeixinCloudFunction(cloudDeployToken);
+            setCloudSyncConfig(loadWeixinCloudSyncConfig());
+            setCloudDeployToken("");
+            setCloudAssistantNotice({
+                ok: true,
+                text: "云函数部署成功（已自动关闭 JWT 校验，Token 未保存）。现在点「开启云端轮询」即可。",
             });
         } catch (err) {
             setCloudAssistantNotice({ ok: false, text: err instanceof Error ? err.message : String(err) });
@@ -708,33 +736,59 @@ export function WeixinSettings() {
                         <div className="flex items-start gap-3">
                             <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">1</span>
                             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                                <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">部署云函数</span>
-                                <span className="menu-desc !mt-0">① 打开 Supabase 控制台 → 左侧「Edge Functions」→ 点绿色「Deploy a new function」→ 选「Via Editor」；</span>
-                                <span className="menu-desc !mt-0">② 先把函数名改成 <b>{WEIXIN_CLOUD_FUNCTION_SLUG}</b>（不要用自动生成的随机名，部署后改名无效，只能删掉重建）；</span>
-                                <span className="menu-desc !mt-0">③ 清空编辑器里的示例代码，粘贴下方复制的代码，点「Deploy」。</span>
-                                <span className="menu-desc !mt-0">📌 只需部署这一次：之后小手机每次同步运行包都会把最新逻辑传到云端，函数自动使用，无需再改代码。建议在电脑上操作（手机浏览器里代码编辑器很难用）。</span>
+                                <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">一键部署云函数</span>
+                                <span className="menu-desc !mt-0">① 打开 supabase.com → 右上角头像 → Account Settings → 「Access Tokens」→ 点「Generate new token」（名字随意）→ 复制生成的 token；</span>
+                                <span className="menu-desc !mt-0">② 粘贴到下方，点「一键部署」。Token 只用这一次、不会被保存，部署时会自动关闭 JWT 校验。</span>
+                                <span className="menu-desc !mt-0">📌 只需部署这一次：之后小手机每次同步运行包都会把最新逻辑传到云端，函数自动使用。</span>
+                                <input
+                                    type="password"
+                                    className="h-10 w-full rounded-[12px] border border-black/10 bg-white px-3 text-[13px] focus:outline-none focus:ring-1 focus:ring-black/30"
+                                    placeholder="粘贴 Access Token（sbp_ 开头）"
+                                    value={cloudDeployToken}
+                                    onChange={e => setCloudDeployToken(e.target.value)}
+                                    autoComplete="off"
+                                />
                                 <button
                                     type="button"
                                     className="ui-btn ui-btn-outline mt-0.5 self-start whitespace-nowrap !gap-1.5 !px-3 !text-[12px]"
-                                    disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
-                                    onClick={() => void handleCopyCloudFunctionCode()}
+                                    disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy) || !cloudDeployToken.trim()}
+                                    onClick={() => void handleDeployCloudFunction()}
                                 >
-                                    {cloudAssistantBusy === "code"
-                                        ? <><Loader2 size={14} className="animate-spin" /> 准备中…</>
-                                        : <><Copy size={14} /> 复制云函数代码</>}
+                                    {cloudAssistantBusy === "deploy"
+                                        ? <><Loader2 size={14} className="animate-spin" /> 部署中…</>
+                                        : <><CloudUpload size={14} /> 一键部署</>}
                                 </button>
+                                <button
+                                    type="button"
+                                    className="ui-link-btn self-start !text-[11px]"
+                                    data-variant="muted"
+                                    onClick={() => setShowManualCloudDeploy(v => !v)}
+                                    aria-expanded={showManualCloudDeploy}
+                                >
+                                    {showManualCloudDeploy ? "收起手动部署方式" : "不想生成 Token？展开手动部署方式"}
+                                </button>
+                                {showManualCloudDeploy && (
+                                    <div className="flex flex-col gap-1.5 rounded-[14px] bg-black/[0.03] p-3">
+                                        <span className="menu-desc !mt-0">① Supabase 控制台 → 左侧「Edge Functions」→ 点绿色「Deploy a new function」→ 选「Via Editor」；</span>
+                                        <span className="menu-desc !mt-0">② 先把函数名改成 <b>{WEIXIN_CLOUD_FUNCTION_SLUG}</b>（不要用自动生成的随机名，部署后改名无效，只能删掉重建）；</span>
+                                        <span className="menu-desc !mt-0">③ 清空编辑器里的示例代码，粘贴下方复制的代码，点「Deploy」（建议在电脑上操作，手机浏览器里代码编辑器很难用）；</span>
+                                        <span className="menu-desc !mt-0">④ 进入函数页 →「Settings」标签 → 关掉「Verify JWT with legacy secret」开关（部分版本叫 Enforce JWT verification）→ 点「Save changes」。</span>
+                                        <button
+                                            type="button"
+                                            className="ui-btn ui-btn-outline mt-0.5 self-start whitespace-nowrap !gap-1.5 !px-3 !text-[12px]"
+                                            disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
+                                            onClick={() => void handleCopyCloudFunctionCode()}
+                                        >
+                                            {cloudAssistantBusy === "code"
+                                                ? <><Loader2 size={14} className="animate-spin" /> 准备中…</>
+                                                : <><Copy size={14} /> 复制云函数代码</>}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div className="flex items-start gap-3">
                             <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">2</span>
-                            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                                <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">关闭 JWT 校验</span>
-                                <span className="menu-desc !mt-0">① 进入刚部署的 {WEIXIN_CLOUD_FUNCTION_SLUG} 函数页 → 点「Settings」标签；</span>
-                                <span className="menu-desc !mt-0">② 关掉「Verify JWT with legacy secret」开关（部分版本叫 Enforce JWT verification）→ 点「Save changes」。</span>
-                            </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                            <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">3</span>
                             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                                 <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">开启定时轮询</span>
                                 <span className="menu-desc !mt-0">点下方按钮，云端会自动创建每 10 秒一次的定时任务，无需再去 Supabase 操作。</span>
@@ -765,7 +819,7 @@ export function WeixinSettings() {
                             </div>
                         </div>
                         <div className="flex items-start gap-3">
-                            <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">4</span>
+                            <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">3</span>
                             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                                 <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">验证部署</span>
                                 <span className="menu-desc !mt-0">点下方按钮立刻触发一轮「拉消息 → 生成 → 回复」；提示成功后，给 Bot 的微信发条消息试试。</span>

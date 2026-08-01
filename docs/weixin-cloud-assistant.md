@@ -11,22 +11,21 @@
 - 已在小手机「数据管理」配置并测试过 Supabase 云端备份；
 - 已添加并启用至少一个微信 Bot。
 
-## 用户部署步骤（小手机内引导，约 3 分钟）
+## 用户部署步骤（小手机内引导，约 2 分钟）
 
-1. 小手机「微信设置 → 微信云端助手」点「复制云函数代码」（会先自动同步运行包并生成密钥）。
-2. Supabase Dashboard → Edge Functions → Deploy a new function → **Via Editor**：
-   - **先把函数名改成 `weixin-assistant`**（函数名决定 URL；编辑器默认给随机名，
-     部署后改名无效，只能删掉重建）；
-   - 清空示例代码，粘贴复制的代码，点 Deploy。
-3. 进入该函数的 **Settings** 标签，关掉「**Verify JWT with legacy secret**」开关
-   （部分版本叫 Enforce JWT verification），点 Save changes。函数改用小手机生成的
-   定时任务密钥做校验（与离线推送函数同一套做法），密钥存在用户自己的备份桶
-   `weixin-cloud/cron-secret.json`。
-4. 回到小手机点「开启云端轮询」：云函数会直连数据库（平台注入的
-   `SUPABASE_DB_URL`）自行执行 `cron.schedule`，创建每 10 秒一次的定时任务。
-   在线开启失败时（例如旧版函数），可用步骤旁的「手动方式：复制定时 SQL」
-   到 SQL Editor 执行——SQL 已自动填好项目 URL 与密钥。
-5. 点「云端测试一次」验证部署；「刷新云端心跳」可查看最近一次轮询时间与错误。
+1. **一键部署**：到 supabase.com → Account Settings → Access Tokens 生成一个
+   Access Token，粘贴到小手机「微信云端助手」步骤①，点「一键部署」。小手机会
+   通过 Supabase 管理 API（等价于 `supabase functions deploy --use-api`）创建
+   `weixin-assistant` 函数并直接指定 `verify_jwt=false`，用户无需进入代码编辑器、
+   也无需手动关 JWT。Token 仅本次请求使用，不持久化。
+   - 手动兜底：步骤①里可展开「手动部署方式」（Via Editor 粘贴 + Settings 关
+     「Verify JWT with legacy secret」），适合不想生成 Token 的用户。
+   - 函数用小手机生成的定时任务密钥做校验（与离线推送函数同一套做法），
+     密钥存在用户自己的备份桶 `weixin-cloud/cron-secret.json`。
+2. 点「开启云端轮询」：云函数直连数据库（平台注入的 `SUPABASE_DB_URL`）执行
+   `cron.schedule`，创建每 10 秒一次的定时任务。失败时可用「手动方式：复制
+   定时 SQL」到 SQL Editor 执行——SQL 已自动填好项目 URL 与密钥。
+3. 点「云端测试一次」验证部署；「刷新云端心跳」可查看最近一次轮询时间与错误。
 
 ## 停用
 
