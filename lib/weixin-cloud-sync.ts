@@ -60,6 +60,7 @@ import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import {
   isCloudBackupConfigured,
   loadCloudBackupConfig,
+  normalizeBackupUrl,
   CLOUD_BACKUP_BUCKET,
   type CloudBackupConfig,
 } from "./cloud-backup/config";
@@ -258,6 +259,136 @@ export function saveWeixinCloudSyncConfig(config: WeixinCloudSyncConfig): void {
 
 export function isWeixinCloudSupabaseReady(config: CloudBackupConfig = loadCloudBackupConfig()): boolean {
   return isCloudBackupConfigured(config);
+}
+
+// ---- 微信云端助手（Supabase Edge Function 托管自动回复） ----
+
+const WEIXIN_CLOUD_CRON_SECRET_PATH = `${WEIXIN_CLOUD_PREFIX}/cron-secret.json`;
+const WEIXIN_CLOUD_ASSISTANT_STATE_PATH = `${WEIXIN_CLOUD_PREFIX}/state/cloud-assistant.json`;
+
+/** 用户在 Supabase 控制台创建云函数时必须使用的名字（决定函数 URL）。 */
+export const WEIXIN_CLOUD_FUNCTION_SLUG = "weixin-assistant";
+export const WEIXIN_CLOUD_CRON_JOB_NAME = "ai-phone-weixin-assistant";
+
+export type WeixinCloudAssistantHeartbeat = {
+  lastRunAt?: string;
+  lastError?: string;
+  polled?: number;
+  received?: number;
+  stored?: number;
+  sent?: number;
+  elapsedMs?: number;
+};
+
+function requireCloudBackupConfig(): CloudBackupConfig {
+  const config = loadCloudBackupConfig();
+  if (!isCloudBackupConfigured(config)) {
+    throw new Error("请先在数据管理里配置 Supabase 云端备份。");
+  }
+  return config;
+}
+
+export function buildWeixinCloudAssistantFunctionUrl(config: CloudBackupConfig = loadCloudBackupConfig()): string {
+  const base = normalizeBackupUrl(config.url);
+  if (!base) throw new Error("请先在数据管理里配置 Supabase 云端备份。");
+  return `${base}/functions/v1/${WEIXIN_CLOUD_FUNCTION_SLUG}`;
+}
+
+/**
+ * 定时任务调用云函数用的共享密钥。云函数没有独立配置入口，密钥直接存在用户
+ * 自己的备份桶里（云函数用 service_role 读同一对象做比对），小手机负责首次生成。
+ */
+export async function ensureWeixinCloudCronSecret(): Promise<string> {
+  const config = requireCloudBackupConfig();
+  await ensureBucket(config);
+
+  const existing = await getObject(config, WEIXIN_CLOUD_CRON_SECRET_PATH);
+  if (existing) {
+    try {
+      const parsed = JSON.parse(await existing.text()) as { token?: unknown };
+      if (typeof parsed.token === "string" && parsed.token.trim().length >= 16) return parsed.token.trim();
+    } catch {
+      // 内容损坏则重新生成覆盖
+    }
+  }
+
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  const token = Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+  await putObject(config, WEIXIN_CLOUD_CRON_SECRET_PATH, JSON.stringify({
+    format: "ai-phone-weixin-cloud-cron-secret",
+    version: 1,
+    token,
+    createdAt: new Date().toISOString(),
+  }, null, 2), "application/json");
+  return token;
+}
+
+/** 生成已填好用户项目 URL 和密钥的定时任务 SQL，粘贴到 Supabase SQL Editor 即可。 */
+export function buildWeixinCloudAssistantCronSql(token: string, config: CloudBackupConfig = loadCloudBackupConfig()): string {
+  const functionUrl = buildWeixinCloudAssistantFunctionUrl(config);
+  return `-- AI Phone 微信云端助手定时任务：每 10 秒轮询一次微信消息并自动回复。
+-- 在 Supabase Dashboard → SQL Editor 里整段执行；重复执行会覆盖同名任务，可安全重跑。
+-- 前提：已在 Edge Functions 里部署名为 ${WEIXIN_CLOUD_FUNCTION_SLUG} 的云函数，并关闭其 JWT 校验。
+
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+select cron.schedule('${WEIXIN_CLOUD_CRON_JOB_NAME}', '10 seconds', $CRON$
+  select net.http_post(
+    url     := '${functionUrl}',
+    headers := jsonb_build_object('Content-Type', 'application/json'),
+    body    := jsonb_build_object('token', '${token}', 'bucket', '${CLOUD_BACKUP_BUCKET}'),
+    timeout_milliseconds := 8000
+  );
+$CRON$);
+
+-- 停用云端助手时执行：
+-- select cron.unschedule('${WEIXIN_CLOUD_CRON_JOB_NAME}');
+`;
+}
+
+/** 读取云函数每次运行后写回的心跳状态；null 表示云函数从未成功运行过。 */
+export async function fetchWeixinCloudAssistantHeartbeat(): Promise<WeixinCloudAssistantHeartbeat | null> {
+  const config = requireCloudBackupConfig();
+  const blob = await getObject(config, WEIXIN_CLOUD_ASSISTANT_STATE_PATH);
+  if (!blob) return null;
+  try {
+    const parsed = JSON.parse(await blob.text()) as WeixinCloudAssistantHeartbeat & { format?: string };
+    if (parsed?.format !== "ai-phone-weixin-cloud-assistant-state") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** 从浏览器直接调用一次云函数，验证部署是否成功。 */
+export async function testWeixinCloudAssistantOnce(): Promise<{ ok: boolean; sent: number; error?: string }> {
+  const config = requireCloudBackupConfig();
+  const token = await ensureWeixinCloudCronSecret();
+  const url = buildWeixinCloudAssistantFunctionUrl(config);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, bucket: CLOUD_BACKUP_BUCKET }),
+    });
+  } catch {
+    throw new Error("无法访问云函数。请确认已部署名为 weixin-assistant 的 Edge Function，并已关闭该函数的 JWT 校验。");
+  }
+
+  const data = await res.json().catch(() => null) as { ok?: boolean; sent?: number; error?: string } | null;
+  if (res.status === 401) {
+    throw new Error(data?.error === "invalid_token"
+      ? "云函数密钥不匹配，请重新复制定时 SQL 并在 SQL Editor 里重新执行。"
+      : "云函数拒绝访问（401）。请在函数设置里关闭「Enforce JWT verification」后重试。");
+  }
+  if (!res.ok || !data?.ok) {
+    throw new Error(data?.error || `云函数返回 HTTP ${res.status}`);
+  }
+  return { ok: true, sent: Number(data.sent) || 0, error: data.error };
 }
 
 export function buildWeixinLocalAssistantConfigCode(

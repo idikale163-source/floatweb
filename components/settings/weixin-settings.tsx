@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Wifi, WifiOff, AlertCircle, MessageSquare, Loader2, RefreshCw, CloudUpload, Copy, Download, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Wifi, WifiOff, AlertCircle, MessageSquare, Loader2, RefreshCw, Cloud, CloudUpload, Copy, Download, ChevronDown, PlayCircle } from "lucide-react";
 import QRCode from "qrcode";
 import {
     loadWeixinBots,
@@ -15,11 +15,17 @@ import {
 import {
     isWeixinCloudSupabaseReady,
     buildWeixinLocalAssistantConfigCode,
+    buildWeixinCloudAssistantCronSql,
+    ensureWeixinCloudCronSecret,
+    fetchWeixinCloudAssistantHeartbeat,
     loadWeixinCloudSyncConfig,
     pullWeixinCloudMessagesFromCloud,
     saveWeixinCloudSyncConfig,
     syncAllWeixinBotRuntimesToCloud,
     syncWeixinBotRuntimeToCloud,
+    testWeixinCloudAssistantOnce,
+    WEIXIN_CLOUD_FUNCTION_SLUG,
+    type WeixinCloudAssistantHeartbeat,
     type WeixinCloudSyncConfig,
 } from "@/lib/weixin-cloud-sync";
 import { getWeixinBotStatus } from "@/lib/use-weixin-bridge";
@@ -51,6 +57,22 @@ function formatCloudSyncTime(value?: string): string {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
     return date.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+    const input = document.createElement("textarea");
+    input.value = text;
+    input.style.position = "fixed";
+    input.style.opacity = "0";
+    document.body.appendChild(input);
+    input.focus();
+    input.select();
+    document.execCommand("copy");
+    document.body.removeChild(input);
 }
 
 function buildLocalAssistantStartBat(): string {
@@ -132,6 +154,10 @@ export function WeixinSettings() {
     const [cloudSyncingId, setCloudSyncingId] = useState<string | null>(null);
     const [cloudSyncNotice, setCloudSyncNotice] = useState<{ ok: boolean; text: string } | null>(null);
     const [showLocalAssistantAdvanced, setShowLocalAssistantAdvanced] = useState(false);
+    const [cloudAssistantBusy, setCloudAssistantBusy] = useState<string | null>(null);
+    const [cloudAssistantNotice, setCloudAssistantNotice] = useState<{ ok: boolean; text: string } | null>(null);
+    const [cloudHeartbeat, setCloudHeartbeat] = useState<WeixinCloudAssistantHeartbeat | null>(null);
+    const [cloudHeartbeatCheckedAt, setCloudHeartbeatCheckedAt] = useState<string | null>(null);
 
     // 添加流程
     const [addStep, setAddStep] = useState<AddStep | null>(null);
@@ -243,19 +269,7 @@ export function WeixinSettings() {
         setCloudSyncNotice(null);
         try {
             const code = buildWeixinLocalAssistantConfigCode({ pollIntervalSeconds: 5 });
-            if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(code);
-            } else {
-                const input = document.createElement("textarea");
-                input.value = code;
-                input.style.position = "fixed";
-                input.style.opacity = "0";
-                document.body.appendChild(input);
-                input.focus();
-                input.select();
-                document.execCommand("copy");
-                document.body.removeChild(input);
-            }
+            await copyTextToClipboard(code);
             setCloudSyncNotice({
                 ok: true,
                 text: "已复制本地助手配置码。配置码包含 Supabase 私密密钥，请只粘贴到你自己的本地助手。",
@@ -280,10 +294,14 @@ export function WeixinSettings() {
             const scriptRes = await fetch("/weixin-local-assistant/assistant.mjs", { cache: "no-store" });
             if (!scriptRes.ok) throw new Error("下载助手脚本失败，请重新部署后再试。");
             const assistantScript = await scriptRes.text();
+            const coreRes = await fetch("/weixin-local-assistant/assistant-core.mjs", { cache: "no-store" });
+            if (!coreRes.ok) throw new Error("下载助手核心模块失败，请重新部署后再试。");
+            const assistantCoreScript = await coreRes.text();
             const JSZip = (await import("jszip")).default;
             const { downloadFile } = await import("@/lib/download-utils");
             const zip = new JSZip();
             zip.file("assistant.mjs", assistantScript);
+            zip.file("assistant-core.mjs", assistantCoreScript);
             zip.file("config.txt", code);
             zip.file("启动助手.bat", buildLocalAssistantStartBat());
             zip.file("测试一次.bat", buildLocalAssistantOnceBat());
@@ -309,6 +327,93 @@ export function WeixinSettings() {
             setCloudSyncNotice({ ok: false, text: err instanceof Error ? err.message : String(err) });
         } finally {
             setCloudSyncingId(null);
+        }
+    };
+
+    const handleCopyCloudFunctionCode = async () => {
+        if (cloudAssistantBusy) return;
+        setCloudAssistantNotice(null);
+        setCloudAssistantBusy("code");
+        try {
+            const results = await syncAllWeixinBotRuntimesToCloud();
+            if (results.length === 0) {
+                setCloudAssistantNotice({ ok: false, text: "没有可同步的已启用微信 Bot，请先添加并启用微信 Bot。" });
+                return;
+            }
+            await ensureWeixinCloudCronSecret();
+            const res = await fetch("/weixin-local-assistant/cloud-function.mjs", { cache: "no-store" });
+            if (!res.ok) throw new Error("下载云函数代码失败，请重新部署站点后再试。");
+            await copyTextToClipboard(await res.text());
+            setCloudSyncConfig(loadWeixinCloudSyncConfig());
+            setCloudAssistantNotice({
+                ok: true,
+                text: `已复制云函数代码并同步运行包。到 Supabase 控制台 Edge Functions 新建名为「${WEIXIN_CLOUD_FUNCTION_SLUG}」的函数粘贴部署，并关闭该函数的 JWT 校验。`,
+            });
+        } catch (err) {
+            setCloudAssistantNotice({ ok: false, text: err instanceof Error ? err.message : String(err) });
+        } finally {
+            setCloudAssistantBusy(null);
+        }
+    };
+
+    const handleCopyCloudCronSql = async () => {
+        if (cloudAssistantBusy) return;
+        setCloudAssistantNotice(null);
+        setCloudAssistantBusy("sql");
+        try {
+            const token = await ensureWeixinCloudCronSecret();
+            await copyTextToClipboard(buildWeixinCloudAssistantCronSql(token));
+            setCloudAssistantNotice({
+                ok: true,
+                text: "已复制定时 SQL（含专属密钥，不要公开分享）。到 Supabase 控制台 SQL Editor 整段执行即可，每 10 秒轮询一次。",
+            });
+        } catch (err) {
+            setCloudAssistantNotice({ ok: false, text: err instanceof Error ? err.message : String(err) });
+        } finally {
+            setCloudAssistantBusy(null);
+        }
+    };
+
+    const refreshCloudHeartbeat = async () => {
+        const heartbeat = await fetchWeixinCloudAssistantHeartbeat();
+        setCloudHeartbeat(heartbeat);
+        setCloudHeartbeatCheckedAt(new Date().toISOString());
+        return heartbeat;
+    };
+
+    const handleTestCloudAssistant = async () => {
+        if (cloudAssistantBusy) return;
+        setCloudAssistantNotice(null);
+        setCloudAssistantBusy("test");
+        try {
+            const result = await testWeixinCloudAssistantOnce();
+            await refreshCloudHeartbeat().catch(() => null);
+            setCloudAssistantNotice({
+                ok: true,
+                text: result.error
+                    ? `云函数已运行，但轮询报错：${result.error}`
+                    : "云端测试成功！云函数已正常轮询微信消息。定时 SQL 执行后即可 24 小时自动回复。",
+            });
+        } catch (err) {
+            setCloudAssistantNotice({ ok: false, text: err instanceof Error ? err.message : String(err) });
+        } finally {
+            setCloudAssistantBusy(null);
+        }
+    };
+
+    const handleRefreshCloudHeartbeat = async () => {
+        if (cloudAssistantBusy) return;
+        setCloudAssistantNotice(null);
+        setCloudAssistantBusy("heartbeat");
+        try {
+            const heartbeat = await refreshCloudHeartbeat();
+            if (!heartbeat) {
+                setCloudAssistantNotice({ ok: false, text: "还没有读到云端心跳。请确认云函数已部署、定时 SQL 已执行，稍等半分钟再刷新。" });
+            }
+        } catch (err) {
+            setCloudAssistantNotice({ ok: false, text: err instanceof Error ? err.message : String(err) });
+        } finally {
+            setCloudAssistantBusy(null);
         }
     };
 
@@ -549,6 +654,87 @@ export function WeixinSettings() {
                     )}
                     <span className="menu-desc !mt-0">
                         运行包会包含微信 token、当前角色绑定的 API 配置和提示词快照，仅写入你自己的 Supabase 私有备份桶。角色、API、预设、世界书或记忆变更后，请重新下载或同步运行包。本地助手包和配置码包含 Supabase 私密密钥，不要公开分享。
+                    </span>
+                </div>
+            </div>
+
+            {/* 微信云端助手 */}
+            <div className="ui-group-card !items-stretch">
+                <div className="flex items-start gap-3">
+                    <div className="ui-icon-circle shrink-0"><Cloud size={20} /></div>
+                    <div className="flex-1 flex flex-col gap-1">
+                        <span className="menu-label font-medium">微信云端助手</span>
+                        <span className="menu-desc !mt-0">
+                            部署到你自己的 Supabase 后，不需要电脑常开：云端每 10 秒自动轮询微信消息并回复。
+                        </span>
+                    </div>
+                </div>
+
+                <div className="flex flex-col gap-3 mt-4">
+                    <ol className="menu-desc !mt-0 flex flex-col gap-1 list-decimal pl-4">
+                        <li>复制云函数代码，到 Supabase 控制台 → Edge Functions 新建函数（名字必须是 {WEIXIN_CLOUD_FUNCTION_SLUG}）粘贴部署，并在函数设置里关闭「Enforce JWT verification」；</li>
+                        <li>复制定时 SQL，到 SQL Editor 里整段执行；</li>
+                        <li>点「云端测试一次」确认部署成功。</li>
+                    </ol>
+                    <div className="grid grid-cols-3 gap-2">
+                        <button
+                            type="button"
+                            className="ui-btn ui-btn-outline min-w-0 justify-center whitespace-nowrap !gap-1 !px-2 !text-[11px]"
+                            disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
+                            onClick={() => void handleCopyCloudFunctionCode()}
+                        >
+                            {cloudAssistantBusy === "code"
+                                ? <><Loader2 size={14} className="animate-spin" /> 准备中…</>
+                                : <><Copy size={14} /> 复制云函数代码</>}
+                        </button>
+                        <button
+                            type="button"
+                            className="ui-btn ui-btn-outline min-w-0 justify-center whitespace-nowrap !gap-1 !px-2 !text-[11px]"
+                            disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
+                            onClick={() => void handleCopyCloudCronSql()}
+                        >
+                            {cloudAssistantBusy === "sql"
+                                ? <><Loader2 size={14} className="animate-spin" /> 生成中…</>
+                                : <><Copy size={14} /> 复制定时 SQL</>}
+                        </button>
+                        <button
+                            type="button"
+                            className="ui-btn ui-btn-outline min-w-0 justify-center whitespace-nowrap !gap-1 !px-2 !text-[11px]"
+                            disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
+                            onClick={() => void handleTestCloudAssistant()}
+                        >
+                            {cloudAssistantBusy === "test"
+                                ? <><Loader2 size={14} className="animate-spin" /> 测试中…</>
+                                : <><PlayCircle size={14} /> 云端测试一次</>}
+                        </button>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="menu-desc !mt-0">
+                            {cloudHeartbeat?.lastRunAt
+                                ? `云端最近轮询：${formatCloudSyncTime(cloudHeartbeat.lastRunAt)}${cloudHeartbeat.lastError ? `（错误：${cloudHeartbeat.lastError}）` : ""}`
+                                : cloudHeartbeatCheckedAt
+                                    ? "未读到云端心跳"
+                                    : "云端心跳：尚未检查"}
+                        </span>
+                        <button
+                            type="button"
+                            className="ui-link-btn shrink-0"
+                            data-variant="muted"
+                            disabled={!cloudSupabaseReady || Boolean(cloudAssistantBusy)}
+                            onClick={() => void handleRefreshCloudHeartbeat()}
+                            title="刷新云端心跳"
+                        >
+                            {cloudAssistantBusy === "heartbeat" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                        </button>
+                    </div>
+                    {!cloudSupabaseReady && (
+                        <Alert variant="warning">请先到「数据管理」配置并测试 Supabase 云端备份。</Alert>
+                    )}
+                    {cloudAssistantNotice && (
+                        <Alert variant={cloudAssistantNotice.ok ? "success" : "danger"}>{cloudAssistantNotice.text}</Alert>
+                    )}
+                    <span className="menu-desc !mt-0">
+                        云端助手与本地助手共用同一套逻辑和防重复锁，可以同时开启互为备份。目前云端版把照片、语音等媒体协议降级为文字发送；微信 token 过期后仍需回到小手机重新扫码。角色、API、预设等变更后记得重新同步运行包。
                     </span>
                 </div>
             </div>
