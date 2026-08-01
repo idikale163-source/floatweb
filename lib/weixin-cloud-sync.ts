@@ -78,6 +78,8 @@ const WEIXIN_CLOUD_CHAT_APP_TAGS = ["chat", "text"];
 const DEFAULT_MESSAGE_LIMIT = 80;
 const REALTIME_PULL_INTERVAL_MS = 8000;
 const LOCAL_UPLOAD_FLUSH_DELAY_MS = 500;
+const RUNTIME_CONFIG_SYNC_DEBOUNCE_MS = 3000;
+const RUNTIME_AUTO_SYNC_THROTTLE_MS = 60 * 60 * 1000;
 
 registerKvMigration(WEIXIN_CLOUD_CONFIG_KEY);
 
@@ -1192,8 +1194,41 @@ export function startWeixinCloudRealtimeSync(): () => void {
     });
   };
 
+  // ── 运行包自动同步 ──
+  // Bot 配置变化（添加/删除/启停/重扫码）后 3 秒内自动同步运行包，
+  // 否则云端/本地助手会一直拿着旧 token 和旧配置轮询；
+  // 回到前台和启动时按 1 小时节流做兜底刷新（顺带覆盖 API/预设等变更）。
+  let runtimeSyncInFlight = false;
+  let lastRuntimeSyncAt = 0;
+  let runtimeSyncTimer: number | null = null;
+
+  const syncRuntimesNow = async (force = false) => {
+    if (stopped || runtimeSyncInFlight || !shouldRun()) return;
+    if (!force && Date.now() - lastRuntimeSyncAt < RUNTIME_AUTO_SYNC_THROTTLE_MS) return;
+    runtimeSyncInFlight = true;
+    try {
+      await syncAllWeixinBotRuntimesToCloud();
+      lastRuntimeSyncAt = Date.now();
+    } catch (err) {
+      console.warn("[WeixinCloudSync] runtime auto sync failed:", err);
+    } finally {
+      runtimeSyncInFlight = false;
+    }
+  };
+
+  const scheduleRuntimeSync = () => {
+    if (runtimeSyncTimer) window.clearTimeout(runtimeSyncTimer);
+    runtimeSyncTimer = window.setTimeout(() => {
+      runtimeSyncTimer = null;
+      void syncRuntimesNow(true);
+    }, RUNTIME_CONFIG_SYNC_DEBOUNCE_MS);
+  };
+
   const onVisibility = () => {
-    if (document.visibilityState === "visible") void pullNow(true);
+    if (document.visibilityState === "visible") {
+      void pullNow(true);
+      void syncRuntimesNow(false);
+    }
   };
 
   const onFocus = () => {
@@ -1201,7 +1236,9 @@ export function startWeixinCloudRealtimeSync(): () => void {
   };
 
   const onConfigChanged = () => {
-    if (shouldRun()) void pullNow(true);
+    if (!shouldRun()) return;
+    void pullNow(true);
+    scheduleRuntimeSync();
   };
 
   window.addEventListener(CHAT_MESSAGE_PUSHED_EVENT, onMessagePushed);
@@ -1214,11 +1251,13 @@ export function startWeixinCloudRealtimeSync(): () => void {
     void pullNow(false);
   }, REALTIME_PULL_INTERVAL_MS);
   void pullNow(true);
+  void syncRuntimesNow(false);
 
   return () => {
     stopped = true;
     window.clearInterval(interval);
     if (uploadFlushTimer) window.clearTimeout(uploadFlushTimer);
+    if (runtimeSyncTimer) window.clearTimeout(runtimeSyncTimer);
     window.removeEventListener(CHAT_MESSAGE_PUSHED_EVENT, onMessagePushed);
     window.removeEventListener(CHAT_MESSAGES_DELETED_EVENT, onMessagesDeleted);
     document.removeEventListener("visibilitychange", onVisibility);
