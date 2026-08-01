@@ -130,7 +130,11 @@ async function storeIncomingMessage(env, runtime, raw, receivedAt) {
   let imageMime;
   if (mediaItem?.kind === "image") {
     const image = await downloadIncomingWeixinImage(mediaItem).catch((err) => {
-      console.warn(`[weixin-assistant] 收图下载失败 bot=${runtime.bot.id}: ${errorMessage(err)}`);
+      // 打出 image_item 的结构（截断）便于排查微信收图协议差异
+      console.warn(
+        `[weixin-assistant] 收图下载失败 bot=${runtime.bot.id}: ${errorMessage(err)}；`
+        + `image_item=${safeJsonPreview(mediaItem.imageItem, 600)}`,
+      );
       return null;
     });
     if (image) {
@@ -168,8 +172,8 @@ async function storeIncomingMessage(env, runtime, raw, receivedAt) {
 function extractIncomingMediaItem(raw) {
   const items = Array.isArray(raw?.item_list) ? raw.item_list : [];
   for (const item of items) {
-    if (item?.type === 2 && item.image_item?.media) {
-      return { kind: "image", media: item.image_item.media };
+    if (item?.type === 2 && item.image_item) {
+      return { kind: "image", imageItem: item.image_item, media: item.image_item.media };
     }
     if (item?.type === 3) return { kind: "voice" };
     if (item?.type === 4 && item.file_item) {
@@ -188,8 +192,7 @@ async function downloadIncomingWeixinImage(mediaItem) {
   const aesKeyEncoded = mediaItem?.media?.aes_key;
   if (!param || !aesKeyEncoded) throw new Error("missing_incoming_image_params");
 
-  const keyHex = Buffer.from(String(aesKeyEncoded), "base64").toString("utf8").trim();
-  const key = /^[0-9a-fA-F]{32}$/.test(keyHex) ? Buffer.from(keyHex, "hex") : null;
+  const key = decodeIncomingAesKey(aesKeyEncoded);
   if (!key) throw new Error("invalid_incoming_image_key");
 
   const res = await fetchWithTimeout(
@@ -207,6 +210,35 @@ async function downloadIncomingWeixinImage(mediaItem) {
   const mimeType = sniffImageMimeType(bytes);
   if (!mimeType) throw new Error("incoming_image_not_image");
   return { bytes, mimeType };
+}
+
+// 兼容三种可能的 aes_key 编码：base64(hex 字符串)（发送路径用的格式）、
+// 裸 hex 字符串、base64(原始 16 字节)。
+function decodeIncomingAesKey(encoded) {
+  const s = String(encoded || "").trim();
+  if (/^[0-9a-fA-F]{32}$/.test(s)) return Buffer.from(s, "hex");
+  try {
+    const decoded = Buffer.from(s, "base64");
+    if (decoded.length === 16) return decoded;
+    const hex = decoded.toString("utf8").trim();
+    if (/^[0-9a-fA-F]{32}$/.test(hex)) return Buffer.from(hex, "hex");
+  } catch {
+    // fall through
+  }
+  return null;
+}
+
+// 序列化对象用于日志排查：长字符串字段只保留长度，整体截断。
+function safeJsonPreview(value, maxLength = 600) {
+  try {
+    const compact = JSON.stringify(value, (jsonKey, jsonValue) => {
+      if (typeof jsonValue === "string" && jsonValue.length > 60) return `<${jsonValue.length} chars>`;
+      return jsonValue;
+    });
+    return String(compact).slice(0, maxLength);
+  } catch {
+    return "(unserializable)";
+  }
 }
 
 function sniffImageMimeType(bytes) {
