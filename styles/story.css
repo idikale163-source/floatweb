@@ -80,14 +80,14 @@
           width: 36px;
           height: 36px;
           border-radius: 999px;
-          /* 实心精致按钮 */
+          /* 实心精致按钮：白底灰图标 */
           border: none;
-          background: var(--c-story-heading, #1e293b);
-          color: var(--c-story-bg-top, #fdfdfd);
+          background: var(--c-story-bubble-bg, #ffffff);
+          color: var(--c-story-sub, #94a3b8);
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
           transition: all 0.2s ease;
         }
         .story-top-btn:active {
@@ -524,8 +524,9 @@
           flex-shrink: 0;
           border-radius: 0;
           border: none;
-          background: var(--c-story-send-bg, var(--c-story-input-inner, rgba(241, 245, 249, 0.9)));
-          color: var(--c-story-send-color, #94a3b8);
+          /* 白底灰图标 */
+          background: var(--c-story-bubble-bg, #ffffff);
+          color: var(--c-story-sub, #94a3b8);
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -533,25 +534,19 @@
           transition: transform 0.16s ease, box-shadow 0.16s ease, color 0.16s ease, background 0.16s ease;
         }
         .story-send-btn:not(:disabled) {
-          background: var(--c-story-send-bg-active, #dbe3ea);
-          color: var(--c-story-send-color-active, #475569);
-          box-shadow: 0 4px 10px color-mix(in srgb, var(--c-story-send-bg-active, #dbe3ea) 34%, transparent);
+          background: var(--c-story-bubble-bg, #ffffff);
+          color: var(--c-story-sub, #94a3b8);
         }
         .story-send-btn:not(:disabled):hover {
           transform: translateY(-1px);
-          box-shadow: 0 6px 14px color-mix(in srgb, var(--c-story-send-bg-active, #dbe3ea) 42%, transparent);
+          color: var(--c-story-text-light, #64748b);
         }
         .story-send-btn:not(:disabled):active {
           transform: translateY(0) scale(0.96);
-          box-shadow: 0 3px 8px color-mix(in srgb, var(--c-story-send-bg-active, #dbe3ea) 32%, transparent);
         }
         .story-send-btn.is-generating:not(:disabled) {
-          background: var(--c-story-send-bg-active, #dbe3ea);
-          color: var(--c-story-send-color-active, #475569);
-          box-shadow: 0 4px 10px color-mix(in srgb, var(--c-story-send-bg-active, #dbe3ea) 34%, transparent);
-        }
-        .story-send-btn.is-generating:not(:disabled):hover {
-          box-shadow: 0 6px 14px color-mix(in srgb, var(--c-story-send-bg-active, #dbe3ea) 42%, transparent);
+          background: var(--c-story-bubble-bg, #ffffff);
+          color: var(--c-story-sub, #94a3b8);
         }
         .story-send-btn:disabled {
           opacity: 0.48;
