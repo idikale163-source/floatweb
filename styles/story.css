@@ -391,11 +391,34 @@
           user-select: none;
           -webkit-touch-callout: none;
         }
+        /* user 消息靠右排列 */
+        .story-row[data-role="user"] {
+          flex-direction: row-reverse;
+        }
+        .story-avatar-wrap {
+          width: 38px;
+          flex: 0 0 38px;
+          margin-top: 4px;
+        }
         .story-bubble-wrap {
           flex: 1;
           min-width: 0;
           display: flex;
           flex-direction: column;
+        }
+        /* 时间/名字头信息 */
+        .story-bubble-head {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: calc(11px*var(--app-text-scale,1));
+          letter-spacing: 0.05em;
+          color: var(--c-story-sub, #94a3b8);
+          margin-bottom: 8px;
+          text-transform: uppercase;
+        }
+        .story-row[data-role="user"] .story-bubble-head {
+          justify-content: flex-end;
         }
         
 

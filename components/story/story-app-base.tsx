@@ -89,6 +89,12 @@ function isAbortLikeError(error: unknown): boolean {
   return false;
 }
 
+function formatStoryTime(iso: string): string {
+  const date = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 const CSS_EXAMPLE = STORY_CSS_EXAMPLE;
 const STORY_THEMES = [
   { id: "paper", color: "#94a3b8", name: "纸白" },
@@ -122,7 +128,13 @@ const STORY_GENERATION_STATUS = ["整理场景", "续写剧情", "打磨对白",
 const STORY_INITIAL_LOAD = 10;
 const STORY_LOAD_MORE_COUNT = 10;
 
-function StoryGeneratingIndicator() {
+function StoryGeneratingIndicator({
+  characterName,
+  avatar,
+}: {
+  characterName: string;
+  avatar?: string;
+}) {
   const [statusIndex, setStatusIndex] = useState(0);
   const status = STORY_GENERATION_STATUS[statusIndex % STORY_GENERATION_STATUS.length];
 
@@ -135,7 +147,14 @@ function StoryGeneratingIndicator() {
 
   return (
     <article className="story-row" data-role="assistant">
+      <div className="story-avatar-wrap">
+        <Avatar src={avatar || undefined} name={characterName} size="md" />
+      </div>
       <div className="story-bubble-wrap">
+        <div className="story-bubble-head">
+          <span>{characterName}</span>
+          <span className="story-generating-head">{status}</span>
+        </div>
         <div className="story-bubble story-generating-bubble" aria-label="正在生成剧情">
           <span className="story-generating-copy">{status}</span>
           <span className="story-generating-dots" aria-hidden="true">
@@ -1023,6 +1042,16 @@ export function StoryApp({ onClose }: StoryAppProps) {
                   </button>
                 ) : null}
                 {visibleMessages.map((message) => {
+                  const speakerName = message.role === "user"
+                    ? (userIdentity?.name?.trim() || "我")
+                    : message.role === "assistant"
+                      ? currentCharacter.name
+                      : "系统";
+                  const avatarUrl = message.role === "user"
+                    ? (userIdentity?.avatarUrl || undefined)
+                    : message.role === "assistant"
+                      ? (currentCharacter.avatar || undefined)
+                      : undefined;
                   return (
                     <article
                       key={message.id}
@@ -1038,7 +1067,18 @@ export function StoryApp({ onClose }: StoryAppProps) {
                         setActiveMessageId(message.id);
                       }}
                     >
+                      {message.role !== "system" ? (
+                        <div className="story-avatar-wrap">
+                          <Avatar src={avatarUrl} name={speakerName} size="md" />
+                        </div>
+                      ) : null}
                       <div className="story-bubble-wrap" style={{ position: "relative" }}>
+                        {message.role !== "system" ? (
+                          <div className="story-bubble-head">
+                            <span>{speakerName}</span>
+                            <span>{formatStoryTime(message.createdAt)}</span>
+                          </div>
+                        ) : null}
                         <div className="story-bubble">
                           {editingMessageId === message.id ? (
                             <div className="story-inline-edit">
@@ -1101,7 +1141,10 @@ export function StoryApp({ onClose }: StoryAppProps) {
               </>
             )}
             {isGenerating ? (
-              <StoryGeneratingIndicator />
+              <StoryGeneratingIndicator
+                characterName={currentCharacter.name}
+                avatar={currentCharacter.avatar || undefined}
+              />
             ) : null}
           </div>
         </div>
