@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Menu, ArrowUp, Square, UserRound, MessageSquareText, Clock3, Sparkles, Eye, EyeOff, Paintbrush, X } from "lucide-react";
+import { ArrowLeft, Menu, Send, Square, UserRound, MessageSquareText, Clock3, Sparkles, Eye, EyeOff, Paintbrush, X } from "lucide-react";
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { Avatar } from "@/components/ui/primitives";
 import { StoryHtmlRenderer } from "@/components/ui/story-html-renderer";
@@ -240,7 +240,7 @@ const StoryComposer = memo(function StoryComposer({
         title={isGenerating ? "停止剧情生成" : "发送剧情输入"}
         disabled={!isGenerating && !draft.trim()}
       >
-        {isGenerating ? <Square size={17} /> : <ArrowUp className="story-send-icon" size={18} />}
+        {isGenerating ? <Square size={17} /> : <Send className="story-send-icon" size={18} fill="currentColor" />}
       </button>
     </div>
   );
