@@ -729,7 +729,7 @@
         /* === 折叠块 (思维链等)：书页脚注式 === */
         .story-fold-block,
         .story-summary-fold {
-          margin: 1.4em 0;
+          margin: 2.2em 0;
           border: none;
           border-radius: 0;
           background: transparent;
@@ -743,7 +743,7 @@
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 2px 0;
+          padding: 8px 0;
           font-size: calc(10px*var(--app-text-scale,1));
           letter-spacing: 0.24em;
           text-transform: uppercase;
@@ -769,11 +769,11 @@
           content: "";
           display: block;
           border-top: 1px dotted color-mix(in srgb, var(--c-story-sub, #94a3b8) 45%, transparent);
-          margin-top: 12px;
+          margin-top: 16px;
         }
         .story-fold-block__content,
         .story-summary-fold__content {
-          padding: 10px 6px 0;
+          padding: 14px 6px 0;
           color: var(--c-story-sub, #64748b);
           line-height: 1.75;
           font-size: calc(12px*var(--app-text-scale,1));
