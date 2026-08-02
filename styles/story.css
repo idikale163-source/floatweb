@@ -439,6 +439,7 @@
           font-size: calc(15px*var(--app-text-scale,1));
           white-space: pre-wrap;
           word-break: break-word;
+          text-align: justify;
           position: relative;
           color: var(--c-story-text, #334155);
           /* 纸白卡片，无描边，纸张感阴影 */
@@ -609,9 +610,10 @@
           font-size: calc(15px*var(--app-text-scale,1));
           overflow-x: hidden;
           overflow-wrap: anywhere;
+          text-align: justify;
         }
         .story-richtext p {
-          margin: 0.6em 0;
+          margin: 1.1em 0;
         }
         .story-richtext p:first-child {
           margin-top: 0;
