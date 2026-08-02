@@ -673,6 +673,17 @@
         .story-summary-fold__content p {
           text-indent: 0;
         }
+        /* 单换行(<br>)后一行的缩进占位符（渲染器注入） */
+        .story-richtext .story-br-indent {
+          display: inline-block;
+          width: 2em;
+        }
+        /* 折叠块与系统消息内保持齐头，占位符归零 */
+        .story-fold-block__content .story-br-indent,
+        .story-summary-fold__content .story-br-indent,
+        .story-row[data-role="system"] .story-br-indent {
+          width: 0;
+        }
         .story-richtext p:first-child {
           margin-top: 0;
         }

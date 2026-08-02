@@ -198,7 +198,12 @@ function MarkdownSegment({ content, scopeClass }: { content: string; scopeClass:
 
         // 2. Strip only <script> tags (security), keep everything else as-is
         //    No DOMPurify — regex-processed HTML is user-configured and trusted
-        const clean = rawHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+        let clean = rawHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+
+        // 2.5 单换行(<br>)后的行也做首行缩进：CSS text-indent 只作用于段落首行，
+        //     标准的 each-line 关键字浏览器均未实现，这里在每个 <br> 后插入
+        //     2em 占位符模拟；折叠块/系统消息内由 CSS 把占位符宽度归零
+        clean = clean.replace(/<br\s*\/?>/gi, '<br><span class="story-br-indent"></span>');
 
         // 3. Scope <style> blocks to prevent CSS leaking
         const scoped = scopeStyles(clean, scopeClass);
