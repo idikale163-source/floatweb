@@ -4,13 +4,23 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { createPortal } from "react-dom";
 import { Sparkles } from "lucide-react";
 import {
-  ArrowLeftIcon,
+  ChevronLeftIcon,
   PaintBrushIcon,
-  Bars3Icon,
   PaperAirplaneIcon,
   StopIcon,
   XMarkIcon,
 } from "@heroicons/react/24/solid";
+
+/* 三条粗横条的实心菜单图标，与实心图标集的笔画粗细一致 */
+function SolidMenuIcon({ size = 17 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <rect x="3" y="4.6" width="18" height="2.8" />
+      <rect x="3" y="10.6" width="18" height="2.8" />
+      <rect x="3" y="16.6" width="18" height="2.8" />
+    </svg>
+  );
+}
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { Avatar } from "@/components/ui/primitives";
 import { StoryHtmlRenderer } from "@/components/ui/story-html-renderer";
@@ -816,7 +826,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
             <div className="story-header-content">
               <div className="story-header-left">
                 <button className="story-top-btn" onClick={onClose} aria-label="关闭剧情模式">
-                  <ArrowLeftIcon width={17} height={17} />
+                  <ChevronLeftIcon width={19} height={19} />
                 </button>
               </div>
               <div className="story-header-center">Story</div>
@@ -971,7 +981,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
           <div className="story-header-content">
             <div className="story-header-left">
               <button className="story-top-btn" onClick={onClose} aria-label="关闭剧情模式">
-                <ArrowLeftIcon width={17} height={17} />
+                <ChevronLeftIcon width={19} height={19} />
               </button>
             </div>
             <div className="story-header-center">Story</div>
@@ -980,7 +990,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                 <PaintBrushIcon width={16} height={16} />
               </button>
               <button className="story-top-btn" onClick={() => setDrawerOpen(true)} aria-label="打开剧情侧栏">
-                <Bars3Icon width={17} height={17} />
+                <SolidMenuIcon size={16} />
               </button>
             </div>
           </div>
