@@ -726,50 +726,57 @@
           margin: 0.5em 0;
         }
         
-        /* === 折叠块 (思维链等) === */
+        /* === 折叠块 (思维链等)：书页脚注式 === */
         .story-fold-block,
         .story-summary-fold {
-          margin-top: 1em;
+          margin: 1.4em 0;
           border: none;
           border-radius: 0;
-          background: var(--c-story-fold-bg, #fcfcfc);
-          overflow: hidden;
-          box-shadow: var(--story-paper-shadow-soft);
+          background: transparent;
+          overflow: visible;
+          box-shadow: none;
         }
         .story-fold-block > summary,
         .story-summary-fold > summary {
           cursor: pointer;
           list-style: none;
-          padding: 12px 16px;
-          font-size: calc(11px*var(--app-text-scale,1));
-          letter-spacing: 0.12em;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 2px 0;
+          font-size: calc(10px*var(--app-text-scale,1));
+          letter-spacing: 0.24em;
           text-transform: uppercase;
           color: var(--c-story-sub, #94a3b8);
           user-select: none;
-          display: flex;
-          align-items: center;
-          gap: 6px;
         }
+        /* 标签两侧的细点线 */
         .story-fold-block > summary::before,
-        .story-summary-fold > summary::before {
-          content: "▸";
-          display: inline-block;
-          transition: transform 0.2s ease;
-        }
-        .story-fold-block[open] > summary::before,
-        .story-summary-fold[open] > summary::before {
-          transform: rotate(90deg);
+        .story-fold-block > summary::after,
+        .story-summary-fold > summary::before,
+        .story-summary-fold > summary::after {
+          content: "";
+          flex: 1;
+          border-top: 1px dotted color-mix(in srgb, var(--c-story-sub, #94a3b8) 45%, transparent);
         }
         .story-fold-block > summary::-webkit-details-marker,
         .story-summary-fold > summary::-webkit-details-marker {
           display: none;
         }
+        /* 展开后底部再补一条细点线，内容夹在两线之间 */
+        .story-fold-block[open]::after,
+        .story-summary-fold[open]::after {
+          content: "";
+          display: block;
+          border-top: 1px dotted color-mix(in srgb, var(--c-story-sub, #94a3b8) 45%, transparent);
+          margin-top: 12px;
+        }
         .story-fold-block__content,
         .story-summary-fold__content {
-          padding: 0 16px 16px;
+          padding: 10px 6px 0;
           color: var(--c-story-sub, #64748b);
-          line-height: 1.8;
-          font-size: calc(13px*var(--app-text-scale,1));
+          line-height: 1.75;
+          font-size: calc(12px*var(--app-text-scale,1));
         }
         .story-fold-translate-btn {
           float: right;
