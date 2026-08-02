@@ -58,8 +58,9 @@
           flex-direction: column;
           z-index: 12;
           flex-shrink: 0;
-          /* 不透明标题栏，底部带与输入栏一致的轻柔弥散阴影 */
+          /* 不透明标题栏，底部两角圆角，与输入栏呼应 */
           background: var(--c-story-bg-top, #ffffff);
+          border-radius: 0 0 14px 14px;
           box-shadow:
             0 2px 8px rgba(0, 0, 0, 0.022),
             0 8px 20px rgba(0, 0, 0, 0.014);
