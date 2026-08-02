@@ -615,6 +615,12 @@
         }
         .story-richtext p {
           margin: 1.1em 0;
+          text-indent: 2em; /* 首行缩进两字，书籍排版 */
+        }
+        /* 引用、列表内的段落不做首行缩进 */
+        .story-richtext blockquote p,
+        .story-richtext li p {
+          text-indent: 0;
         }
         .story-richtext p:first-child {
           margin-top: 0;
