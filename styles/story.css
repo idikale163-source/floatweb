@@ -161,24 +161,58 @@
           margin-bottom: 12px;
           font-weight: 600;
         }
-        .story-character-list { display: grid; gap: 10px; overflow: hidden; }
+        /* 角色选择：一行三个，圆形头像 + 下方小字姓名 */
+        .story-character-list {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 16px 8px;
+          overflow: hidden;
+        }
         .story-character-chip {
           display: flex;
+          flex-direction: column;
           align-items: center;
-          gap: 12px;
-          padding: 12px 14px;
+          gap: 7px;
+          padding: 4px 2px;
           border-radius: 0;
           overflow: hidden;
           max-width: 100%;
           box-sizing: border-box;
           border: none;
-          background: var(--c-story-panel, rgba(255, 255, 255, 0.5));
-          box-shadow: var(--story-paper-shadow-soft);
+          background: transparent;
+          box-shadow: none;
           transition: all 0.2s;
         }
-        .story-character-chip[data-active="true"] {
-          background: var(--c-story-panel-active, rgba(255, 255, 255, 0.9));
-          box-shadow: var(--story-paper-shadow);
+        .story-app-shell .story-character-chip .ui-avatar {
+          border-radius: 999px;
+          box-shadow: var(--story-paper-shadow-soft);
+        }
+        .story-character-chip[data-active="true"] .ui-avatar {
+          box-shadow: 0 0 0 2px var(--c-story-heading, #1e293b);
+        }
+        .story-character-name {
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: calc(10px*var(--app-text-scale,1));
+          color: var(--c-story-sub, #94a3b8);
+          line-height: 1.3;
+        }
+        .story-character-chip[data-active="true"] .story-character-name {
+          color: var(--c-story-heading, #1e293b);
+          font-weight: 600;
+        }
+        .story-tool-btn {
+          width: 100%;
+          padding: 12px 0;
+          border: none;
+          border-radius: 0;
+          background: var(--c-story-panel, rgba(255, 255, 255, 0.5));
+          box-shadow: var(--story-paper-shadow-soft);
+          color: var(--c-story-text, #3a3b3c);
+          font-size: calc(13px*var(--app-text-scale,1));
+          cursor: pointer;
         }
         .story-pref-row {
           display: flex;
