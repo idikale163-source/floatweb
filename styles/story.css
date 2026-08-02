@@ -8,9 +8,9 @@
           overflow: hidden;
           /* 文字颜色：柔和的深灰/铅笔色，比纯黑更有质感 */
           color: var(--c-story-text, #3a3b3c);
-          /* 背景：干净的雾面冷白到微暖米白渐变 */
+          /* 背景：纯白（其他主题通过变量覆盖） */
           background:
-            linear-gradient(160deg, var(--c-story-bg-top, #fdfdfd) 0%, var(--c-story-bg-mid, #f7f8f9) 60%, var(--c-story-bg-bottom, #eff1f0) 100%);
+            linear-gradient(160deg, var(--c-story-bg-top, #ffffff) 0%, var(--c-story-bg-mid, #ffffff) 60%, var(--c-story-bg-bottom, #ffffff) 100%);
           font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
           -webkit-user-select: none;
           user-select: none;
@@ -23,7 +23,7 @@
           position: absolute;
           top: -20%; left: -10%;
           width: 70%; height: 60%;
-          background: radial-gradient(circle, var(--c-story-ornament, rgba(230,238,245,0.4)) 0%, transparent 70%);
+          background: radial-gradient(circle, var(--c-story-ornament, transparent) 0%, transparent 70%);
           pointer-events: none;
           z-index: 0;
         }
@@ -32,7 +32,7 @@
           position: absolute;
           bottom: -15%; right: -15%;
           width: 80%; height: 70%;
-          background: radial-gradient(circle, var(--c-story-ornament-soft, rgba(240,235,230,0.5)) 0%, transparent 65%);
+          background: radial-gradient(circle, var(--c-story-ornament-soft, transparent) 0%, transparent 65%);
           pointer-events: none;
           z-index: 0;
         }
@@ -44,7 +44,7 @@
           flex-direction: column;
           z-index: 12;
           flex-shrink: 0;
-          background: linear-gradient(180deg, var(--c-story-bg-top, #fdfdfd) 60%, transparent 100%);
+          background: linear-gradient(180deg, var(--c-story-bg-top, #ffffff) 60%, transparent 100%);
         }
         .story-header-safe-area {
           height: var(--page-header-safe-top, 48px);
@@ -79,15 +79,20 @@
         .story-top-btn {
           width: 36px;
           height: 36px;
-          border-radius: 999px;
-          /* 实心精致按钮：白底灰图标 */
+          border-radius: 0;
+          /* 白底灰图标，无描边无圆角，纸张感阴影 */
           border: none;
+          outline: none;
           background: var(--c-story-bubble-bg, #ffffff);
           color: var(--c-story-sub, #94a3b8);
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+          /* 纸张感阴影：边缘强而锐，扩散后弱而柔 */
+          box-shadow:
+            0 1px 2px rgba(0, 0, 0, 0.12),
+            0 3px 6px rgba(0, 0, 0, 0.05),
+            0 10px 20px rgba(0, 0, 0, 0.03);
           transition: all 0.2s ease;
         }
         .story-top-btn:active {
@@ -524,13 +529,17 @@
           flex-shrink: 0;
           border-radius: 0;
           border: none;
-          /* 白底灰图标 */
+          outline: none;
+          /* 白底灰图标，纸张感阴影 */
           background: var(--c-story-bubble-bg, #ffffff);
           color: var(--c-story-sub, #94a3b8);
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          box-shadow: none;
+          box-shadow:
+            0 1px 2px rgba(0, 0, 0, 0.12),
+            0 3px 6px rgba(0, 0, 0, 0.05),
+            0 10px 20px rgba(0, 0, 0, 0.03);
           transition: transform 0.16s ease, box-shadow 0.16s ease, color 0.16s ease, background 0.16s ease;
         }
         .story-send-btn:not(:disabled) {
@@ -550,7 +559,6 @@
         }
         .story-send-btn:disabled {
           opacity: 0.48;
-          box-shadow: none;
         }
         .story-send-icon {
           /* 实心纸飞机：填充 currentColor，细描边保持轮廓精致 */
