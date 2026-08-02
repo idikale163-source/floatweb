@@ -236,9 +236,10 @@ interface HtmlPageProps {
     html: string;
     onOptionSelect?: (text: string) => void;
     htmlPageMode: "auto" | "contained";
+    serifIframeFallback?: boolean;
 }
 
-function HtmlPageSegment({ html, onOptionSelect, htmlPageMode }: HtmlPageProps) {
+function HtmlPageSegment({ html, onOptionSelect, htmlPageMode, serifIframeFallback }: HtmlPageProps) {
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [height, setHeight] = useState(0);
     const contained = htmlPageMode === "contained";
@@ -272,12 +273,12 @@ function HtmlPageSegment({ html, onOptionSelect, htmlPageMode }: HtmlPageProps) 
         );
         // Patch template JS: .textContent → .innerHTML so <strong>/<em> tags are preserved
         h = h.replace(/\.textContent\.trim\(\)/g, ".innerHTML.trim()");
-        // 字体兜底放到文档最前，保证生成页自己的样式能覆盖它
-        h = fontFallback + h;
+        // 字体兜底放到文档最前，保证生成页自己的样式能覆盖它（仅剧情模式启用）
+        if (serifIframeFallback) h = fontFallback + h;
         if (h.includes("</body>")) h = h.replace("</body>", bridge + "</body>");
         else h = h + bridge;
         return h;
-    }, [html, contained]);
+    }, [html, contained, serifIframeFallback]);
 
     useEffect(() => {
         const handler = (e: MessageEvent) => {
@@ -367,9 +368,11 @@ export interface StoryHtmlRendererProps {
     messageId: string;
     onOptionSelect?: (text: string) => void;
     htmlPageMode?: "auto" | "contained";
+    /** 剧情模式：给 iframe 生成页注入宋体默认字体兜底 */
+    serifIframeFallback?: boolean;
 }
 
-function StoryHtmlRendererInner({ content, messageId, onOptionSelect, htmlPageMode = "auto" }: StoryHtmlRendererProps) {
+function StoryHtmlRendererInner({ content, messageId, onOptionSelect, htmlPageMode = "auto", serifIframeFallback = false }: StoryHtmlRendererProps) {
     const segments = useMemo(() => splitContent(content), [content]);
     const scopeClass = `smsg-${messageId.slice(-8)}`;
     const containerRef = useRef<HTMLDivElement>(null);
@@ -379,14 +382,14 @@ function StoryHtmlRendererInner({ content, messageId, onOptionSelect, htmlPageMo
         <div className="story-richtext" ref={containerRef}>
             {segments.map((seg, i) => {
                 if (seg.type === "html-page") {
-                    return <HtmlPageSegment key={`hp-${i}`} html={seg.content} onOptionSelect={onOptionSelect} htmlPageMode={htmlPageMode} />;
+                    return <HtmlPageSegment key={`hp-${i}`} html={seg.content} onOptionSelect={onOptionSelect} htmlPageMode={htmlPageMode} serifIframeFallback={serifIframeFallback} />;
                 }
                 if (seg.type === "fold") {
                     return (
                         <StoryFoldBlock key={`fold-${i}`} label={seg.label} content={seg.content} scopeClass={scopeClass}>
                             {splitContent(seg.content).map((innerSeg, innerIndex) => {
                                 if (innerSeg.type === "html-page") {
-                                    return <HtmlPageSegment key={`fold-hp-${i}-${innerIndex}`} html={innerSeg.content} onOptionSelect={onOptionSelect} htmlPageMode={htmlPageMode} />;
+                                    return <HtmlPageSegment key={`fold-hp-${i}-${innerIndex}`} html={innerSeg.content} onOptionSelect={onOptionSelect} htmlPageMode={htmlPageMode} serifIframeFallback={serifIframeFallback} />;
                                 }
                                 if (innerSeg.type === "fold") {
                                     return (
