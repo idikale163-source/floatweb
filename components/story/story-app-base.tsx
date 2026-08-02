@@ -28,7 +28,7 @@ import {
   type StorySession,
   updateStorySession,
 } from "@/lib/story-storage";
-import { scopeSessionCSS } from "@/lib/css-scoper";
+import { SessionCustomCSS } from "@/components/ui/session-custom-css";
 import { STORY_CSS_EXAMPLE } from "@/lib/css-examples";
 import { applyEditOutputRegex } from "@/lib/llm-prompt-assembler";
 import { MacroEngine } from "@/lib/macro-engine";
@@ -873,7 +873,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
     >
       {/* Styles moved to styles/story.css */}
       {currentSession.customCSS ? (
-        <style dangerouslySetInnerHTML={{ __html: scopeSessionCSS(currentSession.customCSS, sessionScope) }} />
+        <SessionCustomCSS css={currentSession.customCSS} scope={sessionScope} />
       ) : null}
 
       {drawerOpen ? <div className="story-drawer-overlay" onClick={() => setDrawerOpen(false)} /> : null}
