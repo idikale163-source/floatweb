@@ -2,8 +2,8 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Sparkles } from "lucide-react";
 import {
+  BookOpenIcon,
   PaintBrushIcon,
   PaperAirplaneIcon,
   StopIcon,
@@ -870,7 +870,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
           <div className="story-stage story-stage-empty">
             <div className="story-stage-inner">
               <div className="story-empty story-empty-panel">
-                <Sparkles size={28} opacity={0.5} />
+                <BookOpenIcon width={30} height={30} opacity={0.45} />
                 <div>
                   <div className="story-empty-title">还没有角色卡</div>
                   <div className="story-empty-desc">请先创建或导入角色卡，再进入剧情 APP 开始故事。</div>
@@ -1061,7 +1061,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
 
             {messages.length === 0 ? (
               <div className="story-empty">
-                <Sparkles size={26} opacity={0.5} />
+                <BookOpenIcon width={28} height={28} opacity={0.45} />
                 <div>
                   <div className="text-[calc(14px*var(--app-text-scale,1))] font-medium text-[var(--c-story-heading,#1e293b)] mb-1">故事从这里开始</div>
                   <div className="text-[calc(12px*var(--app-text-scale,1))] opacity-70">从底部输入一段引导，剧情会继续展开。</div>
