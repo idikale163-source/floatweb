@@ -20,8 +20,9 @@
           /* 背景：纯白（其他主题通过变量覆盖） */
           background:
             linear-gradient(160deg, var(--c-story-bg-top, #ffffff) 0%, var(--c-story-bg-mid, #ffffff) 60%, var(--c-story-bg-bottom, #ffffff) 100%);
-          /* 书籍阅读感：宋体衬线字体 */
-          font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", Georgia, serif;
+          /* 书籍阅读感：宋体衬线字体，UI 全局统一 */
+          --story-font: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", Georgia, serif;
+          font-family: var(--story-font);
           -webkit-user-select: none;
           user-select: none;
           -webkit-touch-callout: none;

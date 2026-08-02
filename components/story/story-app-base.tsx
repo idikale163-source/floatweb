@@ -959,7 +959,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                 border: "none", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.06)",
                 background: "var(--c-story-css-box-bg, rgba(255, 251, 246, 0.88))",
                 color: "var(--c-story-text, #4b4335)",
-                font: "calc(13px*var(--app-text-scale,1))/1.6 inherit",
+                fontSize: "calc(13px*var(--app-text-scale,1))", lineHeight: 1.6, fontFamily: "inherit",
               }}
             />
             <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", marginTop: 4, color: "var(--c-story-sub, rgba(95, 82, 61, 0.72))" }}>
@@ -982,7 +982,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                 border: "none", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.06)",
                 background: "var(--c-story-css-box-bg, rgba(255, 251, 246, 0.88))",
                 color: "var(--c-story-text, #4b4335)",
-                font: "calc(13px*var(--app-text-scale,1))/1.6 inherit",
+                fontSize: "calc(13px*var(--app-text-scale,1))", lineHeight: 1.6, fontFamily: "inherit",
               }}
             />
             <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", marginTop: 4, color: "var(--c-story-sub, rgba(95, 82, 61, 0.72))" }}>
