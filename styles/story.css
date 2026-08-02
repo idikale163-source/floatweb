@@ -380,7 +380,10 @@
           user-select: none;
           -webkit-touch-callout: none;
         }
-        /* user 与 char 消息统一格式：同向排列、同样式气泡 */
+        /* user 消息靠右排列，气泡样式与 char 保持统一 */
+        .story-row[data-role="user"] {
+          flex-direction: row-reverse;
+        }
         /* 富文本内容禁用原生选中，避免长按手势误触发 */
         .story-richtext {
           -webkit-user-select: none;
@@ -410,7 +413,10 @@
           margin-bottom: 8px;
           text-transform: uppercase;
         }
-        
+        .story-row[data-role="user"] .story-bubble-head {
+          justify-content: flex-end;
+        }
+
         /* 气泡卡片：不再像传统的微信气泡，而是像拍立得、剪贴报 */
         .story-bubble {
           border-radius: 8px; /* 极简的微圆角 */
@@ -430,9 +436,11 @@
             inset 0 1px 0 rgba(255,255,255,1);
         }
         
-        .story-row[data-role="assistant"] .story-bubble,
-        .story-row[data-role="user"] .story-bubble {
+        .story-row[data-role="assistant"] .story-bubble {
           border-top-left-radius: 2px; /* 气泡尖角暗示 */
+        }
+        .story-row[data-role="user"] .story-bubble {
+          border-top-right-radius: 2px; /* 靠右侧的尖角，样式其余与 char 一致 */
         }
         .story-row[data-role="system"] {
           justify-content: center;
