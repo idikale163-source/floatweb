@@ -58,8 +58,11 @@
           flex-direction: column;
           z-index: 12;
           flex-shrink: 0;
-          /* 不透明标题栏 */
+          /* 不透明标题栏，底部带与输入栏一致的轻柔弥散阴影 */
           background: var(--c-story-bg-top, #ffffff);
+          box-shadow:
+            0 2px 8px rgba(0, 0, 0, 0.022),
+            0 8px 20px rgba(0, 0, 0, 0.014);
         }
         .story-header-safe-area {
           height: var(--page-header-safe-top, 48px);
@@ -110,7 +113,6 @@
           transform: scale(0.92);
           opacity: 0.85;
         }
-        [data-story-theme="night"] .story-top-btn,
         [data-story-theme="night"] .story-character-chip,
         [data-story-theme="night"] .story-load-more-btn,
         [data-story-theme="night"] .story-bubble {
