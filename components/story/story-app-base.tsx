@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { UserRound, MessageSquareText, Clock3, Sparkles, Eye, EyeOff } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import {
   ArrowLeftIcon,
   PaintBrushIcon,
@@ -89,12 +89,6 @@ function isAbortLikeError(error: unknown): boolean {
   return false;
 }
 
-function formatStoryTime(iso: string): string {
-  const date = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 const CSS_EXAMPLE = STORY_CSS_EXAMPLE;
 const STORY_THEMES = [
   { id: "paper", color: "#94a3b8", name: "纸白" },
@@ -128,19 +122,7 @@ const STORY_GENERATION_STATUS = ["整理场景", "续写剧情", "打磨对白",
 const STORY_INITIAL_LOAD = 10;
 const STORY_LOAD_MORE_COUNT = 10;
 
-function StoryGeneratingIndicator({
-  characterName,
-  avatar,
-  hideAvatar,
-  hideTimestamp,
-  hideBubble,
-}: {
-  characterName: string;
-  avatar?: string;
-  hideAvatar: boolean;
-  hideTimestamp: boolean;
-  hideBubble: boolean;
-}) {
+function StoryGeneratingIndicator() {
   const [statusIndex, setStatusIndex] = useState(0);
   const status = STORY_GENERATION_STATUS[statusIndex % STORY_GENERATION_STATUS.length];
 
@@ -152,19 +134,8 @@ function StoryGeneratingIndicator({
   }, []);
 
   return (
-    <article className="story-row" data-role="assistant" data-hide-bubble={hideBubble ? "true" : undefined} data-hide-avatar={hideAvatar ? "true" : undefined}>
-      {!hideAvatar ? (
-        <div className="story-avatar-wrap">
-          <Avatar src={avatar || undefined} name={characterName} size="md" />
-        </div>
-      ) : null}
+    <article className="story-row" data-role="assistant">
       <div className="story-bubble-wrap">
-        {(!hideAvatar || !hideTimestamp) ? (
-          <div className="story-bubble-head">
-            {!hideAvatar ? <span>{characterName}</span> : null}
-            {!hideAvatar && !hideTimestamp ? <span className="story-generating-head">{status}</span> : null}
-          </div>
-        ) : null}
         <div className="story-bubble story-generating-bubble" aria-label="正在生成剧情">
           <span className="story-generating-copy">{status}</span>
           <span className="story-generating-dots" aria-hidden="true">
@@ -637,16 +608,6 @@ export function StoryApp({ onClose }: StoryAppProps) {
     }
   }
 
-  function handleDrawerToggle(key: keyof NonNullable<StorySession["uiPrefs"]>) {
-    if (!currentSession) return;
-    applySessionUpdates({
-      uiPrefs: {
-        ...uiPrefs,
-        [key]: !uiPrefs[key],
-      },
-    });
-  }
-
   function handleStopGeneration() {
     if (!activeSessionId) return;
     const cancelled = cancelStoryGenerationRun(activeSessionId);
@@ -917,32 +878,6 @@ export function StoryApp({ onClose }: StoryAppProps) {
 
         <div className="story-drawer-section">
           <div className="story-drawer-eyebrow">显示选项</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => handleDrawerToggle("hideBubble")}
-              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 0", borderRadius: 0, border: "none", boxShadow: "var(--story-paper-shadow-soft)", background: uiPrefs.hideBubble ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "var(--c-story-panel, rgba(255,255,255,0.5))", fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-story-text, #3a3b3c)" }}
-            >
-              <MessageSquareText size={18} opacity={uiPrefs.hideBubble ? 0.4 : 1} />
-              <span>气泡</span>
-              {uiPrefs.hideBubble ? <EyeOff size={12} opacity={0.4} /> : <Eye size={12} opacity={0.6} />}
-            </button>
-            <button
-              onClick={() => handleDrawerToggle("hideAvatar")}
-              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 0", borderRadius: 0, border: "none", boxShadow: "var(--story-paper-shadow-soft)", background: uiPrefs.hideAvatar ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "var(--c-story-panel, rgba(255,255,255,0.5))", fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-story-text, #3a3b3c)" }}
-            >
-              <UserRound size={18} opacity={uiPrefs.hideAvatar ? 0.4 : 1} />
-              <span>头像</span>
-              {uiPrefs.hideAvatar ? <EyeOff size={12} opacity={0.4} /> : <Eye size={12} opacity={0.6} />}
-            </button>
-            <button
-              onClick={() => handleDrawerToggle("hideTimestamp")}
-              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 0", borderRadius: 0, border: "none", boxShadow: "var(--story-paper-shadow-soft)", background: uiPrefs.hideTimestamp ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "var(--c-story-panel, rgba(255,255,255,0.5))", fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-story-text, #3a3b3c)" }}
-            >
-              <Clock3 size={18} opacity={uiPrefs.hideTimestamp ? 0.4 : 1} />
-              <span>时间</span>
-              {uiPrefs.hideTimestamp ? <EyeOff size={12} opacity={0.4} /> : <Eye size={12} opacity={0.6} />}
-            </button>
-          </div>
           <div style={{ padding: "10px 0", borderBottom: "1px solid var(--c-story-drawer-border, rgba(124, 104, 68, 0.08))" }}>
             <label style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-story-sub, rgba(95, 82, 61, 0.72))", display: "block", marginBottom: 6 }}>
               折叠标签
@@ -1088,23 +1023,11 @@ export function StoryApp({ onClose }: StoryAppProps) {
                   </button>
                 ) : null}
                 {visibleMessages.map((message) => {
-                  const speakerName = message.role === "user"
-                    ? (userIdentity?.name?.trim() || "我")
-                    : message.role === "assistant"
-                      ? currentCharacter.name
-                      : "系统";
-                  const avatarUrl = message.role === "user"
-                    ? (userIdentity?.avatarUrl || undefined)
-                    : message.role === "assistant"
-                      ? (currentCharacter.avatar || undefined)
-                      : undefined;
                   return (
                     <article
                       key={message.id}
                       className="story-row"
                       data-role={message.role}
-                      data-hide-bubble={uiPrefs.hideBubble ? "true" : undefined}
-                      data-hide-avatar={uiPrefs.hideAvatar ? "true" : undefined}
                       onPointerDown={(e) => handleMsgPointerDown(e, message.id)}
                       onPointerMove={handleMsgPointerMove}
                       onPointerUp={handleMsgPointerUp}
@@ -1115,18 +1038,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                         setActiveMessageId(message.id);
                       }}
                     >
-                      {!uiPrefs.hideAvatar ? (
-                        <div className="story-avatar-wrap">
-                          <Avatar src={avatarUrl} name={speakerName} size="md" />
-                        </div>
-                      ) : null}
                       <div className="story-bubble-wrap" style={{ position: "relative" }}>
-                        {(!uiPrefs.hideAvatar || !uiPrefs.hideTimestamp) ? (
-                          <div className="story-bubble-head">
-                            {!uiPrefs.hideAvatar ? <span>{speakerName}</span> : null}
-                            {!uiPrefs.hideTimestamp ? <span>{formatStoryTime(message.createdAt)}</span> : null}
-                          </div>
-                        ) : null}
                         <div className="story-bubble">
                           {editingMessageId === message.id ? (
                             <div className="story-inline-edit">
@@ -1189,13 +1101,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
               </>
             )}
             {isGenerating ? (
-              <StoryGeneratingIndicator
-                characterName={currentCharacter.name}
-                avatar={currentCharacter.avatar || undefined}
-                hideAvatar={Boolean(uiPrefs.hideAvatar)}
-                hideTimestamp={Boolean(uiPrefs.hideTimestamp)}
-                hideBubble={Boolean(uiPrefs.hideBubble)}
-              />
+              <StoryGeneratingIndicator />
             ) : null}
           </div>
         </div>

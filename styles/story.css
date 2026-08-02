@@ -48,14 +48,21 @@
           z-index: 0;
         }
 
-        /* === 顶部标题栏 (固定，防止内容流到状态栏下方) === */
+        /* === 顶部标题栏：悬浮盖在长卡片上方 === */
         .story-header {
-          position: relative;
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
           display: flex;
           flex-direction: column;
           z-index: 12;
           flex-shrink: 0;
-          background: linear-gradient(180deg, var(--c-story-bg-top, #ffffff) 60%, transparent 100%);
+          background: linear-gradient(180deg, var(--c-story-bg-top, #ffffff) 55%, transparent 100%);
+          pointer-events: none;
+        }
+        .story-header button {
+          pointer-events: auto;
         }
         .story-header-safe-area {
           height: var(--page-header-safe-top, 48px);
@@ -110,14 +117,6 @@
         [data-story-theme="night"] .story-character-chip,
         [data-story-theme="night"] .story-load-more-btn,
         [data-story-theme="night"] .story-bubble {
-          box-shadow: none;
-        }
-        [data-story-theme="night"] .story-meta {
-          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
-        }
-        [data-story-theme="night"] .story-meta::before {
-          background: #2a2e3d;
-          border-color: #383c4e;
           box-shadow: none;
         }
 
@@ -221,7 +220,7 @@
           flex: 1;
           overflow-y: auto;
           overflow-x: hidden;
-          padding: 12px 16px 168px;
+          padding: calc(var(--page-header-safe-top, 48px) + var(--page-header-content-height, 42px) + 10px) 14px 0;
           scroll-behavior: smooth;
           /* 拉到顶/底时不把滚动手势链给外层页面：iOS 上外层橡皮筋回弹
              会连带 fixed 元素与自定义 CSS 层一起抖动/闪烁 */
@@ -230,39 +229,29 @@
         .story-stage-empty {
           padding-bottom: 48px;
         }
+        /* 一整张长卡片：阅读卡与正文都在这张纸上，顶栏底栏悬浮其上 */
         .story-stage-inner {
           max-width: 680px;
           margin: 0 auto;
           display: flex;
           flex-direction: column;
-          gap: 24px; /* 更大的间距，像画册的留白 */
+          gap: 24px;
+          min-height: 100%;
+          box-sizing: border-box;
+          background: var(--c-story-bubble-bg, #ffffff);
+          box-shadow: var(--story-paper-shadow);
+          padding: 26px 22px 150px;
         }
         
-        /* 顶部信息阅读卡片 */
+        /* 顶部信息阅读区：与正文同处一张长卡片，不再是独立卡片 */
         .story-meta {
           position: relative;
-          margin: 0 0 32px;
-          padding: 24px;
+          margin: 0 0 8px;
+          padding: 0;
           border-radius: 0;
-          background: var(--c-story-meta-bg, #ffffff);
+          background: transparent;
           border: none;
-          box-shadow: var(--story-paper-shadow);
-          transition: background-color 0.3s ease;
-        }
-        .story-meta::before {
-          /* 胶带装饰 */
-          content: "";
-          position: absolute;
-          top: -10px;
-          left: 50%;
-          transform: translateX(-50%) rotate(-1deg);
-          width: 80px;
-          height: 24px;
-          background: rgba(255, 255, 255, 0.7);
-          border: none;
-          backdrop-filter: blur(4px);
-          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-          z-index: 2;
+          box-shadow: none;
         }
         .story-meta-layout {
           display: flex;
@@ -391,10 +380,6 @@
           user-select: none;
           -webkit-touch-callout: none;
         }
-        /* user 消息靠右排列，气泡样式与 char 保持统一 */
-        .story-row[data-role="user"] {
-          flex-direction: row-reverse;
-        }
         /* 剧情页内头像随整体风格改为方形纸片 */
         .story-app-shell .ui-avatar {
           border-radius: 0;
@@ -406,11 +391,6 @@
           user-select: none;
           -webkit-touch-callout: none;
         }
-        .story-avatar-wrap {
-          width: 38px;
-          flex: 0 0 38px;
-          margin-top: 4px;
-        }
         .story-bubble-wrap {
           flex: 1;
           min-width: 0;
@@ -418,25 +398,12 @@
           flex-direction: column;
         }
         
-        /* 时间/名字头信息 */
-        .story-bubble-head {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: calc(11px*var(--app-text-scale,1));
-          letter-spacing: 0.05em;
-          color: var(--c-story-sub, #94a3b8);
-          margin-bottom: 8px;
-          text-transform: uppercase;
-        }
-        .story-row[data-role="user"] .story-bubble-head {
-          justify-content: flex-end;
-        }
 
         /* 气泡卡片：不再像传统的微信气泡，而是像拍立得、剪贴报 */
+        /* 正文块：透明融入长卡片，只是纸上的文字 */
         .story-bubble {
           border-radius: 0;
-          padding: 20px 24px;
+          padding: 0;
           line-height: 1.68;
           font-size: calc(14px*var(--app-text-scale,1));
           white-space: pre-wrap;
@@ -444,10 +411,9 @@
           text-align: justify;
           position: relative;
           color: var(--c-story-text, #334155);
-          /* 纸白卡片，无描边，纸张感阴影 */
-          background: var(--c-story-bubble-bg, #ffffff);
+          background: transparent;
           border: none;
-          box-shadow: var(--story-paper-shadow);
+          box-shadow: none;
         }
         .story-row[data-role="system"] {
           justify-content: center;
@@ -464,14 +430,6 @@
           color: var(--c-story-sub, #94a3b8);
           text-align: center;
           font-style: italic;
-        }
-        .story-row[data-hide-bubble="true"] .story-bubble {
-          padding: 0; border: none; background: transparent; box-shadow: none;
-        }
-        /* 隐藏头像后正文与顶部阅读卡片左右对齐 */
-        .story-row[data-hide-avatar="true"] {
-          padding: 0;
-          box-sizing: border-box;
         }
         /* === 底部输入栏（固定在底部，无圆角） === */
         .story-composer {
