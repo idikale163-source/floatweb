@@ -912,7 +912,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={() => handleDrawerToggle("hideBubble")}
-              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 0", borderRadius: 12, border: "1px solid var(--c-story-panel-border, rgba(0,0,0,0.04))", background: uiPrefs.hideBubble ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "var(--c-story-panel, rgba(255,255,255,0.5))", fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-story-text, #3a3b3c)" }}
+              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 0", borderRadius: 0, border: "none", boxShadow: "var(--story-paper-shadow-soft)", background: uiPrefs.hideBubble ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "var(--c-story-panel, rgba(255,255,255,0.5))", fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-story-text, #3a3b3c)" }}
             >
               <MessageSquareText size={18} opacity={uiPrefs.hideBubble ? 0.4 : 1} />
               <span>气泡</span>
@@ -920,7 +920,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
             </button>
             <button
               onClick={() => handleDrawerToggle("hideAvatar")}
-              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 0", borderRadius: 12, border: "1px solid var(--c-story-panel-border, rgba(0,0,0,0.04))", background: uiPrefs.hideAvatar ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "var(--c-story-panel, rgba(255,255,255,0.5))", fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-story-text, #3a3b3c)" }}
+              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 0", borderRadius: 0, border: "none", boxShadow: "var(--story-paper-shadow-soft)", background: uiPrefs.hideAvatar ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "var(--c-story-panel, rgba(255,255,255,0.5))", fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-story-text, #3a3b3c)" }}
             >
               <UserRound size={18} opacity={uiPrefs.hideAvatar ? 0.4 : 1} />
               <span>头像</span>
@@ -928,7 +928,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
             </button>
             <button
               onClick={() => handleDrawerToggle("hideTimestamp")}
-              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 0", borderRadius: 12, border: "1px solid var(--c-story-panel-border, rgba(0,0,0,0.04))", background: uiPrefs.hideTimestamp ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "var(--c-story-panel, rgba(255,255,255,0.5))", fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-story-text, #3a3b3c)" }}
+              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 0", borderRadius: 0, border: "none", boxShadow: "var(--story-paper-shadow-soft)", background: uiPrefs.hideTimestamp ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "var(--c-story-panel, rgba(255,255,255,0.5))", fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-story-text, #3a3b3c)" }}
             >
               <Clock3 size={18} opacity={uiPrefs.hideTimestamp ? 0.4 : 1} />
               <span>时间</span>
@@ -947,8 +947,8 @@ export function StoryApp({ onClose }: StoryAppProps) {
               placeholder="think,thinking"
               style={{
                 width: "100%", boxSizing: "border-box",
-                padding: "8px 12px", borderRadius: 12,
-                border: "1px solid var(--c-story-panel-border, rgba(139, 120, 94, 0.14))",
+                padding: "8px 12px", borderRadius: 0,
+                border: "none", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.06)",
                 background: "var(--c-story-css-box-bg, rgba(255, 251, 246, 0.88))",
                 color: "var(--c-story-text, #4b4335)",
                 font: "calc(13px*var(--app-text-scale,1))/1.6 inherit",
@@ -970,8 +970,8 @@ export function StoryApp({ onClose }: StoryAppProps) {
               placeholder="think,thinking"
               style={{
                 width: "100%", boxSizing: "border-box",
-                padding: "8px 12px", borderRadius: 12,
-                border: "1px solid var(--c-story-panel-border, rgba(139, 120, 94, 0.14))",
+                padding: "8px 12px", borderRadius: 0,
+                border: "none", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.06)",
                 background: "var(--c-story-css-box-bg, rgba(255, 251, 246, 0.88))",
                 color: "var(--c-story-text, #4b4335)",
                 font: "calc(13px*var(--app-text-scale,1))/1.6 inherit",
@@ -1234,8 +1234,9 @@ export function StoryApp({ onClose }: StoryAppProps) {
                       onClick={() => applySessionUpdates({ uiPrefs: { ...uiPrefs, theme: t.id } })}
                       style={{
                         minHeight: 54,
-                        borderRadius: 12,
-                        border: active ? "1px solid var(--c-story-text, #3a3b3c)" : "1px solid var(--c-story-panel-border, rgba(139, 120, 94, 0.14))",
+                        borderRadius: 0,
+                        border: "none",
+                        boxShadow: active ? "var(--story-paper-shadow)" : "var(--story-paper-shadow-soft)",
                         background: active ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "var(--c-story-panel, rgba(255,255,255,0.5))",
                         color: "var(--c-story-text, #3a3b3c)",
                         display: "flex",
@@ -1250,10 +1251,12 @@ export function StoryApp({ onClose }: StoryAppProps) {
                       <span style={{
                         width: 22,
                         height: 22,
-                        borderRadius: "50%",
+                        borderRadius: 0,
                         background: t.color,
-                        border: active ? "2px solid var(--c-story-bg-top, #fdfdfd)" : "2px solid transparent",
-                        boxShadow: active ? "0 0 0 2px var(--c-story-text, #3a3b3c)" : "0 2px 8px rgba(0,0,0,0.1)",
+                        border: "none",
+                        boxShadow: active
+                          ? "inset 0 0 0 2px var(--c-story-bg-top, #fdfdfd), 0 0 0 2px var(--c-story-text, #3a3b3c)"
+                          : "var(--story-paper-shadow-soft)",
                       }} />
                       <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-story-sub, #94a3b8)", lineHeight: 1.1 }}>{t.name}</span>
                     </button>
@@ -1270,7 +1273,9 @@ export function StoryApp({ onClose }: StoryAppProps) {
             />
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <CSSSchemeBar target="story" currentCSS={customCssDraft} onLoad={setCustomCssDraft} btnStyle={{
-                border: "1px solid var(--c-story-btn-border, rgba(0,0,0,0.08))",
+                border: "none",
+                borderRadius: 0,
+                boxShadow: "var(--story-paper-shadow-soft)",
                 background: "var(--c-story-btn-bg, rgba(255,255,255,0.5))",
                 color: "var(--c-story-text, #3a3b3c)",
               }} modalVars={{
@@ -1285,8 +1290,8 @@ export function StoryApp({ onClose }: StoryAppProps) {
               <button
                 onClick={() => setCustomCssDraft(CSS_EXAMPLE)}
                 style={{
-                  flex: 1, padding: "12px 0", borderRadius: 12,
-                  border: "1px solid var(--c-story-btn-border, rgba(0,0,0,0.08))",
+                  flex: 1, padding: "12px 0", borderRadius: 0,
+                  border: "none", boxShadow: "var(--story-paper-shadow-soft)",
                   background: "var(--c-story-btn-bg, rgba(255,255,255,0.5))", color: "var(--c-story-text, #3a3b3c)",
                   fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer",
                 }}
@@ -1296,8 +1301,8 @@ export function StoryApp({ onClose }: StoryAppProps) {
               <button
                 onClick={() => setCustomCssDraft("")}
                 style={{
-                  flex: 1, padding: "12px 0", borderRadius: 12,
-                  border: "1px solid var(--c-story-btn-border, rgba(0,0,0,0.08))",
+                  flex: 1, padding: "12px 0", borderRadius: 0,
+                  border: "none", boxShadow: "var(--story-paper-shadow-soft)",
                   background: "var(--c-story-btn-bg, rgba(255,255,255,0.5))", color: "var(--c-story-text, #3a3b3c)",
                   fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer",
                 }}
@@ -1307,7 +1312,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
               <button
                 onClick={() => { applySessionUpdates({ customCSS: customCssDraft }); setCssModalOpen(false); }}
                 style={{
-                  flex: 1, padding: "12px 0", borderRadius: 12, border: "none",
+                  flex: 1, padding: "12px 0", borderRadius: 0, border: "none", boxShadow: "var(--story-paper-shadow)",
                   background: "var(--c-story-send-bg-active, #dbe3ea)", color: "var(--c-story-send-color-active, #475569)",
                   fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer",
                 }}

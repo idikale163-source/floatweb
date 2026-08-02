@@ -6,6 +6,15 @@
           position: absolute;
           inset: 0;
           overflow: hidden;
+          /* 纸张感阴影：边缘强而锐，扩散后弱而柔 */
+          --story-paper-shadow:
+            0 1px 2px rgba(0, 0, 0, 0.12),
+            0 3px 6px rgba(0, 0, 0, 0.05),
+            0 10px 20px rgba(0, 0, 0, 0.03);
+          --story-paper-shadow-soft:
+            0 1px 2px rgba(0, 0, 0, 0.07),
+            0 3px 8px rgba(0, 0, 0, 0.03),
+            0 10px 20px rgba(0, 0, 0, 0.02);
           /* 文字颜色：柔和的深灰/铅笔色，比纯黑更有质感 */
           color: var(--c-story-text, #3a3b3c);
           /* 背景：纯白（其他主题通过变量覆盖） */
@@ -88,11 +97,7 @@
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          /* 纸张感阴影：边缘强而锐，扩散后弱而柔 */
-          box-shadow:
-            0 1px 2px rgba(0, 0, 0, 0.12),
-            0 3px 6px rgba(0, 0, 0, 0.05),
-            0 10px 20px rgba(0, 0, 0, 0.03);
+          box-shadow: var(--story-paper-shadow);
           transition: all 0.2s ease;
         }
         .story-top-btn:active {
@@ -135,9 +140,13 @@
           box-sizing: border-box;
           background:
             linear-gradient(180deg, var(--c-story-drawer-top, rgba(253, 253, 254, 0.98)), var(--c-story-drawer-bottom, rgba(248, 249, 250, 0.98)));
-          border-left: 1px solid var(--c-story-drawer-border, rgba(0, 0, 0, 0.04));
+          border-left: none;
           overflow-x: hidden;
-          box-shadow: -20px 0 40px rgba(0, 0, 0, 0.06);
+          /* 侧向纸张感阴影 */
+          box-shadow:
+            -1px 0 2px rgba(0, 0, 0, 0.08),
+            -4px 0 8px rgba(0, 0, 0, 0.04),
+            -16px 0 32px rgba(0, 0, 0, 0.03);
           z-index: 11;
           overflow: auto;
           backdrop-filter: blur(20px);
@@ -159,19 +168,18 @@
           align-items: center;
           gap: 12px;
           padding: 12px 14px;
-          border-radius: 16px;
+          border-radius: 0;
           overflow: hidden;
           max-width: 100%;
           box-sizing: border-box;
-          border: 1px solid var(--c-story-panel-border, rgba(255, 255, 255, 0.8));
+          border: none;
           background: var(--c-story-panel, rgba(255, 255, 255, 0.5));
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.02), inset 0 1px 0 rgba(255,255,255,0.4);
+          box-shadow: var(--story-paper-shadow-soft);
           transition: all 0.2s;
         }
         .story-character-chip[data-active="true"] {
-          border-color: var(--c-story-accent-light, rgba(148, 163, 184, 0.4));
           background: var(--c-story-panel-active, rgba(255, 255, 255, 0.9));
-          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
+          box-shadow: var(--story-paper-shadow);
         }
         .story-pref-row {
           display: flex;
@@ -186,8 +194,8 @@
         .story-css-box {
           width: 100%;
           min-height: 140px;
-          border-radius: 14px;
-          border: 1px solid var(--c-story-panel-border, rgba(255, 255, 255, 0.6));
+          border-radius: 0;
+          border: none;
           background: var(--c-story-css-box-bg, rgba(248, 250, 252, 0.6));
           color: var(--c-story-text, #3a3b3c);
           padding: 12px;
@@ -232,15 +240,12 @@
         /* 顶部信息阅读卡片 */
         .story-meta {
           position: relative;
-          margin: 0 4px 32px;
+          margin: 0 0 32px;
           padding: 24px;
-          border-radius: 2px; /* 低圆角纸质卡片 */
+          border-radius: 0;
           background: var(--c-story-meta-bg, #ffffff);
-          border: 1px solid var(--c-story-meta-border, #f0f0f0);
-          box-shadow: 
-            0 1px 1px rgba(0,0,0,0.02), 
-            0 4px 12px rgba(0,0,0,0.03),
-            2px 14px 24px rgba(0,0,0,0.04); /* 底部厚重阴影 */
+          border: none;
+          box-shadow: var(--story-paper-shadow);
           transition: background-color 0.3s ease;
         }
         .story-meta::before {
@@ -253,7 +258,7 @@
           width: 80px;
           height: 24px;
           background: rgba(255, 255, 255, 0.7);
-          border: 1px solid rgba(0,0,0,0.02);
+          border: none;
           backdrop-filter: blur(4px);
           box-shadow: 0 1px 3px rgba(0,0,0,0.05);
           z-index: 2;
@@ -268,11 +273,11 @@
           height: 120px;
           flex-shrink: 0;
           background: var(--c-story-cover-bg, #f1f5f9);
-          border-radius: 4px;
+          border-radius: 0;
           overflow: hidden;
           position: relative;
-          box-shadow: 0 4px 10px rgba(0,0,0,0.08);
-          border: 3px solid var(--c-story-cover-border, #fff);
+          box-shadow: var(--story-paper-shadow);
+          border: none;
         }
         .story-meta-cover img {
           width: 100%; height: 100%; object-fit: cover;
@@ -335,24 +340,24 @@
           min-width: 112px;
           height: 42px;
           border: 0;
-          border-radius: 999px;
+          border-radius: 0;
           background: var(--c-story-text, #111827);
           color: #fff;
           font-size: calc(14px*var(--app-text-scale,1));
           font-weight: 700;
-          box-shadow: 0 12px 24px rgba(15, 23, 42, 0.14);
+          box-shadow: var(--story-paper-shadow);
         }
         .story-load-more-btn {
           appearance: none;
-          border: 1px solid var(--c-story-panel-border, rgba(148, 163, 184, 0.16));
-          background: var(--c-story-panel, rgba(255, 255, 255, 0.5));
+          border: none;
+          background: var(--c-story-bubble-bg, #ffffff);
           color: var(--c-story-sub, #94a3b8);
           width: fit-content;
           max-width: calc(100% - 32px);
           align-self: center;
           min-height: 30px;
           padding: 6px 14px;
-          border-radius: 999px;
+          border-radius: 0;
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -362,7 +367,7 @@
           line-height: 1.25;
           cursor: pointer;
           white-space: nowrap;
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+          box-shadow: var(--story-paper-shadow-soft);
           transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
         }
         .story-load-more-btn:active {
@@ -388,6 +393,11 @@
         /* user 消息靠右排列，气泡样式与 char 保持统一 */
         .story-row[data-role="user"] {
           flex-direction: row-reverse;
+        }
+        /* 剧情页内头像随整体风格改为方形纸片 */
+        .story-app-shell .ui-avatar {
+          border-radius: 0;
+          box-shadow: var(--story-paper-shadow-soft);
         }
         /* 富文本内容禁用原生选中，避免长按手势误触发 */
         .story-richtext {
@@ -424,7 +434,7 @@
 
         /* 气泡卡片：不再像传统的微信气泡，而是像拍立得、剪贴报 */
         .story-bubble {
-          border-radius: 8px; /* 极简的微圆角 */
+          border-radius: 0;
           padding: 20px 24px;
           line-height: 1.8;
           font-size: calc(15px*var(--app-text-scale,1));
@@ -432,20 +442,10 @@
           word-break: break-word;
           position: relative;
           color: var(--c-story-text, #334155);
-          /* 核心审美：高级纸白，带微妙内发光和弥散外阴影 */
+          /* 纸白卡片，无描边，纸张感阴影 */
           background: var(--c-story-bubble-bg, #ffffff);
-          border: 1px solid var(--c-story-bubble-border, rgba(0,0,0,0.03));
-          box-shadow: 
-            0 2px 8px rgba(0,0,0,0.03),
-            0 14px 28px rgba(0,0,0,0.02),
-            inset 0 1px 0 rgba(255,255,255,1);
-        }
-        
-        .story-row[data-role="assistant"] .story-bubble {
-          border-top-left-radius: 2px; /* 气泡尖角暗示 */
-        }
-        .story-row[data-role="user"] .story-bubble {
-          border-top-right-radius: 2px; /* 靠右侧的尖角，样式其余与 char 一致 */
+          border: none;
+          box-shadow: var(--story-paper-shadow);
         }
         .story-row[data-role="system"] {
           justify-content: center;
@@ -466,9 +466,9 @@
         .story-row[data-hide-bubble="true"] .story-bubble {
           padding: 0; border: none; background: transparent; box-shadow: none;
         }
-        /* 隐藏头像后正文直接贴到舞台边距，左右补一点呼吸感 */
+        /* 隐藏头像后正文与顶部阅读卡片左右对齐 */
         .story-row[data-hide-avatar="true"] {
-          padding: 0 12px;
+          padding: 0;
           box-sizing: border-box;
         }
         /* === 底部输入栏（固定在底部，无圆角） === */
@@ -480,10 +480,13 @@
           z-index: 9;
           background: var(--c-story-input-bar, var(--c-story-meta-bg, #ffffff));
           border: none;
-          border-top: 1px solid var(--c-story-input-border, var(--c-story-meta-border, #f0f0f0));
           min-height: 52px;
           border-radius: 0;
-          box-shadow: 0 -2px 10px rgba(0,0,0,0.03);
+          /* 上方向纸张感阴影：边缘强，扩散弱柔 */
+          box-shadow:
+            0 -1px 2px rgba(0, 0, 0, 0.08),
+            0 -4px 8px rgba(0, 0, 0, 0.03),
+            0 -12px 24px rgba(0, 0, 0, 0.02);
           padding: 8px 12px calc(env(safe-area-inset-bottom, 0px) + 8px);
           display: flex;
           align-items: flex-end;
@@ -492,7 +495,6 @@
         }
         .story-composer:focus-within {
           background: var(--c-story-input-bar-focus, var(--c-story-meta-bg, #ffffff));
-          box-shadow: 0 -2px 12px rgba(0,0,0,0.04);
         }
         .story-composer textarea {
           flex: 1;
@@ -536,10 +538,7 @@
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          box-shadow:
-            0 1px 2px rgba(0, 0, 0, 0.12),
-            0 3px 6px rgba(0, 0, 0, 0.05),
-            0 10px 20px rgba(0, 0, 0, 0.03);
+          box-shadow: var(--story-paper-shadow);
           transition: transform 0.16s ease, box-shadow 0.16s ease, color 0.16s ease, background 0.16s ease;
         }
         .story-send-btn:not(:disabled) {
@@ -652,7 +651,7 @@
           font-family: var(--story-font, serif);
           font-size: calc(14px*var(--app-text-scale,1));
           line-height: 1.8;
-          border-radius: 0 8px 8px 0;
+          border-radius: 0;
         }
         .story-richtext blockquote p { margin: 0.3em 0; }
         
@@ -687,9 +686,9 @@
           border-spacing: 0;
           font-size: calc(13px*var(--app-text-scale,1));
           margin: 1em 0;
-          border-radius: 8px;
+          border-radius: 0;
           overflow: hidden;
-          border: 1px solid rgba(0,0,0,0.04);
+          box-shadow: var(--story-paper-shadow-soft);
         }
         .story-richtext th,
         .story-richtext td {
@@ -709,8 +708,9 @@
           max-width: 100%;
           background: var(--c-story-code-bg, #f8fafc);
           padding: 12px 16px;
-          border-radius: 8px;
-          border: 1px solid rgba(0,0,0,0.03);
+          border-radius: 0;
+          border: none;
+          box-shadow: var(--story-paper-shadow-soft);
           font-size: calc(13px*var(--app-text-scale,1));
         }
         .story-richtext code {
@@ -718,14 +718,14 @@
           font-size: 0.9em;
           background: var(--c-story-code-bg, #f8fafc);
           padding: 0.2em 0.4em;
-          border-radius: 4px;
+          border-radius: 0;
           color: var(--c-story-code-color, #0f172a);
         }
         .story-richtext img {
           max-width: 100%;
           height: auto;
-          border-radius: 6px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+          border-radius: 0;
+          box-shadow: var(--story-paper-shadow);
           margin: 0.5em 0;
         }
         
@@ -733,11 +733,11 @@
         .story-fold-block,
         .story-summary-fold {
           margin-top: 1em;
-          border: 1px solid rgba(0,0,0,0.04);
+          border: none;
           border-radius: 0;
           background: var(--c-story-fold-bg, #fcfcfc);
           overflow: hidden;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.01);
+          box-shadow: var(--story-paper-shadow-soft);
         }
         .story-fold-block > summary,
         .story-summary-fold > summary {
@@ -863,8 +863,11 @@
           gap: 6px;
           padding: 4px 0;
           background: var(--ctx-menu-bg, #2c2c2c);
-          border-radius: 8px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          border-radius: 0;
+          box-shadow:
+            0 1px 2px rgba(0, 0, 0, 0.2),
+            0 4px 10px rgba(0, 0, 0, 0.1),
+            0 12px 24px rgba(0, 0, 0, 0.06);
           white-space: nowrap;
         }
         .story-ctx-btn {
@@ -914,7 +917,7 @@
         .story-inline-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
         .story-inline-edit-btn {
           background: none; border: none; cursor: pointer;
-          font-size: calc(12px*var(--app-text-scale,1)); padding: 2px 8px; border-radius: 4px;
+          font-size: calc(12px*var(--app-text-scale,1)); padding: 2px 8px; border-radius: 0;
           color: var(--c-story-sub, rgba(95, 82, 61, 0.72));
         }
         .story-inline-edit-btn-save { color: var(--c-story-accent, #7c6844); font-weight: 500; }
