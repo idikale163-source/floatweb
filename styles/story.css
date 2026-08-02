@@ -476,7 +476,7 @@
         .story-bubble {
           border-radius: 0;
           padding: 0;
-          line-height: 1.68;
+          line-height: 1.78;
           font-size: calc(14px*var(--app-text-scale,1));
           white-space: pre-wrap;
           word-break: break-word;
