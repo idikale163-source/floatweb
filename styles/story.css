@@ -20,7 +20,8 @@
           /* 背景：纯白（其他主题通过变量覆盖） */
           background:
             linear-gradient(160deg, var(--c-story-bg-top, #ffffff) 0%, var(--c-story-bg-mid, #ffffff) 60%, var(--c-story-bg-bottom, #ffffff) 100%);
-          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          /* 书籍阅读感：宋体衬线字体 */
+          font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", Georgia, serif;
           -webkit-user-select: none;
           user-select: none;
           -webkit-touch-callout: none;
@@ -508,7 +509,7 @@
           overflow-y: auto;
           background: var(--c-story-input-inner, rgba(248, 250, 252, 0.78));
           color: var(--c-story-text, #3a3b3c);
-          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          font-family: inherit;
           font-size: calc(14px*var(--app-text-scale,1));
           line-height: 20px;
           padding: 7px 12px;
@@ -627,7 +628,7 @@
         
         /* 强化强调样式 */
         .story-richtext strong, .story-richtext b {
-          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          font-family: inherit;
           font-weight: 600;
           color: var(--c-story-heading, #0f172a);
           background: linear-gradient(transparent 65%, var(--c-story-bold-highlight, rgba(148,163,184,0.2)) 65%);
