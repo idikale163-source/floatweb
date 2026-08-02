@@ -1234,7 +1234,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                         minHeight: 54,
                         borderRadius: 0,
                         border: "none",
-                        boxShadow: active ? "var(--story-paper-shadow)" : "var(--story-paper-shadow-soft)",
+                        boxShadow: "none",
                         background: active ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "var(--c-story-panel, rgba(255,255,255,0.5))",
                         color: "var(--c-story-text, #3a3b3c)",
                         display: "flex",
@@ -1249,12 +1249,12 @@ export function StoryApp({ onClose }: StoryAppProps) {
                       <span style={{
                         width: 22,
                         height: 22,
-                        borderRadius: 0,
+                        borderRadius: "50%",
                         background: t.color,
                         border: "none",
                         boxShadow: active
                           ? "inset 0 0 0 2px var(--c-story-bg-top, #fdfdfd), 0 0 0 2px var(--c-story-text, #3a3b3c)"
-                          : "var(--story-paper-shadow-soft)",
+                          : "none",
                       }} />
                       <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-story-sub, #94a3b8)", lineHeight: 1.1 }}>{t.name}</span>
                     </button>
@@ -1273,7 +1273,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
               <CSSSchemeBar target="story" currentCSS={customCssDraft} onLoad={setCustomCssDraft} btnStyle={{
                 border: "none",
                 borderRadius: 0,
-                boxShadow: "var(--story-paper-shadow-soft)",
+                boxShadow: "none",
                 background: "var(--c-story-btn-bg, rgba(255,255,255,0.5))",
                 color: "var(--c-story-text, #3a3b3c)",
               }} modalVars={{
@@ -1289,9 +1289,9 @@ export function StoryApp({ onClose }: StoryAppProps) {
                 onClick={() => setCustomCssDraft(CSS_EXAMPLE)}
                 style={{
                   flex: 1, padding: "12px 0", borderRadius: 0,
-                  border: "none", boxShadow: "var(--story-paper-shadow-soft)",
+                  border: "none", boxShadow: "none",
                   background: "var(--c-story-btn-bg, rgba(255,255,255,0.5))", color: "var(--c-story-text, #3a3b3c)",
-                  fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer",
+                  fontSize: "calc(12px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer",
                 }}
               >
                 加载示例
@@ -1300,9 +1300,9 @@ export function StoryApp({ onClose }: StoryAppProps) {
                 onClick={() => setCustomCssDraft("")}
                 style={{
                   flex: 1, padding: "12px 0", borderRadius: 0,
-                  border: "none", boxShadow: "var(--story-paper-shadow-soft)",
+                  border: "none", boxShadow: "none",
                   background: "var(--c-story-btn-bg, rgba(255,255,255,0.5))", color: "var(--c-story-text, #3a3b3c)",
-                  fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer",
+                  fontSize: "calc(12px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer",
                 }}
               >
                 清除
@@ -1310,9 +1310,9 @@ export function StoryApp({ onClose }: StoryAppProps) {
               <button
                 onClick={() => { applySessionUpdates({ customCSS: customCssDraft }); setCssModalOpen(false); }}
                 style={{
-                  flex: 1, padding: "12px 0", borderRadius: 0, border: "none", boxShadow: "var(--story-paper-shadow)",
+                  flex: 1, padding: "12px 0", borderRadius: 0, border: "none", boxShadow: "none",
                   background: "var(--c-story-send-bg-active, #dbe3ea)", color: "var(--c-story-send-color-active, #475569)",
-                  fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer",
+                  fontSize: "calc(12px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer",
                 }}
               >
                 应用
