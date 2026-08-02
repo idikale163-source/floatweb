@@ -437,8 +437,8 @@
         .story-bubble {
           border-radius: 0;
           padding: 20px 24px;
-          line-height: 1.8;
-          font-size: calc(15px*var(--app-text-scale,1));
+          line-height: 1.68;
+          font-size: calc(14px*var(--app-text-scale,1));
           white-space: pre-wrap;
           word-break: break-word;
           text-align: justify;
@@ -609,7 +609,7 @@
 
         /* === 富文本排版 (Typography Aesthetic) === */
         .story-richtext {
-          font-size: calc(15px*var(--app-text-scale,1));
+          font-size: calc(14px*var(--app-text-scale,1));
           overflow-x: hidden;
           overflow-wrap: anywhere;
           text-align: justify;
