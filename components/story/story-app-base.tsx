@@ -144,7 +144,7 @@ function StoryGeneratingIndicator({
   }, []);
 
   return (
-    <article className="story-row" data-role="assistant" data-hide-bubble={hideBubble ? "true" : undefined}>
+    <article className="story-row" data-role="assistant" data-hide-bubble={hideBubble ? "true" : undefined} data-hide-avatar={hideAvatar ? "true" : undefined}>
       {!hideAvatar ? (
         <div className="story-avatar-wrap">
           <Avatar src={avatar || undefined} name={characterName} size="md" />
@@ -1096,6 +1096,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                       className="story-row"
                       data-role={message.role}
                       data-hide-bubble={uiPrefs.hideBubble ? "true" : undefined}
+                      data-hide-avatar={uiPrefs.hideAvatar ? "true" : undefined}
                       onPointerDown={(e) => handleMsgPointerDown(e, message.id)}
                       onPointerMove={handleMsgPointerMove}
                       onPointerUp={handleMsgPointerUp}

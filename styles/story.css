@@ -464,6 +464,11 @@
         .story-row[data-hide-bubble="true"] .story-bubble {
           padding: 0; border: none; background: transparent; box-shadow: none;
         }
+        /* 隐藏头像后正文直接贴到舞台边距，左右补一点呼吸感 */
+        .story-row[data-hide-avatar="true"] {
+          padding: 0 12px;
+          box-sizing: border-box;
+        }
         /* === 底部输入框 === */
         .story-composer {
           position: absolute;
