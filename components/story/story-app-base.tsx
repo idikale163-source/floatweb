@@ -282,7 +282,8 @@ export function StoryApp({ onClose }: StoryAppProps) {
   const [customCssDraft, setCustomCssDraft] = useState("");
   const [foldTagsDraft, setFoldTagsDraft] = useState("");
   const [contextExcludedTagsDraft, setContextExcludedTagsDraft] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
+  // 生成状态按会话记录：避免在 A 会话生成时切到 B 会话也显示"正在生成"
+  const [generatingSessionIds, setGeneratingSessionIds] = useState<ReadonlySet<string>>(() => new Set());
   // 抽屉滑动手势用 ref 而不是 state：手指按住时 touchmove 每帧都在触发，
   // 逐帧 setState 会让整个剧情页以事件频率重渲染（iOS 上拉到顶/底按住不动时
   // 表现为持续的重排/闪烁）
@@ -319,6 +320,16 @@ export function StoryApp({ onClose }: StoryAppProps) {
     [sessions, activeSessionId]
   );
   const uiPrefs = currentSession?.uiPrefs || {};
+  const isGenerating = Boolean(activeSessionId) && generatingSessionIds.has(activeSessionId);
+
+  const markGenerating = useCallback((sessionId: string, on: boolean) => {
+    setGeneratingSessionIds((prev) => {
+      if (on === prev.has(sessionId)) return prev;
+      const next = new Set(prev);
+      if (on) next.add(sessionId); else next.delete(sessionId);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -337,6 +348,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
         const session = createOrGetStorySession(initialChar);
         setActiveCharacterId(initialChar);
         setActiveSessionId(session.id);
+        activeSessionIdRef.current = session.id; // 同步更新，堵住生成完成回调的守卫空窗
         setVisibleMessageCount(STORY_INITIAL_LOAD);
         setMessages(loadStoryMessages(session.id));
         setCustomCssDraft(session.customCSS || "");
@@ -352,6 +364,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
     if (!activeCharacterId) return;
     const session = createOrGetStorySession(activeCharacterId);
     setActiveSessionId(session.id);
+    activeSessionIdRef.current = session.id; // 同步更新，堵住生成完成回调的守卫空窗
     setVisibleMessageCount(STORY_INITIAL_LOAD);
     setMessages(loadStoryMessages(session.id));
     setCustomCssDraft(session.customCSS || "");
@@ -595,7 +608,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
     });
     setMessages((prev) => [...prev, userMessage]);
     setStorageVersion((value) => value + 1);
-    setIsGenerating(true);
+    markGenerating(sessionId, true);
     const generationRun = createStoryGenerationRun(sessionId);
     const generationRunId = generationRun.runId;
     const isCurrentGeneration = () => mountedRef.current && isStoryGenerationRunActive(sessionId, generationRunId);
@@ -618,7 +631,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
         parserVersion: result.parserVersion,
       });
       if (activeSessionIdRef.current === sessionId) {
-        setMessages((prev) => [...prev, assistantMessage]);
+        setMessages(loadStoryMessages(sessionId)); // 按会话从存储重读，杜绝跨会话串消息
       }
       setStorageVersion((value) => value + 1);
 
@@ -644,12 +657,13 @@ export function StoryApp({ onClose }: StoryAppProps) {
         renderedContent: errText,
       });
       if (activeSessionIdRef.current === sessionId) {
-        setMessages((prev) => [...prev, systemMessage]);
+        setMessages(loadStoryMessages(sessionId));
       }
       setStorageVersion((value) => value + 1);
     } finally {
-      if (!finishStoryGenerationRun(sessionId, generationRunId)) return;
-      setIsGenerating(false);
+      if (finishStoryGenerationRun(sessionId, generationRunId)) {
+        markGenerating(sessionId, false);
+      }
     }
   }
 
@@ -657,7 +671,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
     if (!activeSessionId) return;
     const cancelled = cancelStoryGenerationRun(activeSessionId);
     if (!cancelled && !isGenerating) return;
-    setIsGenerating(false);
+    markGenerating(activeSessionId, false);
   }
 
   function handleTouchStart(clientX: number) {
@@ -799,7 +813,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
     setMessages(contextMessages);
     setActiveMessageId(null);
     setStorageVersion(v => v + 1);
-    setIsGenerating(true);
+    markGenerating(sessionId, true);
     const generationRun = createStoryGenerationRun(sessionId);
     const generationRunId = generationRun.runId;
     const isCurrentGeneration = () => mountedRef.current && isStoryGenerationRunActive(sessionId, generationRunId);
@@ -815,17 +829,18 @@ export function StoryApp({ onClose }: StoryAppProps) {
         rawContent: result.rawText, renderedContent: result.renderedText,
         storySummary: result.storySummary, regexSignature: result.regexSignature, parserVersion: result.parserVersion,
       });
-      if (activeSessionIdRef.current === sessionId) setMessages(prev => [...prev, assistantMessage]);
+      if (activeSessionIdRef.current === sessionId) setMessages(loadStoryMessages(sessionId));
       setStorageVersion(v => v + 1);
     } catch (error) {
       if (!isCurrentGeneration() || isAbortLikeError(error)) return;
       const errText = error instanceof Error ? error.message : "重试失败，请稍后再试。";
       const systemMessage = pushStoryMessage({ sessionId, role: "system", rawContent: errText, renderedContent: errText });
-      if (activeSessionIdRef.current === sessionId) setMessages(prev => [...prev, systemMessage]);
+      if (activeSessionIdRef.current === sessionId) setMessages(loadStoryMessages(sessionId));
       setStorageVersion(v => v + 1);
     } finally {
-      if (!finishStoryGenerationRun(sessionId, generationRunId)) return;
-      setIsGenerating(false);
+      if (finishStoryGenerationRun(sessionId, generationRunId)) {
+        markGenerating(sessionId, false);
+      }
     }
   }
 
