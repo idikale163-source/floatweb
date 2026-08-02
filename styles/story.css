@@ -498,10 +498,21 @@
           border: none;
           box-shadow: none;
           padding: 8px;
-          font-size: calc(12px*var(--app-text-scale,1));
+          font-size: calc(11.5px*var(--app-text-scale,1));
           color: var(--c-story-sub, #94a3b8);
-          text-align: center;
-          font-style: italic;
+          text-align: left;
+          font-style: normal;
+        }
+        /* 系统消息（报错等）内的富文本跟随小字样式：
+           不让 .story-richtext 的 14px/两端对齐/首行缩进盖回来 */
+        .story-row[data-role="system"] .story-richtext {
+          font-size: calc(11.5px*var(--app-text-scale,1));
+          text-align: left;
+          line-height: 1.7;
+        }
+        .story-row[data-role="system"] .story-richtext p {
+          text-indent: 0;
+          margin: 0.4em 0;
         }
         /* === 底部输入栏（固定在底部，无圆角） === */
         .story-composer {
