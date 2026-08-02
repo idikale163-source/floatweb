@@ -416,10 +416,12 @@
           user-select: none;
           -webkit-touch-callout: none;
         }
-        /* 剧情页内头像随整体风格改为方形纸片 */
+        /* 剧情页内头像随整体风格改为方形纸片；兜底字母头像用白底 */
         .story-app-shell .ui-avatar {
           border-radius: 0;
           box-shadow: var(--story-paper-shadow-soft);
+          background: var(--c-story-bubble-bg, #ffffff);
+          color: var(--c-story-sub, #94a3b8);
         }
         /* 富文本内容禁用原生选中，避免长按手势误触发 */
         .story-richtext {
