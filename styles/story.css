@@ -318,7 +318,7 @@
           align-items: center;
           justify-content: center;
           gap: 8px;
-          background: linear-gradient(165deg, #fcfcfc 0%, #f7f7f7 60%, #f1f1f1 100%);
+          background: #f6f6f6;
         }
         .story-meta-cover-char {
           font-family: var(--story-font, serif);
