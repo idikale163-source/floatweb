@@ -523,7 +523,9 @@
           background: var(--c-story-input-inner-focus, rgba(248, 250, 252, 0.94));
         }
         .story-composer textarea::placeholder {
-          color: var(--c-story-placeholder, #94a3b8);
+          /* 占位提示：字号更小、颜色更浅 */
+          font-size: calc(12px*var(--app-text-scale,1));
+          color: color-mix(in srgb, var(--c-story-placeholder, #94a3b8) 55%, transparent);
           font-weight: 300;
         }
         .story-send-btn {
