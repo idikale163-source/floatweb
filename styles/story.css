@@ -667,6 +667,12 @@
         .story-richtext li p {
           text-indent: 0;
         }
+        /* 折叠块（思维链等）内一律不做首行缩进：
+           AI 思考文本的空行习惯不统一，段落缩进忽有忽无反而杂乱 */
+        .story-fold-block__content p,
+        .story-summary-fold__content p {
+          text-indent: 0;
+        }
         .story-richtext p:first-child {
           margin-top: 0;
         }
