@@ -21,11 +21,17 @@ function SolidMenuIcon({ size = 17 }: { size?: number }) {
   );
 }
 
-/* 纯实心三角返回图标 */
+/* 粗笔画「‹」返回图标，笔画粗细与菜单横条一致 */
 function SolidBackIcon({ size = 17 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M15.5 4.5 L7.5 12 L15.5 19.5 Z" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M15 5 L8 12 L15 19"
+        stroke="currentColor"
+        strokeWidth={2.8}
+        strokeLinecap="square"
+        strokeLinejoin="miter"
+      />
     </svg>
   );
 }
