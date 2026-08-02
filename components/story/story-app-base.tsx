@@ -147,14 +147,16 @@ function StoryGeneratingIndicator({
 
   return (
     <article className="story-row" data-role="assistant">
-      <div className="story-avatar-wrap">
-        <Avatar src={avatar || undefined} name={characterName} size="md" />
+      <div className="story-msg-head">
+        <div className="story-avatar-wrap">
+          <Avatar src={avatar || undefined} name={characterName} size="md" />
+        </div>
+        <div className="story-msg-meta">
+          <span className="story-msg-name">{characterName}</span>
+          <span className="story-msg-time story-generating-head">{status}</span>
+        </div>
       </div>
       <div className="story-bubble-wrap">
-        <div className="story-bubble-head">
-          <span>{characterName}</span>
-          <span className="story-generating-head">{status}</span>
-        </div>
         <div className="story-bubble story-generating-bubble" aria-label="正在生成剧情">
           <span className="story-generating-copy">{status}</span>
           <span className="story-generating-dots" aria-hidden="true">
@@ -1068,17 +1070,17 @@ export function StoryApp({ onClose }: StoryAppProps) {
                       }}
                     >
                       {message.role !== "system" ? (
-                        <div className="story-avatar-wrap">
-                          <Avatar src={avatarUrl} name={speakerName} size="md" />
+                        <div className="story-msg-head">
+                          <div className="story-avatar-wrap">
+                            <Avatar src={avatarUrl} name={speakerName} size="md" />
+                          </div>
+                          <div className="story-msg-meta">
+                            <span className="story-msg-name">{speakerName}</span>
+                            <span className="story-msg-time">{formatStoryTime(message.createdAt)}</span>
+                          </div>
                         </div>
                       ) : null}
                       <div className="story-bubble-wrap" style={{ position: "relative" }}>
-                        {message.role !== "system" ? (
-                          <div className="story-bubble-head">
-                            <span>{speakerName}</span>
-                            <span>{formatStoryTime(message.createdAt)}</span>
-                          </div>
-                        ) : null}
                         <div className="story-bubble">
                           {editingMessageId === message.id ? (
                             <div className="story-inline-edit">
