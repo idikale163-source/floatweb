@@ -309,6 +309,35 @@
           width: 100%; height: 100%; object-fit: cover;
           filter: contrast(0.95) brightness(1.05); /* 日系褪色滤镜 */
         }
+        /* 无头像时的灰色系兜底封面：灰阶渐变 + 宋体首字，素面书封 */
+        .story-meta-cover-fallback {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          background: linear-gradient(165deg, #f4f4f4 0%, #e9e9e9 60%, #e0e0e0 100%);
+        }
+        .story-meta-cover-char {
+          font-family: var(--story-font, serif);
+          font-size: 30px;
+          font-weight: 600;
+          color: #a8a8a8;
+          line-height: 1;
+        }
+        .story-meta-cover-line {
+          width: 18px;
+          height: 1px;
+          background: #c8c8c8;
+        }
+        .story-meta-cover-sub {
+          font-size: 8px;
+          letter-spacing: 3px;
+          color: #bdbdbd;
+          text-transform: uppercase;
+        }
         .story-meta-body {
           flex: 1;
           display: flex;
