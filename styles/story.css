@@ -217,7 +217,8 @@
           flex: 1;
           overflow-y: auto;
           overflow-x: hidden;
-          padding: calc(var(--page-header-safe-top, 48px) + var(--page-header-content-height, 42px) + 10px) 14px 0;
+          /* 纸卡上边缘伸到标题栏下面被盖住 */
+          padding: 0 14px 0;
           scroll-behavior: smooth;
           /* 拉到顶/底时不把滚动手势链给外层页面：iOS 上外层橡皮筋回弹
              会连带 fixed 元素与自定义 CSS 层一起抖动/闪烁 */
@@ -237,7 +238,8 @@
           box-sizing: border-box;
           background: var(--c-story-bubble-bg, #ffffff);
           box-shadow: var(--story-paper-shadow);
-          padding: 26px 22px 150px;
+          /* 顶部内边距补偿标题栏高度，文字位置不变 */
+          padding: calc(var(--page-header-safe-top, 48px) + var(--page-header-content-height, 42px) + 36px) 22px 150px;
         }
         
         /* 顶部信息阅读区：与正文同处一张长卡片，不再是独立卡片 */
