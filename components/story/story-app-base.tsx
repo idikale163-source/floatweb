@@ -259,8 +259,11 @@ export function StoryApp({ onClose }: StoryAppProps) {
   const [foldTagsDraft, setFoldTagsDraft] = useState("");
   const [contextExcludedTagsDraft, setContextExcludedTagsDraft] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [dragStartX, setDragStartX] = useState<number | null>(null);
-  const [dragDeltaX, setDragDeltaX] = useState(0);
+  // 抽屉滑动手势用 ref 而不是 state：手指按住时 touchmove 每帧都在触发，
+  // 逐帧 setState 会让整个剧情页以事件频率重渲染（iOS 上拉到顶/底按住不动时
+  // 表现为持续的重排/闪烁）
+  const dragStartXRef = useRef<number | null>(null);
+  const dragDeltaXRef = useRef(0);
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const [contextMenuPoint, setContextMenuPoint] = useState<{ x: number; y: number } | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -362,6 +365,10 @@ export function StoryApp({ onClose }: StoryAppProps) {
     if (editingMessageIdRef.current) return; // 段落编辑期间任何路径都不允许自动贴底
     const node = scrollRef.current;
     if (!node) return;
+    // 已经贴底（或 iOS 橡皮筋回弹超出底部）时不再强写 scrollTop：
+    // 否则 ResizeObserver → 贴底 → scroll 事件 → 再贴底会形成每帧循环，
+    // 并和 iOS 的回弹动画互相打架
+    if (node.scrollHeight - node.scrollTop - node.clientHeight < 1) return;
     const prevBehavior = node.style.scrollBehavior;
     node.style.scrollBehavior = "auto";
     node.scrollTop = node.scrollHeight;
@@ -535,7 +542,10 @@ export function StoryApp({ onClose }: StoryAppProps) {
         cacheRefreshKeyRef.current = null;
       }
     };
-  }, [ready, activeCharacterId, currentSession, messages, isGenerating]);
+    // 依赖用 id/foldTags 原始值而不是 session 对象：会话缓存归一化会更换对象
+    // 引用，按对象依赖会让本 effect 在无关渲染中反复重跑
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, activeCharacterId, currentSession?.id, currentSession?.foldTags, messages, isGenerating]);
 
   function applySessionUpdates(updates: Partial<StorySession>) {
     if (!currentSession) return;
@@ -637,16 +647,18 @@ export function StoryApp({ onClose }: StoryAppProps) {
   }
 
   function handleTouchStart(clientX: number) {
-    setDragStartX(clientX);
-    setDragDeltaX(0);
+    dragStartXRef.current = clientX;
+    dragDeltaXRef.current = 0;
   }
 
   function handleTouchMove(clientX: number) {
-    if (dragStartX == null) return;
-    setDragDeltaX(clientX - dragStartX);
+    if (dragStartXRef.current == null) return;
+    dragDeltaXRef.current = clientX - dragStartXRef.current;
   }
 
   function handleTouchEnd() {
+    const dragStartX = dragStartXRef.current;
+    const dragDeltaX = dragDeltaXRef.current;
     if (dragStartX == null) return;
     // 从右边缘向左滑打开
     const screenW = typeof window !== "undefined" ? window.innerWidth : 400;
@@ -657,8 +669,8 @@ export function StoryApp({ onClose }: StoryAppProps) {
     if (drawerOpen && dragDeltaX > 54) {
       setDrawerOpen(false);
     }
-    setDragStartX(null);
-    setDragDeltaX(0);
+    dragStartXRef.current = null;
+    dragDeltaXRef.current = 0;
   }
 
   // ── Long-press & context menu handlers ──
@@ -854,7 +866,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
       onTouchEnd={handleTouchEnd}
       onMouseDown={(event) => handleTouchStart(event.clientX)}
       onMouseMove={(event) => {
-        if (dragStartX != null) handleTouchMove(event.clientX);
+        if (dragStartXRef.current != null) handleTouchMove(event.clientX);
       }}
       onMouseUp={handleTouchEnd}
       onMouseLeave={handleTouchEnd}

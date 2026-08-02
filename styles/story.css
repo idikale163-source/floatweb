@@ -211,6 +211,9 @@
           overflow-x: hidden;
           padding: 12px 16px 168px;
           scroll-behavior: smooth;
+          /* 拉到顶/底时不把滚动手势链给外层页面：iOS 上外层橡皮筋回弹
+             会连带 fixed 元素与自定义 CSS 层一起抖动/闪烁 */
+          overscroll-behavior: contain;
         }
         .story-stage-empty {
           padding-bottom: 48px;
