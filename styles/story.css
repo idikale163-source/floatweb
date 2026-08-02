@@ -791,6 +791,20 @@
           letter-spacing: 0.05em;
           color: var(--c-story-sub, #94a3b8);
         }
+        /* 图标版翻译按钮：圆形小按钮，替代文字 */
+        .story-fold-translate-icon {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 3px;
+          line-height: 0;
+        }
+        @keyframes story-fold-spin {
+          to { transform: rotate(360deg); }
+        }
+        .story-fold-icon-spin {
+          animation: story-fold-spin 0.9s linear infinite;
+        }
         .story-fold-view-switch {
           float: right;
           display: inline-flex;

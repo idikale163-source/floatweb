@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Languages, Loader2 } from "lucide-react";
 import { marked } from "marked";
 import { translateReasoningText } from "@/lib/reasoning-translate";
 
@@ -67,8 +68,16 @@ function StoryFoldBlock({ label, content, scopeClass, children }: {
             <summary>
                 {label}
                 {canTranslate && !translation && (
-                    <button type="button" className="story-fold-translate-btn" onClick={handleTranslate}>
-                        {translating ? "翻译中…" : "翻译"}
+                    <button
+                        type="button"
+                        className="story-fold-translate-btn story-fold-translate-icon"
+                        onClick={handleTranslate}
+                        aria-label={translating ? "翻译中" : "翻译"}
+                        title={translating ? "翻译中" : "翻译"}
+                    >
+                        {translating
+                            ? <Loader2 size={13} className="story-fold-icon-spin" aria-hidden="true" />
+                            : <Languages size={13} aria-hidden="true" />}
                     </button>
                 )}
                 {canTranslate && translation && (
