@@ -4,7 +4,6 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { createPortal } from "react-dom";
 import { Sparkles } from "lucide-react";
 import {
-  ChevronLeftIcon,
   PaintBrushIcon,
   PaperAirplaneIcon,
   StopIcon,
@@ -18,6 +17,15 @@ function SolidMenuIcon({ size = 17 }: { size?: number }) {
       <rect x="3" y="4.6" width="18" height="2.8" />
       <rect x="3" y="10.6" width="18" height="2.8" />
       <rect x="3" y="16.6" width="18" height="2.8" />
+    </svg>
+  );
+}
+
+/* 纯实心三角返回图标 */
+function SolidBackIcon({ size = 17 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M15.5 4.5 L7.5 12 L15.5 19.5 Z" />
     </svg>
   );
 }
@@ -826,7 +834,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
             <div className="story-header-content">
               <div className="story-header-left">
                 <button className="story-top-btn" onClick={onClose} aria-label="关闭剧情模式">
-                  <ChevronLeftIcon width={19} height={19} />
+                  <SolidBackIcon size={16} />
                 </button>
               </div>
               <div className="story-header-center">Story</div>
@@ -981,7 +989,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
           <div className="story-header-content">
             <div className="story-header-left">
               <button className="story-top-btn" onClick={onClose} aria-label="关闭剧情模式">
-                <ChevronLeftIcon width={19} height={19} />
+                <SolidBackIcon size={16} />
               </button>
             </div>
             <div className="story-header-center">Story</div>
