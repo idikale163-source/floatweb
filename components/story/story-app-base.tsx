@@ -813,6 +813,10 @@ export function StoryApp({ onClose }: StoryAppProps) {
     setMessages(contextMessages);
     setActiveMessageId(null);
     setStorageVersion(v => v + 1);
+    // 重试会截掉一条长消息，内容变矮时浏览器把滚动位置钳回新底部，
+    // 看起来像"页面跳到上面"；这里主动贴底，让视线落在生成指示器上
+    autoBottomLockRef.current = true;
+    requestAnimationFrame(() => scrollStoryToBottom());
     markGenerating(sessionId, true);
     const generationRun = createStoryGenerationRun(sessionId);
     const generationRunId = generationRun.runId;
