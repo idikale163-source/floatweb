@@ -482,11 +482,10 @@
           border: none;
           min-height: 52px;
           border-radius: 0;
-          /* 上方向纸张感阴影：边缘强，扩散弱柔 */
+          /* 上方向柔和弥散阴影：不用 1px 锐边层，避免看起来像一条描边 */
           box-shadow:
-            0 -1px 2px rgba(0, 0, 0, 0.08),
-            0 -4px 8px rgba(0, 0, 0, 0.03),
-            0 -12px 24px rgba(0, 0, 0, 0.02);
+            0 -3px 10px rgba(0, 0, 0, 0.04),
+            0 -12px 28px rgba(0, 0, 0, 0.03);
           padding: 8px 12px calc(env(safe-area-inset-bottom, 0px) + 8px);
           display: flex;
           align-items: flex-end;
@@ -560,9 +559,7 @@
           opacity: 0.48;
         }
         .story-send-icon {
-          /* 实心纸飞机：填充 currentColor，细描边保持轮廓精致 */
-          stroke-width: 1;
-          margin-right: 2px;
+          display: block;
         }
         .story-generating-head {
           transition: opacity 0.18s ease;

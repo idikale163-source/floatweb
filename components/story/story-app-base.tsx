@@ -2,7 +2,25 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Menu, Send, Square, UserRound, MessageSquareText, Clock3, Sparkles, Eye, EyeOff, Paintbrush, X } from "lucide-react";
+import { UserRound, MessageSquareText, Clock3, Sparkles, Eye, EyeOff } from "lucide-react";
+
+/* 实心填充图标（非线条风格） */
+const SOLID_ICON_PATHS = {
+  back: "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
+  brush: "M7 14c-1.66 0-3 1.34-3 3 0 1.31-1.16 2-2 2 .92 1.22 2.49 2 4 2 2.21 0 4-1.79 4-4 0-1.66-1.34-3-3-3zm13.71-9.37l-1.34-1.34c-.39-.39-1.02-.39-1.41 0L9 12.25 11.75 15l8.96-8.96c.39-.39.39-1.02 0-1.41z",
+  menu: "M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z",
+  send: "M2.01 21L23 12 2.01 3 2 10l15 2-15 2z",
+  stop: "M6 6h12v12H6z",
+  close: "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+} as const;
+
+function SolidIcon({ name, size = 16, className }: { name: keyof typeof SOLID_ICON_PATHS; size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d={SOLID_ICON_PATHS[name]} />
+    </svg>
+  );
+}
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { Avatar } from "@/components/ui/primitives";
 import { StoryHtmlRenderer } from "@/components/ui/story-html-renderer";
@@ -240,7 +258,7 @@ const StoryComposer = memo(function StoryComposer({
         title={isGenerating ? "停止剧情生成" : "发送剧情输入"}
         disabled={!isGenerating && !draft.trim()}
       >
-        {isGenerating ? <Square size={17} /> : <Send className="story-send-icon" size={18} fill="currentColor" />}
+        {isGenerating ? <SolidIcon name="stop" size={16} /> : <SolidIcon name="send" size={17} className="story-send-icon" />}
       </button>
     </div>
   );
@@ -826,7 +844,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
             <div className="story-header-content">
               <div className="story-header-left">
                 <button className="story-top-btn" onClick={onClose} aria-label="关闭剧情模式">
-                  <ArrowLeft size={16} />
+                  <SolidIcon name="back" size={16} />
                 </button>
               </div>
               <div className="story-header-center">Story</div>
@@ -1007,16 +1025,16 @@ export function StoryApp({ onClose }: StoryAppProps) {
           <div className="story-header-content">
             <div className="story-header-left">
               <button className="story-top-btn" onClick={onClose} aria-label="关闭剧情模式">
-                <ArrowLeft size={16} />
+                <SolidIcon name="back" size={16} />
               </button>
             </div>
             <div className="story-header-center">Story</div>
             <div className="story-header-right" style={{ gap: 8 }}>
               <button className="story-top-btn" onClick={() => setCssModalOpen(true)} aria-label="页面样式">
-                <Paintbrush size={16} />
+                <SolidIcon name="brush" size={16} />
               </button>
               <button className="story-top-btn" onClick={() => setDrawerOpen(true)} aria-label="打开剧情侧栏">
-                <Menu size={16} />
+                <SolidIcon name="menu" size={16} />
               </button>
             </div>
           </div>
@@ -1217,7 +1235,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
               页面样式
             </span>
             <button className="story-top-btn" onClick={() => setCssModalOpen(false)}>
-              <X size={16} />
+              <SolidIcon name="close" size={16} />
             </button>
           </div>
           <div style={{ flex: 1, overflow: "auto", padding: "14px 20px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
