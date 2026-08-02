@@ -474,11 +474,12 @@
           background: var(--c-story-input-bar, var(--c-story-meta-bg, #ffffff));
           border: none;
           min-height: 52px;
-          border-radius: 0;
-          /* 上方向柔和弥散阴影：不用 1px 锐边层，避免看起来像一条描边 */
+          /* 仅上边缘两角圆角 */
+          border-radius: 14px 14px 0 0;
+          /* 上方向轻柔弥散阴影 */
           box-shadow:
-            0 -3px 10px rgba(0, 0, 0, 0.04),
-            0 -12px 28px rgba(0, 0, 0, 0.03);
+            0 -2px 8px rgba(0, 0, 0, 0.022),
+            0 -8px 20px rgba(0, 0, 0, 0.014);
           padding: 8px 12px calc(env(safe-area-inset-bottom, 0px) + 8px);
           display: flex;
           align-items: flex-end;
