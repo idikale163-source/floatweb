@@ -43,6 +43,9 @@ function StoryFoldBlock({ label, content, scopeClass, children }: {
     const [translating, setTranslating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<"both" | "zh" | "orig">("both");
+    // 折叠内容懒挂载：收起状态下 iframe 宽度为 0，高度桥会测出垃圾值并触发
+    // vh 反馈环高度锁（表现为展开后一大段空白）。展开后才渲染内容即可避免。
+    const [hasOpened, setHasOpened] = useState(false);
     const handleTranslate = async (e: { preventDefault(): void; stopPropagation(): void }) => {
         e.preventDefault();
         e.stopPropagation();
@@ -65,7 +68,11 @@ function StoryFoldBlock({ label, content, scopeClass, children }: {
         setViewMode(mode);
     };
     return (
-        <details className="story-fold-block" data-fold-tag={label}>
+        <details
+            className="story-fold-block"
+            data-fold-tag={label}
+            onToggle={(e) => { if (e.currentTarget.open) setHasOpened(true); }}
+        >
             <summary>
                 {label}
                 {canTranslate && !translation && (
@@ -102,7 +109,7 @@ function StoryFoldBlock({ label, content, scopeClass, children }: {
                         <MarkdownSegment content={translation} scopeClass={scopeClass} />
                     </div>
                 )}
-                {(viewMode !== "zh" || !translation) && children}
+                {(viewMode !== "zh" || !translation) && hasOpened ? children : null}
             </div>
         </details>
     );
