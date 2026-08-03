@@ -4503,3 +4503,30 @@
     -webkit-backdrop-filter: none;
     border: none;
 }
+
+/* 播放页背景模式选择胶囊 */
+.music-bg-modes {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.music-bg-mode {
+    flex: 1;
+    border: 1px solid var(--c-music-surface-solid);
+    background: var(--c-music-surface);
+    color: var(--c-music-accent);
+    font-size: calc(10.8px*var(--app-text-scale,1));
+    font-family: inherit;
+    padding: 8px 4px;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.music-bg-mode[data-on] {
+    background: var(--c-music-primary-dim);
+    border-color: rgba(255, 84, 104, 0.4);
+    color: var(--c-music-primary);
+    font-weight: 600;
+}

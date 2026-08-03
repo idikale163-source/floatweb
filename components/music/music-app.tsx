@@ -23,8 +23,8 @@ import {
 } from "@/lib/music-service";
 import { clearMusicCloudSyncData } from "@/lib/chat-engine";
 import {
-    loadMusicBg, saveMusicBg, clearMusicBg, fileToCompressedDataUrl, musicBgStyle,
-    MUSIC_BG_EVENT, type MusicBgConfig,
+    loadMusicBg, saveMusicBg, clearMusicBg, fileToCompressedDataUrl, appBgStyle,
+    MUSIC_BG_EVENT, type MusicBgConfig, type MusicPlayerBgMode,
 } from "@/lib/music-bg";
 
 type Props = { onClose: () => void };
@@ -60,7 +60,7 @@ export default function MusicApp({ onClose }: Props) {
         const timers = [300, 1200, 3000].map(ms => setTimeout(() => {
             setBgCfg(prev => {
                 const fresh = loadMusicBg();
-                return prev.image === fresh.image && prev.dim === fresh.dim && prev.applyPlayer === fresh.applyPlayer ? prev : fresh;
+                return JSON.stringify(prev) === JSON.stringify(fresh) ? prev : fresh;
             });
         }, ms));
         return () => timers.forEach(clearTimeout);
@@ -269,7 +269,7 @@ export default function MusicApp({ onClose }: Props) {
     };
 
     return (
-        <div className="music-app" style={musicBgStyle(bgCfg)}>
+        <div className="music-app" style={appBgStyle(bgCfg)}>
             {customCss && <SessionCustomCSS css={customCss} scope=".music-app" />}
             {musicToast && (
                 <div className="music-toast-overlay">
@@ -1141,14 +1141,19 @@ function MusicSettingsTab({ onBack, onSaved }: { onBack: () => void; onSaved: ()
     const [loginNickname, setLoginNickname] = useState<string | null>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    // Custom background state
+    // Custom background state (app pages + player each have their own image)
     const [bg, setBg] = useState<MusicBgConfig>(() => loadMusicBg());
     const [bgMsg, setBgMsg] = useState<string | null>(null);
     const [bgUrlDraft, setBgUrlDraft] = useState(() => {
         const cfg = loadMusicBg();
         return cfg.image.startsWith("data:") ? "" : cfg.image;
     });
+    const [playerUrlDraft, setPlayerUrlDraft] = useState(() => {
+        const cfg = loadMusicBg();
+        return cfg.playerImage.startsWith("data:") ? "" : cfg.playerImage;
+    });
     const bgFileRef = useRef<HTMLInputElement>(null);
+    const playerFileRef = useRef<HTMLInputElement>(null);
 
     const applyBg = (next: MusicBgConfig) => {
         const result = saveMusicBg(next);
@@ -1156,31 +1161,44 @@ function MusicSettingsTab({ onBack, onSaved }: { onBack: () => void; onSaved: ()
         if (result.ok) setBg(next);
     };
 
-    const handleBgUpload = async (files: FileList | null) => {
+    const handleBgUpload = async (files: FileList | null, target: "app" | "player") => {
         const file = files?.[0];
         if (!file) return;
         try {
             const dataUrl = await fileToCompressedDataUrl(file);
-            applyBg({ ...bg, image: dataUrl });
-            setBgUrlDraft("");
+            if (target === "app") {
+                applyBg({ ...bg, image: dataUrl });
+                setBgUrlDraft("");
+            } else {
+                applyBg({ ...bg, playerImage: dataUrl, playerMode: "custom" });
+                setPlayerUrlDraft("");
+            }
         } catch (e) {
             setBgMsg(e instanceof Error ? e.message : "图片处理失败");
         }
         if (bgFileRef.current) bgFileRef.current.value = "";
+        if (playerFileRef.current) playerFileRef.current.value = "";
     };
 
-    const handleBgUrl = () => {
-        const url = bgUrlDraft.trim();
+    const handleBgUrl = (target: "app" | "player") => {
+        const url = (target === "app" ? bgUrlDraft : playerUrlDraft).trim();
         if (!url) return;
         if (!/^https?:\/\//.test(url)) { setBgMsg("请输入 http(s) 图片链接"); return; }
-        applyBg({ ...bg, image: url.replace(/^http:\/\//, "https://") });
+        const secure = url.replace(/^http:\/\//, "https://");
+        if (target === "app") applyBg({ ...bg, image: secure });
+        else applyBg({ ...bg, playerImage: secure, playerMode: "custom" });
     };
 
     const handleBgClear = () => {
         clearMusicBg();
         setBg(loadMusicBg());
         setBgUrlDraft("");
+        setPlayerUrlDraft("");
         setBgMsg(null);
+    };
+
+    const setPlayerMode = (mode: MusicPlayerBgMode) => {
+        applyBg({ ...bg, playerMode: mode });
     };
 
     // Check login status on mount when API is configured
@@ -1351,10 +1369,10 @@ function MusicSettingsTab({ onBack, onSaved }: { onBack: () => void; onSaved: ()
                     </div>
                 )}
 
-                {/* Custom background */}
+                {/* Custom backgrounds: app pages + player page */}
                 <div className="music-settings-section music-qr-section">
-                    <div className="music-settings-label">全局背景</div>
-                    <div className="music-settings-hint">自定义音乐App的背景图，上传图片或粘贴图片链接，即时生效</div>
+                    <div className="music-settings-label">App 页面背景</div>
+                    <div className="music-settings-hint">首页/歌单/我的等页面的背景图，上传或粘贴链接即时生效</div>
 
                     {bg.image && (
                         <div className="music-bg-preview" style={{ backgroundImage: `url("${bg.image}")` }}>
@@ -1362,10 +1380,10 @@ function MusicSettingsTab({ onBack, onSaved }: { onBack: () => void; onSaved: ()
                         </div>
                     )}
 
-                    <input ref={bgFileRef} type="file" accept="image/*" hidden onChange={e => { void handleBgUpload(e.target.files); }} />
+                    <input ref={bgFileRef} type="file" accept="image/*" hidden onChange={e => { void handleBgUpload(e.target.files, "app"); }} />
                     <div className="music-settings-actions" style={{ marginTop: 8 }}>
                         <button className="music-settings-btn" onClick={() => bgFileRef.current?.click()}>上传图片</button>
-                        {bg.image && <button className="music-settings-btn" onClick={handleBgClear}>恢复默认</button>}
+                        {bg.image && <button className="music-settings-btn" onClick={() => applyBg({ ...bg, image: "" })}>清除此图</button>}
                     </div>
 
                     <div className="music-settings-actions">
@@ -1374,9 +1392,9 @@ function MusicSettingsTab({ onBack, onSaved }: { onBack: () => void; onSaved: ()
                             placeholder="https:// 图片链接"
                             value={bgUrlDraft}
                             onChange={e => setBgUrlDraft(e.target.value)}
-                            onKeyDown={e => e.key === "Enter" && handleBgUrl()}
+                            onKeyDown={e => e.key === "Enter" && handleBgUrl("app")}
                         />
-                        <button className="music-settings-btn" style={{ flex: "0 0 76px" }} onClick={handleBgUrl} disabled={!bgUrlDraft.trim()}>使用</button>
+                        <button className="music-settings-btn" style={{ flex: "0 0 76px" }} onClick={() => handleBgUrl("app")} disabled={!bgUrlDraft.trim()}>使用</button>
                     </div>
 
                     {bg.image && (
@@ -1392,19 +1410,68 @@ function MusicSettingsTab({ onBack, onSaved }: { onBack: () => void; onSaved: ()
                                 value={bg.dim}
                                 onChange={e => applyBg({ ...bg, dim: parseInt(e.target.value, 10) })}
                             />
-                            <div className="music-settings-row">
-                                <span className="music-settings-label">播放页也使用此背景</span>
-                                <button
-                                    className="music-settings-toggle"
-                                    {...(bg.applyPlayer ? { "data-checked": "" } : {})}
-                                    onClick={() => applyBg({ ...bg, applyPlayer: !bg.applyPlayer })}
-                                >
-                                    <span className="music-settings-toggle-thumb" />
-                                </button>
+                        </>
+                    )}
+                </div>
+
+                <div className="music-settings-section music-qr-section">
+                    <div className="music-settings-label">播放页背景</div>
+                    <div className="music-settings-hint">全屏播放页可以单独设置背景</div>
+
+                    <div className="music-bg-modes">
+                        <button className="music-bg-mode" {...(bg.playerMode === "cover" ? { "data-on": "" } : {})} onClick={() => setPlayerMode("cover")}>封面取色</button>
+                        <button className="music-bg-mode" {...(bg.playerMode === "follow" ? { "data-on": "" } : {})} onClick={() => setPlayerMode("follow")}>跟随App背景</button>
+                        <button className="music-bg-mode" {...(bg.playerMode === "custom" ? { "data-on": "" } : {})} onClick={() => setPlayerMode("custom")}>独立图片</button>
+                    </div>
+
+                    {bg.playerMode === "custom" && (
+                        <>
+                            {bg.playerImage && (
+                                <div className="music-bg-preview" style={{ backgroundImage: `url("${bg.playerImage}")` }}>
+                                    <span style={{ opacity: bg.playerDim / 100 }} />
+                                </div>
+                            )}
+
+                            <input ref={playerFileRef} type="file" accept="image/*" hidden onChange={e => { void handleBgUpload(e.target.files, "player"); }} />
+                            <div className="music-settings-actions" style={{ marginTop: 8 }}>
+                                <button className="music-settings-btn" onClick={() => playerFileRef.current?.click()}>上传图片</button>
+                                {bg.playerImage && <button className="music-settings-btn" onClick={() => applyBg({ ...bg, playerImage: "" })}>清除此图</button>}
                             </div>
+
+                            <div className="music-settings-actions">
+                                <input
+                                    className="music-settings-input"
+                                    placeholder="https:// 图片链接"
+                                    value={playerUrlDraft}
+                                    onChange={e => setPlayerUrlDraft(e.target.value)}
+                                    onKeyDown={e => e.key === "Enter" && handleBgUrl("player")}
+                                />
+                                <button className="music-settings-btn" style={{ flex: "0 0 76px" }} onClick={() => handleBgUrl("player")} disabled={!playerUrlDraft.trim()}>使用</button>
+                            </div>
+
+                            {bg.playerImage && (
+                                <>
+                                    <div className="music-settings-row" style={{ marginTop: 4 }}>
+                                        <span className="music-settings-label">背景暗化 {bg.playerDim}%</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        className="music-bg-range"
+                                        min={20}
+                                        max={85}
+                                        value={bg.playerDim}
+                                        onChange={e => applyBg({ ...bg, playerDim: parseInt(e.target.value, 10) })}
+                                    />
+                                </>
+                            )}
                         </>
                     )}
 
+                    {(bg.image || bg.playerImage) && (
+                        <div className="music-settings-actions" style={{ marginTop: 8 }}>
+                            <button className="music-settings-btn" onClick={handleBgClear}>全部恢复默认背景</button>
+                        </div>
+                    )}
                     {bgMsg && <div className="music-qr-status">{bgMsg}</div>}
                 </div>
             </div>

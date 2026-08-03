@@ -16,7 +16,7 @@ import {
 } from "@/lib/music-service";
 import MusicCommentsPage from "./music-comments";
 import MusicArtistPage from "./music-artist";
-import { loadMusicBg, musicBgStyle, MUSIC_BG_EVENT, type MusicBgConfig } from "@/lib/music-bg";
+import { loadMusicBg, playerBgStyle, MUSIC_BG_EVENT, type MusicBgConfig } from "@/lib/music-bg";
 
 const PLAY_MODE_ICONS: Record<PlayMode, { svg: string; label: string }> = {
     sequence: {
@@ -89,7 +89,7 @@ export default function MusicPlayer() {
             }
             setBgCfg(prev => {
                 const fresh = loadMusicBg();
-                return prev.image === fresh.image && prev.dim === fresh.dim && prev.applyPlayer === fresh.applyPlayer ? prev : fresh;
+                return JSON.stringify(prev) === JSON.stringify(fresh) ? prev : fresh;
             });
         }, ms));
         return () => timers.forEach(clearTimeout);
@@ -408,7 +408,7 @@ export default function MusicPlayer() {
     const hasLyrics = parsedLyrics.current.length > 0;
     const modeInfo = PLAY_MODE_ICONS[player.playMode];
     const activeLyricText = activeLyricIdx >= 0 ? parsedLyrics.current[activeLyricIdx]?.text : "";
-    const customBg = bgCfg.applyPlayer ? musicBgStyle(bgCfg, 0.08) : undefined;
+    const customBg = playerBgStyle(bgCfg);
     const ambientVars = {
         "--mp-c1": palette[0],
         "--mp-c2": palette[1],
