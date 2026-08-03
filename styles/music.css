@@ -4355,3 +4355,8 @@
     backdrop-filter: blur(20px) saturate(150%);
     -webkit-backdrop-filter: blur(20px) saturate(150%);
 }
+
+/* 底部Tab栏与播放条同材质：同一块玻璃的两层 */
+.music-tabbar {
+    background: rgba(12, 13, 18, 0.4);
+}
