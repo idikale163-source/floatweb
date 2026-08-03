@@ -40,6 +40,7 @@ export default function MusicApp({ onClose }: Props) {
     const [showCssEditor, setShowCssEditor] = useState(false);
     const [customCss, setCustomCss] = useState("");
     const [activePlaylist, setActivePlaylist] = useState<NeteasePlaylist | null>(null);
+    const [dailyView, setDailyView] = useState<NeteaseSearchResult[] | null>(null);
     const [playlists, setPlaylists] = useState<NeteasePlaylist[]>([]);
     const [playlistsLoading, setPlaylistsLoading] = useState(true);
     const [musicToast, setMusicToast] = useState<string | null>(null);
@@ -289,7 +290,8 @@ export default function MusicApp({ onClose }: Props) {
             <div className="music-header">
                 <div className="music-header-left">
                     <button className="music-header-action" onClick={() => {
-                        if (activePlaylist) { setActivePlaylist(null); }
+                        if (dailyView) { setDailyView(null); }
+                        else if (activePlaylist) { setActivePlaylist(null); }
                         else { onClose(); }
                     }} title="返回">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
@@ -298,7 +300,7 @@ export default function MusicApp({ onClose }: Props) {
                     </button>
                 </div>
                 <div className="music-header-title">
-                    {tab === "recommend" ? "" : tab === "search" ? "搜索" : tab === "mine" ? "我的" : "本地音乐"}
+                    {dailyView ? "每日推荐" : tab === "recommend" ? "" : tab === "search" ? "搜索" : tab === "mine" ? "我的" : "本地音乐"}
                 </div>
                 <div className="music-header-right">
                     <button className="music-header-action" onClick={() => setShowSettings(true)} title="设置">
@@ -310,18 +312,27 @@ export default function MusicApp({ onClose }: Props) {
             </div>
 
             {/* Tab content */}
-            {tab === "recommend" && hasNetease && (
+            {tab === "recommend" && hasNetease && (dailyView ? (
+                <DailySongsPage
+                    songs={dailyView}
+                    player={player}
+                    formatTime={formatTime}
+                    onPlayNetease={handlePlayNetease}
+                    onPlayAll={handlePlayAllNetease}
+                />
+            ) : (
                 <RecommendTab
                     formatTime={formatTime}
                     onPlayNetease={handlePlayNetease}
                     onPlayAll={handlePlayAllNetease}
                     onGoSearch={() => setTab("search")}
+                    onOpenDaily={setDailyView}
                     onOpenPlaylist={(playlist) => {
                         setActivePlaylist(playlist);
                         setTab("mine");
                     }}
                 />
-            )}
+            ))}
 
             {tab === "mine" && hasNetease && (
                 <MineTab
@@ -431,7 +442,7 @@ export default function MusicApp({ onClose }: Props) {
             {/* Bottom tab bar */}
             <div className="music-tabbar">
                 {hasNetease && (
-                    <button className="music-tabbar-item" {...(tab === "recommend" ? { "data-active": "" } : {})} onClick={() => { setTab("recommend"); setActivePlaylist(null); }}>
+                    <button className="music-tabbar-item" {...(tab === "recommend" ? { "data-active": "" } : {})} onClick={() => { setTab("recommend"); setActivePlaylist(null); setDailyView(null); }}>
                         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M3 10.5 12 3l9 7.5V21h-6v-6h-6v6H3z" /></svg>
                         <span>推荐</span>
                     </button>
@@ -488,11 +499,12 @@ function greetingByHour(): { hello: string; sub: string } {
     return { hello: "夜深了", sub: "适合戴上耳机的时刻" };
 }
 
-function RecommendTab({ formatTime, onPlayNetease, onPlayAll, onGoSearch, onOpenPlaylist }: {
+function RecommendTab({ formatTime, onPlayNetease, onPlayAll, onGoSearch, onOpenDaily, onOpenPlaylist }: {
     formatTime: (s: number) => string;
     onPlayNetease: (r: NeteaseSearchResult) => void;
     onPlayAll: (results: NeteaseSearchResult[]) => void;
     onGoSearch: () => void;
+    onOpenDaily: (songs: NeteaseSearchResult[]) => void;
     onOpenPlaylist: (playlist: NeteasePlaylist) => void;
 }) {
     const [dailySongs, setDailySongs] = useState<NeteaseSearchResult[]>(() => readMusicCache("music-recommend-daily", []));
@@ -500,7 +512,6 @@ function RecommendTab({ formatTime, onPlayNetease, onPlayAll, onGoSearch, onOpen
     const [hotSearches, setHotSearches] = useState<NeteaseHotSearch[]>(() => readMusicCache("music-recommend-hot-search", []));
     const [toplists, setToplists] = useState<NeteaseToplist[]>(() => readMusicCache("music-recommend-toplists", []));
     const [loading, setLoading] = useState(dailySongs.length + playlists.length + hotSearches.length === 0);
-    const [showDailyList, setShowDailyList] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -547,9 +558,9 @@ function RecommendTab({ formatTime, onPlayNetease, onPlayAll, onGoSearch, onOpen
                 <div className="music-empty"><div className="music-empty-text">加载推荐中...</div></div>
             ) : (
                 <>
-                    {/* Daily recommendation hero card */}
+                    {/* Daily recommendation hero card — opens the daily page */}
                     {dailySongs.length > 0 && (
-                        <div className="music-daily-card" onClick={() => setShowDailyList(v => !v)}>
+                        <div className="music-daily-card" onClick={() => onOpenDaily(dailySongs)}>
                             {dailyCover && <img src={dailyCover} alt="" className="music-daily-bg" />}
                             <div className="music-daily-mask" />
                             <div className="music-daily-inner">
@@ -566,14 +577,6 @@ function RecommendTab({ formatTime, onPlayNetease, onPlayAll, onGoSearch, onOpen
                             >
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
                             </button>
-                        </div>
-                    )}
-
-                    {showDailyList && dailySongs.length > 0 && (
-                        <div className="music-list music-list-compact">
-                            {dailySongs.slice(0, 10).map((song, idx) => (
-                                <NeteaseSongRow key={song.id} song={song} index={idx} formatTime={formatTime} onPlay={onPlayNetease} />
-                            ))}
                         </div>
                     )}
 
@@ -634,6 +637,61 @@ function RecommendTab({ formatTime, onPlayNetease, onPlayAll, onGoSearch, onOpen
                     )}
                 </>
             )}
+        </div>
+    );
+}
+
+// ── Daily Recommendation Page (second-level, like a playlist) ──
+function DailySongsPage({ songs, player, formatTime, onPlayNetease, onPlayAll }: {
+    songs: NeteaseSearchResult[];
+    player: MusicControlsValue;
+    formatTime: (s: number) => string;
+    onPlayNetease: (r: NeteaseSearchResult) => void;
+    onPlayAll: (results: NeteaseSearchResult[]) => void;
+}) {
+    const today = new Date();
+    return (
+        <div className="music-playlist-detail">
+            <div className="music-pl-hero">
+                <div className="music-pl-hero-cover">
+                    {songs[0]?.coverUrl && <img src={songs[0].coverUrl} alt="" />}
+                    <span className="music-rail-count">{today.getMonth() + 1} / {today.getDate()}</span>
+                </div>
+                <div className="music-pl-hero-info">
+                    <div className="music-pl-hero-name">每日推荐</div>
+                    <div className="music-pl-hero-meta">
+                        <span>根据你的口味生成</span>
+                        <span>{songs.length} 首</span>
+                    </div>
+                    <div className="music-pl-hero-tags"><span>每天 6:00 更新</span></div>
+                </div>
+            </div>
+            <div className="music-playlist-detail-header">
+                <button className="music-playlist-play-all" onClick={() => onPlayAll(songs)}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                    <span>播放全部</span>
+                    <i>{songs.length}首</i>
+                </button>
+            </div>
+            <div className="music-list">
+                {songs.map((r, idx) => {
+                    const isCurrent = player.currentTrack?.id === `netease_${r.id}`;
+                    return (
+                        <div key={r.id} className="music-song" {...(isCurrent ? { "data-playing": "" } : {})} style={{ animationDelay: `${Math.min(idx * 0.03, 0.4)}s` }} onClick={() => onPlayNetease(r)}>
+                            {isCurrent && player.isPlaying ? (
+                                <span className="music-song-idx"><span className="music-wave music-queue-wave">{[0, 1, 2].map(i => <span key={i} className="music-wave-bar" style={{ animationDelay: `${i * 0.15}s` }} />)}</span></span>
+                            ) : (
+                                <span className="music-song-idx">{idx + 1}</span>
+                            )}
+                            <div className="music-song-info">
+                                <div className="music-song-title">{r.name}</div>
+                                <div className="music-song-artist">{r.artists}{r.album ? ` · ${r.album}` : ""}</div>
+                            </div>
+                            <div className="music-song-duration">{formatTime(r.duration / 1000)}</div>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }
