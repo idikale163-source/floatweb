@@ -4465,3 +4465,8 @@
     border-right-color: rgba(0, 0, 0, 0.25);
     border-bottom-color: rgba(0, 0, 0, 0.25);
 }
+
+/* 播放条与Tab栏之间不再有分割线，视觉上为同一整块玻璃 */
+.music-now-bar + .music-tabbar {
+    border-top: none;
+}
