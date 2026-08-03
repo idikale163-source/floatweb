@@ -4433,3 +4433,35 @@
         var(--c-music-surface));
     box-shadow: 0 1px 3px var(--c-music-accent-dim);
 }
+
+/* ═══════════════════════════════════════════════════════
+   聊天小窗回归原浅色配色 — 与App暗色主题解耦
+   ═══════════════════════════════════════════════════════ */
+
+.mini-app-window {
+    /* Scoped token overrides: the mini window hosts the light chat UI,
+       keep its chrome in the original light glass palette. */
+    --c-music-surface: rgba(255, 255, 255, 0.3);
+    --c-music-surface-solid: rgba(255, 255, 255, 0.55);
+    --c-music-accent: #5b7b64;
+    --c-music-accent-dim: rgba(106, 141, 115, 0.15);
+    --c-music-text: #2b3d31;
+    --c-music-overlay: rgba(0, 0, 0, 0.25);
+
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 12px;
+    border: 1px solid var(--c-music-surface-solid);
+    box-shadow: 0 6px 16px var(--c-music-accent-dim);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+.mini-app-window .mini-app-titlebar {
+    background: rgba(245, 247, 244, 0.95);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.mini-app-window .mini-app-resize::after {
+    border-right-color: rgba(0, 0, 0, 0.25);
+    border-bottom-color: rgba(0, 0, 0, 0.25);
+}
