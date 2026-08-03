@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
     getSongCommentPage, getFloorComments, postSongComment,
-    type NeteaseComment,
+    type NeteaseComment, type NeteaseCommentResType,
 } from "@/lib/music-service";
 
 const PAGE_SIZE = 20;
@@ -15,6 +15,8 @@ type Props = {
     title: string;
     artist: string;
     coverUrl?: string;
+    /** 0 = song comments (default), 2 = playlist comments */
+    resType?: NeteaseCommentResType;
     onClose: () => void;
 };
 
@@ -43,7 +45,7 @@ function formatCommentTime(ts: number): string {
     return sameYear ? md : `${date.getFullYear()}年${md}`;
 }
 
-export default function MusicCommentsPage({ songId, title, artist, coverUrl, onClose }: Props) {
+export default function MusicCommentsPage({ songId, title, artist, coverUrl, resType = 0, onClose }: Props) {
     const [sort, setSort] = useState<SortMode>("hot");
     const [hotComments, setHotComments] = useState<NeteaseComment[]>([]);
     const [comments, setComments] = useState<NeteaseComment[]>([]);
@@ -69,7 +71,7 @@ export default function MusicCommentsPage({ songId, title, artist, coverUrl, onC
         let cancelled = false;
         setLoading(true);
         offsetRef.current = 0;
-        getSongCommentPage(songId, 0, PAGE_SIZE).then(page => {
+        getSongCommentPage(songId, 0, PAGE_SIZE, resType).then(page => {
             if (cancelled) return;
             setHotComments(page.hotComments);
             setComments(page.comments);
@@ -79,12 +81,12 @@ export default function MusicCommentsPage({ songId, title, artist, coverUrl, onC
             setLoading(false);
         });
         return () => { cancelled = true; };
-    }, [songId]);
+    }, [songId, resType]);
 
     const loadMore = useCallback(async () => {
         if (loadingMore || !hasMore) return;
         setLoadingMore(true);
-        const page = await getSongCommentPage(songId, offsetRef.current, PAGE_SIZE);
+        const page = await getSongCommentPage(songId, offsetRef.current, PAGE_SIZE, resType);
         setComments(prev => {
             const seen = new Set(prev.map(c => c.id));
             return [...prev, ...page.comments.filter(c => !seen.has(c.id))];
@@ -92,13 +94,13 @@ export default function MusicCommentsPage({ songId, title, artist, coverUrl, onC
         offsetRef.current += page.comments.length;
         setHasMore(page.hasMore);
         setLoadingMore(false);
-    }, [songId, loadingMore, hasMore]);
+    }, [songId, loadingMore, hasMore, resType]);
 
     const handleSend = useCallback(async () => {
         const content = draft.trim();
         if (!content || sending) return;
         setSending(true);
-        const result = await postSongComment(songId, content);
+        const result = await postSongComment(songId, content, resType);
         setSending(false);
         showToast(result.message);
         if (result.ok) {
@@ -115,7 +117,7 @@ export default function MusicCommentsPage({ songId, title, artist, coverUrl, onC
             }, ...prev]);
             setTotal(prev => prev + 1);
         }
-    }, [draft, sending, songId, showToast]);
+    }, [draft, sending, songId, resType, showToast]);
 
     const list = sort === "hot" && hotComments.length > 0 ? hotComments : comments;
 
@@ -159,7 +161,7 @@ export default function MusicCommentsPage({ songId, title, artist, coverUrl, onC
                     <div className="mcmt-hint">还没有评论，来抢沙发</div>
                 ) : (
                     <>
-                        {list.map(c => <CommentItem key={c.id} comment={c} songId={songId} />)}
+                        {list.map(c => <CommentItem key={c.id} comment={c} songId={songId} resType={resType} />)}
                         {sort === "new" && hasMore && (
                             <button className="mcmt-more" onClick={loadMore} disabled={loadingMore}>
                                 {loadingMore ? "加载中..." : "加载更多评论"}
@@ -194,7 +196,7 @@ export default function MusicCommentsPage({ songId, title, artist, coverUrl, onC
     );
 }
 
-function CommentItem({ comment, songId }: { comment: NeteaseComment; songId: number }) {
+function CommentItem({ comment, songId, resType = 0 }: { comment: NeteaseComment; songId: number; resType?: NeteaseCommentResType }) {
     const [replies, setReplies] = useState<NeteaseComment[] | null>(null);
     const [loadingReplies, setLoadingReplies] = useState(false);
     const [expanded, setExpanded] = useState(false);
@@ -204,11 +206,11 @@ function CommentItem({ comment, songId }: { comment: NeteaseComment; songId: num
         setExpanded(true);
         if (replies === null && !loadingReplies) {
             setLoadingReplies(true);
-            const list = await getFloorComments(songId, comment.id);
+            const list = await getFloorComments(songId, comment.id, 20, resType);
             setReplies(list);
             setLoadingReplies(false);
         }
-    }, [expanded, replies, loadingReplies, songId, comment.id]);
+    }, [expanded, replies, loadingReplies, songId, comment.id, resType]);
 
     const likeText = formatLikes(comment.likedCount);
     const meta = [formatCommentTime(comment.time), comment.ipLocation].filter(Boolean).join(" · ");

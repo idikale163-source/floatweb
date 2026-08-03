@@ -4530,3 +4530,25 @@
     color: var(--c-music-primary);
     font-weight: 600;
 }
+
+/* 歌单收藏/评论胶囊为可点按钮 */
+.music-pl-chip {
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.15s;
+}
+
+.music-pl-chip:active:not(:disabled) {
+    transform: scale(0.96);
+}
+
+.music-pl-chip:disabled {
+    opacity: 0.6;
+}
+
+.music-pl-chip[data-on] {
+    color: var(--c-music-primary);
+    border-color: rgba(255, 84, 104, 0.4);
+    background: var(--c-music-primary-dim);
+}
+

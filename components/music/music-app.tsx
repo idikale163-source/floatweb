@@ -16,12 +16,13 @@ import {
     getUserPlaylists, getPlaylistTracks, saveNeteaseCookie, clearNeteaseCookie,
     getDailyRecommendSongs, getHotSearchDetail, getPersonalizedPlaylists,
     getRecommendResource, getToplists, getUserRecordWithCounts,
-    getPlaylistDetail, getUserDetail,
+    getPlaylistDetail, getUserDetail, subscribePlaylist,
     type NeteaseHotSearch, type NeteaseSearchResult,
     type NeteasePlaylist, type NeteaseToplist, type MusicApiConfig,
     type NeteasePlaylistDetail, type NeteaseUserDetail, type NeteasePlayRecord,
 } from "@/lib/music-service";
 import { clearMusicCloudSyncData } from "@/lib/chat-engine";
+import MusicCommentsPage from "./music-comments";
 import {
     loadMusicBg, saveMusicBg, clearMusicBg, fileToCompressedDataUrl, appBgStyle,
     MUSIC_BG_EVENT, type MusicBgConfig, type MusicPlayerBgMode,
@@ -332,6 +333,7 @@ export default function MusicApp({ onClose }: Props) {
                     setActivePlaylist={setActivePlaylist}
                     playlists={playlists}
                     loading={playlistsLoading}
+                    onToast={showMusicToast}
                 />
             )}
 
@@ -637,7 +639,7 @@ function RecommendTab({ formatTime, onPlayNetease, onPlayAll, onGoSearch, onOpen
 }
 
 // ── Mine Tab ──
-function MineTab({ player, formatTime, onPlayNetease, onPlayAll, activePlaylist, setActivePlaylist, playlists, loading }: {
+function MineTab({ player, formatTime, onPlayNetease, onPlayAll, activePlaylist, setActivePlaylist, playlists, loading, onToast }: {
     player: MusicControlsValue;
     formatTime: (s: number) => string;
     onPlayNetease: (r: NeteaseSearchResult) => void;
@@ -646,6 +648,7 @@ function MineTab({ player, formatTime, onPlayNetease, onPlayAll, activePlaylist,
     setActivePlaylist: (pl: NeteasePlaylist | null) => void;
     playlists: NeteasePlaylist[];
     loading: boolean;
+    onToast: (text: string) => void;
 }) {
     const [weekRecords, setWeekRecords] = useState<NeteasePlayRecord[]>(() => readMusicCache("music-user-week-records", []));
     const [userDetail, setUserDetail] = useState<NeteaseUserDetail | null>(() => readMusicCache("music-user-detail", null));
@@ -679,6 +682,7 @@ function MineTab({ player, formatTime, onPlayNetease, onPlayAll, activePlaylist,
                 setActivePlaylist={setActivePlaylist}
                 playlists={playlists}
                 loading={loading}
+                onToast={onToast}
             />
         );
     }
@@ -959,7 +963,7 @@ function OnlineSearchTab({ player, formatTime, onPlayNetease }: {
 }
 
 // ── Playlists Tab ──
-function PlaylistsTab({ player, formatTime, onPlayNetease, onPlayAll, activePlaylist, setActivePlaylist, playlists, loading }: {
+function PlaylistsTab({ player, formatTime, onPlayNetease, onPlayAll, activePlaylist, setActivePlaylist, playlists, loading, onToast }: {
     player: MusicControlsValue;
     formatTime: (s: number) => string;
     onPlayNetease: (r: NeteaseSearchResult) => void;
@@ -968,13 +972,21 @@ function PlaylistsTab({ player, formatTime, onPlayNetease, onPlayAll, activePlay
     setActivePlaylist: (pl: NeteasePlaylist | null) => void;
     playlists: NeteasePlaylist[];
     loading: boolean;
+    onToast: (text: string) => void;
 }) {
     const [tracks, setTracks] = useState<NeteaseSearchResult[]>([]);
     const [loadingTracks, setLoadingTracks] = useState(false);
     const [detail, setDetail] = useState<NeteasePlaylistDetail | null>(null);
+    const [isSubscribed, setIsSubscribed] = useState(false);
+    const [subDelta, setSubDelta] = useState(0);
+    const [subscribing, setSubscribing] = useState(false);
+    const [showComments, setShowComments] = useState(false);
 
     // Fetch rich playlist meta (play count / tags / description)
     useEffect(() => {
+        setShowComments(false);
+        setSubDelta(0);
+        setIsSubscribed(false);
         if (!activePlaylist) {
             setDetail(null);
             return;
@@ -982,14 +994,32 @@ function PlaylistsTab({ player, formatTime, onPlayNetease, onPlayAll, activePlay
         let cancelled = false;
         const cacheKey = `music-playlist-detail-${activePlaylist.id}`;
         const cached = readMusicCache<NeteasePlaylistDetail | null>(cacheKey, null);
-        if (cached) setDetail(cached);
+        if (cached) {
+            setDetail(cached);
+            setIsSubscribed(!!cached.subscribed);
+        }
         getPlaylistDetail(activePlaylist.id).then(d => {
             if (cancelled || !d) return;
             setDetail(d);
+            setIsSubscribed(!!d.subscribed);
+            setSubDelta(0);
             writeMusicCache(cacheKey, d);
         });
         return () => { cancelled = true; };
     }, [activePlaylist]);
+
+    const handleCollect = async () => {
+        if (!activePlaylist || subscribing) return;
+        const next = !isSubscribed;
+        setSubscribing(true);
+        const result = await subscribePlaylist(activePlaylist.id, next);
+        setSubscribing(false);
+        onToast(result.message);
+        if (result.ok) {
+            setIsSubscribed(next);
+            setSubDelta(d => d + (next ? 1 : -1));
+        }
+    };
 
     // Clear tracks when navigating back to playlist list
     useEffect(() => {
@@ -1026,6 +1056,7 @@ function PlaylistsTab({ player, formatTime, onPlayNetease, onPlayAll, activePlay
     if (activePlaylist) {
         const playCountText = detail?.playCount ? formatMusicCount(detail.playCount) : "";
         return (
+            <>
             <div className="music-playlist-detail">
                 {/* Hero header with rich meta */}
                 <div className="music-pl-hero">
@@ -1057,18 +1088,20 @@ function PlaylistsTab({ player, formatTime, onPlayNetease, onPlayAll, activePlay
                             <i>{tracks.length}首</i>
                         </button>
                     )}
-                    {detail?.subscribedCount ? (
-                        <span className="music-pl-chip">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="m12 3 2.7 5.7 6.3.8-4.6 4.3 1.2 6.2L12 17l-5.6 3 1.2-6.2L3 9.5l6.3-.8z" /></svg>
-                            {formatMusicCount(detail.subscribedCount)}
-                        </span>
-                    ) : null}
-                    {detail?.commentCount ? (
-                        <span className="music-pl-chip">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 12a8.5 8.5 0 0 1-12.4 7.6L4 21l1.5-4.3A8.5 8.5 0 1 1 21 12z" /></svg>
-                            {formatMusicCount(detail.commentCount)}
-                        </span>
-                    ) : null}
+                    <button
+                        className="music-pl-chip"
+                        {...(isSubscribed ? { "data-on": "" } : {})}
+                        onClick={handleCollect}
+                        disabled={subscribing}
+                        title={isSubscribed ? "取消收藏" : "收藏歌单"}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill={isSubscribed ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="m12 3 2.7 5.7 6.3.8-4.6 4.3 1.2 6.2L12 17l-5.6 3 1.2-6.2L3 9.5l6.3-.8z" /></svg>
+                        {detail?.subscribedCount ? formatMusicCount(detail.subscribedCount + subDelta) : (isSubscribed ? "已收藏" : "收藏")}
+                    </button>
+                    <button className="music-pl-chip" onClick={() => setShowComments(true)} title="查看评论">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 12a8.5 8.5 0 0 1-12.4 7.6L4 21l1.5-4.3A8.5 8.5 0 1 1 21 12z" /></svg>
+                        {detail?.commentCount ? formatMusicCount(detail.commentCount) : "评论"}
+                    </button>
                 </div>
                 {loadingTracks ? (
                     <div className="music-empty"><div className="music-empty-text">加载中...</div></div>
@@ -1093,7 +1126,21 @@ function PlaylistsTab({ player, formatTime, onPlayNetease, onPlayAll, activePlay
                         })}
                     </div>
                 )}
+
             </div>
+
+            {/* Playlist comments overlay — outside the scroll container */}
+            {showComments && (
+                <MusicCommentsPage
+                    songId={activePlaylist.id}
+                    resType={2}
+                    title={activePlaylist.name}
+                    artist={detail?.creator || activePlaylist.creator || "歌单"}
+                    coverUrl={detail?.coverUrl || activePlaylist.coverUrl}
+                    onClose={() => setShowComments(false)}
+                />
+            )}
+            </>
         );
     }
 
