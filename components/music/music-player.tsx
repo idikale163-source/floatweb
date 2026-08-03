@@ -77,6 +77,23 @@ export default function MusicPlayer() {
         window.addEventListener(MUSIC_BG_EVENT, handleBgChange);
         return () => window.removeEventListener(MUSIC_BG_EVENT, handleBgChange);
     }, []);
+
+    // kv cache hydrates asynchronously from IndexedDB — the initial read above
+    // may run before it's ready, silently dropping the saved vinyl preference
+    // and custom background. Re-read a few times until hydration has settled.
+    useEffect(() => {
+        const timers = [300, 1200, 3000].map(ms => setTimeout(() => {
+            const stored = kvGet("music-player-style");
+            if (stored === "vinyl" || stored === "modern") {
+                setPlayerStyle(prev => (prev === stored ? prev : stored));
+            }
+            setBgCfg(prev => {
+                const fresh = loadMusicBg();
+                return prev.image === fresh.image && prev.dim === fresh.dim && prev.applyPlayer === fresh.applyPlayer ? prev : fresh;
+            });
+        }, ms));
+        return () => timers.forEach(clearTimeout);
+    }, []);
     const [musicToast, setMusicToast] = useState<string | null>(null);
     const [pendingPlayTrackId, setPendingPlayTrackId] = useState<string | null>(null);
     const musicToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -202,9 +219,10 @@ export default function MusicPlayer() {
         setPlayerStyle(prev => {
             const next: PlayerStyle = prev === "modern" ? "vinyl" : "modern";
             try { kvSet("music-player-style", next); } catch { /* ignore */ }
+            showMusicToast(next === "vinyl" ? "已切换为黑胶唱片样式" : "已切换为现代封面样式");
             return next;
         });
-    }, []);
+    }, [showMusicToast]);
 
     // ── Parse LRC lyrics ──
     const parsedLyrics = useRef<{ time: number; text: string }[]>([]);

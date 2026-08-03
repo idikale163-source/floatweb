@@ -55,6 +55,17 @@ export default function MusicApp({ onClose }: Props) {
         return () => window.removeEventListener(MUSIC_BG_EVENT, handleBgChange);
     }, []);
 
+    // kv cache hydrates asynchronously — re-read the custom background until settled
+    useEffect(() => {
+        const timers = [300, 1200, 3000].map(ms => setTimeout(() => {
+            setBgCfg(prev => {
+                const fresh = loadMusicBg();
+                return prev.image === fresh.image && prev.dim === fresh.dim && prev.applyPlayer === fresh.applyPlayer ? prev : fresh;
+            });
+        }, ms));
+        return () => timers.forEach(clearTimeout);
+    }, []);
+
     useEffect(() => {
         loadAllTracks().then(t => { setTracks(t); setLoading(false); });
         const neteaseOk = isNeteaseConfigured();
