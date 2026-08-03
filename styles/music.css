@@ -4323,3 +4323,35 @@
         0 8px 24px var(--c-music-accent-dim),
         0 2px 8px var(--c-music-accent-dim);
 }
+
+/* ═══════════════════════════════════════════════════════
+   Lumen polish v6 — adaptive bottom bars
+   底栏改为中性低透明度+强模糊，颜色随任意背景图自适应融合
+   ═══════════════════════════════════════════════════════ */
+
+.music-tabbar {
+    background: linear-gradient(180deg, rgba(12, 13, 18, 0.44), rgba(12, 13, 18, 0.62));
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.music-now-bar {
+    background: rgba(12, 13, 18, 0.4);
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* 评论输入栏与悬浮按钮同样自适应 */
+.mcmt-input-bar {
+    background: rgba(12, 13, 18, 0.5);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+}
+
+.music-fab-add {
+    background: rgba(16, 18, 26, 0.55);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+}
