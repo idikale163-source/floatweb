@@ -383,7 +383,8 @@ export default function MusicApp({ onClose }: Props) {
                 </>
             )}
 
-            {/* Now playing bar */}
+            {/* Bottom dock: mini player + tab bar share one glass slab */}
+            <div className="music-bottom-dock">
             {player.currentTrack && (
                 <div className="music-now-bar" onClick={player.openFullPlayer}>
                     <div className="music-birds">
@@ -449,6 +450,7 @@ export default function MusicApp({ onClose }: Props) {
                     <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
                     <span>本地</span>
                 </button>
+            </div>
             </div>
 
             {/* Settings Modal */}
