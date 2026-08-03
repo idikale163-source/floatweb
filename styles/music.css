@@ -4298,3 +4298,28 @@
     height: 24px;
     cursor: pointer;
 }
+
+/* ═══════════════════════════════════════════════════════
+   悬浮球独立配色 — 桌面浮球回归原浅色玻璃，不随App暗色主题
+   ═══════════════════════════════════════════════════════ */
+
+.music-float {
+    /* Scoped token overrides: the ball lives on the (light) home screen,
+       so it keeps the original Spring-Light glass palette. */
+    --c-music-surface: rgba(255, 255, 255, 0.3);
+    --c-music-surface-solid: rgba(255, 255, 255, 0.55);
+    --c-music-glass-dim: rgba(255, 255, 255, 0.08);
+    --c-music-accent: #5b7b64;
+    --c-music-accent-dim: rgba(106, 141, 115, 0.15);
+    --c-music-text: #2b3d31;
+    --c-music-overlay: rgba(0, 0, 0, 0.25);
+    --c-music-gold: rgba(212, 168, 83, 0.3);
+
+    background: var(--c-music-surface);
+    border: 1px solid var(--c-music-surface);
+    box-shadow:
+        inset 0 1px 1px var(--c-music-surface-solid),
+        inset 0 -1px 1px var(--c-music-overlay),
+        0 8px 24px var(--c-music-accent-dim),
+        0 2px 8px var(--c-music-accent-dim);
+}
