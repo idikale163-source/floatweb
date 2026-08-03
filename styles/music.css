@@ -4360,3 +4360,76 @@
 .music-tabbar {
     background: rgba(12, 13, 18, 0.4);
 }
+
+/* ═══════════════════════════════════════════════════════
+   唱片回归最初的玻璃发光质感（保留居中修正，撤销深色唱盘）
+   ═══════════════════════════════════════════════════════ */
+
+.mp-lumen .music-player-vinyl-glow {
+    background: radial-gradient(circle, var(--c-music-gold) 0%, transparent 60%);
+}
+
+.mp-lumen .music-player-vinyl {
+    background: radial-gradient(circle,
+            var(--c-music-surface) 0%,
+            var(--c-music-glass-dim) 35%,
+            var(--c-music-glass-dim) 50%,
+            var(--c-music-glass-dim) 65%,
+            var(--c-music-surface) 100%);
+    box-shadow:
+        0 0 0 1px var(--c-music-accent-dim),
+        0 8px 32px var(--c-music-accent-dim),
+        inset 0 0 20px var(--c-music-surface-solid);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.mp-lumen .music-player-vinyl-groove {
+    border-color: var(--c-music-glass-dim);
+}
+
+.mp-lumen .music-player-vinyl-center {
+    background: var(--c-music-surface);
+    box-shadow: inset 0 0 10px var(--c-music-surface);
+}
+
+.mp-lumen .music-player-vinyl-dot {
+    background: var(--c-music-gold);
+    box-shadow: 0 0 4px var(--c-music-gold);
+}
+
+.mp-lumen .music-player-tonearm-pivot {
+    background: radial-gradient(circle at 40% 35%,
+        var(--c-music-surface-solid),
+        var(--c-music-gold) 60%,
+        var(--c-music-surface) 100%);
+    box-shadow:
+        0 0 0 2px var(--c-music-surface-solid),
+        0 2px 6px var(--c-music-accent-dim);
+}
+
+.mp-lumen .music-player-tonearm-pivot::after {
+    background: var(--c-music-surface-solid);
+}
+
+.mp-lumen .music-player-tonearm-arm {
+    background: linear-gradient(180deg,
+        var(--c-music-surface-solid) 0%,
+        var(--c-music-surface) 40%,
+        var(--c-music-bg-glow) 100%);
+    box-shadow: 0 1px 4px var(--c-music-accent-dim);
+}
+
+.mp-lumen .music-player-tonearm-head {
+    background: linear-gradient(180deg,
+        var(--c-music-surface) 0%,
+        var(--c-music-bg-glow) 100%);
+    box-shadow: 0 1px 3px var(--c-music-accent-dim);
+}
+
+.mp-lumen .music-player-tonearm-head::before {
+    background: linear-gradient(180deg,
+        var(--c-music-surface-solid),
+        var(--c-music-surface));
+    box-shadow: 0 1px 3px var(--c-music-accent-dim);
+}
