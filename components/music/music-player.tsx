@@ -16,6 +16,7 @@ import {
 } from "@/lib/music-service";
 import MusicCommentsPage from "./music-comments";
 import MusicArtistPage from "./music-artist";
+import { loadMusicBg, musicBgStyle, MUSIC_BG_EVENT, type MusicBgConfig } from "@/lib/music-bg";
 
 const PLAY_MODE_ICONS: Record<PlayMode, { svg: string; label: string }> = {
     sequence: {
@@ -68,7 +69,14 @@ export default function MusicPlayer() {
     const [showComments, setShowComments] = useState(false);
     const [artistView, setArtistView] = useState<{ id: number; name: string } | null>(null);
     const [palette, setPalette] = useState<CoverPalette>(DEFAULT_COVER_PALETTE);
+    const [bgCfg, setBgCfg] = useState<MusicBgConfig>(() => loadMusicBg());
     const [commentTotal, setCommentTotal] = useState(0);
+
+    useEffect(() => {
+        const handleBgChange = () => setBgCfg(loadMusicBg());
+        window.addEventListener(MUSIC_BG_EVENT, handleBgChange);
+        return () => window.removeEventListener(MUSIC_BG_EVENT, handleBgChange);
+    }, []);
     const [musicToast, setMusicToast] = useState<string | null>(null);
     const [pendingPlayTrackId, setPendingPlayTrackId] = useState<string | null>(null);
     const musicToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -382,10 +390,12 @@ export default function MusicPlayer() {
     const hasLyrics = parsedLyrics.current.length > 0;
     const modeInfo = PLAY_MODE_ICONS[player.playMode];
     const activeLyricText = activeLyricIdx >= 0 ? parsedLyrics.current[activeLyricIdx]?.text : "";
+    const customBg = bgCfg.applyPlayer ? musicBgStyle(bgCfg, 0.08) : undefined;
     const ambientVars = {
         "--mp-c1": palette[0],
         "--mp-c2": palette[1],
         "--mp-c3": palette[2],
+        ...(customBg || {}),
     } as React.CSSProperties;
 
     return (
@@ -403,11 +413,15 @@ export default function MusicPlayer() {
                 </div>
             )}
 
-            {/* Ambient flowing background tinted by cover colors */}
+            {/* Ambient flowing background tinted by cover colors (hidden on custom bg) */}
             <div className="mp-ambient" aria-hidden="true">
-                <i className="mp-blob mp-blob-1" />
-                <i className="mp-blob mp-blob-2" />
-                <i className="mp-blob mp-blob-3" />
+                {!customBg && (
+                    <>
+                        <i className="mp-blob mp-blob-1" />
+                        <i className="mp-blob mp-blob-2" />
+                        <i className="mp-blob mp-blob-3" />
+                    </>
+                )}
                 <span className="mp-grain" />
                 <span className="mp-vignette" />
             </div>

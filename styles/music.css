@@ -4271,3 +4271,30 @@
     width: 26px;
     font-size: calc(11.7px*var(--app-text-scale,1));
 }
+
+/* ── Custom background settings ── */
+
+.music-bg-preview {
+    position: relative;
+    height: 92px;
+    border-radius: 12px;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
+    border: 1px solid var(--c-music-surface-solid);
+    margin-top: 8px;
+}
+
+.music-bg-preview span {
+    position: absolute;
+    inset: 0;
+    display: block;
+    background: rgb(8, 9, 14);
+}
+
+.music-bg-range {
+    width: 100%;
+    accent-color: var(--c-music-primary);
+    height: 24px;
+    cursor: pointer;
+}
