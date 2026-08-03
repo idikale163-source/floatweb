@@ -4087,3 +4087,64 @@
     background: linear-gradient(180deg, #3a4150, #232836);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
+
+/* ═══════════════════════════════════════════════════════
+   Lumen polish v3 — unified alignment grid (16px gutters)
+   ═══════════════════════════════════════════════════════ */
+
+/* Playlist detail: every block starts at the same 16px gutter */
+.music-pl-hero {
+    padding: 4px 0 0;
+}
+
+.music-pl-hero-desc {
+    padding: 10px 0 0;
+}
+
+.music-playlist-detail .music-playlist-detail-header {
+    padding: 12px 0 10px;
+    gap: 10px;
+}
+
+/* Three action buttons fill the row edge-to-edge */
+.music-playlist-detail .music-playlist-detail-header .music-playlist-play-all {
+    flex: 1.35;
+    justify-content: center;
+    height: 42px;
+    padding: 0 10px;
+}
+
+.music-playlist-detail .music-playlist-detail-header .music-pl-chip {
+    flex: 1;
+    justify-content: center;
+    height: 42px;
+    padding: 0 10px;
+}
+
+/* Nested track list: drop the double gutter so row bg aligns with the hero */
+.music-playlist-detail .music-list {
+    flex: none;
+    overflow: visible;
+    padding: 4px 0 0;
+}
+
+/* Home / Mine: strip the stray 2px offsets so everything sits on the gutter */
+.music-greet {
+    padding: 4px 0 0;
+}
+
+.music-section-head {
+    padding: 0;
+}
+
+.music-me-head {
+    padding: 2px 0 0;
+}
+
+.music-rail {
+    padding: 2px 0 4px;
+}
+
+.mart-sec-head {
+    padding: 14px 0 8px;
+}
