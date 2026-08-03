@@ -3960,3 +3960,130 @@
         0 0 24px rgba(140, 170, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.12);
 }
+
+/* ═══════════════════════════════════════════════════════
+   Lumen polish v2 — flat song rows, dark vinyl, alignment
+   ═══════════════════════════════════════════════════════ */
+
+/* Flat song rows (design-spec): no bubble cards */
+.music-song {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    padding: 10px 10px;
+    border-radius: 14px;
+    gap: 12px;
+}
+
+.music-song:active {
+    transform: none;
+    background: var(--c-music-accent-dim);
+}
+
+.music-song[data-playing] {
+    background: var(--c-music-primary-dim);
+}
+
+.music-song[data-playing] .music-song-title {
+    color: var(--c-music-primary);
+}
+
+.music-song-cover {
+    border-radius: 10px;
+}
+
+.music-list {
+    gap: 2px;
+}
+
+.music-list-compact {
+    gap: 2px;
+}
+
+/* Playlist detail: collect/comment chips beside play-all */
+.music-playlist-detail .music-playlist-detail-header {
+    gap: 10px;
+}
+
+.music-pl-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 1px solid var(--c-music-surface-solid);
+    background: var(--c-music-surface);
+    color: var(--c-music-text);
+    font-size: calc(11px*var(--app-text-scale,1));
+    font-variant-numeric: tabular-nums;
+}
+
+.music-pl-chip svg {
+    color: var(--c-music-accent);
+}
+
+/* ── Vinyl mode on the dark player: center it & go true black vinyl ── */
+
+.mp-lumen .music-player-vinyl-area {
+    align-self: center;
+}
+
+.mp-lumen .music-player-vinyl-glow {
+    background: radial-gradient(circle, rgba(160, 190, 255, 0.1) 0%, transparent 60%);
+}
+
+.mp-lumen .music-player-vinyl {
+    background: radial-gradient(circle,
+            #1d212c 0%,
+            #12141c 30%,
+            #171a24 47%,
+            #12141c 62%,
+            #1d212c 100%);
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.07),
+        0 20px 50px rgba(0, 0, 0, 0.6),
+        inset 0 0 24px rgba(0, 0, 0, 0.55);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+.mp-lumen .music-player-vinyl-groove {
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+.mp-lumen .music-player-vinyl-center {
+    background: #10131c;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.mp-lumen .music-player-vinyl-dot {
+    background: rgba(220, 235, 255, 0.85);
+    box-shadow: 0 0 6px rgba(200, 224, 255, 0.7);
+}
+
+.mp-lumen .music-player-tonearm-pivot {
+    background: radial-gradient(circle at 40% 35%, #3a4150, #232836 60%, #14161e 100%);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1), 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.mp-lumen .music-player-tonearm-pivot::after {
+    background: rgba(220, 235, 255, 0.7);
+}
+
+.mp-lumen .music-player-tonearm-arm {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.18));
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.mp-lumen .music-player-tonearm-head {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.14));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.mp-lumen .music-player-tonearm-head::before {
+    background: linear-gradient(180deg, #3a4150, #232836);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}

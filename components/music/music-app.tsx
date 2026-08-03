@@ -1014,8 +1014,6 @@ function PlaylistsTab({ player, formatTime, onPlayNetease, onPlayAll, activePlay
                         <div className="music-pl-hero-meta">
                             {(detail?.creator || activePlaylist.creator) && <span>{detail?.creator || activePlaylist.creator}</span>}
                             <span>{detail?.trackCount || activePlaylist.trackCount} 首</span>
-                            {detail?.subscribedCount ? <span>收藏 {formatMusicCount(detail.subscribedCount)}</span> : null}
-                            {detail?.commentCount ? <span>评论 {formatMusicCount(detail.commentCount)}</span> : null}
                         </div>
                         {(detail?.tags?.length ?? 0) > 0 && (
                             <div className="music-pl-hero-tags">
@@ -1035,14 +1033,32 @@ function PlaylistsTab({ player, formatTime, onPlayNetease, onPlayAll, activePlay
                             <i>{tracks.length}首</i>
                         </button>
                     )}
+                    {detail?.subscribedCount ? (
+                        <span className="music-pl-chip">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="m12 3 2.7 5.7 6.3.8-4.6 4.3 1.2 6.2L12 17l-5.6 3 1.2-6.2L3 9.5l6.3-.8z" /></svg>
+                            {formatMusicCount(detail.subscribedCount)}
+                        </span>
+                    ) : null}
+                    {detail?.commentCount ? (
+                        <span className="music-pl-chip">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 12a8.5 8.5 0 0 1-12.4 7.6L4 21l1.5-4.3A8.5 8.5 0 1 1 21 12z" /></svg>
+                            {formatMusicCount(detail.commentCount)}
+                        </span>
+                    ) : null}
                 </div>
                 {loadingTracks ? (
                     <div className="music-empty"><div className="music-empty-text">加载中...</div></div>
                 ) : (
                     <div className="music-list">
-                        {tracks.map((r, idx) => (
-                            <div key={r.id} className="music-song" style={{ animationDelay: `${Math.min(idx * 0.03, 0.4)}s` }} onClick={() => onPlayNetease(r)}>
-                                <span className="music-song-idx">{idx + 1}</span>
+                        {tracks.map((r, idx) => {
+                            const isCurrent = player.currentTrack?.id === `netease_${r.id}`;
+                            return (
+                            <div key={r.id} className="music-song" {...(isCurrent ? { "data-playing": "" } : {})} style={{ animationDelay: `${Math.min(idx * 0.03, 0.4)}s` }} onClick={() => onPlayNetease(r)}>
+                                {isCurrent && player.isPlaying ? (
+                                    <span className="music-song-idx"><span className="music-wave music-queue-wave">{[0, 1, 2].map(i => <span key={i} className="music-wave-bar" style={{ animationDelay: `${i * 0.15}s` }} />)}</span></span>
+                                ) : (
+                                    <span className="music-song-idx">{idx + 1}</span>
+                                )}
                                 <div className="music-song-cover">
                                     {r.coverUrl ? <img src={r.coverUrl} alt="" /> : (
                                         <div className="music-song-cover-placeholder">
@@ -1056,7 +1072,8 @@ function PlaylistsTab({ player, formatTime, onPlayNetease, onPlayAll, activePlay
                                 </div>
                                 <div className="music-song-duration">{formatTime(r.duration / 1000)}</div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -1299,6 +1316,7 @@ function writeMusicCache<T>(key: string, data: T): void {
 
 function formatMusicCount(value: number): string {
     if (!Number.isFinite(value)) return "0";
+    if (value >= 100000000) return `${Math.round(value / 10000000) / 10}亿`;
     if (value >= 10000) return `${Math.round(value / 1000) / 10}万`;
     return String(value);
 }
