@@ -4210,3 +4210,12 @@
 .music-playlist-detail {
     padding-bottom: 175px;
 }
+
+/* Floating action buttons sit above the docked bottom stack */
+.music-fab-add {
+    z-index: 45;
+    background: rgba(28, 32, 48, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}

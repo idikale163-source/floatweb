@@ -340,7 +340,7 @@ export default function MusicApp({ onClose }: Props) {
                         className="music-fab-add"
                         onClick={() => setShowCssEditor(true)}
                         title="自定义样式"
-                        style={{ bottom: player.currentTrack ? "224px" : "148px" }}
+                        style={{ bottom: player.currentTrack ? "calc(202px + env(safe-area-inset-bottom, 0px))" : "calc(146px + env(safe-area-inset-bottom, 0px))" }}
                     >
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z" />
@@ -351,7 +351,7 @@ export default function MusicApp({ onClose }: Props) {
                         className="music-fab-add"
                         onClick={() => fileInputRef.current?.click()}
                         title="添加本地音乐"
-                        style={{ bottom: player.currentTrack ? "168px" : "92px" }}
+                        style={{ bottom: player.currentTrack ? "calc(146px + env(safe-area-inset-bottom, 0px))" : "calc(90px + env(safe-area-inset-bottom, 0px))" }}
                     >
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="12" y1="5" x2="12" y2="19" />
