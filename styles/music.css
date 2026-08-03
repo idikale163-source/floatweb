@@ -4219,3 +4219,55 @@
     -webkit-backdrop-filter: blur(16px);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
+
+/* ═══════════════════════════════════════════════════════
+   Lumen polish v5 — type weight pass (match design mock)
+   ═══════════════════════════════════════════════════════ */
+
+.music-song-title {
+    font-size: calc(13.5px*var(--app-text-scale,1));
+    font-weight: 600;
+}
+
+.music-song-artist {
+    margin-top: 3px;
+}
+
+.music-song-duration {
+    font-weight: 500;
+}
+
+.music-now-bar-title {
+    font-weight: 600;
+}
+
+.music-queue-item-title {
+    font-weight: 500;
+}
+
+.music-queue-item[data-current] .music-queue-item-title {
+    font-weight: 600;
+}
+
+.music-rail-name,
+.music-playlist-name,
+.music-hot-word,
+.music-tabbar-item,
+.music-playlist-picker-name {
+    font-weight: 500;
+}
+
+.music-greet-sub,
+.music-section-head span {
+    font-weight: 400;
+}
+
+/* Playlist detail rows: index + title only (design-spec), roomier line */
+.music-playlist-detail .music-song {
+    padding: 12px 10px;
+}
+
+.music-playlist-detail .music-song-idx {
+    width: 26px;
+    font-size: calc(11.7px*var(--app-text-scale,1));
+}

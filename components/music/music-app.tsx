@@ -1059,13 +1059,6 @@ function PlaylistsTab({ player, formatTime, onPlayNetease, onPlayAll, activePlay
                                 ) : (
                                     <span className="music-song-idx">{idx + 1}</span>
                                 )}
-                                <div className="music-song-cover">
-                                    {r.coverUrl ? <img src={r.coverUrl} alt="" /> : (
-                                        <div className="music-song-cover-placeholder">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
-                                        </div>
-                                    )}
-                                </div>
                                 <div className="music-song-info">
                                     <div className="music-song-title">{r.name}</div>
                                     <div className="music-song-artist">{r.artists}{r.album ? ` · ${r.album}` : ""}</div>
