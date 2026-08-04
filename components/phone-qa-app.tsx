@@ -196,6 +196,7 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
   const snapshot = useSyncExternalStore(subscribeQaChat, getQaChatSnapshot, getQaChatSnapshot);
   const [input, setInput] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [devNoticeOpen, setDevNoticeOpen] = useState(true);
   const [apiReady, setApiReady] = useState(true);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -356,6 +357,23 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
           )}
         </div>
       </footer>
+
+      {devNoticeOpen && (
+        <div className="qa-devnotice-backdrop">
+          <div className="qa-devnotice" role="alertdialog" aria-label="开发中提示">
+            <div className="qa-devnotice-title">App 开发中</div>
+            <div className="qa-devnotice-text">答疑 App 还在开发中，请暂时不要使用。</div>
+            <div className="qa-devnotice-actions">
+              <button type="button" className="qa-devnotice-btn is-primary" onClick={onClose}>
+                返回桌面
+              </button>
+              <button type="button" className="qa-devnotice-btn" onClick={() => setDevNoticeOpen(false)}>
+                仍要看看
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {drawerOpen && (
         <QaSessionDrawer

@@ -442,6 +442,71 @@
   border: 1px solid var(--qa-border-strong);
 }
 
+/* ── 开发中弹层 ── */
+.qa-devnotice-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: qa-fade-in 0.18s ease;
+}
+.qa-devnotice {
+  width: min(100%, 320px);
+  padding: 22px 20px 18px;
+  border-radius: 16px;
+  background: var(--qa-bg-overlay);
+  border: 1px solid var(--qa-border-strong);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+.qa-devnotice-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--qa-text-primary);
+}
+.qa-devnotice-text {
+  margin-top: 8px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--qa-text-secondary);
+}
+.qa-devnotice-actions {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.qa-devnotice-btn {
+  width: 100%;
+  padding: 10px 0;
+  border: 1px solid var(--qa-border-strong);
+  border-radius: 11px;
+  background: transparent;
+  color: var(--qa-text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.qa-devnotice-btn:hover {
+  background: var(--qa-state-hover);
+  color: var(--qa-text-primary);
+}
+.qa-devnotice-btn.is-primary {
+  background: var(--qa-accent);
+  border-color: transparent;
+  color: var(--qa-text-inverse);
+  font-weight: 500;
+}
+.qa-devnotice-btn.is-primary:hover {
+  background: var(--qa-accent-hover);
+}
+
 /* ── 会话抽屉 ── */
 .qa-drawer-backdrop {
   position: absolute;
