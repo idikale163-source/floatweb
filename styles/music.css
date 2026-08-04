@@ -4552,3 +4552,25 @@
     background: var(--c-music-primary-dim);
 }
 
+
+/* ═══════════════════════════════════════════════════════
+   默认背景改黑灰中性系 — 清除残留的蓝色调
+   ═══════════════════════════════════════════════════════ */
+
+.mp-lumen {
+    background-color: #08080a;
+}
+
+.music-week-card {
+    background:
+        radial-gradient(220px 130px at 85% 0%, rgba(200, 203, 212, 0.1), transparent 70%),
+        linear-gradient(140deg, #1d1d22, #151517 70%);
+}
+
+.mcmt-page {
+    background-image: radial-gradient(360px 240px at 80% -10%, rgba(160, 162, 172, 0.09), transparent 70%);
+}
+
+.music-bottom-dock {
+    background: rgba(14, 14, 16, 0.4);
+}
