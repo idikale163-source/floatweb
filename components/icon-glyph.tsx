@@ -36,7 +36,7 @@ import {
   mdiDatabase,
   mdiAccount,
   mdiHome,
-  mdiFaceAgent,
+  mdiHammerWrench,
 } from "@mdi/js";
 
 type IconGlyphProps = {
@@ -62,7 +62,7 @@ const MDI_PATHS: Record<IconId, string> = {
   vnmode: mdiScriptTextOutline,
   mapmode: mdiMapMarker,
   worldbuilder: mdiEarth,
-  qa: mdiFaceAgent,
+  qa: mdiHammerWrench,
   vnplay: mdiPlayCircle,
   vnchapters: mdiBookmark,
   moments: mdiCamera,

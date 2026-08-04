@@ -263,7 +263,7 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
           </button>
         </div>
         <div className="qa-header-center">
-          <span className="qa-header-title">答疑</span>
+          <span className="qa-header-title">工坊</span>
         </div>
         <div className="qa-header-right">
           <button type="button" className="qa-icon-btn" onClick={() => setDrawerOpen(true)} aria-label="对话记录">
@@ -362,7 +362,7 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
         <div className="qa-devnotice-backdrop">
           <div className="qa-devnotice" role="alertdialog" aria-label="开发中提示">
             <div className="qa-devnotice-title">App 开发中</div>
-            <div className="qa-devnotice-text">答疑 App 还在开发中，请暂时不要使用。</div>
+            <div className="qa-devnotice-text">工坊还在开发中，请暂时不要使用。</div>
             <div className="qa-devnotice-actions">
               <button type="button" className="qa-devnotice-btn is-primary" onClick={onClose}>
                 返回桌面

@@ -106,5 +106,5 @@ export const ICONS: Record<IconId, IconMeta> = {
     placeholder: false,
     path: "/world-builder"
   },
-  qa: { id: "qa", label: "答疑", tone: "var(--c-icon-qa, #4a505c99)", placeholder: false },
+  qa: { id: "qa", label: "工坊", tone: "var(--c-icon-qa, #4a505c99)", placeholder: false },
 };
