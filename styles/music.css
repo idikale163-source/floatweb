@@ -4570,3 +4570,13 @@
 .music-bottom-dock {
     background: rgba(14, 14, 16, 0.4);
 }
+
+/* 去掉页面背景的胶片噪点纹理，保留纯净渐变（播放页不受影响） */
+.music-app {
+    background-image:
+        radial-gradient(circle at 10% 10%, var(--c-music-bg-mint) 0%, transparent 60%),
+        radial-gradient(circle at 90% 10%, var(--c-music-bg-cream) 0%, transparent 60%),
+        radial-gradient(circle at 85% 85%, var(--c-music-bg-lime) 0%, transparent 65%),
+        radial-gradient(circle at 10% 90%, var(--c-music-bg-mint-dim) 0%, transparent 60%),
+        radial-gradient(circle at 50% 50%, var(--c-music-bg-center) 0%, transparent 70%);
+}
