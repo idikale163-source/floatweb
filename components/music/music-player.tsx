@@ -448,7 +448,7 @@ export default function MusicPlayer() {
             <div className="mp-top">
                 <button className="music-player-close" onClick={player.closeFullPlayer}>
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                        <path d="m6 9 6 6 6-6" />
+                        <path d="M15 19 8 12l7-7" />
                     </svg>
                 </button>
                 <div className="mp-titles">
