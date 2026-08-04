@@ -11,7 +11,7 @@ import { useMusicControls, type MusicControlsValue } from "@/lib/music-context";
 import { SessionCustomCSS } from "@/components/ui/session-custom-css";
 import {
     isNeteaseConfigured, loadMusicApiConfig, saveMusicApiConfig,
-    searchNetease, getNeteasePlayUrl, getNeteaseLyrics, getNeteaseSongDetail,
+    searchNetease, getNeteasePlayInfo, getNeteaseLyrics, getNeteaseSongDetail,
     testNeteaseConnection, getQrKey, getQrImage, checkQrStatus, checkLoginStatus,
     getUserPlaylists, getPlaylistTracks, saveNeteaseCookie, clearNeteaseCookie,
     getDailyRecommendSongs, getHotSearchDetail, getPersonalizedPlaylists,
@@ -195,9 +195,9 @@ export default function MusicApp({ onClose }: Props) {
     const handlePlayNetease = useCallback(async (result: NeteaseSearchResult) => {
         const trackId = `netease_${result.id}`;
         beginMusicLoadingToast(trackId);
-        const url = await getNeteasePlayUrl(result.id);
-        if (!url) {
-            showMusicToast("加载失败，请稍后重试");
+        const info = await getNeteasePlayInfo(result.id);
+        if (!info.url) {
+            showMusicToast(info.reason || "加载失败，请稍后重试", 2600);
             return;
         }
         const detail = await getNeteaseSongDetail(result.id);
@@ -207,7 +207,8 @@ export default function MusicApp({ onClose }: Props) {
         if (!player.queue.some(t => t.id === track.id)) {
             player.setQueue([track, ...player.queue]);
         }
-        player.playUrl(url, track);
+        player.playUrl(info.url, track);
+        if (info.trial) showMusicToast("VIP 歌曲，当前播放 30 秒试听", 2600);
     }, [beginMusicLoadingToast, player, showMusicToast, toMusicTrack]);
 
     /** Play all tracks from a playlist — replace queue */
@@ -217,18 +218,20 @@ export default function MusicApp({ onClose }: Props) {
         player.setQueue(queue);
 
         beginMusicLoadingToast(`netease_${results[0].id}`);
-        let playable: { song: NeteaseSearchResult; url: string; index: number } | null = null;
+        let playable: { song: NeteaseSearchResult; url: string; index: number; trial: boolean } | null = null;
+        let firstReason = "";
         for (let i = 0; i < results.length; i++) {
             const song = results[i];
-            const url = await getNeteasePlayUrl(song.id);
-            if (url) {
-                playable = { song, url, index: i };
+            const info = await getNeteasePlayInfo(song.id);
+            if (info.url) {
+                playable = { song, url: info.url, index: i, trial: info.trial };
                 break;
             }
+            if (!firstReason && info.reason) firstReason = info.reason;
         }
 
         if (!playable) {
-            showMusicToast("歌单内暂无可播放歌曲");
+            showMusicToast(firstReason || "歌单内暂无可播放歌曲", 2600);
             return;
         }
 
@@ -238,6 +241,7 @@ export default function MusicApp({ onClose }: Props) {
         const track = toMusicTrack(playable.song, { lyrics, coverUrl: detail?.coverUrl, name: detail?.name, artists: detail?.artists });
         player.playUrl(playable.url, track);
         if (playable.index > 0) showMusicToast(`已跳过 ${playable.index} 首不可播放歌曲`);
+        else if (playable.trial) showMusicToast("VIP 歌曲，当前播放 30 秒试听", 2600);
     }, [beginMusicLoadingToast, player, showMusicToast, toMusicTrack]);
 
     const formatTime = (s: number) => {

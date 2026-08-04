@@ -7,7 +7,7 @@ import { useMusicPlayer } from "@/lib/music-context";
 import type { MusicTrack } from "@/lib/music-storage";
 import {
     getArtistDetail, getArtistTopSongs, getArtistAlbums,
-    getNeteasePlayUrl, getNeteaseSongDetail, getNeteaseLyrics,
+    getNeteasePlayInfo, getNeteaseSongDetail, getNeteaseLyrics,
     type NeteaseArtist, type NeteaseAlbum, type NeteaseSearchResult,
 } from "@/lib/music-service";
 
@@ -67,12 +67,13 @@ export default function MusicArtistPage({ artistId, artistName, onClose }: Props
 
     const playSong = useCallback(async (song: NeteaseSearchResult) => {
         setPendingSongId(song.id);
-        const url = await getNeteasePlayUrl(song.id);
-        if (!url) {
+        const info = await getNeteasePlayInfo(song.id);
+        if (!info.url) {
             setPendingSongId(null);
-            setToast("这首歌暂时无法播放");
+            setToast(info.reason || "这首歌暂时无法播放");
             return;
         }
+        const url = info.url;
         const [detail, lyrics] = await Promise.all([
             getNeteaseSongDetail(song.id).catch(() => null),
             getNeteaseLyrics(song.id).catch(() => ""),
