@@ -86,6 +86,7 @@ import type { LLMMessage } from "@/lib/llm-prompt-assembler";
 import { resolveUserIdentity } from "@/lib/settings-storage";
 import { incrementEventCounter } from "@/lib/memory-storage";
 import { maybeRunSummarization } from "@/lib/memory-summarizer";
+import { IFRAME_ERROR_CAPTURE_SCRIPT } from "@/lib/qa-iframe-error-bridge";
 
 type GameMainView = "hall" | "library" | "studio";
 type GameStudioMode = "published" | "drafts";
@@ -504,9 +505,9 @@ ${body}
 </script>`;
 
   if (/<body[\s>]/i.test(base)) {
-    return base.replace(/<body([^>]*)>/i, `<body$1>${bridge}`);
+    return base.replace(/<body([^>]*)>/i, `<body$1>${IFRAME_ERROR_CAPTURE_SCRIPT}${bridge}`);
   }
-  return `${bridge}${base}`;
+  return `${IFRAME_ERROR_CAPTURE_SCRIPT}${bridge}${base}`;
 }
 
 function GameIframe({

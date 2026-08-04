@@ -4,13 +4,16 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
-import { Check, ChevronLeft, Copy, History, Plus, Send, Square, Trash2, X } from "lucide-react";
+import { Check, ChevronLeft, Copy, Github, History, Loader2, Plus, Send, Square, Trash2, X } from "lucide-react";
 import {
+  applyQaCommit,
+  cancelQaCommit,
   createQaSession,
   deleteQaSession,
   getQaChatSnapshot,
   hydrateQaChat,
   retryQaMessage,
+  revertQaAppliedCommit,
   sendQaMessage,
   stopQaGeneration,
   subscribeQaChat,
@@ -19,6 +22,15 @@ import {
   type QaSession,
 } from "@/lib/qa-chat-store";
 import { resolveQaApiConfig } from "@/lib/qa-agent-engine";
+import {
+  loadQaGithubConfig,
+  saveQaGithubConfig,
+  clearQaGithubConfig,
+  validateQaGithubConfig,
+  type QaGithubConfig,
+  type QaGithubValidation,
+} from "@/lib/qa-github";
+import "@/lib/qa-error-log";
 
 type PhoneQaAppProps = {
   onClose: () => void;
@@ -92,6 +104,72 @@ const QA_MARKDOWN_COMPONENTS = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any;
 
+// ── 提交提案卡片 ─────────────────────────────────────
+
+function QaCommitCard({ msg }: { msg: QaMsg }) {
+  const pending = msg.pendingCommit;
+  const [busy, setBusy] = useState(false);
+  if (!pending) return null;
+  const { proposal, status, result, error } = pending;
+  const files = proposal.files;
+
+  const apply = async () => {
+    setBusy(true);
+    await applyQaCommit(msg.id);
+    setBusy(false);
+  };
+  const revert = async () => {
+    setBusy(true);
+    await revertQaAppliedCommit(msg.id);
+    setBusy(false);
+  };
+
+  return (
+    <div className={`qa-commit-card status-${status}`}>
+      <div className="qa-commit-head">
+        <span className="qa-commit-title">
+          {status === "applied" ? "已提交" : status === "reverted" ? "已撤销" : status === "canceled" ? "已取消" : "修改提案"}
+        </span>
+        <span className="qa-commit-branch">{proposal.branch || "默认分支"} · {files.length} 个文件</span>
+      </div>
+      <div className="qa-commit-msg">{proposal.message}</div>
+      <ul className="qa-commit-files">
+        {files.map((f) => (
+          <li key={f.path}>{f.path}</li>
+        ))}
+      </ul>
+      {error && <div className="qa-commit-error">{error}</div>}
+      {status === "pending" && (
+        <div className="qa-commit-actions">
+          <button type="button" className="qa-commit-btn is-primary" onClick={apply} disabled={busy}>
+            {busy ? <Loader2 size={13} className="qa-spin" /> : "应用"}
+          </button>
+          <button type="button" className="qa-commit-btn" onClick={() => cancelQaCommit(msg.id)} disabled={busy}>
+            取消
+          </button>
+        </div>
+      )}
+      {(status === "applying" || status === "reverting") && (
+        <div className="qa-commit-actions">
+          <span className="qa-commit-progress">
+            <Loader2 size={13} className="qa-spin" /> {status === "applying" ? "提交中…" : "撤销中…"}
+          </span>
+        </div>
+      )}
+      {status === "applied" && result && (
+        <div className="qa-commit-actions">
+          <a className="qa-commit-link" href={result.htmlUrl} target="_blank" rel="noreferrer noopener">
+            查看 commit {result.sha.slice(0, 7)}
+          </a>
+          <button type="button" className="qa-commit-btn is-danger" onClick={revert} disabled={busy}>
+            撤销
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 消息渲染 ─────────────────────────────────────────
 
 function QaMessageItem({ msg, isStreaming, onRetry }: { msg: QaMsg; isStreaming: boolean; onRetry: (id: string) => void }) {
@@ -103,9 +181,19 @@ function QaMessageItem({ msg, isStreaming, onRetry }: { msg: QaMsg; isStreaming:
     );
   }
 
-  const thinkingOnly = isStreaming && !msg.content;
+  const thinkingOnly = isStreaming && !msg.content && (!msg.tools || msg.tools.length === 0);
   return (
     <div className="qa-msg-assistant">
+      {msg.tools && msg.tools.length > 0 && (
+        <div className="qa-tools">
+          {msg.tools.map((tool, i) => (
+            <span key={`${tool.name}-${i}`} className={`qa-tool-pill ${tool.running ? "is-running" : tool.success === false ? "is-fail" : "is-done"}`}>
+              <span className="qa-tool-dot" />
+              {tool.running ? `正在${tool.name}…` : tool.success === false ? `${tool.name}失败` : tool.name}
+            </span>
+          ))}
+        </div>
+      )}
       {thinkingOnly ? (
         <div className="qa-thinking">{msg.reasoning ? "正在思考…" : "正在生成…"}</div>
       ) : (
@@ -116,6 +204,7 @@ function QaMessageItem({ msg, isStreaming, onRetry }: { msg: QaMsg; isStreaming:
           {isStreaming && <span className="qa-cursor" />}
         </div>
       )}
+      {msg.pendingCommit && <QaCommitCard msg={msg} />}
       {msg.aborted && <div className="qa-msg-note">已停止生成</div>}
       {msg.error && (
         <div className="qa-msg-error">
@@ -190,12 +279,135 @@ function QaSessionDrawer({
   );
 }
 
+// ── GitHub 仓库配置面板 ──────────────────────────────
+
+function QaRepoSheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const existing = useMemo(() => loadQaGithubConfig(), []);
+  const [owner, setOwner] = useState(existing?.owner ?? "");
+  const [repo, setRepo] = useState(existing?.repo ?? "");
+  const [branch, setBranch] = useState(existing?.branch ?? "");
+  const [token, setToken] = useState(existing?.token ?? "");
+  const [writeMode, setWriteMode] = useState<"confirm" | "auto">(existing?.writeMode ?? "confirm");
+  const [checking, setChecking] = useState(false);
+  const [result, setResult] = useState<QaGithubValidation | null>(null);
+
+  const buildConfig = useCallback((): QaGithubConfig => {
+    const cfg: QaGithubConfig = { owner: owner.trim(), repo: repo.trim(), writeMode };
+    if (branch.trim()) cfg.branch = branch.trim();
+    if (token.trim()) cfg.token = token.trim();
+    if (existing?.apiBase) cfg.apiBase = existing.apiBase;
+    return cfg;
+  }, [owner, repo, branch, token, writeMode, existing]);
+
+  const handleVerify = useCallback(async () => {
+    if (!owner.trim() || !repo.trim()) {
+      setResult({ ok: false, error: "请填写 owner 和 repo。" });
+      return;
+    }
+    setChecking(true);
+    setResult(null);
+    const validation = await validateQaGithubConfig(buildConfig());
+    setResult(validation);
+    setChecking(false);
+  }, [owner, repo, buildConfig]);
+
+  const handleSave = useCallback(() => {
+    if (!owner.trim() || !repo.trim()) return;
+    saveQaGithubConfig(buildConfig());
+    onSaved();
+    onClose();
+  }, [owner, repo, buildConfig, onSaved, onClose]);
+
+  const handleDisconnect = useCallback(() => {
+    clearQaGithubConfig();
+    onSaved();
+    onClose();
+  }, [onSaved, onClose]);
+
+  return (
+    <div className="qa-sheet-backdrop" onClick={onClose}>
+      <div className="qa-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="qa-sheet-head">
+          <span className="qa-sheet-title">
+            <Github size={16} /> 连接 GitHub 仓库
+          </span>
+          <button type="button" className="qa-icon-btn" onClick={onClose} aria-label="关闭">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="qa-sheet-body hide-scrollbar">
+          <p className="qa-sheet-note">
+            连接后可以让工坊查阅这个仓库的代码来回答问题。配置只保存在你的浏览器本地，不会上传。公开仓库可不填 PAT。
+          </p>
+          <label className="qa-field">
+            <span className="qa-field-label">Owner（用户名 / 组织）</span>
+            <input className="qa-input" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="xiaolongbao0709" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+          </label>
+          <label className="qa-field">
+            <span className="qa-field-label">Repo（仓库名）</span>
+            <input className="qa-input" value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="ai-virtual-phone" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+          </label>
+          <label className="qa-field">
+            <span className="qa-field-label">分支（可选，默认仓库默认分支）</span>
+            <input className="qa-input" value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+          </label>
+          <label className="qa-field">
+            <span className="qa-field-label">Fine-grained PAT（私有仓库或搜索代码需要）</span>
+            <input className="qa-input" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="github_pat_…" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+            <span className="qa-field-hint">
+              GitHub → Settings → Developer settings → Fine-grained tokens。只查代码勾 Contents: Read；要让工坊改代码勾 Contents: Read and write。
+            </span>
+          </label>
+          <div className="qa-field">
+            <span className="qa-field-label">改代码时的模式</span>
+            <div className="qa-segment">
+              <button type="button" className={`qa-segment-btn ${writeMode === "confirm" ? "is-active" : ""}`} onClick={() => setWriteMode("confirm")}>
+                确认后提交
+              </button>
+              <button type="button" className={`qa-segment-btn ${writeMode === "auto" ? "is-active" : ""}`} onClick={() => setWriteMode("auto")}>
+                全自动
+              </button>
+            </div>
+            <span className="qa-field-hint">
+              {writeMode === "confirm"
+                ? "工坊改代码前会先展示改动，你点「应用」才真正提交。推荐。"
+                : "工坊说完直接提交推送，不再逐次确认。仍可事后一键撤销。仅在信任后开启。"}
+            </span>
+          </div>
+          {result && (
+            <div className={`qa-verify ${result.ok ? "is-ok" : "is-fail"}`}>
+              {result.ok
+                ? `✓ 已连接 ${result.fullName}（${result.private ? "私有" : "公开"}，默认分支 ${result.defaultBranch}）`
+                : `✗ ${result.error}`}
+            </div>
+          )}
+        </div>
+        <div className="qa-sheet-actions">
+          {existing && (
+            <button type="button" className="qa-sheet-btn is-danger" onClick={handleDisconnect}>
+              断开
+            </button>
+          )}
+          <button type="button" className="qa-sheet-btn" onClick={handleVerify} disabled={checking}>
+            {checking ? <Loader2 size={14} className="qa-spin" /> : "验证"}
+          </button>
+          <button type="button" className="qa-sheet-btn is-primary" onClick={handleSave} disabled={!owner.trim() || !repo.trim()}>
+            保存
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── App 本体 ─────────────────────────────────────────
 
 export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
   const snapshot = useSyncExternalStore(subscribeQaChat, getQaChatSnapshot, getQaChatSnapshot);
   const [input, setInput] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [repoSheetOpen, setRepoSheetOpen] = useState(false);
+  const [repoConnected, setRepoConnected] = useState(false);
   const [devNoticeOpen, setDevNoticeOpen] = useState(true);
   const [apiReady, setApiReady] = useState(true);
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -205,6 +417,7 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
   useEffect(() => {
     void hydrateQaChat();
     setApiReady(resolveQaApiConfig() != null);
+    setRepoConnected(loadQaGithubConfig() != null);
   }, []);
 
   const activeSession = useMemo(
@@ -266,6 +479,14 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
           <span className="qa-header-title">工坊</span>
         </div>
         <div className="qa-header-right">
+          <button
+            type="button"
+            className={`qa-icon-btn ${repoConnected ? "is-active" : ""}`}
+            onClick={() => setRepoSheetOpen(true)}
+            aria-label="连接仓库"
+          >
+            <Github size={17} strokeWidth={1.75} />
+          </button>
           <button type="button" className="qa-icon-btn" onClick={() => setDrawerOpen(true)} aria-label="对话记录">
             <History size={17} strokeWidth={1.75} />
           </button>
@@ -373,6 +594,10 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {repoSheetOpen && (
+        <QaRepoSheet onClose={() => setRepoSheetOpen(false)} onSaved={() => setRepoConnected(loadQaGithubConfig() != null)} />
       )}
 
       {drawerOpen && (

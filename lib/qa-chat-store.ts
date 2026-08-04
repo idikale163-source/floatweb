@@ -1,4 +1,7 @@
-import { callQaChat, formatQaErrorMessage } from "./qa-agent-engine";
+import { callQaAgent, formatQaErrorMessage } from "./qa-agent-engine";
+import { QA_TOOLS, type QaProposedCommit } from "./qa-agent-tools";
+import { loadQaGithubConfig } from "./qa-github";
+import { commitQaFiles, revertQaCommit, type QaCommitResult } from "./qa-github-write";
 
 // ── 答疑 App 会话存储 ─────────────────────────────────
 // 模式与 mascot-chat-store 一致：裸 IndexedDB + 模块级单例 + subscribe/snapshot。
@@ -11,6 +14,15 @@ const QA_STATE_KEY = "state";
 const MAX_SESSIONS = 30;
 const MAX_MESSAGES_PER_SESSION = 200;
 
+export type QaToolStatus = { name: string; running: boolean; success?: boolean };
+
+export type QaPendingCommit = {
+    proposal: QaProposedCommit;
+    status: "pending" | "applying" | "applied" | "reverting" | "reverted" | "canceled";
+    result?: QaCommitResult;
+    error?: string;
+};
+
 export type QaMsg = {
     id: string;
     role: "user" | "assistant";
@@ -18,6 +30,8 @@ export type QaMsg = {
     reasoning?: string;
     error?: string;
     aborted?: boolean;
+    tools?: QaToolStatus[];
+    pendingCommit?: QaPendingCommit;
     ts: number;
 };
 
@@ -235,6 +249,8 @@ export async function sendQaMessage(text: string): Promise<void> {
 
     let streamedContent = "";
     let streamedReasoning = "";
+    let toolStatuses: QaToolStatus[] = [];
+    let stagedCommit: QaPendingCommit | undefined;
     let lastPaintAt = 0;
     let lastPaintLength = 0;
 
@@ -254,13 +270,17 @@ export async function sendQaMessage(text: string): Promise<void> {
         );
     };
 
+    const toolLabel = (name: string): string => QA_TOOLS.find((t) => t.name === name)?.name ?? name;
+
     try {
         const history = (getActiveSession()?.messages ?? [])
             .filter((m) => m.id !== assistantMsg.id && !m.error)
             .map((m) => ({ role: m.role, content: m.content }));
 
-        const result = await callQaChat(history, {
+        const autoCommit = loadQaGithubConfig()?.writeMode === "auto";
+        await callQaAgent(history, {
             signal: controller.signal,
+            autoCommit,
             callbacks: {
                 onDelta: (delta) => {
                     streamedContent += delta;
@@ -270,18 +290,48 @@ export async function sendQaMessage(text: string): Promise<void> {
                     streamedReasoning += delta;
                     paintAssistant({ reasoning: streamedReasoning }, { persist: false });
                 },
+                onToolStart: (name) => {
+                    toolStatuses = [...toolStatuses, { name: toolLabel(name), running: true }];
+                    paintAssistant({ tools: toolStatuses }, { force: true, persist: false });
+                },
+                onToolDone: (name, success) => {
+                    let patched = false;
+                    toolStatuses = toolStatuses.map((t) =>
+                        !patched && t.running && t.name === toolLabel(name)
+                            ? ((patched = true), { ...t, running: false, success })
+                            : t,
+                    );
+                    paintAssistant({ tools: toolStatuses }, { force: true, persist: false });
+                },
+                onStageCommit: (proposal) => {
+                    stagedCommit = { proposal, status: "pending" };
+                    paintAssistant({ pendingCommit: stagedCommit }, { force: true, persist: false });
+                },
             },
         });
-        paintAssistant({ content: result.content, reasoning: result.reasoning || undefined }, { force: true });
+        paintAssistant(
+            {
+                content: streamedContent,
+                reasoning: streamedReasoning || undefined,
+                tools: toolStatuses.length ? toolStatuses : undefined,
+                pendingCommit: stagedCommit,
+            },
+            { force: true },
+        );
+        // 全自动模式：直接提交暂存的提案（用户仍可事后一键撤销）
+        if (autoCommit && stagedCommit?.status === "pending") {
+            await applyQaCommit(assistantMsg.id);
+        }
     } catch (error) {
+        const finalTools = toolStatuses.length ? toolStatuses.map((t) => (t.running ? { ...t, running: false } : t)) : undefined;
         if (controller.signal.aborted) {
             paintAssistant(
-                { content: streamedContent, reasoning: streamedReasoning || undefined, aborted: true },
+                { content: streamedContent, reasoning: streamedReasoning || undefined, tools: finalTools, aborted: true },
                 { force: true },
             );
         } else {
             paintAssistant(
-                { content: streamedContent, reasoning: streamedReasoning || undefined, error: formatQaErrorMessage(error) },
+                { content: streamedContent, reasoning: streamedReasoning || undefined, tools: finalTools, error: formatQaErrorMessage(error) },
                 { force: true },
             );
         }
@@ -305,4 +355,63 @@ export async function retryQaMessage(assistantMsgId: string): Promise<void> {
         messages: s.messages.filter((m) => m.id !== assistantMsgId && m.id !== userMsg.id),
     }));
     await sendQaMessage(userMsg.content);
+}
+
+// ── 提交提案的确认 / 应用 / 撤销 ────────────────────
+
+function patchPendingCommit(sessionId: string, msgId: string, patch: Partial<QaPendingCommit>) {
+    updateSession(sessionId, (s) => ({
+        ...s,
+        messages: s.messages.map((m) =>
+            m.id === msgId && m.pendingCommit ? { ...m, pendingCommit: { ...m.pendingCommit, ...patch } } : m,
+        ),
+    }));
+}
+
+function findMsgWithPending(msgId: string): { sessionId: string; pending: QaPendingCommit } | null {
+    for (const session of sessions) {
+        const msg = session.messages.find((m) => m.id === msgId);
+        if (msg?.pendingCommit) return { sessionId: session.id, pending: msg.pendingCommit };
+    }
+    return null;
+}
+
+/** 用户点「应用」：真正提交提案到 GitHub。 */
+export async function applyQaCommit(msgId: string): Promise<void> {
+    const found = findMsgWithPending(msgId);
+    if (!found || found.pending.status !== "pending") return;
+    const config = loadQaGithubConfig();
+    if (!config) {
+        patchPendingCommit(found.sessionId, msgId, { status: "canceled", error: "仓库配置已丢失。" });
+        return;
+    }
+    patchPendingCommit(found.sessionId, msgId, { status: "applying" });
+    try {
+        const result = await commitQaFiles(config, found.pending.proposal);
+        patchPendingCommit(found.sessionId, msgId, { status: "applied", result });
+    } catch (error) {
+        patchPendingCommit(found.sessionId, msgId, { status: "pending", error: formatQaErrorMessage(error) });
+    }
+}
+
+/** 用户点「取消」：丢弃提案，不提交。 */
+export function cancelQaCommit(msgId: string): void {
+    const found = findMsgWithPending(msgId);
+    if (!found || found.pending.status !== "pending") return;
+    patchPendingCommit(found.sessionId, msgId, { status: "canceled" });
+}
+
+/** 用户点「撤销」：回退已应用的提交。 */
+export async function revertQaAppliedCommit(msgId: string): Promise<void> {
+    const found = findMsgWithPending(msgId);
+    if (!found || found.pending.status !== "applied" || !found.pending.result) return;
+    const config = loadQaGithubConfig();
+    if (!config) return;
+    patchPendingCommit(found.sessionId, msgId, { status: "reverting" });
+    try {
+        await revertQaCommit(config, found.pending.result);
+        patchPendingCommit(found.sessionId, msgId, { status: "reverted" });
+    } catch (error) {
+        patchPendingCommit(found.sessionId, msgId, { status: "applied", error: formatQaErrorMessage(error) });
+    }
 }
