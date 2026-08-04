@@ -4557,10 +4557,6 @@
    默认背景改黑灰中性系 — 清除残留的蓝色调
    ═══════════════════════════════════════════════════════ */
 
-.mp-lumen {
-    background-color: #08080a;
-}
-
 .music-week-card {
     background:
         radial-gradient(220px 130px at 85% 0%, rgba(200, 203, 212, 0.1), transparent 70%),

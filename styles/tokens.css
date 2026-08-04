@@ -82,10 +82,10 @@
   /* 背景渐变·浅灰淡 */
   --c-music-bg-center: rgba(16, 16, 18, 0.85);
   /* 背景渐变·中心深灰 */
-  --c-music-bg-glow: rgba(210, 213, 220, 0.11);
+  --c-music-bg-glow: rgba(160, 190, 255, 0.14);
   /* 全屏播放器·月光 */
-  --c-music-bg-mist: rgba(140, 140, 150, 0.08);
-  /* 全屏播放器·灰雾 */
+  --c-music-bg-mist: rgba(90, 120, 200, 0.1);
+  /* 全屏播放器·蓝雾 */
   --c-music-surface: rgba(255, 255, 255, 0.06);
   /* 玻璃面板/唱片底 */
   --c-music-surface-solid: rgba(255, 255, 255, 0.13);
@@ -98,17 +98,17 @@
   /* 纯白（文字/圆钮） */
   --c-music-text: #eef0f7;
   /* 月白主文字 */
-  --c-music-accent: #9da1ab;
-  /* 月灰次级文字/图标 */
-  --c-music-accent-dim: rgba(170, 175, 185, 0.14);
-  /* 淡灰（阴影/投影/进度条） */
+  --c-music-accent: #9aa6c0;
+  /* 月灰蓝次级文字/图标 */
+  --c-music-accent-dim: rgba(150, 170, 220, 0.14);
+  /* 淡蓝（阴影/投影/进度条） */
   --c-music-primary: #ff5468;
   /* 珊瑚红主强调（红心/CTA） */
   --c-music-primary-dim: rgba(255, 84, 104, 0.14);
   /* 珊瑚红淡底 */
-  --c-music-glowtext: #e8ecf5;
+  --c-music-glowtext: #dcebff;
   /* 发光歌词月光色 */
-  --c-music-gold: rgba(232, 236, 245, 0.4);
+  --c-music-gold: rgba(220, 235, 255, 0.4);
   /* 月光（唱片中心/光晕） */
   --c-music-overlay: rgba(0, 0, 0, 0.55);
   /* 遮罩/投影 */
