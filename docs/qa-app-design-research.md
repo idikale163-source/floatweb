@@ -1,6 +1,6 @@
-# 内置答疑 App 调研报告（v2）
+# 内置答疑 App 调研报告（v2.1）
 
-> 调研日期：2026-08-04（v2：经讨论修订落地方案）
+> 调研日期：2026-08-04（v2.1：开发工场扩展至游戏大厅与黑市剧场）
 > 目标：为「内置答疑 App」提供两方面调研——①高级感黑灰色系 UI；②AI 连接 GitHub 查阅/修改代码的 Agent 架构。并结合本项目（Next.js 15 + Netlify/Vercel serverless + 用户自带 API key）给出落地方案。
 
 ---
@@ -8,8 +8,8 @@
 ## 摘要（TL;DR）
 
 1. **UI**：高级感 = 近黑但不纯黑的基底（`#0a0a0a`~`#18181b`）+ 每层只提亮 4–6% 的多级 surface + alpha 细边框 + 93% 白的文字 + 低饱和单一 accent + 克制到一两处的光晕/玻璃/noise 点缀。AI 回答用全宽文档流、用户消息用轻气泡、代码块比正文更深一档。第一部分附可直接用于 Tailwind 4 的 CSS token。
-2. **产品定位**：答疑 App 是**系统层工程师**（知识答疑、诊断排障、自定义 APP 开发、仓库代码、反馈闭环），与小卷（内容层：创作与美化）严格分界、互为补足，双向转交。
-3. **双版本架构**：同一个 agent 引擎，分层工具集。闭源版 = 本地系统工具集（诊断/自定义APP/反馈）；自部署版额外叠加 **GitHub 完整权限工具集**：用户知道 GitHub 但从不手动操作，agent 可直推 main、管分支/PR/issue、用 GitHub Actions 作为执行器跑测试——体验对标 Claude Code。浏览器端直连 GitHub REST API（支持 CORS），零服务器、零沙箱（agent 不在本地执行仓库代码）。
+2. **产品定位**：答疑 App 是**系统层工程师**（知识答疑、诊断排障、内容开发工场：自定义 APP/游戏/黑市剧场、仓库代码、反馈闭环），与小卷（内容层：创作与美化）严格分界、互为补足，双向转交。
+3. **双版本架构**：同一个 agent 引擎，分层工具集。闭源版 = 本地系统工具集（诊断/开发工场/反馈）；自部署版额外叠加 **GitHub 完整权限工具集**：用户知道 GitHub 但从不手动操作，agent 可直推 main、管分支/PR/issue、用 GitHub Actions 作为执行器跑测试——体验对标 Claude Code。浏览器端直连 GitHub REST API（支持 CORS），零服务器、零沙箱（agent 不在本地执行仓库代码）。
 4. **复用现有基建**：`llm-provider-adapter.ts`、`text-tool-protocol.ts` + `tool-executor.ts`、小卷 engine 结构、`components/phone-*-app.tsx` 内置 App 形态——不需从零搭。
 
 ---
@@ -182,7 +182,7 @@
 
 ---
 
-# 第三部分：结合本项目的落地方案（v2，经讨论修订）
+# 第三部分：结合本项目的落地方案（v2.1）
 
 ## 3.0 项目现状与约束
 
@@ -198,20 +198,22 @@
 - **小卷（mascot）**：7 个工具包 —— 角色（创建/更新/读取）、世界书（词条 CRUD）、预设（CRUD/克隆）、正则（CRUD）、CSS/桌面美化（读写 CSS、九宫格、桌面布局、摆放组件）、DIY 贴纸组件、图像素材（生成/裁切/图床）+ 导航。
 - **cocreate**：小说共创（章节/角色阵容/笔记本/关系档案）。
 
-**分工原则：小卷 = 内容层（创作与美化）；答疑 App = 系统层（让这台手机本身正常运转、进化）。**
+**分工原则：小卷 = 内容层（创作与美化）；答疑 App = 系统层（知识、诊断、开发、代码、反馈）。凡创作形态本质是“写代码/写协议”（HTML/CSS/JS/正则/输出契约）的，归答疑 App。**
 
 | 能力域 | 归属 | 说明 |
 |---|---|---|
 | 角色/世界书/预设/正则 | 小卷 | 答疑 App 不碰，识别到此类需求时转交 |
-| CSS/主题/桌面美化/贴纸组件/图像素材 | 小卷 | 同上（v1 草案曾将 CSS 划给答疑 App，v2 纠正） |
+| CSS/主题/桌面美化/贴纸组件/图像素材 | 小卷 | 同上 |
 | 小说共创 | cocreate | 不碰 |
 | **知识答疑**：功能怎么用、概念解释、最佳实践 | **答疑 App** | 内置文档/FAQ 知识库；现无任何助手覆盖 |
 | **诊断排障**：报错分析、API 连通性检测、日志读取、存储体检、数据修复、备份恢复引导 | **答疑 App** | 可复用 `debug-store.ts`、`llm-provider-adapter`（连通性测试）、`data-management/`；现无覆盖 |
-| **自定义 APP 开发**（应用市场 SDK 写的完整应用） | **答疑 App** | 小卷只管贴纸小组件，SDK 应用无人覆盖；可复用 `custom-app-creator-guide.ts` 语料 + SDK 权限沙箱 |
-| **GitHub 代码域**（自部署）：查代码答疑、改代码、推送、CI | **答疑 App** | 完全无重合 |
+| **自定义 APP 开发**（应用市场 SDK 完整应用） | **答疑 App** | 小卷只管贴纸小组件；复用 `custom-app-creator-guide.ts` 语料 + SDK 权限沙箱 |
+| **游戏大厅开发**（GameTemplate） | **答疑 App** | 本质是写 HTML/JS 游戏（`pickerHtml` + `gameHtml`）+ 角色槽位 + 元数据；有草稿箱机制（`GameHallDraft`）与 `game-creator-guide.ts` 语料；无任何助手覆盖 |
+| **黑市剧场开发**（BlackMarketTheaterTemplate） | **答疑 App** | 技术密度最高的创作格式：`openingHtml` + `aiInstruction` + `outputContract` + `renderRules`（正则渲染规则）+ `renderCss` + 记忆总结 prompt；HTML/CSS/正则与 prompt 工程混合体；无任何助手覆盖 |
+| **GitHub 代码域**（自部署） | **答疑 App** | 完全无重合 |
 | **反馈闭环**：需求整理成结构化需求单 | **答疑 App** | 无重合 |
 
-**双向转交机制**：答疑 App 识别到创作/美化需求 → 引导到小卷（可带上整理好的需求描述）；小卷遇到报错/技术问题 → 引导到答疑 App。两者共享 text-tool-protocol，不共享工具实现。另外“小卷怎么用”本身就是答疑 App 的知识库内容之一。
+**双向转交机制**：答疑 App 识别到创作/美化需求 → 引导到小卷（可带上整理好的需求描述）；小卷遇到报错/技术问题 → 引导到答疑 App。两者共享 text-tool-protocol，不共享工具实现。“小卷怎么用”本身就是答疑 App 的知识库内容之一。边界例：黑市剧场的剧情文本（storyText）属创作性质，但因小卷无剧场工具，整个剧场创作由答疑 App 一站式完成，不强行拆分。
 
 ## 3.2 双版本架构：同一引擎，分层工具集
 
@@ -220,19 +222,24 @@ qa-agent-engine（复用 llm-provider-adapter + text-tool-protocol）
  ├─ 基座工具集（两版共用）
  │   ├─ 知识检索：内置文档/FAQ（小量全量注入 + caching，大量再上检索）
  │   ├─ 诊断：API 连通性测试、debug 日志读取、存储体检、数据一致性检查/修复、备份引导
- │   ├─ 自定义 APP 开发：读写 custom-app-storage，SDK 权限沙箱内创建/修改/调试 SDK 应用
+ │   ├─ 内容开发工场（三种格式，共享“生成→预览→迭代→安装”循环）：
+ │   │   ├─ 自定义 APP：读写 custom-app-storage，SDK 权限沙箱内创建/修改/调试
+ │   │   ├─ 游戏大厅：GameTemplateDraft 草稿 CRUD（pickerHtml/gameHtml/roleSlots/元数据）、预览、本地安装
+ │   │   └─ 黑市剧场：TheaterTemplate CRUD（openingHtml/aiInstruction/outputContract/renderRules/renderCss/记忆prompt）、预览、本地上架（source: local）
  │   ├─ 反馈单：需求整理 → Supabase feedback 表（闭源版）/ GitHub issue（自部署版）
  │   └─ 转交：到小卷 / 到相应设置页的导航
  └─ GitHub 工具集（自部署版增量，见 3.3）
 ```
 
+开发工场设计要点：三种格式都是“HTML/协议模板 + 元数据，存本地 IndexedDB，社区市场发布另走审核通道”的同构结构，工具层可抽象为统一的 draft CRUD + 预览 + 安装；**发布到社区市场始终人工确认**（市场本身有审核，但 agent 不自动发布）。预览迭代循环里，agent 应能拿到 iframe 沙箱的控制台错误回传，形成“写→跑→看报错→修”的闭环。
+
 | 用户 | agent 权限面 | 修改对象 | 生效方式 |
 |---|---|---|---|
-| 闭源版用户 | 基座工具集 | 诊断修复、自定义 APP、设置 | 即时 |
+| 闭源版用户 | 基座工具集 | 诊断修复、自定义 APP/游戏/剧场、设置 | 即时 |
 | 自部署用户 | 基座 + GitHub 全量 | 上述一切 + 仓库核心代码 | 即时 / push 后自动部署 |
 | 开发者（你） | 同自部署 + 消化反馈流水线 | 一切 + 用户需求单 | 发版 |
 
-**反馈闭环流水线**：闭源用户口头提需求 → agent 整理成结构化需求单入 Supabase → 开发者侧 agent 读需求单、改代码、发版 → 全体用户获得更新。两个版本的 agent 串成一条产品改进管线。
+**反馈闭环流水线**：闭源用户口头提需求 → agent 整理成结构化需求单入 Supabase → 开发者侧 agent 读需求单、改代码、发版 → 全体用户获得更新。
 
 ## 3.3 GitHub Agent：完整权限版（自部署）
 
@@ -245,41 +252,45 @@ qa-agent-engine（复用 llm-provider-adapter + text-tool-protocol）
 | 读取/检索 | 文件树（`git/trees?recursive=1`，会话开始时作 repo map 注入）、读文件、代码搜索、commit 历史、blame、任意两版本 diff、release/tag |
 | 写入 | 多文件一次 commit（Git Data API：blob→tree→commit→ref）、**直推 main** 或任意分支、建/删分支、revert、合并分支、打 tag、发 release |
 | PR | 开 PR（普通/draft 按任务性质自选）、更新、评论、review、合并、关闭 |
-| Issue | 建/评论/标签/关闭——agent 把用户口头需求自动记成 issue，修完自动关联关闭，形成可追溯工作记录 |
-| CI/执行 | 触发 workflow（`workflow_dispatch`）、读运行状态与完整日志、重跑失败任务；agent 可自己写 workflow 文件（有 Workflows 权限） |
+| Issue | 建/评论/标签/关闭——agent 把用户口头需求自动记成 issue，修完自动关联关闭 |
+| CI/执行 | 触发 workflow（`workflow_dispatch`）、读运行状态与完整日志、重跑失败任务；agent 可自己写 workflow 文件 |
 | 部署监控 | 读 Netlify/Vercel 回写的 commit status / deployment，构建失败自动回滚或自动修 |
 | 仓库管理（高信任可选） | 分支保护规则、label 体系、仓库设置 |
 
 ### PAT 权限（接入向导一次性引导勾选）
-`Contents`、`Pull requests`、`Issues`、`Actions`、`Workflows` 读写 + `Commit statuses`、`Metadata` 读；需要管分支保护再加 `Administration`。限定目标仓库、设过期时间。接入向导带截图逐步引导 + 粘贴后立即校验权限并提示缺项。
+`Contents`、`Pull requests`、`Issues`、`Actions`、`Workflows` 读写 + `Commit statuses`、`Metadata` 读；需管分支保护再加 `Administration`。限定目标仓库、设过期时间。接入向导带截图逐步引导 + 粘贴后立即校验权限并提示缺项。
 
 ### Actions = agent 的“手”（执行能力补齐）
 - agent 写 workflow → 触发 → 读日志 → 迭代：测试、lint、构建验证全覆盖；
-- 进阶：workflow 内启动应用 + Playwright 截图存 artifact，agent 下载后把改完的界面截图直接发给用户（“改好了，你看效果”）；
+- 进阶：workflow 内启动应用 + Playwright 截图存 artifact，agent 下载后把改完的界面截图直接发给用户；
 - 产品分层：改代码/答疑秒级即时，验证类重活异步跑（分钟级），跑完 agent 主动汇报。
 
 ### 体验层：模式开关 + 事后安全网
-- **默认模式**：改前在聊天里给一句人话摘要知会（diff 折叠在“查看详情”）；**全自动模式**（opt-in）：说完直接改直接推。对应 Claude Code 的权限模式。
+- **默认模式**：改前在聊天里给一句人话摘要知会（diff 折叠在“查看详情”）；**全自动模式**（opt-in）：说完直接改直接推。
 - **一键撤销**：revert commit + 自动重新部署；**部署失败自动处置**：自动回滚或自动修，并告知用户。
 - **操作日志**：agent 每次 push/合并/触发了什么，应用内可查，附 GitHub 链接——用户不操作 GitHub，但对一切有知情权和否决权。
-- 直推 main 的取舍需知情：改坏会短暂影响站点直到回滚生效；prompt injection 的破坏半径更大。对“用户自己的 fork、自己承担后果”可接受，但全自动模式必须 opt-in。
+- 直推 main 取舍需知情：改坏会短暂影响站点直到回滚生效；prompt injection 破坏半径更大。全自动模式必须 opt-in。
 
 ### 实现要点
 - 新建 `lib/qa-agent-engine.ts` + `lib/qa-agent-tools.ts`（参考 mascot engine 结构）；工具按 3.2 分层注册。
-- GitHub code search 限流（10 次/分钟、仅默认分支）：用文件树 + 按需读 + 客户端过滤作主手段，search API 作辅助。
+- GitHub code search 限流（10 次/分钟、仅默认分支）：用文件树 + 按需读 + 客户端过滤作主手段。
 - 文件内容按 commit sha 缓存在 IndexedDB（Dexie 已有）。
 - 隐私提示：仓库内容会经过用户自配的 LLM API，在 UI 说明。
 
 ## 3.4 闭源版细化
 
-- **知识答疑**：知识库 = 精选内置文档（README、docs/、`custom-app-creator-guide.ts`、`chat-plugin-docs.ts` 等现成语料）；小量全量注入 + prompt caching，量大再上关键词/embedding 检索。
-- **诊断工具集**（无任何助手覆盖的空白，也是“答疑”定位最自然的延伸）：API 设置连通性测试（拉模型列表/最小请求）、读 debug 日志分析报错、存储用量体检（`navigator.storage.estimate` + Dexie 统计）、数据一致性检查与修复、备份/恢复引导。
-- **自定义 APP 开发助手**：用户口述 → agent 用 SDK 写完整应用装进应用市场本地；迭代修改、调试；安全走现有 SDK 权限沙箱，无需新建安全体系。
-- **反馈闭环**：触及核心代码的需求 → 整理成结构化需求单（复现步骤/期望行为/环境信息）提交 Supabase feedback 表；告知用户已提交。
+- **知识答疑**：知识库 = 精选内置文档（README、docs/、`custom-app-creator-guide.ts`、`game-creator-guide.ts`、`chat-plugin-docs.ts` 等现成语料）；小量全量注入 + prompt caching，量大再上关键词/embedding 检索。
+- **诊断工具集**：API 设置连通性测试（拉模型列表/最小请求）、读 debug 日志分析报错、存储用量体检（`navigator.storage.estimate` + Dexie 统计）、数据一致性检查与修复、备份/恢复引导。
+- **内容开发工场**（三种格式，均无助手覆盖）：
+  - **自定义 APP**：口述 → agent 用 SDK 写完整应用装进本地；迭代、调试；安全走现有 SDK 权限沙箱。
+  - **游戏大厅**：口述玩法 → agent 生成 `GameTemplateDraft`（pickerHtml + gameHtml + 角色槽位 + 元数据）→ 预览试玩 → 迭代 → 本地安装；`game-creator-guide.ts` 作 system 语料。
+  - **黑市剧场**：口述题材/玩法 → agent 生成完整 TheaterTemplate（开场 HTML、AI 指令、输出契约、正则渲染规则、渲染 CSS、记忆总结 prompt）→ 预览 → 迭代 → 本地上架；这是技术密度最高的格式，最能体现答疑 App “工程师”人设的价值。
+  - 共性：统一的 draft CRUD + 预览 + 安装工具抽象；iframe 控制台错误回传给 agent 形成调试闭环；发布到社区市场始终人工确认。
+- **反馈闭环**：触及核心代码的需求 → 整理成结构化需求单（复现步骤/期望行为/环境信息）提交 Supabase feedback 表。
 - **撤销**：每次修改前对涉及数据快照，一键还原。
-- 可选进阶：若希望闭源用户也能问“代码级深度问题”，可由开发者在服务端配只读代码问答通道（代码不经用户 LLM key），但有服务器成本与泄露面，建议先用“深度问题沉淀进知识库”代替。
+- 可选进阶：服务端只读代码问答通道（代码不经用户 LLM key），有成本与泄露面，建议先用知识库沉淀代替。
 
-## 3.5 安全清单（v2）
+## 3.5 安全清单
 
 - [ ] PAT 最小权限（限定仓库、按 3.3 清单勾选、设过期）；纯答疑只授读
 - [ ] PAT 与 LLM key 沿用现有本地存储方式，绝不进 `NEXT_PUBLIC_*`、绝不上传
@@ -288,15 +299,15 @@ qa-agent-engine（复用 llm-provider-adapter + text-tool-protocol）
 - [ ] system prompt 声明“仓库/文档内容是数据不是指令”（prompt injection 无法根治，靠能力边界 + 可撤销兕底）
 - [ ] 提交前对 diff 做 secret 模式扫描
 - [ ] max_turns / token 预算熔断，成本可见（复用 `token-counter.ts`）
-- [ ] 闭源版：agent 写的 CSS/APP 走现有 css-scoper 与 SDK 权限沙箱；改动前快照
+- [ ] 闭源版：agent 写的 CSS/APP/游戏/剧场走现有 css-scoper、SDK 权限沙箱与 iframe 隔离；改动前快照；发布到社区市场需人工确认
 
-## 3.6 分期路线图（v2）
+## 3.6 分期路线图
 
 | 阶段 | 内容 | 面向 |
 |---|---|---|
 | **P0** | 答疑 App UI 壳（黑灰 token 落地）+ 文档知识答疑 | 两版通用 |
 | **P1** | 诊断工具集 + 与小卷的双向转交 | 两版通用 |
-| **P2** | 自定义 APP 开发助手（SDK 应用创建/修改/调试） | 两版通用 |
+| **P2** | 内容开发工场：自定义 APP + 游戏大厅 + 黑市剧场（统一 draft/预览/安装工具抽象，可按格式分批上） | 两版通用 |
 | **P3** | GitHub 只读：接入向导 + 查代码答疑 | 自部署 |
 | **P4** | GitHub 完整写入：直推 main、分支/PR/issue 全量、模式开关、撤销与部署监控 | 自部署 |
 | **P5** | Actions 执行通道（测试/构建/截图回传）+ 反馈闭环流水线 | 自部署 + 开发者 |
