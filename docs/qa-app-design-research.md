@@ -1,15 +1,16 @@
-# 内置答疑 App 调研报告
+# 内置答疑 App 调研报告（v2）
 
-> 调研日期：2026-08-04
-> 目标：为「内置答疑 App」提供两方面的调研支撑——①高级感黑灰色系 UI 设计；②AI 连接 GitHub 查阅/修改代码的 Agent 架构。并结合本项目（Next.js 15 + Netlify/Vercel serverless + 用户自带 API key）给出可落地的方案建议。
+> 调研日期：2026-08-04（v2：经讨论修订落地方案）
+> 目标：为「内置答疑 App」提供两方面调研——①高级感黑灰色系 UI；②AI 连接 GitHub 查阅/修改代码的 Agent 架构。并结合本项目（Next.js 15 + Netlify/Vercel serverless + 用户自带 API key）给出落地方案。
 
 ---
 
 ## 摘要（TL;DR）
 
-1. **UI**：高级感 = 近黑但不纯黑的基底（`#0a0a0a`~`#18181b`）+ 每层只提亮 4–6% 的多级 surface + alpha 细边框 + 93% 白的文字 + 低饱和单一 accent + 克制到一两处的光晕/玻璃/noise 点缀。AI 回答用全宽文档流、用户消息用轻气泡、代码块比正文更深一档。本文第一部分附一套可直接用于 Tailwind 4 的 CSS token。
-2. **Agent**：业界共识是 agentic search（让模型自己 grep/读文件）优于向量检索；写操作必须人工确认 + 只推专属分支 + 只开 draft PR。本项目部署在 Netlify/Vercel（serverless、无长驻进程、无 Docker），因此**不走「服务器 clone 仓库跑命令行」的传统路线**，推荐**纯浏览器端 Agent**：用户填 GitHub fine-grained PAT，agent 通过 GitHub REST API（支持浏览器 CORS 直连）完成读文件、搜代码、提交、开 PR——零服务器依赖，与本项目「自带 key」哲学一致，且因为**不执行任何仓库代码，天然免去沙箱问题**。
-3. **复用现有基建**：`lib/llm-provider-adapter.ts`（多供应商 LLM 调用）、`lib/text-tool-protocol.ts` + `lib/tool-executor.ts`（工具调用协议）、小卷（mascot）的 agent 循环模式、`components/phone-*-app.tsx` 的内置 App 形态——答疑 App 不需要从零搭。
+1. **UI**：高级感 = 近黑但不纯黑的基底（`#0a0a0a`~`#18181b`）+ 每层只提亮 4–6% 的多级 surface + alpha 细边框 + 93% 白的文字 + 低饱和单一 accent + 克制到一两处的光晕/玻璃/noise 点缀。AI 回答用全宽文档流、用户消息用轻气泡、代码块比正文更深一档。第一部分附可直接用于 Tailwind 4 的 CSS token。
+2. **产品定位**：答疑 App 是**系统层工程师**（知识答疑、诊断排障、自定义 APP 开发、仓库代码、反馈闭环），与小卷（内容层：创作与美化）严格分界、互为补足，双向转交。
+3. **双版本架构**：同一个 agent 引擎，分层工具集。闭源版 = 本地系统工具集（诊断/自定义APP/反馈）；自部署版额外叠加 **GitHub 完整权限工具集**：用户知道 GitHub 但从不手动操作，agent 可直推 main、管分支/PR/issue、用 GitHub Actions 作为执行器跑测试——体验对标 Claude Code。浏览器端直连 GitHub REST API（支持 CORS），零服务器、零沙箱（agent 不在本地执行仓库代码）。
+4. **复用现有基建**：`llm-provider-adapter.ts`、`text-tool-protocol.ts` + `tool-executor.ts`、小卷 engine 结构、`components/phone-*-app.tsx` 内置 App 形态——不需从零搭。
 
 ---
 
@@ -60,25 +61,25 @@
 
 - **Material Design 3**：基底推荐 `#121212` 深灰而非纯黑；深色下海拔靠“越高越亮”表达；主色要降饱和（用 200 系而非 500 系）。
 - **Apple HIG**：背景分 base / elevated 两组，弹窗、modal 用更亮的 elevated 组（`#1C1C1E → #2C2C2E → #3A3A3C`）；自定义色小字对比建议 7:1。
-- **Radix Colors 12 步暗色灰阶**（每步有明确用途，可直接抄）：1–2 App 背景（`#111/#191919`）、3–5 组件底/hover/按下（`#222/#2a2a2a/#313131`）、6–8 边框（`#3a3a3a/#484848/#606060`）、9–10 实色填充、11–12 文字（`#b4b4b4`/`#eeeeee`）。另有带色偏的灰：Slate（冷蓝灰）、Mauve（紫灰）、Sand（暖沙灰）——**选一个与 accent 同相的灰阶是高级感的捷径**。
-- **Tailwind**：zinc（微冷：950 `#09090b` / 900 `#18181b` / 800 `#27272a` / 700 `#3f3f46`）和 neutral（纯中性：950 `#0a0a0a` / 900 `#171717` / 800 `#262626`）是最常用落地基线；shadcn/ui 深色默认即 zinc 体系。
+- **Radix Colors 12 步暗色灰阶**：1–2 App 背景（`#111/#191919`）、3–5 组件底/hover/按下（`#222/#2a2a2a/#313131`）、6–8 边框（`#3a3a3a/#484848/#606060`）、9–10 实色填充、11–12 文字（`#b4b4b4`/`#eeeeee`）。带色偏的灰：Slate（冷蓝灰）、Mauve（紫灰）、Sand（暖沙灰）——**选一个与 accent 同相的灰阶是高级感的捷径**。
+- **Tailwind**：zinc（微冷：950 `#09090b` / 900 `#18181b` / 800 `#27272a` / 700 `#3f3f46`）和 neutral（纯中性：950 `#0a0a0a` / 900 `#171717` / 800 `#262626`）；shadcn/ui 深色默认即 zinc 体系。
 
 ## 3. 流行趋势与技法
 
-1. **暗色玻璃拟态**：深基底 + 半透明毛玻璃面板（rgba 0.1–0.25 + `backdrop-filter: blur`）；当前演化方向是轻模糊、少层数。（注意：本项目 build 流程里有 `restore-backdrop-filter.mjs`，说明 backdrop-filter 有兼容处理，落地时留意。）
+1. **暗色玻璃拟态**：深基底 + 半透明毛玻璃面板（rgba 0.1–0.25 + `backdrop-filter: blur`）；演化方向是轻模糊、少层数。（本项目 build 流程有 `restore-backdrop-filter.mjs`，落地时留意兼容处理。）
 2. **氛围渐变光球**：深紫/电光蓝/青色的模糊光球置于 UI 背后极低不透明度处（Raycast 式）。
 3. **Noise 纹理**：大面积深灰叠 2–4% 不透明度颗粒，消除“数码平灰”的塑料感。
-4. **发光/渐变描边**：1px 渐变描边或内发光标记“AI 正在生成”——每屏最多一两处，泛滥即廉价。
+4. **发光/渐变描边**：标记“AI 正在生成”——每屏最多一两处，泛滥即廉价。
 5. **AI 专属模式**：流式打字、骨架屏、streaming 状态的 shimmer 描边已是标配。
 6. 灵感库：Mobbin 的 dark mode / chatbot 分类比 Dribbble 概念稿更可落地。
 
 ## 4. 聊天/答疑类组件设计要点
 
-- **消息布局**：AI 回答用全宽文档流（无底色、左起、行宽限 65–75ch），用户消息用轻气泡（右对齐、surface-2 底、16px 大圆角）。气泡传达“IM”，文档流传达“生产力工具”。
-- **代码块**：比正文背景更深一档（正文 `#171717` 内嵌 `#0d0d0d`），顶部信息条：语言标签 + 一键复制（点击变对勾）；流式渲染时增量解析 Markdown；语法高亮主题必须过对比度检查。
-- **输入框**：固定停靠底部；多行自增高到上限后内部滚动；深色卡片外观（surface-2 底 + 1px alpha 边框 + 聚焦时 accent 微光）；`Enter` 发送、`Shift+Enter` 换行；移动端随键盘上移不跳动。
-- **会话列表**：自动标题（取首个提问）+ 时间分组（今天/7天内/更早）；窄屏折叠为抽屉。**本项目答疑 App 运行在虚拟手机屏幕内（窄屏），侧边栏应做成抽屉/下拉会话切换，而非常驻左栏。**
-- **交互红线**：必须有停止生成按钮；靠流式起步让首 token < 800ms；用户上滚阅读时禁止自动拉回底部；错误要具体可恢复（原因+重试）；上下文被截断要有标记。
+- **消息布局**：AI 回答用全宽文档流（无底色、左起、行宽限 65–75ch），用户消息用轻气泡（右对齐、surface-2 底、16px 大圆角）。
+- **代码块**：比正文背景更深一档（正文 `#171717` 内嵌 `#0d0d0d`），顶部：语言标签 + 一键复制；流式渲染时增量解析 Markdown；高亮主题过对比度检查。
+- **输入框**：固定底部；多行自增高到上限后内部滚动；深色卡片外观 + 聚焦时 accent 微光；移动端随键盘上移不跳动。
+- **会话列表**：自动标题 + 时间分组；**答疑 App 运行在虚拟手机窄屏内，会话列表应做成抽屉/下拉，而非常驻左栏。**
+- **交互红线**：必须有停止生成按钮；靠流式起步让首 token < 800ms；用户上滚时禁止自动拉回底部；错误具体可恢复；上下文截断有标记。
 
 ## 5. 可直接落地的 Token（微冷 zinc 基调）
 
@@ -106,7 +107,7 @@
   --text-tertiary:  #6e7178;
   --text-inverse:   #0b0c0e;
 
-  /* Accent（低饱和，深色下降饱和提亮度）*/
+  /* Accent（低饱和）*/
   --accent:        #7c8aff;
   --accent-hover:  #939eff;
   --accent-subtle: rgba(124,138,255,0.12);
@@ -116,19 +117,19 @@
 }
 ```
 
-> 替换方案：想要 Claude 式暖感 → Sand 系灰（`#0f0f0e / #171716 / #262626…`）+ 陶土橙 accent；想要 Vercel 式极客感 → 纯中性 neutral + 白色 CTA。关键是灰阶色偏与 accent 同相。
+> 替换方案：Claude 式暖感 → Sand 系灰 + 陶土橙 accent；Vercel 式极客感 → 纯中性 neutral + 白色 CTA。关键是灰阶色偏与 accent 同相。
 
-**排版**：Inter/SF Pro（中文配 PingFang/思源黑体），代码 JetBrains Mono；深色下整体降一档字重（浅色 600 → 深色 500）；正文 15–16px、行高 1.6–1.7；阴影在深色下几乎无效，用“上层更亮 + 细边框”表达层次。
+**排版**：Inter/SF Pro（中文配 PingFang/思源黑体），代码 JetBrains Mono；深色下整体降一档字重；正文 15–16px、行高 1.6–1.7；阴影用“上层更亮 + 细边框”代替。
 
 ## 6. 常见误区
 
-1. **纯黑 `#000` 背景**：OLED 滚动拖影、无法表达海拔、与白字对比过强。基底用 `#0a0a0a`~`#16181c`。
-2. **纯白文字**：深底上产生光晕效应（halation，散光人群看到字发抖/重影）。正文白度压到 87–93%。
-3. **直接反转浅色主题**：饱和色必须降饱和、字重要微调、阴影换成亮度层次。
-4. **对比度翻车点**：正文须 WCAG AA 4.5:1；代码高亮主题、占位符灰、时间戳灰最常出问题。
-5. **层次全靠边框或全靠底色**：应遵循“每层 +4–6% 亮度 + alpha 细边框”组合；层级超过 4 层会灰成一片。
-6. **发光/渐变/玻璃全上**：每屏最多一两处；文字勿放重模糊面板上。
-7. **浮层没有 elevated 层**：弹窗、下拉、toast 要比页面更亮一档，否则“沉”在页面里。
+1. 纯黑 `#000` 背景：OLED 拖影、无法表达海拔、对比过强。基底用 `#0a0a0a`~`#16181c`。
+2. 纯白文字：光晕效应（halation），正文白度压到 87–93%。
+3. 直接反转浅色主题：饱和色要降饱和、字重要微调、阴影换亮度层次。
+4. 对比度：正文须 WCAG AA 4.5:1；代码高亮、占位符、时间戳是翻车点。
+5. 层次：“每层 +4–6% 亮度 + alpha 细边框”组合；超过 4 层会灰成一片。
+6. 发光/渐变/玻璃每屏最多一两处；文字勿放重模糊面板上。
+7. 浮层要比页面更亮一档（elevated 层），否则“沉”在页面里。
 
 ---
 
@@ -139,159 +140,196 @@
 | 产品 | 形态 | Agent loop | 检索方式 | 沙箱 | GitHub 集成 | 可复用性 |
 |---|---|---|---|---|---|---|
 | Claude Code / Agent SDK | CLI + SDK | 单主循环 + subagent | agentic search（grep/glob），**无向量索引** | 本地/自带环境 | claude-code-action、GitHub MCP | SDK 可直接嵌入（TS/Py） |
-| Copilot coding agent | GitHub 原生 SaaS | issue → draft PR | 仓库内探索 | GitHub Actions 一次性容器（受限网络） | 原生（`copilot/*` 分支、draft PR） | 形态参考 |
-| Devin | SaaS | planner + executor | 检索 + 向量化记忆 | 云端整机 VM | App 连仓库、自动 PR | 否 |
-| OpenHands | 开源平台 + SDK | EventStream 事件流 | agentic 探索 | 每会话 Docker 容器 | Resolver（label 触发） | 全开源，SDK 可嵌入 |
-| SWE-agent | 开源研究 | ReAct + 定制 ACI 命令 | 专用 search/find 命令 | Docker | 弱 | ACI 理念可复用 |
+| Copilot coding agent | GitHub 原生 SaaS | issue → draft PR | 仓库内探索 | GitHub Actions 一次性容器 | 原生 | 形态参考 |
+| Devin | SaaS | planner + executor | 检索 + 向量化记忆 | 云端整机 VM | App 连仓库 | 否 |
+| OpenHands | 开源平台 + SDK | EventStream 事件流 | agentic 探索 | 每会话 Docker | Resolver（label 触发） | 全开源，SDK 可嵌入 |
+| SWE-agent | 开源研究 | ReAct + 定制 ACI 命令 | 专用 search/find | Docker | 弱 | ACI 理念可复用 |
 | Aider | 开源 CLI | 人机结对 | **tree-sitter repo map + PageRank** | 无 | git 原生 | repo map 思路可移植 |
 | Sweep AI | GitHub App | issue→plan→edit→validate→PR | embedding + 依赖图 | 托管环境 | App + webhook | 形态参考 |
-| CodeRabbit | SaaS App | **固定流水线 + judge 过滤** | 变更影响图 | 每 PR 短生命周期环境 | App + 行级评论 | 流水线思路可复用 |
-| Cline | 开源 VS Code 扩展 | **Plan/Act 双模式，逐步审批** | 文件读 + 正则 + AST | 无（靠审批控制） | 靠 MCP/git | 审批 UX 最佳范本 |
+| CodeRabbit | SaaS App | **固定流水线 + judge** | 变更影响图 | 短生命周期环境 | App + 行级评论 | 流水线思路可复用 |
+| Cline | 开源 VS Code 扩展 | **Plan/Act 双模式** | 文件读 + 正则 + AST | 无（靠审批） | 靠 MCP/git | 审批 UX 范本 |
 
 关键结论：
-- **Anthropic 2025 年移除了 Claude Code 的向量检索**，官方结论是 agentic search（模型自己 grep/读文件）效果更好——无索引维护成本、对代码这种符号精确匹配场景比语义相似度更准。
-- **Copilot 的安全设计值得照抄**：agent 只能推自己命名空间的分支、PR 必须人工审查、不能自批自合。
-- **Cline 的 Plan/Act 双模式**（先只读规划，用户确认后再执行，每次写操作展示 diff 待批准）是“写操作人工确认”UX 的最佳范本。
+- **Anthropic 2025 年移除了 Claude Code 的向量检索**：agentic search（模型自己 grep/读文件）效果更好且零索引维护成本。
+- **Cline 的 Plan/Act 双模式**是写操作确认 UX 的最佳范本；本方案中演化为“默认知会 / 全自动”模式开关。
 - **CodeRabbit 的启示**：审阅类（只读）功能用固定流水线 + 有界 agent 比自由 agent 更可靠。
 
 ## 2. 关键技术组件
 
-### 2.1 代码库检索/理解（三条路线）
+### 2.1 代码库检索：agentic search 为主 + repo map 为辅
+1. **Agentic search**（首选）：grep/glob/read 工具让模型自己找；代价是多轮调用（prompt caching 缓解）。
+2. **Repo map**（互补）：简化版 = `git ls-files` 目录树 + README + package.json 注入 system prompt；完整版 = tree-sitter 符号图 + PageRank（Aider 路线）。
+3. **Embedding + RAG**：不作 V1 必需（项目已有 `memory-embedding.ts` 可作后期增强）。
 
-1. **Agentic search**（主流首选）：给模型 grep/glob/read 工具让它自己找。无索引维护、权限过滤天然安全；代价是多轮调用的延迟和 token（prompt caching 可大幅缓解）。
-2. **Repo map**（Aider 路线，与上互补）：tree-sitter 抽取全仓库符号 → 依赖图 → PageRank 排序 → 在 token 预算内生成签名级仓库摘要注入首轮上下文，显著减少 agent 盲目搜索的轮数。简化版：把 `git ls-files` 目录树 + README + package.json 注入 system prompt。
-3. **Embedding + RAG**：适合“模糊自然语言问题 → 定位相关代码”的首跳，但要维护索引（增量更新、多分支）。建议不作为 V1 必需项（本项目已有 `memory-embedding.ts`，未来可选增强）。
+### 2.2 Agent loop
+- 每个工具**输出限行数并标注截断**（SWE-agent ACI 原则）；`edit` 用精确字符串替换而非整文件重写。
+- `while not done: LLM → tool_calls → 执行 → 回填`，配 max_turns / token 预算熔断。
+- 不同模式挂不同工具白名单与 system prompt。
 
-### 2.2 Agent loop 设计
-
-- 核心工具：`read_file`（带行号/分页）、`edit_file`（精确字符串替换，优于整文件重写）、`write_file`、`grep/search`、`glob/list`；每个工具**输出限行数并标注截断**（SWE-agent ACI 原则：为 LLM 设计工具输出）。
-- 循环：`while not done: LLM → tool_calls → 执行 → 结果回填`，配 max_turns / max_cost 熔断。
-- 答疑（只读）与修码（读写）用**不同的工具白名单和 system prompt**。
-- 上下文：prompt caching；接近窗口上限时压缩旧轮次；大信息放“文件系统”（本项目场景=按需再调 API 读）而非硬塞上下文。
-
-### 2.3 GitHub 接入方式对比
-
+### 2.3 GitHub 接入方式
 | 方式 | 权限模型 | 适用 |
 |---|---|---|
-| **Fine-grained PAT** | 用户自建，可限定仓库 + 细粒度权限 + 可过期 | **单用户自部署最简路径（本项目 V1 首选）** |
-| GitHub App | 细粒度 + 按仓库安装 + 1h 短时效 token + bot 身份 + webhook | 多租户/正式产品；自部署场景用 App Manifest flow 让每个实例一键生成自己的 App（Renovate/n8n 模式） |
-| OAuth App | 粗粒度 scope（`repo` 即全读写） | 权限过粗，不推荐 |
-
-- 写操作流程：只推 `ai/*` 命名空间分支 → 开 **draft PR** → 人工 review 后 merge。
-- Checks API 可读 CI 结果（V2：CI 失败后 agent 自动追加修复 commit）。
+| **Fine-grained PAT** | 用户自建，限定仓库 + 细粒度 + 可过期 | **自部署首选**；接入向导引导创建，一次性设置 |
+| GitHub App | 细粒度 + 1h 短时效 token + bot 身份 + webhook | 多租户；自部署用 App Manifest flow 每实例自建 |
+| OAuth App | 粗粒度 scope | 不推荐；若追求“点一下授权”体验可用服务端路由做 token 交换，但自部署需每实例注册 App，得不偿失 |
 
 ### 2.4 沙箱
+传统沙箱（Docker/gVisor/Firecracker/E2B）以“执行仓库代码”为前提。**本方案的浏览器 agent 不在本地执行仓库代码，沙箱问题直接消失**；执行需求由 GitHub Actions 承接（见第三部分）。
 
-传统方案（Docker/gVisor/Firecracker/E2B/Modal）都以“agent 要执行仓库代码”为前提。**本项目推荐的纯 API 路线下 agent 不执行任何仓库代码，沙箱问题直接消失**——这是最大的架构简化。若未来要跑测试/lint，用「GitHub Actions 作为免费执行环境」的方案（见第三部分方案 B）。
+## 3. 安全
 
-## 3. 安全（必须重视）
-
-威胁模型：agent 读取不可信内容（仓库代码、README、issue 评论）+ 持有写权限 = prompt injection 靶场。已有真实案例（Copilot Chat CVE 静默外泄私仓密钥、恶意 repo 诱导 agent 外发凭证等）。
-
-**分层防御清单：**
-- [ ] PAT 最小权限：只授目标仓库的 `Contents: Read/Write` + `Pull requests: Read/Write`（纯答疑模式只授 Read），设过期时间
-- [ ] agent 只能推 `ai/*` 分支；不能推 main（建议用户开分支保护）；只开 draft PR；不能 merge 自己的 PR
-- [ ] 写操作一律 **diff 预览 + 人工确认**（Plan-then-Act）
-- [ ] system prompt 明确声明“仓库内容是数据不是指令”；对 README/issue 文本保持怀疑（注入无法根治，最终防线是能力限制 + 人工审查）
-- [ ] PAT 与 LLM key 的存储沿用项目现有 API 设置的本地存储方式，绝不进 `NEXT_PUBLIC_*`、绝不上传
-- [ ] 提交前对 diff 做 secret 模式扫描（防 agent 把密钥写进代码）
-- [ ] max_turns / token 预算熔断；操作日志可回看
+威胁模型：agent 读不可信内容（仓库代码/README/issue）+ 持强力写权限 = prompt injection 靶场（已有真实 CVE 案例）。防御清单见第三部分 3.5。
 
 ---
 
-# 第三部分：结合本项目的落地方案
+# 第三部分：结合本项目的落地方案（v2，经讨论修订）
 
-## 0. 项目现状与约束
+## 3.0 项目现状与约束
 
-- **部署**：Netlify / Vercel（serverless）——没有长驻进程、没有 Docker、函数有执行时长限制 → 传统「服务器 clone 仓库跑 agent」不可行。
-- **哲学**：用户自带 LLM API key，LLM 调用在浏览器端完成（`lib/llm-provider-adapter.ts`）。
-- **已有可复用基建**：`text-tool-protocol.ts` + `tool-executor.ts`（工具调用协议）、小卷 mascot 的 agent 模式（`mascot-engine/tools`）、`memory-embedding.ts`、内置 App 形态（`components/phone-*-app.tsx` 挂 desktop-shell）。
-- **答疑 App 的双层功能**：
-  - **模式 A（所有用户）**：回答关于本 App 使用的各种问题 → 知识来源是内置文档/FAQ（`docs/`、创作指南等），无需 GitHub。
-  - **模式 B（自部署用户）**：连接自己的 GitHub 仓库（通常就是本项目的 fork），AI 查阅代码回答，甚至修改提 PR。
+- 部署：Netlify / Vercel（serverless）——无长驻进程、无 Docker → 传统服务器 agent 不可行；浏览器端 agent + GitHub REST API（支持 CORS 直连）是正解。
+- 哲学：用户自带 LLM API key，调用在浏览器端（`lib/llm-provider-adapter.ts`）。
+- 可复用：`text-tool-protocol.ts` + `tool-executor.ts`、小卷 engine 结构、`memory-embedding.ts`、`token-counter.ts`、`debug-store.ts`、内置 App 形态。
+- 两个用户群：**闭源版用户**（无 GitHub，用官方部署）与**自部署用户**（有自己 fork 的仓库和部署）。
 
-## 1. 三档候选架构
+## 3.1 产品定位：与小卷不重合，互为补足
 
-### 方案 A：纯浏览器端 Agent（推荐作为 V1）★
+**现有助手能力版图（基于 mascot-tools.ts / cocreate-tools.ts 实际工具清单）：**
 
-**原理**：GitHub REST API 支持浏览器 CORS 直连。用户在答疑 App 设置里填一个 fine-grained PAT，agent loop 完全跑在浏览器里：LLM（用户自己的 key）决定调用哪个工具 → 前端直接调 GitHub API 执行 → 结果回填继续循环。
+- **小卷（mascot）**：7 个工具包 —— 角色（创建/更新/读取）、世界书（词条 CRUD）、预设（CRUD/克隆）、正则（CRUD）、CSS/桌面美化（读写 CSS、九宫格、桌面布局、摆放组件）、DIY 贴纸组件、图像素材（生成/裁切/图床）+ 导航。
+- **cocreate**：小说共创（章节/角色阵容/笔记本/关系档案）。
 
-**工具集映射（全部是 GitHub REST API）：**
+**分工原则：小卷 = 内容层（创作与美化）；答疑 App = 系统层（让这台手机本身正常运转、进化）。**
 
-| 工具 | API | 说明 |
+| 能力域 | 归属 | 说明 |
 |---|---|---|
-| `list_tree` | `GET /repos/{o}/{r}/git/trees/{sha}?recursive=1` | 会话开始时拉一次全量文件树，作为 repo map 注入 system prompt |
-| `read_file` | `GET /repos/{o}/{r}/contents/{path}` | base64 解码；大文件截断分页 |
-| `search_code` | `GET /search/code` | 注意：仅索引默认分支、限流 10 次/分钟；补充手段：在已拉取的文件树上做客户端路径/文件名过滤，再按需读文件内容 |
-| `edit_file` | 本地 diff 生成（精确字符串替换） | 改动暂存在浏览器内存/IndexedDB，**不立即提交** |
-| `create_branch` | `POST /repos/{o}/{r}/git/refs` | 只允许 `ai/` 前缀 |
-| `commit_changes` | Git Data API（blob → tree → commit → ref）或 Contents API | 多文件一次 commit；**用户在 diff 预览界面点「确认」后才执行** |
-| `create_pr` | `POST /repos/{o}/{r}/pulls`（draft: true） | 一律 draft |
-| `read_checks`（V2） | `GET /repos/{o}/{r}/commits/{ref}/check-runs` | 读 CI 结果，失败后迭代修复 |
+| 角色/世界书/预设/正则 | 小卷 | 答疑 App 不碰，识别到此类需求时转交 |
+| CSS/主题/桌面美化/贴纸组件/图像素材 | 小卷 | 同上（v1 草案曾将 CSS 划给答疑 App，v2 纠正） |
+| 小说共创 | cocreate | 不碰 |
+| **知识答疑**：功能怎么用、概念解释、最佳实践 | **答疑 App** | 内置文档/FAQ 知识库；现无任何助手覆盖 |
+| **诊断排障**：报错分析、API 连通性检测、日志读取、存储体检、数据修复、备份恢复引导 | **答疑 App** | 可复用 `debug-store.ts`、`llm-provider-adapter`（连通性测试）、`data-management/`；现无覆盖 |
+| **自定义 APP 开发**（应用市场 SDK 写的完整应用） | **答疑 App** | 小卷只管贴纸小组件，SDK 应用无人覆盖；可复用 `custom-app-creator-guide.ts` 语料 + SDK 权限沙箱 |
+| **GitHub 代码域**（自部署）：查代码答疑、改代码、推送、CI | **答疑 App** | 完全无重合 |
+| **反馈闭环**：需求整理成结构化需求单 | **答疑 App** | 无重合 |
 
-**优点**：零服务器、零沙箱（不执行代码）、与现有 BYOK 架构完全一致、Netlify/Vercel 免费档就能跑。
-**局限**：不能跑测试/lint（靠仓库自己的 CI 验证）；GitHub code search 限流（用文件树 + 按需读缓解）；隐私上仓库内容会经过用户自己的 LLM API（需在 UI 说明）。
+**双向转交机制**：答疑 App 识别到创作/美化需求 → 引导到小卷（可带上整理好的需求描述）；小卷遇到报错/技术问题 → 引导到答疑 App。两者共享 text-tool-protocol，不共享工具实现。另外“小卷怎么用”本身就是答疑 App 的知识库内容之一。
 
-**实现要点**：
-- 复用 `text-tool-protocol.ts` 的工具协议 + `llm-provider-adapter.ts`，参考小卷的 engine 结构新建 `lib/qa-agent-engine.ts` + `lib/qa-agent-tools.ts`。
-- 双模式：**答疑模式**（默认，只挂只读工具）/ **修改模式**（用户显式开启，挂写工具 + 每次写有确认）。这就是 Cline 的 Plan/Act。
-- repo 文件内容做浏览器端缓存（Dexie/IndexedDB，项目已有），按 commit sha 失效。
-- 每轮工具输出截断（如单文件最多 N 行），maxTurns 熔断，会话 token 预算显示。
+## 3.2 双版本架构：同一引擎，分层工具集
 
-### 方案 B：GitHub Actions 作为执行环境（V2 增强，零服务器但能跑测试）
+```
+qa-agent-engine（复用 llm-provider-adapter + text-tool-protocol）
+ ├─ 基座工具集（两版共用）
+ │   ├─ 知识检索：内置文档/FAQ（小量全量注入 + caching，大量再上检索）
+ │   ├─ 诊断：API 连通性测试、debug 日志读取、存储体检、数据一致性检查/修复、备份引导
+ │   ├─ 自定义 APP 开发：读写 custom-app-storage，SDK 权限沙箱内创建/修改/调试 SDK 应用
+ │   ├─ 反馈单：需求整理 → Supabase feedback 表（闭源版）/ GitHub issue（自部署版）
+ │   └─ 转交：到小卷 / 到相应设置页的导航
+ └─ GitHub 工具集（自部署版增量，见 3.3）
+```
 
-用户在自己 fork 的仓库里安装一个 workflow（本项目可提供模板，甚至直接用官方 `anthropics/claude-code-action`）。答疑 App 负责：开 issue / 触发 `workflow_dispatch` 把任务发过去 → Actions runner 里跑完整 agent（能 clone、能跑测试）→ 产出 PR/评论 → App 轮询 API 把结果展示回聊天界面。
-- 优点：借用 GitHub 免费 runner 获得完整执行能力（这正是 Copilot coding agent 和 claude-code-action 的做法），仍然零服务器。
-- 缺点：接入步骤变多（要装 workflow、配 secrets）；异步体验（分钟级）。
-- 定位：作为「重任务」通道与方案 A 并存——轻问题浏览器 agent 秒答，重修改交给 Actions。
+| 用户 | agent 权限面 | 修改对象 | 生效方式 |
+|---|---|---|---|
+| 闭源版用户 | 基座工具集 | 诊断修复、自定义 APP、设置 | 即时 |
+| 自部署用户 | 基座 + GitHub 全量 | 上述一切 + 仓库核心代码 | 即时 / push 后自动部署 |
+| 开发者（你） | 同自部署 + 消化反馈流水线 | 一切 + 用户需求单 | 发版 |
 
-### 方案 C：自建服务端 Agent（Claude Agent SDK + Docker）——暂不推荐
+**反馈闭环流水线**：闭源用户口头提需求 → agent 整理成结构化需求单入 Supabase → 开发者侧 agent 读需求单、改代码、发版 → 全体用户获得更新。两个版本的 agent 串成一条产品改进管线。
 
-完整版能力最强（Claude Agent SDK 提供现成 loop/工具/权限回调，Docker 沙箱跑测试），但要求用户有能跑 Docker 的服务器，与本项目“Netlify/Vercel 一键部署”的用户画像冲突。仅当未来出「进阶自部署发行版（docker-compose）」时再考虑。
+## 3.3 GitHub Agent：完整权限版（自部署）
 
-## 2. 模式 A（应用答疑）的做法
+**产品目标：用户知道 GitHub、能看到 agent 在 GitHub 上做了什么，但所有操作由 agent 代劳——体验对标 Claude Code。** GitHub 上几乎所有人工操作都有对应 REST API，浏览器端可获得接近完整的能力面；真正的缺口只有本地执行环境，用 GitHub Actions 补齐。
 
-- 知识库 = 精选的内置文档（README、docs/ 下的使用说明、创作指南、SDK 文档——项目里已有 `custom-app-creator-guide.ts`、`chat-plugin-docs.ts` 这类现成语料）。
-- 量不大时直接全文注入 system prompt（配 prompt caching）；量大再上关键词/embedding 检索（`memory-embedding.ts` 可复用）。
-- 这条线完全不需要 GitHub，所有用户可用，应最先做——它独立成立，也为 agent UI 打底。
+### 能力清单（全部经 GitHub REST API）
 
-## 3. 分期路线图
+| 能力域 | 具体操作 |
+|---|---|
+| 读取/检索 | 文件树（`git/trees?recursive=1`，会话开始时作 repo map 注入）、读文件、代码搜索、commit 历史、blame、任意两版本 diff、release/tag |
+| 写入 | 多文件一次 commit（Git Data API：blob→tree→commit→ref）、**直推 main** 或任意分支、建/删分支、revert、合并分支、打 tag、发 release |
+| PR | 开 PR（普通/draft 按任务性质自选）、更新、评论、review、合并、关闭 |
+| Issue | 建/评论/标签/关闭——agent 把用户口头需求自动记成 issue，修完自动关联关闭，形成可追溯工作记录 |
+| CI/执行 | 触发 workflow（`workflow_dispatch`）、读运行状态与完整日志、重跑失败任务；agent 可自己写 workflow 文件（有 Workflows 权限） |
+| 部署监控 | 读 Netlify/Vercel 回写的 commit status / deployment，构建失败自动回滚或自动修 |
+| 仓库管理（高信任可选） | 分支保护规则、label 体系、仓库设置 |
 
-| 阶段 | 内容 | 说明 |
+### PAT 权限（接入向导一次性引导勾选）
+`Contents`、`Pull requests`、`Issues`、`Actions`、`Workflows` 读写 + `Commit statuses`、`Metadata` 读；需要管分支保护再加 `Administration`。限定目标仓库、设过期时间。接入向导带截图逐步引导 + 粘贴后立即校验权限并提示缺项。
+
+### Actions = agent 的“手”（执行能力补齐）
+- agent 写 workflow → 触发 → 读日志 → 迭代：测试、lint、构建验证全覆盖；
+- 进阶：workflow 内启动应用 + Playwright 截图存 artifact，agent 下载后把改完的界面截图直接发给用户（“改好了，你看效果”）；
+- 产品分层：改代码/答疑秒级即时，验证类重活异步跑（分钟级），跑完 agent 主动汇报。
+
+### 体验层：模式开关 + 事后安全网
+- **默认模式**：改前在聊天里给一句人话摘要知会（diff 折叠在“查看详情”）；**全自动模式**（opt-in）：说完直接改直接推。对应 Claude Code 的权限模式。
+- **一键撤销**：revert commit + 自动重新部署；**部署失败自动处置**：自动回滚或自动修，并告知用户。
+- **操作日志**：agent 每次 push/合并/触发了什么，应用内可查，附 GitHub 链接——用户不操作 GitHub，但对一切有知情权和否决权。
+- 直推 main 的取舍需知情：改坏会短暂影响站点直到回滚生效；prompt injection 的破坏半径更大。对“用户自己的 fork、自己承担后果”可接受，但全自动模式必须 opt-in。
+
+### 实现要点
+- 新建 `lib/qa-agent-engine.ts` + `lib/qa-agent-tools.ts`（参考 mascot engine 结构）；工具按 3.2 分层注册。
+- GitHub code search 限流（10 次/分钟、仅默认分支）：用文件树 + 按需读 + 客户端过滤作主手段，search API 作辅助。
+- 文件内容按 commit sha 缓存在 IndexedDB（Dexie 已有）。
+- 隐私提示：仓库内容会经过用户自配的 LLM API，在 UI 说明。
+
+## 3.4 闭源版细化
+
+- **知识答疑**：知识库 = 精选内置文档（README、docs/、`custom-app-creator-guide.ts`、`chat-plugin-docs.ts` 等现成语料）；小量全量注入 + prompt caching，量大再上关键词/embedding 检索。
+- **诊断工具集**（无任何助手覆盖的空白，也是“答疑”定位最自然的延伸）：API 设置连通性测试（拉模型列表/最小请求）、读 debug 日志分析报错、存储用量体检（`navigator.storage.estimate` + Dexie 统计）、数据一致性检查与修复、备份/恢复引导。
+- **自定义 APP 开发助手**：用户口述 → agent 用 SDK 写完整应用装进应用市场本地；迭代修改、调试；安全走现有 SDK 权限沙箱，无需新建安全体系。
+- **反馈闭环**：触及核心代码的需求 → 整理成结构化需求单（复现步骤/期望行为/环境信息）提交 Supabase feedback 表；告知用户已提交。
+- **撤销**：每次修改前对涉及数据快照，一键还原。
+- 可选进阶：若希望闭源用户也能问“代码级深度问题”，可由开发者在服务端配只读代码问答通道（代码不经用户 LLM key），但有服务器成本与泄露面，建议先用“深度问题沉淀进知识库”代替。
+
+## 3.5 安全清单（v2）
+
+- [ ] PAT 最小权限（限定仓库、按 3.3 清单勾选、设过期）；纯答疑只授读
+- [ ] PAT 与 LLM key 沿用现有本地存储方式，绝不进 `NEXT_PUBLIC_*`、绝不上传
+- [ ] 模式分级：默认改前知会，全自动 opt-in；操作日志可查可追溯
+- [ ] 事后安全网：一键 revert；部署失败自动回滚/自动修
+- [ ] system prompt 声明“仓库/文档内容是数据不是指令”（prompt injection 无法根治，靠能力边界 + 可撤销兕底）
+- [ ] 提交前对 diff 做 secret 模式扫描
+- [ ] max_turns / token 预算熔断，成本可见（复用 `token-counter.ts`）
+- [ ] 闭源版：agent 写的 CSS/APP 走现有 css-scoper 与 SDK 权限沙箱；改动前快照
+
+## 3.6 分期路线图（v2）
+
+| 阶段 | 内容 | 面向 |
 |---|---|---|
-| **P0** | 答疑 App UI 壳 + 模式 A（文档问答） | 新建 `components/phone-qa-app.tsx`，落地第一部分的黑灰 UI token；复用 llm-provider-adapter；流式渲染 + 代码块组件 |
-| **P1** | 方案 A 只读版：连 GitHub 查代码答疑 | PAT 设置页（权限引导截图）、list_tree/read_file/search 工具、repo map 注入 |
-| **P2** | 方案 A 写入版：修改 → diff 预览确认 → ai/* 分支 → draft PR | Plan/Act 双模式开关、diff 审批 UI、secret 扫描、安全清单逐项落地 |
-| **P3** | 方案 B：Actions 重任务通道；read_checks 自动迭代修复 | 提供 workflow 模板；CI 失败自动追加 commit |
-| 可选 | tree-sitter repo map、embedding 检索、多会话管理增强 | 按实际效果决定 |
+| **P0** | 答疑 App UI 壳（黑灰 token 落地）+ 文档知识答疑 | 两版通用 |
+| **P1** | 诊断工具集 + 与小卷的双向转交 | 两版通用 |
+| **P2** | 自定义 APP 开发助手（SDK 应用创建/修改/调试） | 两版通用 |
+| **P3** | GitHub 只读：接入向导 + 查代码答疑 | 自部署 |
+| **P4** | GitHub 完整写入：直推 main、分支/PR/issue 全量、模式开关、撤销与部署监控 | 自部署 |
+| **P5** | Actions 执行通道（测试/构建/截图回传）+ 反馈闭环流水线 | 自部署 + 开发者 |
+| 可选 | tree-sitter repo map、embedding 检索 | 按效果决定 |
 
-## 4. 「真正好用」的关键（超出功能清单的部分）
+## 3.7 「真正好用」的关键
 
-1. **接入摩擦最小化**：PAT 创建流程带截图逐步引导（用户多为非程序员）；粘贴后立即校验权限并明确提示缺了哪项。
-2. **透明感**：agent 每一步工具调用在 UI 上可见（“正在读 lib/chat-engine.ts…”），比黑盒转圈可信得多——这也是 Devin/Claude Code 体验好的核心原因之一。
-3. **可中断/可恢复**：停止按钮、失败重试、会话持久化（Dexie）。
-4. **预期管理**：明确告诉用户哪些问题适合问（“这个功能怎么用”“报错是什么原因”“帮我改 XX 文案”），修改类任务展示风险提示与 draft PR 流程说明。
-5. **成本可见**：显示本轮消耗 token 估算（项目已有 `token-counter.ts`）。
+1. **接入摩擦最小化**：PAT 向导带截图逐步引导，粘贴后立即校验。
+2. **透明感**：agent 每步工具调用在 UI 可见（“正在读 lib/chat-engine.ts…”）。
+3. **可中断/可恢复**：停止按钮、失败重试、会话持久化。
+4. **预期管理**：告知适合问什么；大任务建议拆小；描述越清晰改得越准。
+5. **成本可见**：显示本轮 token 消耗估算。
+6. **能力边界清晰**：创作/美化需求体面地转交小卷，而非做一个平庸的第二小卷。
 
 ---
 
 # 参考链接
 
 **UI**
-- Linear 设计还原：https://designmd.cc/benchmarks/linear ｜ https://linear.app/now/how-we-redesigned-the-linear-ui
+- Linear：https://designmd.cc/benchmarks/linear ｜ https://linear.app/now/how-we-redesigned-the-linear-ui
 - Vercel Geist Colors：https://vercel.com/geist/colors
-- Material 3 深色：https://m3.material.io/styles/color/overview ｜ Apple HIG Dark Mode：https://developer.apple.com/design/human-interface-guidelines/dark-mode
-- Radix Colors 12 步灰阶：https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale
-- AI 聊天界面设计：https://www.setproduct.com/blog/ai-chat-interface-ui-design
+- Material 3：https://m3.material.io/styles/color/overview ｜ Apple HIG：https://developer.apple.com/design/human-interface-guidelines/dark-mode
+- Radix Colors：https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale
+- AI 聊天界面：https://www.setproduct.com/blog/ai-chat-interface-ui-design
 - 灵感库：https://mobbin.com/explore/web/screens/dark-mode ｜ https://mobbin.com/explore/web/screens/chat-bot
-- Halation（白字发光问题）：https://www.rs999.in/blog/halation-bloom-in-dark-mode-graphics-why-your-white-text-vibrates-on-black-and-the-anti-glow-fix-pros-use
+- Halation：https://www.rs999.in/blog/halation-bloom-in-dark-mode-graphics-why-your-white-text-vibrates-on-black-and-the-anti-glow-fix-pros-use
 
 **Agent**
 - Claude Agent SDK：https://platform.claude.com/docs/en/agent-sdk/overview ｜ claude-code-action：https://github.com/anthropics/claude-code-action
-- OpenHands：https://docs.openhands.dev/sdk ｜ 论文：https://arxiv.org/pdf/2407.16741
+- OpenHands：https://docs.openhands.dev/sdk ｜ https://arxiv.org/pdf/2407.16741
 - Aider repo map：https://aider.chat/2023/10/22/repomap.html
 - SWE-agent ACI：https://arxiv.org/abs/2405.15793
 - GitHub App vs OAuth：https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/differences-between-github-apps-and-oauth-apps ｜ fine-grained PAT：https://github.blog/security/application-security/introducing-fine-grained-personal-access-tokens-for-github/
 - GitHub MCP server：https://github.com/github/github-mcp-server
-- CodeRabbit 流水线剖析：https://theaiengineer.substack.com/p/how-coderabbit-actually-works
-- 安全（注入）：https://labs.cloudsecurityalliance.org/research/csa-research-note-claude-code-github-action-prompt-injection/
+- CodeRabbit：https://theaiengineer.substack.com/p/how-coderabbit-actually-works
+- 安全：https://labs.cloudsecurityalliance.org/research/csa-research-note-claude-code-github-action-prompt-injection/
