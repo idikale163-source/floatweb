@@ -3,29 +3,32 @@
    全部变量 scope 在 .qa-app-shell 内，不污染全局。 */
 
 .qa-app-shell {
-  /* 背景层级：每层只提亮 4–6% */
-  --qa-bg-canvas: #0b0c0e;
-  --qa-bg-sidebar: #101114;
-  --qa-bg-surface: #16181c;
-  --qa-bg-raised: #1d2025;
-  --qa-bg-overlay: #24272e;
-  --qa-bg-code: #0d0e10;
+  /* 暖调深色（Claude 风）：暖炭底 + 每层微提亮 */
+  --qa-bg-canvas: #1a1915;
+  --qa-bg-sidebar: #211f1b;
+  --qa-bg-surface: #262420;
+  --qa-bg-raised: #302d28;
+  --qa-bg-overlay: #38352f;
+  --qa-bg-code: #14130f;
   /* 交互态 */
-  --qa-state-hover: rgba(255, 255, 255, 0.05);
-  --qa-state-active: rgba(255, 255, 255, 0.09);
-  /* 边框 */
-  --qa-border-subtle: rgba(255, 255, 255, 0.07);
-  --qa-border-strong: rgba(255, 255, 255, 0.14);
-  /* 文字层级（勿用纯白） */
-  --qa-text-primary: #ededf0;
-  --qa-text-secondary: #a6a8ae;
-  --qa-text-tertiary: #6e7178;
-  --qa-text-inverse: #0b0c0e;
-  /* Accent：低饱和冷紫蓝 */
-  --qa-accent: #7c8aff;
-  --qa-accent-hover: #939eff;
-  --qa-accent-subtle: rgba(124, 138, 255, 0.12);
-  --qa-danger: #f87171;
+  --qa-state-hover: rgba(255, 255, 255, 0.045);
+  --qa-state-active: rgba(255, 255, 255, 0.08);
+  /* 边框（暖白 alpha） */
+  --qa-border-subtle: rgba(240, 230, 210, 0.08);
+  --qa-border-strong: rgba(240, 230, 210, 0.16);
+  /* 文字层级（暖白，勿用纯白） */
+  --qa-text-primary: #f4f0e6;
+  --qa-text-secondary: #b0a99a;
+  --qa-text-tertiary: #837c6e;
+  --qa-text-inverse: #1a1915;
+  /* Accent：Claude 陶土橙 */
+  --qa-accent: #d97757;
+  --qa-accent-hover: #e08a6c;
+  --qa-accent-subtle: rgba(217, 119, 87, 0.14);
+  --qa-danger: #e0796b;
+  /* 衬线正文字体（Claude 标志） */
+  --qa-font-serif: "Georgia", "Times New Roman", "Songti SC", "Noto Serif SC", "Source Han Serif SC", serif;
+  --success: #7fb287;
 
   position: absolute;
   inset: 0;
@@ -36,19 +39,19 @@
   background: var(--qa-bg-canvas);
   color: var(--qa-text-primary);
   font-family: var(--app-font-family);
-  font-size: 15px;
-  line-height: 1.65;
+  font-size: 16px;
+  line-height: 1.72;
 }
 
-/* 氛围光：单个克制的径向光晕 */
+/* 氛围光：暖橙极淡光晕 */
 .qa-ambient {
   position: absolute;
-  top: -120px;
-  right: -80px;
-  width: 320px;
-  height: 320px;
+  top: -140px;
+  right: -90px;
+  width: 340px;
+  height: 340px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(124, 138, 255, 0.1) 0%, transparent 68%);
+  background: radial-gradient(circle, rgba(217, 119, 87, 0.08) 0%, transparent 70%);
   pointer-events: none;
   z-index: 0;
 }
@@ -77,11 +80,20 @@
   justify-content: flex-end;
   gap: 4px;
 }
+.qa-header-center {
+  flex-direction: column;
+  gap: 1px;
+}
 .qa-header-title {
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--qa-text-primary);
+}
+.qa-header-sub {
+  font-size: 11px;
+  color: var(--qa-text-tertiary);
+  letter-spacing: 0.02em;
 }
 
 .qa-icon-btn {
@@ -152,46 +164,79 @@
   animation: qa-shimmer 1.6s ease-in-out infinite;
 }
 
-/* 工具调用状态 pill */
+/* 工具调用：折叠单行摘要 + 点开展开（Claude Code 风） */
 .qa-tools {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 12px;
 }
-.qa-tool-pill {
-  display: inline-flex;
+.qa-tool-row {
+  border-radius: 8px;
+}
+.qa-tool-row-head {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  border: 1px solid var(--qa-border-subtle);
-  background: var(--qa-bg-surface);
-  color: var(--qa-text-secondary);
+  gap: 8px;
+  width: 100%;
+  padding: 5px 4px;
+  border: none;
+  background: transparent;
+  color: var(--qa-text-tertiary);
+  font-size: 13.5px;
+  cursor: pointer;
+  text-align: left;
 }
-.qa-tool-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--qa-text-tertiary);
+.qa-tool-row-head:disabled {
+  cursor: default;
 }
-.qa-tool-pill.is-running {
-  border-color: rgba(124, 138, 255, 0.35);
+.qa-tool-row.is-running .qa-tool-row-head {
   color: var(--qa-accent);
 }
-.qa-tool-pill.is-running .qa-tool-dot {
-  background: var(--qa-accent);
-  animation: qa-shimmer 1s ease-in-out infinite;
-}
-.qa-tool-pill.is-done .qa-tool-dot {
-  background: var(--success);
-}
-.qa-tool-pill.is-fail {
+.qa-tool-row.is-fail .qa-tool-row-head {
   color: var(--qa-danger);
 }
-.qa-tool-pill.is-fail .qa-tool-dot {
-  background: var(--qa-danger);
+.qa-tool-row-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qa-tool-row-chevron {
+  flex-shrink: 0;
+  color: var(--qa-text-tertiary);
+  transition: transform 0.18s ease;
+}
+.qa-tool-row-chevron.is-open {
+  transform: rotate(90deg);
+}
+.qa-tool-row-body {
+  margin: 2px 0 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--qa-bg-code);
+  border: 1px solid var(--qa-border-subtle);
+}
+.qa-tool-row-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--qa-text-tertiary);
+  margin-bottom: 4px;
+}
+.qa-tool-row-label:not(:first-child) {
+  margin-top: 10px;
+}
+.qa-tool-row-pre {
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--qa-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 @keyframes qa-shimmer {
   0%, 100% { opacity: 0.45; }
@@ -246,9 +291,13 @@
   background: var(--qa-state-hover);
 }
 
-/* ── Markdown ── */
+/* ── Markdown（衬线正文，Claude 风）── */
 .qa-markdown {
   display: flow-root;
+  font-family: var(--qa-font-serif);
+  font-size: 16.5px;
+  line-height: 1.75;
+  letter-spacing: 0.003em;
 }
 .qa-markdown > :first-child { margin-top: 0; }
 .qa-markdown > :last-child { margin-bottom: 0; }
