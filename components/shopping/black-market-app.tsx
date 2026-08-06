@@ -2337,7 +2337,7 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
                     </button>
                     <button type="button" className="is-primary" disabled={publishing} onClick={() => void handlePublishDraft()}>
                       <Send size={14} />
-                      {publishing ? "同步中" : editingTemplate ? "保存修改" : "发布共享"}
+                      {publishing ? "同步中" : editingTemplate ? "保存修改" : editingStudioDraft?.sourceTemplateId ? "更新发布" : "发布共享"}
                     </button>
                   </div>
                 </div>

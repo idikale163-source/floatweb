@@ -837,6 +837,11 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
     () => editingTemplateId ? communityGames.find(item => item.id === editingTemplateId) ?? null : null,
     [communityGames, editingTemplateId],
   );
+  // 正在编辑的草稿是否已关联发布条目：关联时发布按钮显示「更新发布」（发布=同步更新原条目）
+  const editingDraftLinked = useMemo(
+    () => editingDraftId ? Boolean(drafts.find(item => item.id === editingDraftId)?.publishedTemplateId) : false,
+    [drafts, editingDraftId],
+  );
 
   useEffect(() => {
     const syncState = () => setState(loadGameState());
@@ -2946,7 +2951,7 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
                     <button type="button" onClick={saveDraft}><Archive size={14} /> 存草稿</button>
                     <button type="button" className="is-primary" disabled={publishing} onClick={() => void publishDraft()}>
                       <Send size={14} />
-                      {publishing ? "同步中" : editingTemplate ? "保存修改" : "发布共享"}
+                      {publishing ? "同步中" : editingTemplate ? "保存修改" : editingDraftLinked ? "更新发布" : "发布共享"}
                     </button>
                   </div>
                 </div>
