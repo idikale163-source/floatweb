@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
-import { AppWindow, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, Drama, Eraser, Gamepad2, Github, Loader2, Menu, Play, Plus, Square, Trash2, Wrench, X } from "lucide-react";
+import { AppWindow, ArrowUp, BrushCleaning, Check, ChevronLeft, ChevronRight, Copy, Drama, Gamepad2, Github, Loader2, Menu, Play, Plus, Square, Trash2, Wrench, X } from "lucide-react";
 import { mdiHammerWrench } from "@mdi/js";
 import { CustomAppRunner } from "@/components/app-market/custom-app-runner";
 import { GameHubApp } from "@/components/game/game-hub-app";
@@ -450,6 +450,7 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
   const [repoSheetOpen, setRepoSheetOpen] = useState(false);
   const [repoConnected, setRepoConnected] = useState(false);
   const [devNoticeOpen, setDevNoticeOpen] = useState(true);
+  const [clearToolsOpen, setClearToolsOpen] = useState(false);
   const [apiReady, setApiReady] = useState(true);
   const [modelName, setModelName] = useState("");
   const [repoWritable, setRepoWritable] = useState(false);
@@ -482,13 +483,16 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
       onNotice?.("没有可清理的工具调用历史。");
       return;
     }
-    const confirmed = window.confirm("将移除本会话上下文中的工具调用与工具结果记录（防原生协议报错），普通对话内容不会删除。继续？");
-    if (!confirmed) return;
+    setClearToolsOpen(true);
+  }, [snapshot.isGenerating, onNotice]);
+
+  const confirmClearToolHistory = useCallback(() => {
+    setClearToolsOpen(false);
     const result = clearQaToolHistory();
     onNotice?.(result && result.removed + result.cleaned > 0
       ? `已清理 ${result.removed} 条工具记录，整理 ${result.cleaned} 条消息。`
       : "没有可清理的工具调用历史。");
-  }, [snapshot.isGenerating, onNotice]);
+  }, [onNotice]);
 
   const toggleWriteMode = useCallback(() => {
     const gh = loadQaGithubConfig();
@@ -586,7 +590,7 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
             aria-label="清理原生tool调用历史（防报错）"
             title="清理原生tool调用历史——防报错"
           >
-            <Eraser size={17} strokeWidth={1.75} />
+            <BrushCleaning size={17} strokeWidth={1.75} />
           </button>
           <button type="button" className="qa-icon-btn" onClick={() => setDrawerOpen((v) => !v)} aria-label="对话记录">
             <Menu size={18} strokeWidth={1.75} />
@@ -731,6 +735,25 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
               </button>
               <button type="button" className="qa-devnotice-btn" onClick={() => setDevNoticeOpen(false)}>
                 仍要看看
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {clearToolsOpen && (
+        <div className="qa-devnotice-backdrop" onClick={() => setClearToolsOpen(false)}>
+          <div className="qa-devnotice" role="alertdialog" aria-label="清理工具历史确认" onClick={(e) => e.stopPropagation()}>
+            <div className="qa-devnotice-title">清理工具调用历史？</div>
+            <div className="qa-devnotice-text">
+              将移除本会话上下文中的工具调用与工具结果记录，用于修复原生工具协议的报错。普通对话内容不会删除，之前的工具结论仍保留在小坊的回复文字里。
+            </div>
+            <div className="qa-devnotice-actions">
+              <button type="button" className="qa-devnotice-btn" onClick={() => setClearToolsOpen(false)}>
+                取消
+              </button>
+              <button type="button" className="qa-devnotice-btn is-primary" onClick={confirmClearToolHistory}>
+                清理
               </button>
             </div>
           </div>
