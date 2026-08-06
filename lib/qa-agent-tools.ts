@@ -34,6 +34,7 @@ import {
     type QaFeedbackTicket,
 } from "./qa-feedback";
 import { QA_CONTENT_TOOLS, type QaCreatedContent } from "./qa-content-tools";
+import { searchQaFaq, readQaFaqPage } from "./qa-faq";
 
 export type { QaCreatedContent } from "./qa-content-tools";
 
@@ -255,6 +256,39 @@ const deviceInfoTool: QaTool = {
             // ignore
         }
         return clip(lines.join("\n"));
+    },
+};
+
+// ── 答疑文档（可检索、可翻页的持续补充 FAQ）──────────
+
+const faqTool: QaTool = {
+    name: "答疑文档",
+    nativeName: "read_faq_doc",
+    parameters: {
+        type: "object",
+        properties: {
+            find: { type: "string", description: "关键词（可空格分隔多个，任一命中即返回该问答条目）" },
+            page: { type: "number", description: "不带 find 时按页顺序阅读全文，默认第 1 页" },
+        },
+    },
+    description:
+        "检索产品答疑文档（持续补充的 FAQ）：传 find 按关键词查相关问答，不传则分页通读。回答没把握的产品问题前先查这里；查不到再用 GitHub 工具读源码求证。",
+    schemaLines: [
+        "  参数：",
+        "    · find (可选) — 关键词，任一命中即返回对应问答条目",
+        "    · page (可选) — 不带 find 时分页通读，默认第 1 页",
+        '  调用：[执行动作:答疑文档({"find":"备份 迁移"})]',
+    ],
+    async run(args) {
+        const find = typeof args.find === "string" ? args.find.trim() : "";
+        if (find) {
+            const hits = searchQaFaq(find);
+            if (hits.length === 0) {
+                return `答疑文档里没有找到与「${find}」相关的条目。可换关键词再查，或（已连接仓库时）用「搜索仓库代码」「读取仓库文件」从源码求证；仍无结论就如实告诉用户并用「记录反馈」登记。`;
+            }
+            return `【答疑文档命中 ${hits.length} 条】\n\n${hits.join("\n\n")}`;
+        }
+        return readQaFaqPage(args.page);
     },
 };
 
@@ -806,7 +840,7 @@ const feedbackTool: QaTool = {
     },
 };
 
-const BASE_TOOLS: QaTool[] = [apiCheckTool, storageReportTool, errorLogTool, deviceInfoTool, feedbackTool, ...QA_CONTENT_TOOLS];
+const BASE_TOOLS: QaTool[] = [apiCheckTool, storageReportTool, errorLogTool, deviceInfoTool, feedbackTool, faqTool, ...QA_CONTENT_TOOLS];
 
 /** 当前可用工具集：基础诊断 + 内容开发工场 + （已连接仓库时）GitHub 只读 + （有 PAT 时）写入工具。 */
 export function getQaTools(): QaTool[] {
@@ -852,6 +886,7 @@ export function buildQaToolsPrompt(): string {
     lines.push("===== 调用规则 =====");
     lines.push('· 执行动作：使用 [执行动作:工具名({"参数":"值"})] 格式，无参数时用 [执行动作:工具名({})]');
     lines.push("· 一条回复里可以调用多个工具；调用后等待系统返回工具结果再继续分析");
+    lines.push("· 产品问题没把握时先用「答疑文档」按关键词检索；文档查不到且已连接仓库时再查源码；仍无结论就如实说明");
     lines.push("· 回答代码问题时，先用「仓库文件树」或「搜索仓库代码」定位，再用「读取仓库文件」看具体实现，基于真实代码作答");
     lines.push("· 用户想要新 APP/小游戏/剧场时：先用「创作指南」读对应类型的制作说明（可分页），写好完整内容后用对应安装工具装进本机，最后告诉用户去哪里打开；同名会更新，改完可直接重装");
     lines.push("· 收到工具结果后，用人话向用户解释结论和建议，不要原样罗列");
