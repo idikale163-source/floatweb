@@ -300,7 +300,27 @@ export type QaAgentCallbacks = {
     onContentCreated?: (item: QaCreatedContent) => void;
 };
 
-const QA_MAX_ROUNDS = 5;
+const QA_MAX_ROUNDS = 8;
+
+// 轮数用尽/输出截断时给用户的可见提示——否则未执行的指令被流过滤器隐藏，
+// 表现为"话说到一半突然断了"
+const QA_ROUNDS_EXHAUSTED_NOTICE = "\n\n（这轮的工具调用次数用完了，还有操作没执行——回复「继续」我会接着完成。）";
+const QA_TRUNCATED_NOTICE = "\n\n（回复被模型的输出长度上限截断，最后一个操作没能完整生成——回复「继续」我会重试；经常出现的话，建议在预设里调大最大输出 token。）";
+
+/** 正文末尾残留未闭合的 [执行动作: 指令：输出被 max_tokens 截断的典型特征 */
+function hasTruncatedDirective(content: string): boolean {
+    const text = stripThinkBlocks(content);
+    let start = -1;
+    let from = 0;
+    for (;;) {
+        const match = QA_DIRECTIVE_START.exec(text.slice(from));
+        if (!match) break;
+        start = from + match.index;
+        from = start + 1;
+    }
+    if (start === -1) return false;
+    return !/[)）]\s*\]/.test(text.slice(start));
+}
 
 type QaAgentOptions = { signal?: AbortSignal; callbacks?: QaAgentCallbacks; autoCommit?: boolean };
 
@@ -358,8 +378,15 @@ async function callQaAgentText(apiConfig: ApiConfig, history: QaEngineMessage[],
         await filter.flush();
 
         const { toolCalls } = parseToolCalls(stripThinkBlocks(result.content));
+        if (hasTruncatedDirective(result.content)) {
+            await callbacks?.onDelta?.(QA_TRUNCATED_NOTICE);
+            return;
+        }
         if (toolCalls.length === 0) return;
-        if (round === QA_MAX_ROUNDS - 1) return; // 轮数用尽，不再执行工具
+        if (round === QA_MAX_ROUNDS - 1) {
+            await callbacks?.onDelta?.(QA_ROUNDS_EXHAUSTED_NOTICE);
+            return;
+        }
 
         working.push({ role: "assistant", content: result.content });
         const resultBlocks: string[] = [];
@@ -451,8 +478,14 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
         // 原生调用为主；同时兜底解析正文里的文本协议指令（弱模型混写时也能执行）
         const nativeCalls = result.toolCalls || [];
         const textParsed = parseToolCalls(stripThinkBlocks(result.content || ""));
-        if (nativeCalls.length === 0 && textParsed.toolCalls.length === 0) return;
-        if (round === QA_MAX_ROUNDS - 1) return; // 轮数用尽，不再执行工具
+        if (nativeCalls.length === 0 && textParsed.toolCalls.length === 0) {
+            if (hasTruncatedDirective(result.content || "")) await callbacks?.onDelta?.(QA_TRUNCATED_NOTICE);
+            return;
+        }
+        if (round === QA_MAX_ROUNDS - 1) {
+            await callbacks?.onDelta?.(QA_ROUNDS_EXHAUSTED_NOTICE);
+            return;
+        }
 
         working.push({
             role: "assistant",
