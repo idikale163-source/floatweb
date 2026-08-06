@@ -18,7 +18,7 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
-import { kvGet, kvSet } from "@/lib/kv-db";
+import { kvGet, kvSet, registerKvMigration } from "@/lib/kv-db";
 
 import {
   BLACK_MARKET_DAILY_CHECKIN_CREDITS,
@@ -30,7 +30,6 @@ import {
   formatShadowCredits,
   getBlackMarketCatalog,
   getBlackMarketSceneSession,
-  isLocalTestTheaterId,
   upsertLocalTestTheater,
   appendBlackMarketSceneMessage,
   loadAllBlackMarketTheaterProjectionEntries,
@@ -72,7 +71,7 @@ type BlackMarketAppProps = {
 };
 
 type BlackMarketTab = "market" | "vault" | "ledger" | "studio";
-type BlackMarketStudioMode = "published" | "drafts" | "create" | "localtest";
+type BlackMarketStudioMode = "published" | "drafts" | "create";
 type BlackMarketPreviewMode = "info" | "opening";
 type BlackMarketSceneBusy = "reply" | "summary" | null;
 type BlackMarketDeleteTarget =
@@ -80,11 +79,6 @@ type BlackMarketDeleteTarget =
   | { kind: "published"; templateId: string };
 type BlackMarketExternalCanvasRequest = "start" | "resume" | null;
 type BlackMarketSceneConfirmAction = "return" | "archive" | "restart" | "summary";
-type BlackMarketPublishChoice = {
-  sourceTemplateId: string;
-  sourceTemplateTitle: string;
-};
-
 type BlackMarketNotice = {
   id: number;
   tone: "success" | "error" | "info";
@@ -103,6 +97,8 @@ const BLACK_MARKET_THEATER_FRAME_COLLAPSE_THRESHOLD = 900;
 const BLACK_MARKET_THEATER_FRAME_COLLAPSED_HEIGHT = 620;
 const BLACK_MARKET_REPLY_FRAME_MIN_HEIGHT = 90;
 const BLACK_MARKET_STUDIO_DRAFTS_KEY = "ai_phone_black_market_studio_drafts_v1";
+// 注册 localStorage → kv-db 迁移：老版本存在 localStorage 里的草稿在首次进入时收编进 kv
+registerKvMigration(BLACK_MARKET_STUDIO_DRAFTS_KEY);
 const BLACK_MARKET_STUDIO_TEST_USER_SAMPLE = "你刚才到底想隐瞒什么？";
 const BLACK_MARKET_STUDIO_TEST_ASSISTANT_SAMPLE = `*他猛地攥紧袖口，呼吸停了一拍。*
 
@@ -826,7 +822,6 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
   const [publishing, setPublishing] = useState(false);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BlackMarketDeleteTarget | null>(null);
-  const [publishChoice, setPublishChoice] = useState<BlackMarketPublishChoice | null>(null);
   const [recordMenuId, setRecordMenuId] = useState<string | null>(null);
   const [previewNonce, setPreviewNonce] = useState(0);
   const [terminalTime, setTerminalTime] = useState("00:00:00");
@@ -894,16 +889,6 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
   const editingStudioDraft = useMemo(
     () => editingDraftId ? studioDrafts.find(item => item.id === editingDraftId) ?? null : null,
     [editingDraftId, studioDrafts],
-  );
-  const localTestTheaters = useMemo(
-    () => state.ownedTheaters
-      .filter(item => isLocalTestTheaterId(item.localId))
-      .sort((a, b) => (b.lastUsedAt || b.purchasedAt).localeCompare(a.lastUsedAt || a.purchasedAt)),
-    [state.ownedTheaters],
-  );
-  const publishChoiceSourceTemplate = useMemo(
-    () => publishChoice ? communityTheaters.find(item => item.id === publishChoice.sourceTemplateId) ?? null : null,
-    [communityTheaters, publishChoice],
   );
   const resumableLaunchScene = useMemo(() => {
     if (!launchOwnedTheater || !launchCharacterId) return null;
@@ -1114,7 +1099,7 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
     if (!item) return;
     autoOpenedRef.current = true;
     setSelectedTab("studio");
-    setStudioMode("localtest");
+    setStudioMode("drafts");
     openSceneLauncher(item);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenLocalId]);
@@ -1646,16 +1631,6 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
     showNotice("info", "草稿已删除");
   }
 
-  function getEditingDraftPublishSource(): BlackMarketPublishChoice | null {
-    const currentDraft = editingStudioDraft;
-    const sourceTemplateId = currentDraft?.sourceTemplateId?.trim();
-    if (!editingDraftId || !currentDraft || !sourceTemplateId) return null;
-    return {
-      sourceTemplateId,
-      sourceTemplateTitle: currentDraft.sourceTemplateTitle?.trim() || currentDraft.title || "原发布档案",
-    };
-  }
-
   function buildDraftTemplate(existing?: BlackMarketTheaterTemplate | null): BlackMarketTheaterTemplate {
     const title = draft.title.trim();
     const openingHtml = draft.openingHtml.trim();
@@ -1722,24 +1697,20 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
     }
   }
 
-  function handleDeleteLocalTestTheater(localId: string): void {
-    const result = deleteBlackMarketOwnedTheater(localId);
-    if (result.ok) {
-      setState(result.state);
-      showNotice("info", "已删除本机测试剧场");
-    }
-  }
-
-  async function publishCurrentDraft(mode: "auto" | "new" | "overwrite-source" = "auto"): Promise<void> {
+  async function handlePublishDraft(): Promise<void> {
     setPublishing(true);
     try {
-      const sourceTemplate = mode === "overwrite-source" && publishChoice
-        ? communityTheaters.find(item => item.id === publishChoice.sourceTemplateId) ?? null
-        : null;
-      if (mode === "overwrite-source" && !sourceTemplate) {
-        throw new Error("找不到原发布档案，请先刷新共享市场，或改为发布成新档案。");
+      // 关联发布：修改已发布模式用该档案；否则草稿带关联时解析出原档案 → 同步更新同一条目
+      let existingTemplate = editingTemplate;
+      const linkedId = !existingTemplate ? editingStudioDraft?.sourceTemplateId?.trim() : undefined;
+      if (!existingTemplate && linkedId) {
+        try {
+          const known = communityTheaters.find(item => item.id === linkedId);
+          existingTemplate = known ? await ensureFullTheaterTemplate(known) : await fetchBlackMarketTheater(linkedId);
+        } catch {
+          existingTemplate = null; // 原档案已不存在：退化为发布新档案，成功后改写关联
+        }
       }
-      const existingTemplate = mode === "new" ? null : editingTemplate ?? sourceTemplate;
       const template = buildDraftTemplate(existingTemplate);
       const published = existingTemplate
         ? await updateBlackMarketTheater(template)
@@ -1750,8 +1721,21 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
       if (snapshotSync?.updatedCount) {
         setState(snapshotSync.state);
       }
+      // 发布后保留草稿并写入关联：标签变「已发布」，下次发布即同步更新，不产生新档案
       if (editingDraftId) {
-        setStudioDrafts(current => saveBlackMarketStudioDrafts(current.filter(item => item.id !== editingDraftId)));
+        const now = new Date().toISOString();
+        setStudioDrafts(current => saveBlackMarketStudioDrafts(current.map(item =>
+          item.id === editingDraftId
+            ? {
+                ...item,
+                title: draft.title.trim() || item.title,
+                draft,
+                sourceTemplateId: published.id,
+                sourceTemplateTitle: published.title,
+                updatedAt: now,
+              }
+            : item,
+        )));
         setEditingDraftId(null);
       }
       setCommunityTheaters(current => [published, ...current.filter(item => item.id !== published.id)]
@@ -1760,7 +1744,6 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
       setSelectedTemplateId(published.id);
       setEditingTemplateId(null);
       setStudioMode("published");
-      setPublishChoice(null);
       showNotice(
         "success",
         existingTemplate
@@ -1776,28 +1759,18 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
     }
   }
 
-  async function handlePublishDraft(): Promise<void> {
-    if (!editingTemplate) {
-      const source = getEditingDraftPublishSource();
-      if (source) {
-        setPublishChoice(source);
-        return;
-      }
-    }
-    await publishCurrentDraft("auto");
-  }
-
-  function closePublishChoice(): void {
-    if (publishing) return;
-    setPublishChoice(null);
-  }
-
   async function handleDeletePublished(template: BlackMarketTheaterTemplate): Promise<void> {
     if (deletingTemplateId) return;
     setDeletingTemplateId(template.id);
     try {
       await deleteBlackMarketTheater({ id: template.id, authorId: template.authorId });
       setCommunityTheaters(current => current.filter(item => item.id !== template.id));
+      // 清掉指向该档案的草稿关联：标签回「未发布」，之后发布会作为新档案
+      setStudioDrafts(current => current.some(item => item.sourceTemplateId === template.id)
+        ? saveBlackMarketStudioDrafts(current.map(item => item.sourceTemplateId === template.id
+          ? { ...item, sourceTemplateId: undefined, sourceTemplateTitle: undefined }
+          : item))
+        : current);
       if (selectedTemplateId === template.id) setSelectedTemplateId(null);
       if (editingTemplateId === template.id) resetDraft();
       setDeleteTarget(null);
@@ -2072,7 +2045,7 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
               <b>{publishedTheaters.length} PUBLISHED · {studioDrafts.length} DRAFTS</b>
             </div>
 
-            <div className="cp-black-market-studio-tabs cp-black-market-studio-tabs-4" role="tablist" aria-label="发布管理">
+            <div className="cp-black-market-studio-tabs" role="tablist" aria-label="发布管理">
               <button
                 type="button"
                 role="tab"
@@ -2099,15 +2072,6 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
                 onClick={() => setStudioMode("drafts")}
               >
                 草稿箱
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={studioMode === "localtest"}
-                className={studioMode === "localtest" ? "is-active" : ""}
-                onClick={() => setStudioMode("localtest")}
-              >
-                本机测试
               </button>
             </div>
 
@@ -2164,9 +2128,9 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
                     {studioDrafts.map(item => (
                       <article key={item.id} className="cp-black-market-published-card">
                         <div>
-                          <span>{item.sourceTemplateId ? "来源草稿" : "草稿"}</span>
+                          <span data-pub={item.sourceTemplateId ? "yes" : "no"}>{item.sourceTemplateId ? "已发布" : "未发布"}</span>
                           <strong>{item.title}</strong>
-                          <p>{item.sourceTemplateId ? `来源：${item.sourceTemplateTitle || "已发布档案"}` : item.draft.subtitle || item.draft.synopsis || item.draft.storyText}</p>
+                          <p>{item.sourceTemplateId ? `关联：${item.sourceTemplateTitle || "已发布档案"}` : item.draft.subtitle || item.draft.synopsis || item.draft.storyText}</p>
                           <time>{formatBlackMarketDate(item.updatedAt)}</time>
                         </div>
                         <div className="cp-black-market-published-actions">
@@ -2186,49 +2150,6 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
               </div>
             ) : null}
 
-            {studioMode === "localtest" ? (
-              <div className="cp-black-market-studio-panel">
-                <h3>本机测试</h3>
-                <p className="cp-black-market-studio-hint">从草稿点「本机测试」会本地上架到这里，可反复启封试演，且会写入记忆、进入回传记录，但不会发布到市场，也不扣暗币。</p>
-                {localTestTheaters.length === 0 ? (
-                  <div className="cp-black-market-empty">还没有本机测试的剧场。<br />在草稿编辑里点「本机测试」即可。</div>
-                ) : (
-                  <div className="cp-black-market-published-list">
-                    {localTestTheaters.map(item => {
-                      const linkedDraftId = item.localId.slice("localtest_theater_".length);
-                      const linkedDraft = studioDrafts.find(d => d.id === linkedDraftId);
-                      return (
-                        <article key={item.localId} className="cp-black-market-published-card">
-                          <div>
-                            <span>本机测试{item.useCount > 0 ? ` · 试演 ${item.useCount} 次` : ""}</span>
-                            <strong>{item.templateSnapshot.title}</strong>
-                            <p>{item.templateSnapshot.subtitle || item.templateSnapshot.synopsis || item.templateSnapshot.storyText}</p>
-                            <time>{formatBlackMarketDate(item.lastUsedAt || item.purchasedAt)}</time>
-                          </div>
-                          <div className="cp-black-market-published-actions">
-                            <button type="button" className="is-primary" onClick={() => openSceneLauncher(item)}>
-                              <Play size={14} />
-                              启封试演
-                            </button>
-                            {linkedDraft ? (
-                              <button type="button" onClick={() => beginEditStudioDraft(linkedDraft)}>
-                                <Pencil size={14} />
-                                编辑草稿
-                              </button>
-                            ) : null}
-                            <button type="button" className="is-danger" onClick={() => handleDeleteLocalTestTheater(item.localId)}>
-                              <Trash2 size={14} />
-                              DELETE
-                            </button>
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ) : null}
-
             {studioMode === "create" ? (
               <>
                 {editingTemplate ? (
@@ -2240,7 +2161,7 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
                 ) : null}
                 {editingDraftId && !editingTemplate ? (
                   <div className="cp-black-market-editing-banner">
-                    <span>{editingStudioDraft?.sourceTemplateId ? "来源草稿" : "草稿中"}</span>
+                    <span>{editingStudioDraft?.sourceTemplateId ? "已发布草稿" : "草稿中"}</span>
                     <strong>{editingStudioDraft?.title || "未命名草稿"}</strong>
                     <button type="button" onClick={resetDraft}>退出草稿</button>
                   </div>
@@ -2416,7 +2337,7 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
                     </button>
                     <button type="button" className="is-primary" disabled={publishing} onClick={() => void handlePublishDraft()}>
                       <Send size={14} />
-                      {publishing ? "同步中" : editingTemplate ? "保存修改" : editingStudioDraft?.sourceTemplateId ? "选择发布方式" : "发布共享"}
+                      {publishing ? "同步中" : editingTemplate ? "保存修改" : "发布共享"}
                     </button>
                   </div>
                 </div>
@@ -2429,38 +2350,6 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
       {notice ? (
         <div key={notice.id} className={`cp-black-market-toast cp-black-market-toast--${notice.tone}`} role="status">
           {notice.text}
-        </div>
-      ) : null}
-
-      {publishChoice ? (
-        <div className="cp-black-market-modal cp-black-market-confirm-modal" role="presentation" onClick={closePublishChoice}>
-          <section className="cp-black-market-modal-card cp-black-market-confirm-card" role="dialog" aria-modal="true" aria-label="选择发布方式" onClick={event => event.stopPropagation()}>
-            <div className="cp-black-market-modal-head">
-              <div>
-                <span>发布方式</span>
-                <strong>这个草稿来自已发布档案</strong>
-              </div>
-              <button type="button" onClick={closePublishChoice}>关闭</button>
-            </div>
-            <div className="cp-black-market-confirm-body">
-              <div className="cp-black-market-confirm-code">{publishChoice.sourceTemplateTitle}</div>
-              <p>请选择把这份草稿覆盖到原档案，还是作为一份新的夜间档案发布。</p>
-              <span>{publishChoiceSourceTemplate ? "覆盖会更新原档案；发布为新档案会保留原档案不动。" : "当前列表里找不到原档案，只能发布为新档案；刷新共享市场后可再尝试覆盖。"}</span>
-            </div>
-            <div className="cp-black-market-modal-actions cp-black-market-confirm-actions">
-              <button type="button" disabled={publishing} onClick={() => void publishCurrentDraft("new")}>
-                发布为新档案
-              </button>
-              <button
-                type="button"
-                className="is-primary"
-                disabled={publishing || !publishChoiceSourceTemplate}
-                onClick={() => void publishCurrentDraft("overwrite-source")}
-              >
-                覆盖原档案
-              </button>
-            </div>
-          </section>
         </div>
       ) : null}
 
