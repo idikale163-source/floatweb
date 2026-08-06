@@ -583,7 +583,7 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
             </div>
             <div className="qa-welcome-title">有什么问题？</div>
             <div className="qa-welcome-sub">
-              使用问题、报错排查、部署配置，都可以问我。
+              我是小坊，工坊的驻场工程师。使用问题、报错排查、部署配置，都可以问我。
               <br />
               想创作角色、世界书或美化桌面，找桌面上的小卷更合适。
             </div>

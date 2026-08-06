@@ -129,6 +129,7 @@
 }
 .qa-header-center {
   flex-direction: column;
+  align-items: center;
   gap: 1px;
 }
 .qa-header-title {
