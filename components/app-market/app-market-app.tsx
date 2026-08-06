@@ -1205,10 +1205,6 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                             <Pencil size={14} />
                             <span>编辑</span>
                           </button>
-                          <button type="button" className="am-action-chip" onClick={() => startMarketUpdateFromLocal(item)} aria-label={`以本机版更新${item.name}`}>
-                            <RefreshCw size={14} />
-                            <span>本机版更新</span>
-                          </button>
                           <button type="button" className="am-action-chip" onClick={() => startMarketPackageUpdate(item)} aria-label={`替换${item.name}应用包`}>
                             <Upload size={16} />
                             <span>换包</span>
@@ -1637,6 +1633,21 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
               </div>
               <div className="app-market-sheet-actions">
                 <button type="button" className="app-market-secondary" onClick={closeManualBuilder} disabled={busy}>取消</button>
+                {marketEditTarget && findLocalCopyForMarketItem(marketEditTarget) ? (
+                  <button
+                    type="button"
+                    className="app-market-secondary"
+                    disabled={busy}
+                    onClick={() => {
+                      const target = marketEditTarget;
+                      closeManualBuilder();
+                      startMarketUpdateFromLocal(target);
+                    }}
+                  >
+                    <RefreshCw size={16} />
+                    <span>以本机版更新</span>
+                  </button>
+                ) : null}
                 <button type="button" className="app-market-primary" onClick={() => void buildManualPackage()} disabled={busy}>
                   {busy ? <LoaderCircle className="am-spin" size={18} /> : <PackageCheck size={18} />}
                   <span>{busy ? "组包中" : marketEditTarget ? "保存并检查" : "生成并检查"}</span>
