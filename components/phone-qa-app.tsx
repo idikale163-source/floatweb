@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
-import { Check, ChevronLeft, ChevronRight, Copy, Github, History, Loader2, Plus, Send, Square, Trash2, Wrench, X } from "lucide-react";
+import { AppWindow, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, Drama, Gamepad2, Github, Loader2, Menu, Play, Plus, Square, Trash2, Wrench, X } from "lucide-react";
+import { mdiHammerWrench } from "@mdi/js";
+import { CustomAppRunner } from "@/components/app-market/custom-app-runner";
+import { GameHubApp } from "@/components/game/game-hub-app";
+import { BlackMarketApp } from "@/components/shopping/black-market-app";
+import { getInstalledCustomApp } from "@/lib/custom-app-storage";
+import type { QaCreatedContent } from "@/lib/qa-agent-tools";
 import {
   applyQaCommit,
   cancelQaCommit,
@@ -131,12 +137,15 @@ function QaCommitCard({ msg }: { msg: QaMsg }) {
         <span className="qa-commit-title">
           {status === "applied" ? "已提交" : status === "reverted" ? "已撤销" : status === "canceled" ? "已取消" : "修改提案"}
         </span>
-        <span className="qa-commit-branch">{proposal.branch || "默认分支"} · {files.length} 个文件</span>
+        <span className="qa-commit-branch">{proposal.branch || "默认分支"} · {files.length + (proposal.deletes?.length ?? 0)} 个文件</span>
       </div>
       <div className="qa-commit-msg">{proposal.message}</div>
       <ul className="qa-commit-files">
         {files.map((f) => (
           <li key={f.path}>{f.path}</li>
+        ))}
+        {(proposal.deletes ?? []).map((path) => (
+          <li key={`del-${path}`} className="qa-commit-file-delete">− {path}（删除）</li>
         ))}
       </ul>
       {error && <div className="qa-commit-error">{error}</div>}
@@ -261,56 +270,51 @@ function QaSessionDrawer({
   onSelect,
   onDelete,
   onCreate,
-  onClose,
 }: {
   sessions: QaSession[];
   activeId: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onCreate: () => void;
-  onClose: () => void;
 }) {
   return (
-    <div className="qa-drawer-backdrop" onClick={onClose}>
-      <aside className="qa-drawer" onClick={(e) => e.stopPropagation()}>
-        <div className="qa-drawer-head">
-          <span className="qa-drawer-title">对话记录</span>
-          <button type="button" className="qa-icon-btn" onClick={onClose} aria-label="关闭">
-            <X size={16} />
-          </button>
-        </div>
+    <aside className="qa-drawer">
+      <div className="qa-drawer-head">
+        <span className="qa-drawer-title">对话记录</span>
+      </div>
+      <div className="qa-drawer-list hide-scrollbar">
+        {sessions.length === 0 && <div className="qa-drawer-empty">还没有对话</div>}
+        {sessions.map((session) => (
+          <div
+            key={session.id}
+            className={`qa-drawer-item ${session.id === activeId ? "is-active" : ""}`}
+            onClick={() => onSelect(session.id)}
+          >
+            <div className="qa-drawer-item-main">
+              <span className="qa-drawer-item-title">{session.title}</span>
+              <span className="qa-drawer-item-time">{formatRelativeTime(session.updatedAt)}</span>
+            </div>
+            <button
+              type="button"
+              className="qa-icon-btn qa-drawer-item-delete"
+              aria-label="删除对话"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(session.id);
+              }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="qa-drawer-foot">
         <button type="button" className="qa-drawer-new" onClick={onCreate}>
-          <Plus size={15} />
+          <Plus size={16} strokeWidth={2} />
           <span>新对话</span>
         </button>
-        <div className="qa-drawer-list hide-scrollbar">
-          {sessions.length === 0 && <div className="qa-drawer-empty">还没有对话</div>}
-          {sessions.map((session) => (
-            <div
-              key={session.id}
-              className={`qa-drawer-item ${session.id === activeId ? "is-active" : ""}`}
-              onClick={() => onSelect(session.id)}
-            >
-              <div className="qa-drawer-item-main">
-                <span className="qa-drawer-item-title">{session.title}</span>
-                <span className="qa-drawer-item-time">{formatRelativeTime(session.updatedAt)}</span>
-              </div>
-              <button
-                type="button"
-                className="qa-icon-btn qa-drawer-item-delete"
-                aria-label="删除对话"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(session.id);
-                }}
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      </aside>
-    </div>
+      </div>
+    </aside>
   );
 }
 
@@ -376,11 +380,11 @@ function QaRepoSheet({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
           </p>
           <label className="qa-field">
             <span className="qa-field-label">Owner（用户名 / 组织）</span>
-            <input className="qa-input" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="xiaolongbao0709" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+            <input className="qa-input" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="例：octocat" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
           </label>
           <label className="qa-field">
             <span className="qa-field-label">Repo（仓库名）</span>
-            <input className="qa-input" value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="ai-virtual-phone" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+            <input className="qa-input" value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="例：hello-world" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
           </label>
           <label className="qa-field">
             <span className="qa-field-label">分支（可选，默认仓库默认分支）</span>
@@ -445,14 +449,33 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
   const [repoConnected, setRepoConnected] = useState(false);
   const [devNoticeOpen, setDevNoticeOpen] = useState(true);
   const [apiReady, setApiReady] = useState(true);
+  const [modelName, setModelName] = useState("");
+  const [repoWritable, setRepoWritable] = useState(false);
+  const [writeMode, setWriteMode] = useState<"confirm" | "auto">("confirm");
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const stickToBottomRef = useRef(true);
 
+  const refreshComposerMeta = useCallback(() => {
+    setApiReady(resolveQaApiConfig() != null);
+    setModelName(resolveQaApiConfig()?.defaultModel ?? "");
+    const gh = loadQaGithubConfig();
+    setRepoConnected(gh != null);
+    setRepoWritable(Boolean(gh?.token));
+    setWriteMode(gh?.writeMode ?? "confirm");
+  }, []);
+
   useEffect(() => {
     void hydrateQaChat();
-    setApiReady(resolveQaApiConfig() != null);
-    setRepoConnected(loadQaGithubConfig() != null);
+    refreshComposerMeta();
+  }, [refreshComposerMeta]);
+
+  const toggleWriteMode = useCallback(() => {
+    const gh = loadQaGithubConfig();
+    if (!gh) return;
+    const next = gh.writeMode === "auto" ? "confirm" : "auto";
+    saveQaGithubConfig({ ...gh, writeMode: next });
+    setWriteMode(next);
   }, []);
 
   const activeSession = useMemo(
@@ -460,6 +483,13 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
     [snapshot.sessions, snapshot.activeSessionId],
   );
   const messages = useMemo(() => activeSession?.messages ?? [], [activeSession]);
+  const createdContent = useMemo(() => activeSession?.createdContent ?? [], [activeSession]);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewItem, setPreviewItem] = useState<QaCreatedContent | null>(null);
+  const previewApp = useMemo(
+    () => (previewItem?.type === "app" ? getInstalledCustomApp(previewItem.refId) : null),
+    [previewItem],
+  );
 
   // 自动滚动：用户上滚阅读时不拉回底部
   const handleScroll = useCallback(() => {
@@ -503,6 +533,20 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
 
   return (
     <div className="qa-app-shell">
+      <QaSessionDrawer
+        sessions={snapshot.sessions}
+        activeId={snapshot.activeSessionId}
+        onSelect={(id) => {
+          switchQaSession(id);
+          setDrawerOpen(false);
+        }}
+        onDelete={deleteQaSession}
+        onCreate={() => {
+          createQaSession();
+          setDrawerOpen(false);
+        }}
+      />
+      <div className={`qa-stage ${drawerOpen ? "is-pushed" : ""}`}>
       <div className="qa-ambient" aria-hidden />
       <header className="qa-header">
         <div className="qa-header-left">
@@ -523,19 +567,8 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
           >
             <Github size={17} strokeWidth={1.75} />
           </button>
-          <button type="button" className="qa-icon-btn" onClick={() => setDrawerOpen(true)} aria-label="对话记录">
-            <History size={17} strokeWidth={1.75} />
-          </button>
-          <button
-            type="button"
-            className="qa-icon-btn"
-            onClick={() => {
-              createQaSession();
-              setDrawerOpen(false);
-            }}
-            aria-label="新对话"
-          >
-            <Plus size={19} strokeWidth={1.75} />
+          <button type="button" className="qa-icon-btn" onClick={() => setDrawerOpen((v) => !v)} aria-label="对话记录">
+            <Menu size={18} strokeWidth={1.75} />
           </button>
         </div>
       </header>
@@ -543,7 +576,11 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
       <div className="qa-body hide-scrollbar" ref={bodyRef} onScroll={handleScroll}>
         {messages.length === 0 ? (
           <div className="qa-welcome">
-            <div className="qa-welcome-badge" aria-hidden />
+            <div className="qa-welcome-badge" aria-hidden>
+              <svg viewBox="0 0 24 24" width="26" height="26">
+                <path d={mdiHammerWrench} fill="currentColor" />
+              </svg>
+            </div>
             <div className="qa-welcome-title">有什么问题？</div>
             <div className="qa-welcome-sub">
               使用问题、报错排查、部署配置，都可以问我。
@@ -590,30 +627,57 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
               setInput(e.target.value);
               autoGrow();
             }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
           />
-          {snapshot.isGenerating ? (
-            <button type="button" className="qa-send-btn is-stop" onClick={stopQaGeneration} aria-label="停止生成">
-              <Square size={14} fill="currentColor" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="qa-send-btn"
-              onClick={handleSend}
-              disabled={!input.trim()}
-              aria-label="发送"
-            >
-              <Send size={15} />
-            </button>
-          )}
+          <div className="qa-composer-toolbar">
+            {modelName && <span className="qa-model-pill">{modelName}</span>}
+
+            {repoWritable && (
+              <button type="button" className="qa-mode-pill" onClick={toggleWriteMode}>
+                {writeMode === "auto" ? "全自动" : "确认后提交"}
+              </button>
+            )}
+
+            <div className="qa-composer-spacer" />
+
+            {createdContent.length > 0 && (
+              <button
+                type="button"
+                className="qa-circle-btn qa-preview-btn"
+                onClick={() => setPreviewOpen(true)}
+                aria-label="预览本轮创建的内容"
+              >
+                <Play size={16} />
+              </button>
+            )}
+
+            {snapshot.isGenerating ? (
+              <button type="button" className="qa-circle-btn qa-send-btn is-stop" onClick={stopQaGeneration} aria-label="停止生成">
+                <Square size={14} fill="currentColor" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="qa-circle-btn qa-send-btn"
+                onClick={handleSend}
+                disabled={!input.trim()}
+                aria-label="发送"
+              >
+                <ArrowUp size={20} strokeWidth={2.4} />
+              </button>
+            )}
+          </div>
         </div>
       </footer>
+
+      {drawerOpen && (
+        <button
+          type="button"
+          className="qa-stage-scrim"
+          aria-label="关闭对话列表"
+          onClick={() => setDrawerOpen(false)}
+        />
+      )}
+      </div>
 
       {devNoticeOpen && (
         <div className="qa-devnotice-backdrop">
@@ -633,24 +697,61 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
       )}
 
       {repoSheetOpen && (
-        <QaRepoSheet onClose={() => setRepoSheetOpen(false)} onSaved={() => setRepoConnected(loadQaGithubConfig() != null)} />
+        <QaRepoSheet onClose={() => setRepoSheetOpen(false)} onSaved={refreshComposerMeta} />
       )}
 
-      {drawerOpen && (
-        <QaSessionDrawer
-          sessions={snapshot.sessions}
-          activeId={snapshot.activeSessionId}
-          onSelect={(id) => {
-            switchQaSession(id);
-            setDrawerOpen(false);
-          }}
-          onDelete={deleteQaSession}
-          onCreate={() => {
-            createQaSession();
-            setDrawerOpen(false);
-          }}
-          onClose={() => setDrawerOpen(false)}
-        />
+      {previewOpen && !previewItem && (
+        <div className="qa-sheet-backdrop" onClick={() => setPreviewOpen(false)}>
+          <div className="qa-sheet qa-preview-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="qa-sheet-head">
+              <span className="qa-sheet-title">
+                <Play size={16} /> 预览本轮创建
+              </span>
+              <button type="button" className="qa-icon-btn" onClick={() => setPreviewOpen(false)} aria-label="关闭">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="qa-sheet-body">
+              <p className="qa-sheet-note">本次对话里创建/更新的内容，点开直接测试，返回后回到聊天。</p>
+              {createdContent.map((item) => (
+                <button
+                  key={`${item.type}-${item.refId}`}
+                  type="button"
+                  className="qa-preview-item"
+                  onClick={() => setPreviewItem(item)}
+                >
+                  {item.type === "app" ? <AppWindow size={17} /> : item.type === "game" ? <Gamepad2 size={17} /> : <Drama size={17} />}
+                  <span className="qa-preview-item-title">{item.title}</span>
+                  <span className="qa-preview-item-type">
+                    {item.type === "app" ? "应用" : item.type === "game" ? "游戏" : "剧场"}
+                  </span>
+                  <ChevronRight size={15} />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previewItem && (
+        <div className="qa-preview-runtime">
+          {previewItem.type === "app" ? (
+            previewApp ? (
+              <CustomAppRunner app={previewApp} onClose={() => setPreviewItem(null)} />
+            ) : (
+              <div className="qa-preview-missing">
+                <p>这个应用已被卸载或找不到了。</p>
+                <button type="button" className="qa-sheet-btn is-primary" onClick={() => setPreviewItem(null)}>
+                  返回
+                </button>
+              </div>
+            )
+          ) : previewItem.type === "game" ? (
+            <GameHubApp onClose={() => setPreviewItem(null)} autoOpenLocalId={previewItem.refId} />
+          ) : (
+            <BlackMarketApp onClose={() => setPreviewItem(null)} autoOpenLocalId={previewItem.refId} />
+          )}
+        </div>
       )}
     </div>
   );

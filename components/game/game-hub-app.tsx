@@ -700,7 +700,7 @@ function draftFromTemplate(template: GameTemplate): GameTemplateDraft {
   };
 }
 
-export function GameHubApp({ onClose }: { onClose: () => void }) {
+export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; autoOpenLocalId?: string }) {
   const { account } = useAccount();
   const [mainView, setMainView] = useState<GameMainView>("hall");
   const [studioMode, setStudioMode] = useState<GameStudioMode>("drafts");
@@ -1210,6 +1210,19 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     setSelectedTemplate(null);
   }
 
+  // 工坊预览等场景：带 autoOpenLocalId 打开时，挂载后直接进入该游戏运行时
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!autoOpenLocalId || autoOpenedRef.current) return;
+    const item = loadGameState().installedGames.find(installed => installed.localId === autoOpenLocalId);
+    if (!item) return;
+    autoOpenedRef.current = true;
+    setMainView("studio");
+    setStudioMode("localtest");
+    openRuntime(item);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenLocalId]);
+
   function closeRuntime(): void {
     gameRoomRef.current?.leave();
     gameRoomRef.current = null;
@@ -1301,6 +1314,47 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
     setPublishAnonymously(false);
     setCreatorPageOpen(true);
     setMainView("studio");
+  }
+
+  /** 把已发布游戏拉回本地草稿（带显式关联），修改后发布即同步更新原条目 */
+  async function pullPublishedToDraft(template: GameTemplate): Promise<void> {
+    setStudioMenuId(null);
+    try {
+      const full = await ensureFullGameTemplate(template);
+      const existingLinked = drafts.find(item => item.publishedTemplateId === full.id);
+      if (existingLinked && !window.confirm(`本地已有「${existingLinked.title}」的工作草稿，拉回会覆盖其内容，继续？`)) return;
+      const now = new Date().toISOString();
+      const item: GameHallDraft = {
+        id: existingLinked?.id ?? createDraftId(),
+        title: full.title,
+        draft: draftFromTemplate(full),
+        publishedTemplateId: full.id,
+        createdAt: existingLinked?.createdAt ?? now,
+        updatedAt: now,
+      };
+      setDrafts(current => saveGameDrafts([item, ...current.filter(d => d.id !== item.id)]));
+      showNotice("success", "已拉回本地草稿，修改后发布即同步更新");
+      editDraft(item);
+    } catch (err) {
+      showNotice("error", err instanceof Error ? err.message : "拉回失败");
+    }
+  }
+
+  /** 本机测试游戏（如工坊 agent 直装、无关联草稿的）转为新草稿，汇入发布正轨 */
+  function convertLocalTestToDraft(item: GameInstalledItem): void {
+    setStudioMenuId(null);
+    const now = new Date().toISOString();
+    const draftId = item.localId.slice("localtest_game_".length) || `draft_${Date.now().toString(36)}`;
+    const newDraft: GameHallDraft = {
+      id: draftId,
+      title: item.templateSnapshot.title,
+      draft: draftFromTemplate(item.templateSnapshot),
+      createdAt: now,
+      updatedAt: now,
+    };
+    setDrafts(current => saveGameDrafts([newDraft, ...current.filter(d => d.id !== draftId)]));
+    showNotice("success", "已转为草稿，可编辑后发布到共享大厅");
+    editDraft(newDraft);
   }
 
   function deleteDraft(id: string): void {
@@ -1475,18 +1529,37 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
   async function publishDraft(): Promise<void> {
     setPublishing(true);
     try {
-      const template = await prepareTemplateForPublish(createTemplateFromDraft(draft, state, editingTemplate, {
+      // 统一发布：修改已发布模式用该模板；否则草稿带显式关联时解析出已发布模板 → 同步更新同一条目
+      let existingPublished = editingTemplate;
+      const linkedId = !existingPublished && editingDraftId
+        ? drafts.find(item => item.id === editingDraftId)?.publishedTemplateId
+        : undefined;
+      if (!existingPublished && linkedId) {
+        try {
+          const known = publishedGames.find(item => item.id === linkedId);
+          existingPublished = known ? await ensureFullGameTemplate(known) : await fetchGameHallTemplate(linkedId);
+        } catch {
+          existingPublished = null; // 市场条目已不存在：退化为发布新条目，并在成功后改写关联
+        }
+      }
+      const template = await prepareTemplateForPublish(createTemplateFromDraft(draft, state, existingPublished, {
         anonymous: publishAnonymously,
         authorId: account.id,
         authorName: state.displayName,
         authorAvatar: state.avatarUrl,
       }));
-      const published = editingTemplate
+      const published = existingPublished
         ? await updateGameTemplate(template)
         : await publishGameTemplate(template);
       setCommunityGames(current => mergeTemplate(current, published));
+      // 发布后保留草稿并写入关联：下次「发布」即同步更新，不再产生新条目
       if (editingDraftId) {
-        setDrafts(current => saveGameDrafts(current.filter(item => item.id !== editingDraftId)));
+        const now = new Date().toISOString();
+        setDrafts(current => saveGameDrafts(current.map(item =>
+          item.id === editingDraftId
+            ? { ...item, title: draft.title.trim() || item.title, draft, publishedTemplateId: published.id, updatedAt: now }
+            : item,
+        )));
       }
       setEditingDraftId(null);
       setEditingTemplateId(null);
@@ -1494,7 +1567,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
       setCreatorPageOpen(false);
       setCreatorGuideOpen(false);
       setMainView("studio");
-      showNotice("success", editingTemplate ? "游戏已同步修改" : "游戏已发布到共享大厅");
+      showNotice("success", existingPublished ? "游戏已同步修改" : "游戏已发布到共享大厅");
     } catch (err) {
       showNotice("error", err instanceof Error ? err.message : "发布失败");
     } finally {
@@ -2280,6 +2353,7 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
           {menuOpen ? (
             <div className="game-studio-card-menu-pop" onClick={event => event.stopPropagation()}>
               <button type="button" onClick={() => { setStudioMenuId(null); void editPublished(template); }}>编辑</button>
+              <button type="button" onClick={() => { void pullPublishedToDraft(template); }}>拉回本地草稿</button>
               <button type="button" onClick={() => { setStudioMenuId(null); openTemplateDetails(template); }}>查看详情</button>
               <button type="button" className="is-danger" onClick={() => { setStudioMenuId(null); void deletePublished(template); }}>删除</button>
             </div>
@@ -2384,7 +2458,9 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
               <button type="button" onClick={() => { setStudioMenuId(null); openRuntime(item); }}>开始玩</button>
               {linkedDraft ? (
                 <button type="button" onClick={() => { setStudioMenuId(null); editDraft(linkedDraft); }}>编辑草稿</button>
-              ) : null}
+              ) : (
+                <button type="button" onClick={() => convertLocalTestToDraft(item)}>转为草稿（可发布）</button>
+              )}
               <button type="button" className="is-danger" onClick={() => deleteLocalTestGame(item.localId)}>删除</button>
             </div>
           ) : null}
@@ -2832,6 +2908,24 @@ export function GameHubApp({ onClose }: { onClose: () => void }) {
                   <div className="game-editing-banner">
                     <span>MODIFYING</span>
                     <strong>{editingTemplate.title}</strong>
+                    {(() => {
+                      // 修改已发布时，如本机测试里有同名（如工坊迭代过的）最新版，可一键灌入编辑器
+                      const localMatch = localTestGames.find(
+                        item => item.templateSnapshot.title.trim() === editingTemplate.title.trim(),
+                      );
+                      return localMatch ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDraft(draftFromTemplate(localMatch.templateSnapshot));
+                            setAdvancedStudioOpen(localMatch.templateSnapshot.roleSlots.length > 0);
+                            showNotice("success", "已导入本机测试最新版，检查后发布即同步修改");
+                          }}
+                        >
+                          导入本机测试最新版
+                        </button>
+                      ) : null;
+                    })()}
                     <button type="button" onClick={closeCreatorPage}>取消修改</button>
                   </div>
                 ) : null}

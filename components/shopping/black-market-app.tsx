@@ -6,6 +6,7 @@ import {
   Check,
   ChevronLeft,
   Copy,
+  Download,
   Eye,
   FileText,
   Pencil,
@@ -32,6 +33,7 @@ import {
   getBlackMarketSceneSession,
   isLocalTestTheaterId,
   upsertLocalTestTheater,
+  BLACK_MARKET_LOCAL_TEST_PREFIX,
   appendBlackMarketSceneMessage,
   loadAllBlackMarketTheaterProjectionEntries,
   loadBlackMarketSceneSessions,
@@ -67,6 +69,8 @@ import { IFRAME_ERROR_CAPTURE_SCRIPT } from "@/lib/qa-iframe-error-bridge";
 
 type BlackMarketAppProps = {
   onClose: () => void;
+  /** 工坊预览等场景：挂载后直接打开该本机剧场的试演入口 */
+  autoOpenLocalId?: string;
 };
 
 type BlackMarketTab = "market" | "vault" | "ledger" | "studio";
@@ -803,7 +807,7 @@ function createDraftPreviewTemplate(draft: TheaterDraft, renderRules: BlackMarke
   };
 }
 
-export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
+export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps) {
   const { account } = useAccount();
   const [state, setState] = useState<BlackMarketState>(() => loadBlackMarketState());
   const [theaterRecords, setTheaterRecords] = useState<BlackMarketTheaterProjectionEntry[]>(() => loadAllBlackMarketTheaterProjectionEntries());
@@ -1103,6 +1107,19 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
   function requiresExternalCanvasPermission(item?: BlackMarketOwnedTheater | null): boolean {
     return item?.templateSnapshot.allowExternalControl === true;
   }
+
+  // 工坊预览等场景：带 autoOpenLocalId 打开时，挂载后直接进入该剧场的试演入口
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!autoOpenLocalId || autoOpenedRef.current) return;
+    const item = loadBlackMarketState().ownedTheaters.find(owned => owned.localId === autoOpenLocalId);
+    if (!item) return;
+    autoOpenedRef.current = true;
+    setSelectedTab("studio");
+    setStudioMode("localtest");
+    openSceneLauncher(item);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenLocalId]);
 
   function openSceneLauncher(item: BlackMarketOwnedTheater): void {
     const existing = loadBlackMarketSceneSessions().find(session =>
@@ -1586,6 +1603,46 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
     setPreviewNonce(value => value + 1);
   }
 
+  /** 把已发布档案拉回本地草稿（带原档案关联），修改后发布可同步更新原条目 */
+  async function pullPublishedToStudioDraft(template: BlackMarketTheaterTemplate): Promise<void> {
+    try {
+      const full = await ensureFullTheaterTemplate(template);
+      const existingLinked = studioDrafts.find(item => item.sourceTemplateId === full.id);
+      if (existingLinked && !window.confirm(`本地已有「${existingLinked.title}」的工作草稿，拉回会覆盖其内容，继续？`)) return;
+      const now = new Date().toISOString();
+      const item: BlackMarketStudioDraft = {
+        id: existingLinked?.id ?? createStudioDraftId(),
+        title: full.title,
+        draft: createDraftFromTemplate(full),
+        sourceTemplateId: full.id,
+        sourceTemplateTitle: full.title,
+        createdAt: existingLinked?.createdAt ?? now,
+        updatedAt: now,
+      };
+      setStudioDrafts(current => saveBlackMarketStudioDrafts([item, ...current.filter(d => d.id !== item.id)]));
+      showNotice("success", "已拉回本地草稿，修改后发布可同步更新原档案");
+      beginEditStudioDraft(item);
+    } catch (err) {
+      showNotice("error", err instanceof Error ? err.message : "拉回失败");
+    }
+  }
+
+  /** 本机测试剧场（如工坊 agent 直装、无关联草稿的）转为新草稿，汇入发布正轨 */
+  function convertLocalTestToStudioDraft(item: BlackMarketOwnedTheater): void {
+    const now = new Date().toISOString();
+    const draftId = item.localId.slice(BLACK_MARKET_LOCAL_TEST_PREFIX.length) || createStudioDraftId();
+    const newDraft: BlackMarketStudioDraft = {
+      id: draftId,
+      title: item.templateSnapshot.title,
+      draft: createDraftFromTemplate(item.templateSnapshot),
+      createdAt: now,
+      updatedAt: now,
+    };
+    setStudioDrafts(current => saveBlackMarketStudioDrafts([newDraft, ...current.filter(d => d.id !== draftId)]));
+    showNotice("success", "已转为草稿，可编辑后发布到共享市场");
+    beginEditStudioDraft(newDraft);
+  }
+
   function beginEditStudioDraft(item: BlackMarketStudioDraft): void {
     setEditingTemplateId(null);
     setEditingDraftId(item.id);
@@ -1735,8 +1792,14 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
       if (snapshotSync?.updatedCount) {
         setState(snapshotSync.state);
       }
+      // 发布后保留草稿并写入关联：下次发布可直接同步更新，不再产生新条目
       if (editingDraftId) {
-        setStudioDrafts(current => saveBlackMarketStudioDrafts(current.filter(item => item.id !== editingDraftId)));
+        const draftNow = new Date().toISOString();
+        setStudioDrafts(current => saveBlackMarketStudioDrafts(current.map(item =>
+          item.id === editingDraftId
+            ? { ...item, title: draft.title.trim() || item.title, draft, sourceTemplateId: published.id, sourceTemplateTitle: published.title, updatedAt: draftNow }
+            : item,
+        )));
         setEditingDraftId(null);
       }
       setCommunityTheaters(current => [published, ...current.filter(item => item.id !== published.id)]
@@ -2121,6 +2184,10 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                             <Pencil size={14} />
                             MODIFY
                           </button>
+                          <button type="button" onClick={() => void pullPublishedToStudioDraft(template)}>
+                            <Download size={14} />
+                            拉回本地
+                          </button>
                           <button
                             type="button"
                             className="is-danger"
@@ -2200,7 +2267,12 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                                 <Pencil size={14} />
                                 编辑草稿
                               </button>
-                            ) : null}
+                            ) : (
+                              <button type="button" onClick={() => convertLocalTestToStudioDraft(item)}>
+                                <Pencil size={14} />
+                                转为草稿（可发布）
+                              </button>
+                            )}
                             <button type="button" className="is-danger" onClick={() => handleDeleteLocalTestTheater(item.localId)}>
                               <Trash2 size={14} />
                               DELETE
@@ -2220,6 +2292,24 @@ export function BlackMarketApp({ onClose }: BlackMarketAppProps) {
                   <div className="cp-black-market-editing-banner">
                     <span>修改中</span>
                     <strong>{editingTemplate.title}</strong>
+                    {(() => {
+                      // 修改已发布时，如本机测试里有同名（如工坊迭代过的）最新版，可一键灌入编辑器
+                      const localMatch = localTestTheaters.find(
+                        item => item.templateSnapshot.title.trim() === editingTemplate.title.trim(),
+                      );
+                      return localMatch ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDraft(createDraftFromTemplate(localMatch.templateSnapshot));
+                            setPreviewNonce(value => value + 1);
+                            showNotice("success", "已导入本机测试最新版，检查后发布即同步修改");
+                          }}
+                        >
+                          导入本机测试最新版
+                        </button>
+                      ) : null;
+                    })()}
                     <button type="button" onClick={resetDraft}>取消修改</button>
                   </div>
                 ) : null}

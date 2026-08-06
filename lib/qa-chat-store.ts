@@ -1,5 +1,5 @@
 import { callQaAgent, formatQaErrorMessage } from "./qa-agent-engine";
-import { QA_TOOLS, type QaProposedCommit } from "./qa-agent-tools";
+import { QA_TOOLS, type QaCreatedContent, type QaProposedCommit } from "./qa-agent-tools";
 import { loadQaGithubConfig } from "./qa-github";
 import { commitQaFiles, revertQaCommit, type QaCommitResult } from "./qa-github-write";
 
@@ -41,6 +41,8 @@ export type QaSession = {
     createdAt: number;
     updatedAt: number;
     messages: QaMsg[];
+    /** 本会话中 agent 创建/更新过的本机内容（APP/游戏/剧场），供工坊内预览直接打开 */
+    createdContent?: QaCreatedContent[];
 };
 
 export type QaChatSnapshot = {
@@ -308,6 +310,40 @@ export async function sendQaMessage(text: string): Promise<void> {
                     stagedCommit = { proposal, status: "pending" };
                     paintAssistant({ pendingCommit: stagedCommit }, { force: true, persist: false });
                 },
+                // 全自动模式：工具内当场提交，保证同一轮里「创建PR」等后续工具看到已落地的提交
+                commitNow: async (proposal) => {
+                    const config = loadQaGithubConfig();
+                    if (!config) {
+                        stagedCommit = { proposal, status: "canceled", error: "仓库配置已丢失。" };
+                        paintAssistant({ pendingCommit: stagedCommit }, { force: true, persist: false });
+                        return { ok: false, error: "仓库配置已丢失。" };
+                    }
+                    stagedCommit = { proposal, status: "applying" };
+                    paintAssistant({ pendingCommit: stagedCommit }, { force: true, persist: false });
+                    try {
+                        const result = await commitQaFiles(config, proposal, controller.signal);
+                        stagedCommit = { proposal, status: "applied", result };
+                        paintAssistant({ pendingCommit: stagedCommit }, { force: true, persist: false });
+                        return { ok: true, htmlUrl: result.htmlUrl };
+                    } catch (error) {
+                        const message = formatQaErrorMessage(error);
+                        stagedCommit = { proposal, status: "pending", error: message };
+                        paintAssistant({ pendingCommit: stagedCommit }, { force: true, persist: false });
+                        return { ok: false, error: message };
+                    }
+                },
+                onContentCreated: (item) => {
+                    updateSession(
+                        sessionId,
+                        (s) => {
+                            const rest = (s.createdContent ?? []).filter(
+                                (c) => !(c.type === item.type && c.refId === item.refId),
+                            );
+                            return { ...s, createdContent: [...rest, item] };
+                        },
+                        { persist: true },
+                    );
+                },
             },
         });
         paintAssistant(
@@ -319,8 +355,8 @@ export async function sendQaMessage(text: string): Promise<void> {
             },
             { force: true },
         );
-        // 全自动模式：直接提交暂存的提案（用户仍可事后一键撤销）
-        if (autoCommit && stagedCommit?.status === "pending") {
+        // 全自动模式下提交已在工具内完成（commitNow）；这里只兜底处理提交失败留下的待办提案
+        if (autoCommit && stagedCommit?.status === "pending" && !stagedCommit.error) {
             await applyQaCommit(assistantMsg.id);
         }
     } catch (error) {

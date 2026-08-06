@@ -1,16 +1,25 @@
 import {
     buildProviderRequest,
+    nativeToolProtocolForConfig,
     parseProviderResponse,
     parseProviderStreamDelta,
     stripHallucinatedTimestamps,
     type LlmRequestMessage,
     type LlmRequestPayload,
 } from "./llm-provider-adapter";
+import { sendLLMToolStreamRequest, type LLMToolRequestResult } from "./chat-engine";
 import { loadApiConfigs, loadBindingConfig } from "./settings-storage";
 import type { ApiConfig } from "./settings-types";
 import { buildQaSystemPrompt } from "./qa-knowledge";
 import { parseToolCalls } from "./tool-executor";
-import { buildQaToolsPrompt, runQaToolCall, type QaProposedCommit } from "./qa-agent-tools";
+import {
+    buildQaNativeNameMap,
+    buildQaToolsPrompt,
+    getQaNativeToolDefinitions,
+    runQaToolCall,
+    type QaCreatedContent,
+    type QaProposedCommit,
+} from "./qa-agent-tools";
 
 // ── 答疑引擎（P0：知识问答，无工具）──────────────────
 // 流式 + 失败降级非流式的双路径，模式与小卷（mascot-engine）一致。
@@ -29,6 +38,12 @@ export type QaStreamCallbacks = {
 export function resolveQaApiConfig(): ApiConfig | null {
     const binding = loadBindingConfig();
     const apiConfigs = loadApiConfigs();
+    // 优先级：配置绑定「工坊 API」→ 全局默认 → 列表第一个
+    const qaId = binding.qaApiConfigId;
+    if (qaId) {
+        const found = apiConfigs.find((c) => c.id === qaId);
+        if (found) return found;
+    }
     const globalId = binding.globalDefaults.apiConfigId;
     if (globalId) {
         const found = apiConfigs.find((c) => c.id === globalId);
@@ -279,19 +294,41 @@ export type QaAgentCallbacks = {
     onToolDone?: (name: string, success: boolean, result?: string) => void | Promise<void>;
     /** 确认模式下写工具生成提案时回调（由 store 存到消息上供 UI 确认）。 */
     onStageCommit?: (proposal: QaProposedCommit) => void;
+    /** 全自动模式下由 store 立即执行提交，保证同轮后续工具看到已落地的提交。 */
+    commitNow?: (proposal: QaProposedCommit) => Promise<{ ok: boolean; htmlUrl?: string; error?: string }>;
+    /** 内容工具安装/更新本机内容后回调（store 记到会话上，供工坊内预览）。 */
+    onContentCreated?: (item: QaCreatedContent) => void;
 };
 
 const QA_MAX_ROUNDS = 5;
 
+type QaAgentOptions = { signal?: AbortSignal; callbacks?: QaAgentCallbacks; autoCommit?: boolean };
+
+function buildQaToolContext(options?: QaAgentOptions) {
+    return {
+        signal: options?.signal,
+        autoCommit: options?.autoCommit,
+        onStageCommit: options?.callbacks?.onStageCommit,
+        commitNow: options?.callbacks?.commitNow,
+        onContentCreated: options?.callbacks?.onContentCreated,
+    };
+}
+
 /**
- * 工坊 agent 主循环：模型可通过 [执行动作:工具名({…})] 调用诊断工具，
- * 工具结果回填后继续下一轮，直到无工具调用或轮数用尽。
+ * 工坊 agent 主循环。与小卷同模式：API 配置开启「启用原生工具」时走
+ * function calling（工具经请求体 tools 声明），否则走文本协议
+ * [执行动作:工具名({…})]。两条路径都循环回填工具结果，直到无调用或轮数用尽。
  */
-export async function callQaAgent(
-    history: QaEngineMessage[],
-    options?: { signal?: AbortSignal; callbacks?: QaAgentCallbacks; autoCommit?: boolean },
-): Promise<void> {
+export async function callQaAgent(history: QaEngineMessage[], options?: QaAgentOptions): Promise<void> {
     const apiConfig = requireQaApiConfig();
+    const useNative = !!nativeToolProtocolForConfig(apiConfig);
+    if (useNative) return callQaAgentNative(apiConfig, history, options);
+    return callQaAgentText(apiConfig, history, options);
+}
+
+// ── 文本协议路径 ──
+
+async function callQaAgentText(apiConfig: ApiConfig, history: QaEngineMessage[], options?: QaAgentOptions): Promise<void> {
     const callbacks = options?.callbacks;
     const latestUser = [...history].reverse().find((m) => m.role === "user");
     const systemPrompt = `${buildQaSystemPrompt(latestUser?.content ?? "")}\n\n${buildQaToolsPrompt()}`;
@@ -329,11 +366,7 @@ export async function callQaAgent(
         for (const call of toolCalls) {
             if (options?.signal?.aborted) throw new DOMException("aborted", "AbortError");
             await callbacks?.onToolStart?.(call.name, call.args);
-            const toolResult = await runQaToolCall(call, {
-                signal: options?.signal,
-                autoCommit: options?.autoCommit,
-                onStageCommit: callbacks?.onStageCommit,
-            });
+            const toolResult = await runQaToolCall(call, buildQaToolContext(options));
             await callbacks?.onToolDone?.(call.name, toolResult.success, toolResult.resultForModel);
             resultBlocks.push(`【${toolResult.name}】${toolResult.success ? "" : "（失败）"}\n${toolResult.resultForModel}`);
         }
@@ -341,5 +374,123 @@ export async function callQaAgent(
             role: "user",
             content: `[系统工具结果，用户不可见]\n${resultBlocks.join("\n\n")}\n\n请基于以上结果继续回答用户的问题。`,
         });
+    }
+}
+
+// ── 原生工具协议路径 ──
+
+async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[], options?: QaAgentOptions): Promise<void> {
+    const callbacks = options?.callbacks;
+    const latestUser = [...history].reverse().find((m) => m.role === "user");
+    // 原生协议下工具经请求体声明，系统提示词只保留身份与行为规则
+    const systemPrompt = [
+        buildQaSystemPrompt(latestUser?.content ?? ""),
+        "你有原生工具可以调用（见请求中的 tools 定义）。排查问题优先实际调用工具检测，不要凭空猜测；收到工具结果后用人话向用户解释结论和建议。",
+    ].join("\n\n");
+    const working: LlmRequestMessage[] = historyToRequestMessages(history);
+    const nameMap = buildQaNativeNameMap();
+
+    let emittedAny = false;
+    for (let round = 0; round < QA_MAX_ROUNDS; round++) {
+        const tools = getQaNativeToolDefinitions();
+        let pendingBreak = emittedAny;
+        // 仍套用文本过滤器：弱模型可能在正文里混写文本协议指令，隐藏之
+        const filter = createQaStreamFilter(async (text) => {
+            if (pendingBreak && text.trim()) {
+                pendingBreak = false;
+                await callbacks?.onDelta?.("\n\n");
+            }
+            if (text.trim()) emittedAny = true;
+            await callbacks?.onDelta?.(text);
+        });
+
+        const messages: LlmRequestMessage[] = [{ role: "system", content: systemPrompt }, ...working];
+        let result: LLMToolRequestResult;
+        try {
+            result = await sendLLMToolStreamRequest(
+                apiConfig,
+                null,
+                messages,
+                tools,
+                [],
+                { characterName: "工坊", userName: "用户" },
+                { appId: "qa", signal: options?.signal },
+                {
+                    async onDelta(delta) {
+                        await filter.push(delta);
+                    },
+                    async onReasoningDelta(delta) {
+                        await callbacks?.onReasoningDelta?.(delta);
+                    },
+                },
+            );
+        } catch (streamError) {
+            if (options?.signal?.aborted) throw streamError;
+            await callbacks?.onStreamFallback?.(formatQaErrorMessage(streamError));
+            const fallbackRequest = buildProviderRequest(apiConfig, null, messages, { tools });
+            const response = await fetch(fallbackRequest.url, {
+                method: "POST",
+                headers: fallbackRequest.headers,
+                body: JSON.stringify(fallbackRequest.body),
+                signal: options?.signal,
+            });
+            if (!response.ok) throw new Error(`API ${response.status}: ${await response.text()}`);
+            const parsed = parseProviderResponse(fallbackRequest.providerKind, await response.json());
+            if (parsed.content) await filter.push(parsed.content);
+            result = {
+                content: parsed.content || "",
+                reasoning: parsed.reasoning,
+                openRouterReasoningDetails: parsed.openRouterReasoningDetails,
+                toolCalls: parsed.toolCalls || [],
+                rawResponse: "",
+                providerKind: fallbackRequest.providerKind,
+            };
+        }
+        await filter.flush();
+
+        // 原生调用为主；同时兜底解析正文里的文本协议指令（弱模型混写时也能执行）
+        const nativeCalls = result.toolCalls || [];
+        const textParsed = parseToolCalls(stripThinkBlocks(result.content || ""));
+        if (nativeCalls.length === 0 && textParsed.toolCalls.length === 0) return;
+        if (round === QA_MAX_ROUNDS - 1) return; // 轮数用尽，不再执行工具
+
+        working.push({
+            role: "assistant",
+            content: result.content || "",
+            toolCalls: nativeCalls.length > 0 ? nativeCalls : undefined,
+            reasoning: result.reasoning,
+            openRouterReasoningDetails: result.openRouterReasoningDetails,
+        });
+
+        // 原生调用：结果以 tool 消息回传（带 toolCallId）
+        for (const nc of nativeCalls) {
+            if (options?.signal?.aborted) throw new DOMException("aborted", "AbortError");
+            const displayName = nameMap.get(nc.name) || nc.name;
+            await callbacks?.onToolStart?.(displayName, nc.args);
+            const toolResult = await runQaToolCall({ name: displayName, args: nc.args }, buildQaToolContext(options));
+            await callbacks?.onToolDone?.(displayName, toolResult.success, toolResult.resultForModel);
+            working.push({
+                role: "tool",
+                content: toolResult.success ? toolResult.resultForModel : `（失败）${toolResult.resultForModel}`,
+                name: nc.name,
+                toolCallId: nc.id,
+            });
+        }
+
+        // 文本协议兜底调用：结果以 user 消息块回传
+        if (textParsed.toolCalls.length > 0) {
+            const resultBlocks: string[] = [];
+            for (const call of textParsed.toolCalls) {
+                if (options?.signal?.aborted) throw new DOMException("aborted", "AbortError");
+                await callbacks?.onToolStart?.(call.name, call.args);
+                const toolResult = await runQaToolCall(call, buildQaToolContext(options));
+                await callbacks?.onToolDone?.(call.name, toolResult.success, toolResult.resultForModel);
+                resultBlocks.push(`【${toolResult.name}】${toolResult.success ? "" : "（失败）"}\n${toolResult.resultForModel}`);
+            }
+            working.push({
+                role: "user",
+                content: `[系统工具结果，用户不可见]\n${resultBlocks.join("\n\n")}\n\n请基于以上结果继续回答用户的问题。`,
+            });
+        }
     }
 }

@@ -123,6 +123,8 @@ export type GameHallDraft = {
   id: string;
   title: string;
   draft: GameTemplateDraft;
+  /** 显式关联：本草稿发布/拉回对应的市场条目 id。有值时「发布」= 同步更新该条目。 */
+  publishedTemplateId?: string;
   createdAt: string;
   updatedAt: string;
 };
