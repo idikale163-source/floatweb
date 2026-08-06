@@ -4529,13 +4529,13 @@
   color: #64748b;
 }
 
-/* 关联草稿在上次发布后又存过草稿：提示有未提交的本机改动（与状态标签同款胶囊样式） */
+/* 关联草稿在上次发布后又存过草稿：提示有未提交的本机改动（与「已发布」标签同款同色） */
 .game-studio-list-copy .game-dirty-hint {
   flex: 0 0 auto;
   padding: 2px 7px;
   border-radius: 7px;
-  background: #fef3c7;
-  color: #b45309;
+  background: #dcfce7;
+  color: #15803d;
   font-style: normal;
   font-size: calc(9px * var(--app-text-scale, 1));
   font-weight: 900;

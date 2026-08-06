@@ -2089,10 +2089,10 @@
   color: #79d99a;
 }
 
-/* 关联草稿在上次发布后又存过草稿：提示有未提交的本机改动（与状态标签同款样式） */
+/* 关联草稿在上次发布后又存过草稿：提示有未提交的本机改动（与「已发布」标签同款同色） */
 .cp-bm-dirty-hint {
   margin-left: 8px;
-  color: var(--bm-dim);
+  color: #79d99a;
   font: 800 calc(9px*var(--app-text-scale,1)) "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   letter-spacing: 0.16em;
   text-transform: uppercase;
