@@ -53,7 +53,6 @@ import {
   deleteInstalledGame,
   getGameCatalog,
   installGameTemplate,
-  isLocalTestGameId,
   upsertLocalTestGame,
   loadGameDrafts,
   loadGameSave,
@@ -91,7 +90,7 @@ import { maybeRunSummarization } from "@/lib/memory-summarizer";
 import { IFRAME_ERROR_CAPTURE_SCRIPT } from "@/lib/qa-iframe-error-bridge";
 
 type GameMainView = "hall" | "library" | "studio";
-type GameStudioMode = "published" | "drafts" | "localtest";
+type GameStudioMode = "published" | "drafts";
 type GameNotice = { id: number; tone: "success" | "error" | "info"; text: string };
 type RuntimeStage = "permission" | "picker" | "game";
 type RuntimeTitleBarMaterial = "clear" | "solid" | "glass";
@@ -793,12 +792,6 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
       .slice(0, 20),
     [state.gameEvents],
   );
-  const localTestGames = useMemo(
-    () => state.installedGames
-      .filter(item => isLocalTestGameId(item.localId))
-      .sort((a, b) => installedGameActivityTime(b).localeCompare(installedGameActivityTime(a))),
-    [state.installedGames],
-  );
   const libraryCollections = useMemo<GameLibraryCollection[]>(() => {
     const sortedInstalled = [...state.installedGames]
       .sort((a, b) => installedGameActivityTime(b).localeCompare(installedGameActivityTime(a)));
@@ -1218,7 +1211,7 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
     if (!item) return;
     autoOpenedRef.current = true;
     setMainView("studio");
-    setStudioMode("localtest");
+    setStudioMode("drafts");
     openRuntime(item);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenLocalId]);
@@ -1488,18 +1481,37 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
   async function publishDraft(): Promise<void> {
     setPublishing(true);
     try {
-      const template = await prepareTemplateForPublish(createTemplateFromDraft(draft, state, editingTemplate, {
+      // 关联发布：修改已发布模式用该模板；否则草稿带关联时解析出已发布条目 → 同步更新同一条目
+      let existingPublished = editingTemplate;
+      const linkedId = !existingPublished && editingDraftId
+        ? drafts.find(item => item.id === editingDraftId)?.publishedTemplateId
+        : undefined;
+      if (!existingPublished && linkedId) {
+        try {
+          const known = publishedGames.find(item => item.id === linkedId);
+          existingPublished = known ? await ensureFullGameTemplate(known) : await fetchGameHallTemplate(linkedId);
+        } catch {
+          existingPublished = null; // 大厅条目已不存在：退化为发布新条目，成功后改写关联
+        }
+      }
+      const template = await prepareTemplateForPublish(createTemplateFromDraft(draft, state, existingPublished, {
         anonymous: publishAnonymously,
         authorId: account.id,
         authorName: state.displayName,
         authorAvatar: state.avatarUrl,
       }));
-      const published = editingTemplate
+      const published = existingPublished
         ? await updateGameTemplate(template)
         : await publishGameTemplate(template);
       setCommunityGames(current => mergeTemplate(current, published));
+      // 发布后保留草稿并写入关联：草稿标签变「已发布」，下次发布即同步更新，不产生新条目
       if (editingDraftId) {
-        setDrafts(current => saveGameDrafts(current.filter(item => item.id !== editingDraftId)));
+        const now = new Date().toISOString();
+        setDrafts(current => saveGameDrafts(current.map(item =>
+          item.id === editingDraftId
+            ? { ...item, title: draft.title.trim() || item.title, draft, publishedTemplateId: published.id, updatedAt: now }
+            : item,
+        )));
       }
       setEditingDraftId(null);
       setEditingTemplateId(null);
@@ -1507,7 +1519,7 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
       setCreatorPageOpen(false);
       setCreatorGuideOpen(false);
       setMainView("studio");
-      showNotice("success", editingTemplate ? "游戏已同步修改" : "游戏已发布到共享大厅");
+      showNotice("success", existingPublished ? "游戏已同步修改" : "游戏已发布到共享大厅");
     } catch (err) {
       showNotice("error", err instanceof Error ? err.message : "发布失败");
     } finally {
@@ -1519,6 +1531,12 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
     try {
       await deleteGameTemplate({ id: template.id, authorId: template.authorId });
       setCommunityGames(current => current.filter(item => item.id !== template.id));
+      // 清掉指向该条目的草稿关联：标签回到「未发布」，之后发布会作为新条目
+      setDrafts(current => current.some(item => item.publishedTemplateId === template.id)
+        ? saveGameDrafts(current.map(item => item.publishedTemplateId === template.id
+          ? { ...item, publishedTemplateId: undefined }
+          : item))
+        : current);
       showNotice("success", "已从共享大厅删除");
     } catch (err) {
       showNotice("error", err instanceof Error ? err.message : "删除失败");
@@ -2321,7 +2339,7 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
         <div className="game-studio-list-copy">
           <div>
             <strong>{item.title}</strong>
-            <span>草稿</span>
+            <span data-pub={item.publishedTemplateId ? "yes" : "no"}>{item.publishedTemplateId ? "已发布" : "未发布"}</span>
           </div>
           <time>{formatGameDate(item.updatedAt)}</time>
         </div>
@@ -2340,65 +2358,6 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
             <div className="game-studio-card-menu-pop" onClick={event => event.stopPropagation()}>
               <button type="button" onClick={() => { setStudioMenuId(null); editDraft(item); }}>编辑</button>
               <button type="button" className="is-danger" onClick={() => { setStudioMenuId(null); deleteDraft(item.id); }}>删除</button>
-            </div>
-          ) : null}
-        </div>
-      </article>
-    );
-  }
-
-  function deleteLocalTestGame(localId: string): void {
-    setStudioMenuId(null);
-    const result = deleteInstalledGame(localId);
-    if (result.ok) {
-      setState(result.state);
-      showNotice("success", "已删除本机测试游戏");
-    }
-  }
-
-  function renderLocalTestStudioCard(item: GameInstalledItem, index: number) {
-    const menuId = `localtest:${item.localId}`;
-    const menuOpen = studioMenuId === menuId;
-    const linkedDraftId = item.localId.slice("localtest_game_".length);
-    const linkedDraft = drafts.find(d => d.id === linkedDraftId);
-    return (
-      <article
-        key={item.localId}
-        className={`game-studio-list-card ${menuOpen ? "is-menu-open" : ""}`}
-        role="button"
-        tabIndex={0}
-        style={{ animationDelay: `${index * 0.06}s` }}
-        onClick={() => openRuntime(item)}
-        onKeyDown={event => handleStudioCardKeyDown(event, () => openRuntime(item))}
-      >
-        <div className="game-studio-list-icon">
-          <Play size={18} strokeWidth={2.5} />
-        </div>
-        <div className="game-studio-list-copy">
-          <div>
-            <strong>{item.templateSnapshot.title}</strong>
-            <span>本机测试{item.playCount > 0 ? ` · 玩过 ${item.playCount} 次` : ""}</span>
-          </div>
-          <time>{formatGameDate(installedGameActivityTime(item))}</time>
-        </div>
-        <div className="game-studio-card-menu">
-          <button
-            type="button"
-            aria-label="打开操作菜单"
-            onClick={event => {
-              event.stopPropagation();
-              setStudioMenuId(current => current === menuId ? null : menuId);
-            }}
-          >
-            <MoreHorizontal size={17} />
-          </button>
-          {menuOpen ? (
-            <div className="game-studio-card-menu-pop" onClick={event => event.stopPropagation()}>
-              <button type="button" onClick={() => { setStudioMenuId(null); openRuntime(item); }}>开始玩</button>
-              {linkedDraft ? (
-                <button type="button" onClick={() => { setStudioMenuId(null); editDraft(linkedDraft); }}>编辑草稿</button>
-              ) : null}
-              <button type="button" className="is-danger" onClick={() => deleteLocalTestGame(item.localId)}>删除</button>
             </div>
           ) : null}
         </div>
@@ -2801,10 +2760,9 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
                 </div>
               </section>
 
-              <div className="game-studio-tabs game-studio-tabs-3" role="tablist" aria-label="游戏发布管理" data-active-index={studioMode === "drafts" ? 0 : studioMode === "published" ? 1 : 2}>
+              <div className="game-studio-tabs" role="tablist" aria-label="游戏发布管理" data-active-index={studioMode === "drafts" ? 0 : 1}>
                 <button type="button" className={studioMode === "drafts" ? "is-active" : ""} onClick={() => setStudioMode("drafts")}>草稿箱</button>
                 <button type="button" className={studioMode === "published" ? "is-active" : ""} onClick={() => setStudioMode("published")}>已发布</button>
-                <button type="button" className={studioMode === "localtest" ? "is-active" : ""} onClick={() => setStudioMode("localtest")}>本机测试</button>
               </div>
 
               {studioMode === "published" ? (
@@ -2827,15 +2785,6 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
                 )
               ) : null}
 
-              {studioMode === "localtest" ? (
-                localTestGames.length === 0 ? (
-                  <div className="game-empty">还没有本机测试的游戏。<br />在草稿里点「本机测试」，就会安装到这里，可反复玩，且会写入记忆、进入回传记录，但不会发布到市场。</div>
-                ) : (
-                  <div className="game-published-list">
-                    {localTestGames.map(renderLocalTestStudioCard)}
-                  </div>
-                )
-              ) : null}
               </>
             ) : null}
 
