@@ -1284,7 +1284,48 @@
   flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   padding: 10px 14px calc(env(safe-area-inset-bottom, 0px) + 16px);
+}
+/* 工坊配置：次级样式，与新对话并列 */
+.qa-drawer-settings {
+  background: var(--qa-bg-raised);
+  color: var(--qa-text-secondary);
+  box-shadow: none;
+}
+
+/* 工坊配置面板 */
+.qa-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  text-align: left;
+}
+.qa-settings-field > span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--qa-text-secondary);
+}
+.qa-settings-field input {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(60, 50, 90, 0.14);
+  background: var(--qa-bg-raised);
+  color: var(--qa-text-primary);
+  font-size: 14px;
+  outline: none;
+}
+.qa-settings-field input:focus {
+  border-color: var(--qa-accent);
+}
+.qa-settings-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--qa-text-tertiary);
+  text-align: left;
 }
 .qa-drawer-new {
   display: inline-flex;

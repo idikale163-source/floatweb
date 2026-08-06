@@ -96,6 +96,34 @@ function contextUsageOf(session: QaSession | null): number {
 
 let isCompacting = false;
 
+export const QA_DEFAULT_CONTEXT_BUDGET_CHARS = DEFAULT_CONTEXT_BUDGET_CHARS;
+export const QA_CONTEXT_BUDGET_MIN = 2_000;
+export const QA_CONTEXT_BUDGET_MAX = 2_000_000;
+
+export function getQaContextBudgetChars(): number {
+    return getContextBudget();
+}
+
+/** 设置上下文预算（null = 恢复默认）；立即刷新进度条 */
+export function setQaContextBudgetChars(chars: number | null): void {
+    try {
+        if (chars == null) localStorage.removeItem("ai_phone_qa_context_budget_chars");
+        else {
+            const clamped = Math.min(QA_CONTEXT_BUDGET_MAX, Math.max(QA_CONTEXT_BUDGET_MIN, Math.floor(chars)));
+            localStorage.setItem("ai_phone_qa_context_budget_chars", String(clamped));
+        }
+    } catch {
+        // ignore
+    }
+    emit();
+}
+
+/** 当前会话已用的上下文字符数 */
+export function getQaActiveContextChars(): number {
+    const session = getActiveSession();
+    return session ? sessionContext(session).reduce((sum, entry) => sum + entryChars(entry), 0) : 0;
+}
+
 /** 是否存在可清理的工具调用历史（tool 条目或带原生 toolCalls 的条目） */
 export function hasQaToolHistory(): boolean {
     const session = getActiveSession();

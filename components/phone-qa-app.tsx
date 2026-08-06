@@ -17,9 +17,15 @@ import {
   clearQaToolHistory,
   createQaSession,
   deleteQaSession,
+  getQaActiveContextChars,
   getQaChatSnapshot,
+  getQaContextBudgetChars,
   hasQaToolHistory,
   hydrateQaChat,
+  QA_CONTEXT_BUDGET_MAX,
+  QA_CONTEXT_BUDGET_MIN,
+  QA_DEFAULT_CONTEXT_BUDGET_CHARS,
+  setQaContextBudgetChars,
   retryQaMessage,
   revertQaAppliedCommit,
   sendQaMessage,
@@ -272,12 +278,14 @@ function QaSessionDrawer({
   onSelect,
   onDelete,
   onCreate,
+  onOpenSettings,
 }: {
   sessions: QaSession[];
   activeId: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onCreate: () => void;
+  onOpenSettings: () => void;
 }) {
   return (
     <aside className="qa-drawer">
@@ -311,12 +319,69 @@ function QaSessionDrawer({
         ))}
       </div>
       <div className="qa-drawer-foot">
+        <button type="button" className="qa-drawer-new qa-drawer-settings" onClick={onOpenSettings}>
+          <Wrench size={15} strokeWidth={2} />
+          <span>工坊配置</span>
+        </button>
         <button type="button" className="qa-drawer-new" onClick={onCreate}>
           <Plus size={16} strokeWidth={2} />
           <span>新对话</span>
         </button>
       </div>
     </aside>
+  );
+}
+
+// ── 工坊配置面板 ─────────────────────────────────────
+
+function QaSettingsSheet({ onClose, onNotice }: { onClose: () => void; onNotice?: (msg: string) => void }) {
+  const [budget, setBudget] = useState(() => String(getQaContextBudgetChars()));
+  const usedChars = getQaActiveContextChars();
+  const pct = Math.round((usedChars / getQaContextBudgetChars()) * 100);
+
+  const save = () => {
+    const parsed = Number(budget);
+    if (!Number.isFinite(parsed) || parsed < QA_CONTEXT_BUDGET_MIN || parsed > QA_CONTEXT_BUDGET_MAX) {
+      onNotice?.(`预算需为 ${QA_CONTEXT_BUDGET_MIN.toLocaleString()} - ${QA_CONTEXT_BUDGET_MAX.toLocaleString()} 之间的数字。`);
+      return;
+    }
+    setQaContextBudgetChars(parsed);
+    onNotice?.("已保存工坊配置。");
+    onClose();
+  };
+
+  const reset = () => {
+    setQaContextBudgetChars(null);
+    setBudget(String(QA_DEFAULT_CONTEXT_BUDGET_CHARS));
+    onNotice?.("已恢复默认预算。");
+  };
+
+  return (
+    <div className="qa-devnotice-backdrop" onClick={onClose}>
+      <div className="qa-devnotice" role="dialog" aria-label="工坊配置" onClick={(e) => e.stopPropagation()}>
+        <div className="qa-devnotice-title">工坊配置</div>
+        <label className="qa-settings-field">
+          <span>上下文预算（字符）</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={QA_CONTEXT_BUDGET_MIN}
+            max={QA_CONTEXT_BUDGET_MAX}
+            step={1000}
+            value={budget}
+            onChange={(e) => setBudget(e.target.value)}
+          />
+        </label>
+        <div className="qa-settings-hint">
+          上下文满 100% 时自动压缩成摘要并重新累计。中文约 1 字符 ≈ 1 token；默认 {QA_DEFAULT_CONTEXT_BUDGET_CHARS.toLocaleString()}，小上下文（32k）模型建议 30000–50000。
+        </div>
+        <div className="qa-settings-hint">当前会话已用 {usedChars.toLocaleString()} 字符（约 {pct}%）。</div>
+        <div className="qa-devnotice-actions is-row">
+          <button type="button" className="qa-devnotice-btn" onClick={reset}>恢复默认</button>
+          <button type="button" className="qa-devnotice-btn is-primary" onClick={save}>保存</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -451,6 +516,7 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
   const [repoConnected, setRepoConnected] = useState(false);
   const [devNoticeOpen, setDevNoticeOpen] = useState(true);
   const [clearToolsOpen, setClearToolsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [apiReady, setApiReady] = useState(true);
   const [modelName, setModelName] = useState("");
   const [repoWritable, setRepoWritable] = useState(false);
@@ -567,6 +633,10 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
         onDelete={deleteQaSession}
         onCreate={() => {
           createQaSession();
+          setDrawerOpen(false);
+        }}
+        onOpenSettings={() => {
+          setSettingsOpen(true);
           setDrawerOpen(false);
         }}
       />
@@ -758,6 +828,10 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {settingsOpen && (
+        <QaSettingsSheet onClose={() => setSettingsOpen(false)} onNotice={onNotice} />
       )}
 
       {repoSheetOpen && (
