@@ -27,11 +27,15 @@ export type QaMsg = {
     id: string;
     role: "user" | "assistant";
     content: string;
+    /** user：随消息发送的图片（dataURL），点击可查看 */
+    images?: string[];
     reasoning?: string;
     error?: string;
     aborted?: boolean;
     tools?: QaToolStatus[];
     pendingCommit?: QaPendingCommit;
+    /** 流过滤器正在缓冲长工具指令：显示"编写工具调用中"占位（瞬态，不持久） */
+    toolDrafting?: boolean;
     ts: number;
 };
 
@@ -358,9 +362,9 @@ function autoTitle(text: string): string {
     return compact.length > 18 ? `${compact.slice(0, 18)}…` : compact || "新对话";
 }
 
-export async function sendQaMessage(text: string): Promise<void> {
+export async function sendQaMessage(text: string, images?: string[]): Promise<void> {
     const trimmed = text.trim();
-    if (!trimmed || isGenerating) return;
+    if ((!trimmed && !images?.length) || isGenerating) return;
 
     let session = getActiveSession();
     if (!session) {
@@ -375,15 +379,15 @@ export async function sendQaMessage(text: string): Promise<void> {
         await compactSessionContext(sessionId);
     }
 
-    const userMsg: QaMsg = { id: makeId(), role: "user", content: trimmed, ts: Date.now() };
+    const userMsg: QaMsg = { id: makeId(), role: "user", content: trimmed, images: images?.length ? images : undefined, ts: Date.now() };
     const assistantMsg: QaMsg = { id: makeId(), role: "assistant", content: "", ts: Date.now() };
 
     updateSession(sessionId, (s) => ({
         ...s,
-        title: s.messages.length === 0 ? autoTitle(trimmed) : s.title,
+        title: s.messages.length === 0 ? autoTitle(trimmed || "（图片）") : s.title,
         updatedAt: Date.now(),
         messages: [...s.messages, userMsg, assistantMsg].slice(-MAX_MESSAGES_PER_SESSION),
-        context: [...sessionContext(s), { role: "user", content: trimmed, turn: assistantMsg.id }],
+        context: [...sessionContext(s), { role: "user", content: trimmed || "（用户发来图片）", images: images?.length ? images : undefined, turn: assistantMsg.id }],
     }));
 
     isGenerating = true;
@@ -483,6 +487,9 @@ export async function sendQaMessage(text: string): Promise<void> {
                         return { ok: false, error: message };
                     }
                 },
+                onToolDrafting: (drafting) => {
+                    paintAssistant({ toolDrafting: drafting || undefined }, { force: true, persist: false });
+                },
                 onContentCreated: (item) => {
                     updateSession(
                         sessionId,
@@ -503,6 +510,7 @@ export async function sendQaMessage(text: string): Promise<void> {
                 reasoning: streamedReasoning || undefined,
                 tools: toolStatuses.length ? toolStatuses : undefined,
                 pendingCommit: stagedCommit,
+                toolDrafting: undefined,
             },
             { force: true },
         );
@@ -517,13 +525,37 @@ export async function sendQaMessage(text: string): Promise<void> {
     } catch (error) {
         const finalTools = toolStatuses.length ? toolStatuses.map((t) => (t.running ? { ...t, running: false } : t)) : undefined;
         if (controller.signal.aborted) {
+            // 中断续接：已执行的工具调用/结果已在上下文里；这里补齐悬空的原生调用结果、
+            // 记录已流出的可见文本，下一轮「继续」能接上，原生协议也不会因缺 tool 结果报错
+            updateSession(sessionId, (s) => {
+                const entries = sessionContext(s);
+                const turnEntries = entries.filter((entry) => entry.turn === assistantMsg.id);
+                const answered = new Set(turnEntries.filter((entry) => entry.role === "tool" && entry.toolCallId).map((entry) => entry.toolCallId));
+                const patches: QaContextEntry[] = [];
+                for (const entry of turnEntries) {
+                    if (entry.role !== "assistant") continue;
+                    for (const call of entry.toolCalls ?? []) {
+                        if (call.id && !answered.has(call.id)) {
+                            patches.push({ role: "tool", toolCallId: call.id, name: call.name, content: "（用户中断，本次调用未完成）", turn: assistantMsg.id });
+                        }
+                    }
+                }
+                if (streamedContent.trim() || patches.length > 0) {
+                    patches.push({
+                        role: "assistant",
+                        content: `${streamedContent.trim()}\n（本轮被用户中断，回复「继续」可接着做）`.trim(),
+                        turn: assistantMsg.id,
+                    });
+                }
+                return patches.length > 0 ? { ...s, context: [...entries, ...patches] } : s;
+            });
             paintAssistant(
-                { content: streamedContent, reasoning: streamedReasoning || undefined, tools: finalTools, aborted: true },
+                { content: streamedContent, reasoning: streamedReasoning || undefined, tools: finalTools, aborted: true, toolDrafting: undefined },
                 { force: true },
             );
         } else {
             paintAssistant(
-                { content: streamedContent, reasoning: streamedReasoning || undefined, tools: finalTools, error: formatQaErrorMessage(error) },
+                { content: streamedContent, reasoning: streamedReasoning || undefined, tools: finalTools, error: formatQaErrorMessage(error), toolDrafting: undefined },
                 { force: true },
             );
         }
@@ -548,7 +580,7 @@ export async function retryQaMessage(assistantMsgId: string): Promise<void> {
         // 同步裁掉该轮的上下文条目，避免重发后出现重复轮次
         context: s.context?.filter((entry) => entry.turn !== assistantMsgId),
     }));
-    await sendQaMessage(userMsg.content);
+    await sendQaMessage(userMsg.content, userMsg.images);
 }
 
 // ── 提交提案的确认 / 应用 / 撤销 ────────────────────

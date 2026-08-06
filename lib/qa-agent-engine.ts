@@ -9,6 +9,7 @@ import {
     type LlmToolCall,
 } from "./llm-provider-adapter";
 import { sendLLMToolStreamRequest, type LLMToolRequestResult } from "./chat-engine";
+import type { LLMContentPart } from "./llm-prompt-assembler";
 import { loadApiConfigs, loadBindingConfig } from "./settings-storage";
 import type { ApiConfig } from "./settings-types";
 import { buildQaSystemPrompt } from "./qa-knowledge";
@@ -167,8 +168,15 @@ const QA_DIRECTIVE_START = /\[[^\[\]\n]{0,60}?(?:执行动作|工具调用|获�
 const QA_THINK_START = /<\s*(?:think|thinking)\b/i;
 const QA_THINK_END = /<\/\s*(?:think|thinking)\s*>/i;
 
-function createQaStreamFilter(sink: QaVisibleSink) {
+function createQaStreamFilter(sink: QaVisibleSink, onHolding?: (holding: boolean) => void | Promise<void>) {
     let buffer = "";
+    let holding = false;
+
+    const setHolding = async (next: boolean) => {
+        if (holding === next) return;
+        holding = next;
+        await onHolding?.(next);
+    };
 
     const findStart = (text: string): number => {
         const directive = QA_DIRECTIVE_START.exec(text);
@@ -208,6 +216,9 @@ function createQaStreamFilter(sink: QaVisibleSink) {
                 out += work.slice(0, start);
                 buffer = final ? "" : work.slice(start);
                 if (out) await sink(out);
+                // 正在缓冲一段未收尾的指令（如大段安装调用）：告知 UI 显示"编写工具调用中"，
+                // 否则长时间无可见增量会被误认为卡住
+                await setHolding(!final && buffer.length > 60);
                 return;
             }
             out += work.slice(0, start);
@@ -222,6 +233,7 @@ function createQaStreamFilter(sink: QaVisibleSink) {
             buffer = work.slice(hold);
         }
         if (out) await sink(out);
+        await setHolding(false);
     };
 
     return {
@@ -299,6 +311,8 @@ export type QaAgentCallbacks = {
     commitNow?: (proposal: QaProposedCommit) => Promise<{ ok: boolean; htmlUrl?: string; error?: string }>;
     /** 内容工具安装/更新本机内容后回调（store 记到会话上，供工坊内预览）。 */
     onContentCreated?: (item: QaCreatedContent) => void;
+    /** 流过滤器正在缓冲一段长指令（无可见增量）：UI 据此显示"编写工具调用中" */
+    onToolDrafting?: (drafting: boolean) => void | Promise<void>;
 };
 
 const QA_MAX_ROUNDS = 8;
@@ -330,6 +344,8 @@ function hasTruncatedDirective(content: string): boolean {
 export type QaContextEntry = {
     role: "user" | "assistant" | "tool";
     content: string;
+    /** user：随消息附带的图片（dataURL）；识图未开启时适配层会自动降级为占位文本 */
+    images?: string[];
     /** assistant：原生协议的工具调用（文本协议轮次不填，指令已在 content 里） */
     toolCalls?: LlmToolCall[];
     /** tool：来源调用 id（原生轮次才有）与工具名 */
@@ -339,6 +355,15 @@ export type QaContextEntry = {
     turn?: string;
 };
 
+/** user 条目内容：带图片时转多模态 parts（识图未开启由适配层降级为占位） */
+function userEntryContent(entry: QaContextEntry): string | LLMContentPart[] {
+    if (!entry.images?.length) return entry.content;
+    return [
+        { type: "text", text: entry.content },
+        ...entry.images.map((url) => ({ type: "image_url" as const, image_url: { url } })),
+    ];
+}
+
 /** 文本协议回放：tool 条目转系统结果块；原生 assistant 条目补写指令文本 */
 function contextToTextMessages(entries: QaContextEntry[]): LlmRequestMessage[] {
     const nativeToZh = new Map<string, string>();
@@ -346,7 +371,7 @@ function contextToTextMessages(entries: QaContextEntry[]): LlmRequestMessage[] {
     const out: LlmRequestMessage[] = [];
     for (const entry of entries) {
         if (entry.role === "user") {
-            out.push({ role: "user", content: entry.content });
+            out.push({ role: "user", content: userEntryContent(entry) });
         } else if (entry.role === "assistant") {
             let content = entry.content;
             if (entry.toolCalls?.length) {
@@ -371,7 +396,7 @@ function contextToNativeMessages(entries: QaContextEntry[]): LlmRequestMessage[]
     const out: LlmRequestMessage[] = [];
     for (const entry of entries) {
         if (entry.role === "user") {
-            out.push({ role: "user", content: entry.content });
+            out.push({ role: "user", content: userEntryContent(entry) });
         } else if (entry.role === "assistant") {
             out.push({ role: "assistant", content: entry.content, toolCalls: entry.toolCalls?.length ? entry.toolCalls : undefined });
         } else if (entry.toolCallId) {
@@ -462,7 +487,7 @@ async function callQaAgentText(apiConfig: ApiConfig, history: QaEngineMessage[],
             }
             if (text.trim()) emittedAny = true;
             await callbacks?.onDelta?.(text);
-        });
+        }, (holding) => callbacks?.onToolDrafting?.(holding));
 
         const messages: LlmRequestMessage[] = [{ role: "system", content: systemPrompt }, ...working];
         const result = await requestQaCompletion(apiConfig, messages, {
@@ -539,7 +564,7 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
             }
             if (text.trim()) emittedAny = true;
             await callbacks?.onDelta?.(text);
-        });
+        }, (holding) => callbacks?.onToolDrafting?.(holding));
 
         const messages: LlmRequestMessage[] = [{ role: "system", content: systemPrompt }, ...working];
         let result: LLMToolRequestResult;

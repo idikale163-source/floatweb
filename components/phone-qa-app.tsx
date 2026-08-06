@@ -227,11 +227,22 @@ function QaToolRow({ tool }: { tool: QaToolStatus }) {
   );
 }
 
-function QaMessageItem({ msg, isStreaming, onRetry }: { msg: QaMsg; isStreaming: boolean; onRetry: (id: string) => void }) {
+function QaMessageItem({ msg, isStreaming, onRetry, onViewImage }: { msg: QaMsg; isStreaming: boolean; onRetry: (id: string) => void; onViewImage: (url: string) => void }) {
   if (msg.role === "user") {
     return (
       <div className="qa-msg-user-row">
-        <div className="qa-msg-user">{msg.content}</div>
+        <div className="qa-msg-user">
+          {msg.images && msg.images.length > 0 && (
+            <div className="qa-msg-images">
+              {msg.images.map((url, i) => (
+                <button key={i} type="button" className="qa-msg-image" onClick={() => onViewImage(url)} aria-label="查看图片">
+                  <img src={url} alt="" />
+                </button>
+              ))}
+            </div>
+          )}
+          {msg.content}
+        </div>
       </div>
     );
   }
@@ -247,7 +258,7 @@ function QaMessageItem({ msg, isStreaming, onRetry }: { msg: QaMsg; isStreaming:
         </div>
       )}
       {thinkingOnly ? (
-        <div className="qa-thinking">{msg.reasoning ? "正在思考…" : "正在生成…"}</div>
+        <div className="qa-thinking">{msg.toolDrafting ? "正在编写工具调用…" : msg.reasoning ? "正在思考…" : "正在生成…"}</div>
       ) : (
         <div className="qa-markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={QA_MARKDOWN_COMPONENTS}>
@@ -255,6 +266,9 @@ function QaMessageItem({ msg, isStreaming, onRetry }: { msg: QaMsg; isStreaming:
           </ReactMarkdown>
           {isStreaming && <span className="qa-cursor" />}
         </div>
+      )}
+      {isStreaming && msg.toolDrafting && !thinkingOnly && (
+        <div className="qa-thinking qa-tool-drafting">正在编写工具调用…</div>
       )}
       {msg.pendingCommit && <QaCommitCard msg={msg} />}
       {msg.aborted && <div className="qa-msg-note">已停止生成</div>}
@@ -517,6 +531,10 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
   const [devNoticeOpen, setDevNoticeOpen] = useState(true);
   const [clearToolsOpen, setClearToolsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [viewerImage, setViewerImage] = useState<string | null>(null);
+  const [visionEnabled, setVisionEnabled] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [apiReady, setApiReady] = useState(true);
   const [modelName, setModelName] = useState("");
   const [repoWritable, setRepoWritable] = useState(false);
@@ -528,6 +546,7 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
   const refreshComposerMeta = useCallback(() => {
     setApiReady(resolveQaApiConfig() != null);
     setModelName(resolveQaApiConfig()?.defaultModel ?? "");
+    setVisionEnabled(resolveQaApiConfig()?.enableImageRecognition === true);
     const gh = loadQaGithubConfig();
     setRepoConnected(gh != null);
     setRepoWritable(Boolean(gh?.token));
@@ -604,12 +623,32 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
 
   const handleSend = useCallback(() => {
     const text = input.trim();
-    if (!text || snapshot.isGenerating) return;
+    if ((!text && pendingImages.length === 0) || snapshot.isGenerating) return;
     setInput("");
+    const images = pendingImages;
+    setPendingImages([]);
     stickToBottomRef.current = true;
     requestAnimationFrame(autoGrow);
-    void sendQaMessage(text);
-  }, [input, snapshot.isGenerating, autoGrow]);
+    void sendQaMessage(text, images.length ? images : undefined);
+  }, [input, pendingImages, snapshot.isGenerating, autoGrow]);
+
+  // 附加图片：仅识图已开启的 API 显示入口；读为 dataURL，单张限 4MB
+  const handlePickImages = useCallback((files: FileList | null) => {
+    if (!files?.length) return;
+    for (const file of Array.from(files).slice(0, 6)) {
+      if (file.size > 4 * 1024 * 1024) {
+        onNotice?.(`「${file.name}」超过 4MB，已跳过。`);
+        continue;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const url = typeof reader.result === "string" ? reader.result : "";
+        if (url) setPendingImages((current) => (current.length >= 6 ? current : [...current, url]));
+      };
+      reader.readAsDataURL(file);
+    }
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  }, [onNotice]);
 
   const handleRetry = useCallback((assistantMsgId: string) => {
     stickToBottomRef.current = true;
@@ -704,7 +743,7 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
         ) : (
           <div className="qa-messages">
             {messages.map((msg) => (
-              <QaMessageItem key={msg.id} msg={msg} isStreaming={msg.id === streamingMsgId} onRetry={handleRetry} />
+              <QaMessageItem key={msg.id} msg={msg} isStreaming={msg.id === streamingMsgId} onRetry={handleRetry} onViewImage={setViewerImage} />
             ))}
           </div>
         )}
@@ -712,6 +751,25 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
 
       <footer className="qa-composer-wrap">
         <div className={`qa-composer ${snapshot.isGenerating ? "is-generating" : ""}`}>
+          {pendingImages.length > 0 && (
+            <div className="qa-attach-strip">
+              {pendingImages.map((url, i) => (
+                <div key={i} className="qa-attach-thumb">
+                  <button type="button" className="qa-attach-view" onClick={() => setViewerImage(url)} aria-label="查看图片">
+                    <img src={url} alt="" />
+                  </button>
+                  <button
+                    type="button"
+                    className="qa-attach-remove"
+                    onClick={() => setPendingImages((current) => current.filter((_, idx) => idx !== i))}
+                    aria-label="移除图片"
+                  >
+                    <X size={11} strokeWidth={2.4} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             className="qa-composer-input hide-scrollbar"
@@ -724,6 +782,26 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
             }}
           />
           <div className="qa-composer-toolbar">
+            {visionEnabled && (
+              <>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={(e) => handlePickImages(e.target.files)}
+                />
+                <button
+                  type="button"
+                  className="qa-circle-btn qa-attach-btn"
+                  onClick={() => imageInputRef.current?.click()}
+                  aria-label="发送图片"
+                >
+                  <Plus size={17} strokeWidth={2.2} />
+                </button>
+              </>
+            )}
             {modelName && <span className="qa-model-pill">{modelName}</span>}
 
             {repoWritable && (
@@ -827,6 +905,15 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {viewerImage && (
+        <div className="qa-image-viewer" role="presentation" onClick={() => setViewerImage(null)}>
+          <img src={viewerImage} alt="" />
+          <button type="button" className="qa-image-viewer-close" aria-label="关闭" onClick={() => setViewerImage(null)}>
+            <X size={20} />
+          </button>
         </div>
       )}
 

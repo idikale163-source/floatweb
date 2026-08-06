@@ -656,6 +656,114 @@
   display: flex;
   align-items: center;
   gap: 7px;
+  min-width: 0;
+}
+.qa-composer-toolbar .qa-circle-btn {
+  flex-shrink: 0;
+}
+.qa-mode-pill {
+  flex-shrink: 0;
+}
+
+/* 附图：+ 号入口、缩略图条、消息内图片、全屏查看 */
+.qa-attach-btn {
+  color: var(--qa-text-secondary);
+}
+.qa-attach-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 2px 2px 0;
+}
+.qa-attach-thumb {
+  position: relative;
+}
+.qa-attach-view {
+  display: block;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(60, 50, 90, 0.12);
+  padding: 0;
+  background: none;
+}
+.qa-attach-view img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.qa-attach-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(40, 34, 60, 0.75);
+  color: #fff;
+}
+.qa-msg-images {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.qa-msg-image {
+  display: block;
+  width: 108px;
+  height: 108px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: none;
+  padding: 0;
+  background: none;
+}
+.qa-msg-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.qa-image-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12, 10, 20, 0.86);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.qa-image-viewer img {
+  max-width: 94vw;
+  max-height: 86vh;
+  border-radius: 10px;
+  object-fit: contain;
+}
+.qa-image-viewer-close {
+  position: absolute;
+  /* 避开手机壳状态栏（独立层级，会拦截点击） */
+  top: calc(var(--page-header-safe-top, 48px) + 10px);
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.qa-tool-drafting {
+  margin-top: 8px;
 }
 .qa-composer-spacer {
   flex: 1;
@@ -725,6 +833,13 @@
   background: rgba(255, 255, 255, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.6);
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8);
+  /* 模型名过长时省略，避免把右侧按钮挤出输入栏 */
+  max-width: 34vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
 }
 .qa-mode-pill {
   cursor: pointer;
