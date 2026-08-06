@@ -748,7 +748,7 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
             <div className="qa-devnotice-text">
               将移除本会话上下文中的工具调用与工具结果记录，用于修复原生工具协议的报错。普通对话内容不会删除，之前的工具结论仍保留在小坊的回复文字里。
             </div>
-            <div className="qa-devnotice-actions">
+            <div className="qa-devnotice-actions is-row">
               <button type="button" className="qa-devnotice-btn" onClick={() => setClearToolsOpen(false)}>
                 取消
               </button>
