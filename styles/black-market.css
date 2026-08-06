@@ -2089,6 +2089,15 @@
   color: #79d99a;
 }
 
+/* 关联草稿在上次发布后又存过草稿：提示有未提交的本机改动 */
+.cp-bm-dirty-hint {
+  margin-left: 8px;
+  color: #d9b25f;
+  font: 800 calc(9px*var(--app-text-scale,1)) "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.12em;
+  font-style: normal;
+}
+
 .cp-black-market-studio-tabs button {
   min-height: 36px;
   border: 1px solid var(--bm-line-soft);

@@ -1297,6 +1297,8 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
           title,
           draft: normalizedDraft,
           publishedTemplateId,
+          // 关联草稿存了新内容但还没提交更新：卡片在「已发布」旁提示有未发布改动
+          hasUnpublishedChanges: publishedTemplateId ? true : undefined,
           createdAt: existing?.createdAt || now,
           updatedAt: now,
         },
@@ -1522,7 +1524,7 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
         const now = new Date().toISOString();
         setDrafts(current => saveGameDrafts(current.map(item =>
           item.id === editingDraftId
-            ? { ...item, title: draft.title.trim() || item.title, draft, publishedTemplateId: published.id, updatedAt: now }
+            ? { ...item, title: draft.title.trim() || item.title, draft, publishedTemplateId: published.id, hasUnpublishedChanges: undefined, updatedAt: now }
             : item,
         )));
       }
@@ -1547,7 +1549,7 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
       // 清掉指向该条目的草稿关联：标签回到「未发布」，之后发布会作为新条目
       setDrafts(current => current.some(item => item.publishedTemplateId === template.id)
         ? saveGameDrafts(current.map(item => item.publishedTemplateId === template.id
-          ? { ...item, publishedTemplateId: undefined }
+          ? { ...item, publishedTemplateId: undefined, hasUnpublishedChanges: undefined }
           : item))
         : current);
       showNotice("success", "已从共享大厅删除");
@@ -2353,6 +2355,7 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
           <div>
             <strong>{item.title}</strong>
             <span data-pub={item.publishedTemplateId ? "yes" : "no"}>{item.publishedTemplateId ? "已发布" : "未发布"}</span>
+            {item.publishedTemplateId && item.hasUnpublishedChanges ? <i className="game-dirty-hint">有未发布改动</i> : null}
           </div>
           <time>{formatGameDate(item.updatedAt)}</time>
         </div>

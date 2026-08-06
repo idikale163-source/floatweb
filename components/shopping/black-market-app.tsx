@@ -141,6 +141,8 @@ type BlackMarketStudioDraft = {
   draft: TheaterDraft;
   sourceTemplateId?: string;
   sourceTemplateTitle?: string;
+  /** 关联发布档案后,本机又存过草稿但还没提交更新时为 true;更新发布成功后清除 */
+  hasUnpublishedChanges?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -702,6 +704,7 @@ function normalizeStudioDraftRecord(value: unknown): BlackMarketStudioDraft | nu
     draft,
     sourceTemplateId: String(record.sourceTemplateId ?? "").trim() || undefined,
     sourceTemplateTitle: String(record.sourceTemplateTitle ?? "").trim() || undefined,
+    hasUnpublishedChanges: record.hasUnpublishedChanges === true ? true : undefined,
     createdAt: String(record.createdAt ?? now),
     updatedAt: String(record.updatedAt ?? now),
   };
@@ -1610,6 +1613,8 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
           draft,
           sourceTemplateId,
           sourceTemplateTitle,
+          // 关联草稿存了新内容但还没提交更新：卡片在「已发布」旁提示有未发布改动
+          hasUnpublishedChanges: sourceTemplateId ? true : undefined,
           createdAt: existing?.createdAt || now,
           updatedAt: now,
         },
@@ -1732,6 +1737,7 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
                 draft,
                 sourceTemplateId: published.id,
                 sourceTemplateTitle: published.title,
+                hasUnpublishedChanges: undefined,
                 updatedAt: now,
               }
             : item,
@@ -1768,7 +1774,7 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
       // 清掉指向该档案的草稿关联：标签回「未发布」，之后发布会作为新档案
       setStudioDrafts(current => current.some(item => item.sourceTemplateId === template.id)
         ? saveBlackMarketStudioDrafts(current.map(item => item.sourceTemplateId === template.id
-          ? { ...item, sourceTemplateId: undefined, sourceTemplateTitle: undefined }
+          ? { ...item, sourceTemplateId: undefined, sourceTemplateTitle: undefined, hasUnpublishedChanges: undefined }
           : item))
         : current);
       if (selectedTemplateId === template.id) setSelectedTemplateId(null);
@@ -2129,6 +2135,7 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
                       <article key={item.id} className="cp-black-market-published-card">
                         <div>
                           <span data-pub={item.sourceTemplateId ? "yes" : "no"}>{item.sourceTemplateId ? "已发布" : "未发布"}</span>
+                          {item.sourceTemplateId && item.hasUnpublishedChanges ? <i className="cp-bm-dirty-hint">有未发布改动</i> : null}
                           <strong>{item.title}</strong>
                           <p>{item.sourceTemplateId ? `关联：${item.sourceTemplateTitle || "已发布档案"}` : item.draft.subtitle || item.draft.synopsis || item.draft.storyText}</p>
                           <time>{formatBlackMarketDate(item.updatedAt)}</time>

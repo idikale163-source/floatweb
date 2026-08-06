@@ -4528,3 +4528,13 @@
   background: rgba(120, 132, 150, 0.14);
   color: #64748b;
 }
+
+/* 关联草稿在上次发布后又存过草稿：提示有未提交的本机改动 */
+.game-studio-list-copy .game-dirty-hint {
+  flex: 0 0 auto;
+  font-style: normal;
+  font-size: calc(10px * var(--app-text-scale, 1));
+  font-weight: 700;
+  color: #a8842c;
+  white-space: nowrap;
+}
