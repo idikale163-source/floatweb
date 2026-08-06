@@ -225,7 +225,7 @@ const installAppTool: QaContentTool = {
         // 请求桌面为新应用摆放图标（应用市场安装走同一落位逻辑）
         window.dispatchEvent(new CustomEvent(CUSTOM_APP_PLACE_DESKTOP_EVENT, { detail: { appId: app.id } }));
         context?.onContentCreated?.({ type: "app", refId: app.id, title: name });
-        return `✓ 已安装本机应用「${name}」。请告诉用户：点输入框旁的预览按钮即可直接打开测试；应用图标也已放到桌面，长按可卸载。想分享给其他用户时，到 应用市场 → 创作 → 本地测试 里可发布上架。`;
+        return `✓ 已安装本机应用「${name}」。请告诉用户：点输入框旁的预览按钮即可直接打开测试；应用图标也已放到桌面，长按可卸载。`;
     },
 };
 
@@ -329,7 +329,7 @@ const installGameTool: QaContentTool = {
         const result = upsertLocalTestGame(`qa_${slug}`, template);
         if (!result.ok) return `安装失败：${result.error ?? "游戏包无效"}。检查 gameHtml 是否为完整 HTML。`;
         context?.onContentCreated?.({ type: "game", refId: result.installedGame?.localId ?? `localtest_game_qa_${slug}`, title });
-        return `✓ 已安装本机游戏「${title}」。请告诉用户：点输入框旁的预览按钮即可直接游玩；游戏也在 游戏大厅 → 创作工坊 → 本机测试；重复安装同名游戏会自动更新。想分享给其他玩家时，在本机测试卡片菜单里点「转为草稿（可发布）」，编辑后即可发布到共享大厅。`;
+        return `✓ 已安装本机游戏「${title}」。请告诉用户：点输入框旁的预览按钮即可直接游玩；游戏也在 游戏大厅 → 创作工坊 → 本机测试；重复安装同名游戏会自动更新。`;
     },
 };
 
@@ -408,7 +408,7 @@ const installTheaterTool: QaContentTool = {
         const result = upsertLocalTestTheater(`qa_${slug}`, template);
         if (!result.ok) return `上架失败：${result.error ?? "夜间档案无效"}。`;
         context?.onContentCreated?.({ type: "theater", refId: result.ownedTheater?.localId ?? `localtest_theater_qa_${slug}`, title });
-        return `✓ 已上架本机剧场「${title}」。请告诉用户：点输入框旁的预览按钮即可直接试演；剧场也在 黑市剧场 → 工作室 → 本机测试；重复上架同名剧场会自动更新。想分享给其他用户时，在本机测试卡片上点「转为草稿（可发布）」，编辑后即可发布到共享市场。`;
+        return `✓ 已上架本机剧场「${title}」。请告诉用户：点输入框旁的预览按钮即可直接试演；剧场也在 黑市剧场 → 工作室 → 本机测试；重复上架同名剧场会自动更新。`;
     },
 };
 

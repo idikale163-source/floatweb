@@ -574,39 +574,6 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
     }
   }
 
-  /** 按显式标记优先、包内身份兜底，找到某市场条目对应的本机副本 */
-  function findLocalCopyForMarketItem(item: CustomAppMarketItem): InstalledCustomApp | null {
-    const norm = (value: unknown) => String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
-    return apps.find(app => app.marketItemId === item.id)
-      ?? apps.find(app => app.id === item.appId)
-      ?? apps.find(app => norm(app.manifest?.id) && norm(app.manifest?.id) === norm(item.manifest?.id))
-      ?? apps.find(app => norm(app.name) === norm(item.name))
-      ?? null;
-  }
-
-  function suggestNextVersion(version: string): string {
-    const match = version.trim().match(/^(.*?)(\d+)$/);
-    if (!match) return version;
-    return `${match[1]}${Number(match[2]) + 1}`;
-  }
-
-  /** 以本机安装版为底稿更新市场条目：直接进入发布前检查，不用重新上传包 */
-  function startMarketUpdateFromLocal(item: CustomAppMarketItem) {
-    const local = findLocalCopyForMarketItem(item);
-    if (!local) {
-      showErrorDialog(new Error("没有找到这个 APP 的本机副本。可先从市场安装到本机，或改用「换包」上传新包。"), "以本机版更新");
-      return;
-    }
-    setMarketEditTarget(item);
-    setLocalEditTarget(null);
-    setSourceFile(null);
-    setManualFiles(EMPTY_MANUAL_FILES);
-    setPublishChangelog("");
-    setPublishVersion(suggestNextVersion(item.version));
-    setPendingApp(local);
-    setTab("create");
-  }
-
   function startMarketPackageUpdate(item: CustomAppMarketItem) {
     setMarketEditTarget(item);
     setLocalEditTarget(null);
@@ -842,17 +809,6 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
         version: app.version,
         changelog: publishChangelog,
       });
-      // 显式关联：发布来源若是本机安装副本（运行时 id 相同），回写 marketItemId + 版本号，
-      // 之后归类与「以本机版更新」都走显式标记，不再靠名字猜
-      const installedNow = loadInstalledCustomApps();
-      if (installedNow.some(installed => installed.id === app.id)) {
-        saveInstalledCustomApps(installedNow.map(installed =>
-          installed.id === app.id
-            ? { ...installed, marketItemId: published.id, version: app.version, updatedAt: new Date().toISOString() }
-            : installed,
-        ));
-        refresh();
-      }
       setPendingApp(null);
       setSourceFile(null);
       setMarketEditTarget(null);
@@ -1633,21 +1589,6 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
               </div>
               <div className="app-market-sheet-actions">
                 <button type="button" className="app-market-secondary" onClick={closeManualBuilder} disabled={busy}>取消</button>
-                {marketEditTarget && findLocalCopyForMarketItem(marketEditTarget) ? (
-                  <button
-                    type="button"
-                    className="app-market-secondary"
-                    disabled={busy}
-                    onClick={() => {
-                      const target = marketEditTarget;
-                      closeManualBuilder();
-                      startMarketUpdateFromLocal(target);
-                    }}
-                  >
-                    <RefreshCw size={16} />
-                    <span>以本机版更新</span>
-                  </button>
-                ) : null}
                 <button type="button" className="app-market-primary" onClick={() => void buildManualPackage()} disabled={busy}>
                   {busy ? <LoaderCircle className="am-spin" size={18} /> : <PackageCheck size={18} />}
                   <span>{busy ? "组包中" : marketEditTarget ? "保存并检查" : "生成并检查"}</span>
