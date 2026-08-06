@@ -231,6 +231,15 @@
   word-break: break-word;
 }
 
+/* 消息文本可长按选择复制（.phone-workspace 全局禁选，这里按内容白名单放开） */
+.qa-msg-user,
+.qa-msg-assistant,
+.qa-markdown,
+.qa-tool-result {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .qa-thinking {
   color: var(--qa-text-tertiary);
   font-size: 14px;
