@@ -96,6 +96,37 @@ function contextUsageOf(session: QaSession | null): number {
 
 let isCompacting = false;
 
+/** 是否存在可清理的工具调用历史（tool 条目或带原生 toolCalls 的条目） */
+export function hasQaToolHistory(): boolean {
+    const session = getActiveSession();
+    if (!session) return false;
+    return sessionContext(session).some((entry) => entry.role === "tool" || (entry.toolCalls?.length ?? 0) > 0);
+}
+
+/** 清理原生工具历史（防报错）：移除 tool 条目、剥离原生调用元数据；普通对话内容保留 */
+export function clearQaToolHistory(): { removed: number; cleaned: number } | null {
+    const session = getActiveSession();
+    if (!session || isGenerating) return null;
+    let removed = 0;
+    let cleaned = 0;
+    const next: QaContextEntry[] = [];
+    for (const entry of sessionContext(session)) {
+        if (entry.role === "tool") {
+            removed += 1;
+            continue;
+        }
+        if (entry.toolCalls?.length) {
+            cleaned += 1;
+            const { toolCalls: _toolCalls, ...rest } = entry;
+            next.push(rest);
+        } else {
+            next.push(entry);
+        }
+    }
+    updateSession(session.id, (s) => ({ ...s, context: next }));
+    return { removed, cleaned };
+}
+
 /** 压缩：整段上下文 → 备忘录摘要，失败时保留原上下文下轮再试 */
 async function compactSessionContext(sessionId: string): Promise<void> {
     const session = sessions.find((s) => s.id === sessionId);

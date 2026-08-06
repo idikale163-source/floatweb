@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
-import { AppWindow, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, Drama, Gamepad2, Github, Loader2, Menu, Play, Plus, Square, Trash2, Wrench, X } from "lucide-react";
+import { AppWindow, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, Drama, Eraser, Gamepad2, Github, Loader2, Menu, Play, Plus, Square, Trash2, Wrench, X } from "lucide-react";
 import { mdiHammerWrench } from "@mdi/js";
 import { CustomAppRunner } from "@/components/app-market/custom-app-runner";
 import { GameHubApp } from "@/components/game/game-hub-app";
@@ -14,9 +14,11 @@ import type { QaCreatedContent } from "@/lib/qa-agent-tools";
 import {
   applyQaCommit,
   cancelQaCommit,
+  clearQaToolHistory,
   createQaSession,
   deleteQaSession,
   getQaChatSnapshot,
+  hasQaToolHistory,
   hydrateQaChat,
   retryQaMessage,
   revertQaAppliedCommit,
@@ -441,7 +443,7 @@ function QaRepoSheet({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 
 // ── App 本体 ─────────────────────────────────────────
 
-export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
+export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
   const snapshot = useSyncExternalStore(subscribeQaChat, getQaChatSnapshot, getQaChatSnapshot);
   const [input, setInput] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -469,6 +471,24 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
     void hydrateQaChat();
     refreshComposerMeta();
   }, [refreshComposerMeta]);
+
+  // 清理原生 tool 调用历史（防报错）：与小卷同款——移除上下文里的工具记录与原生元数据
+  const handleClearToolHistory = useCallback(() => {
+    if (snapshot.isGenerating) {
+      onNotice?.("小坊正在执行，完成后再清理。");
+      return;
+    }
+    if (!hasQaToolHistory()) {
+      onNotice?.("没有可清理的工具调用历史。");
+      return;
+    }
+    const confirmed = window.confirm("将移除本会话上下文中的工具调用与工具结果记录（防原生协议报错），普通对话内容不会删除。继续？");
+    if (!confirmed) return;
+    const result = clearQaToolHistory();
+    onNotice?.(result && result.removed + result.cleaned > 0
+      ? `已清理 ${result.removed} 条工具记录，整理 ${result.cleaned} 条消息。`
+      : "没有可清理的工具调用历史。");
+  }, [snapshot.isGenerating, onNotice]);
 
   const toggleWriteMode = useCallback(() => {
     const gh = loadQaGithubConfig();
@@ -561,11 +581,12 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
         <div className="qa-header-right">
           <button
             type="button"
-            className={`qa-icon-btn ${repoConnected ? "is-active" : ""}`}
-            onClick={() => setRepoSheetOpen(true)}
-            aria-label="连接仓库"
+            className="qa-icon-btn"
+            onClick={handleClearToolHistory}
+            aria-label="清理原生tool调用历史（防报错）"
+            title="清理原生tool调用历史——防报错"
           >
-            <Github size={17} strokeWidth={1.75} />
+            <Eraser size={17} strokeWidth={1.75} />
           </button>
           <button type="button" className="qa-icon-btn" onClick={() => setDrawerOpen((v) => !v)} aria-label="对话记录">
             <Menu size={18} strokeWidth={1.75} />
@@ -650,6 +671,15 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
               </button>
             )}
 
+            <button
+              type="button"
+              className={`qa-circle-btn qa-github-btn ${repoConnected ? "is-active" : ""}`}
+              onClick={() => setRepoSheetOpen(true)}
+              aria-label="连接仓库"
+            >
+              <Github size={16} strokeWidth={1.75} />
+            </button>
+
             {snapshot.isGenerating ? (
               <button type="button" className="qa-circle-btn qa-send-btn is-stop" onClick={stopQaGeneration} aria-label="停止生成">
                 <Square size={14} fill="currentColor" />
@@ -674,7 +704,7 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
               <i style={{ width: `${Math.min(100, Math.round(snapshot.contextUsage * 100))}%` }} />
             </div>
             <span className="qa-context-meter-label">
-              {snapshot.isCompacting ? "压缩上下文中…" : `上下文 ${Math.min(999, Math.round(snapshot.contextUsage * 100))}%`}
+              {snapshot.isCompacting ? "压缩中" : `${Math.min(999, Math.round(snapshot.contextUsage * 100))}%`}
             </span>
           </div>
         </div>
