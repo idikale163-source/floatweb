@@ -1284,17 +1284,25 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
     setDraft(normalizedDraft);
     setDrafts(current => {
       const existing = current.find(item => item.id === id);
+      // 编辑已发布游戏时存草稿：写入关联，草稿标签显示「已发布」，之后发布即同步更新原条目
+      const publishedTemplateId = editingTemplate?.id || existing?.publishedTemplateId;
       return saveGameDrafts([
         {
           id,
           title,
           draft: normalizedDraft,
+          publishedTemplateId,
           createdAt: existing?.createdAt || now,
           updatedAt: now,
         },
         ...current.filter(item => item.id !== id),
       ]);
     });
+    // 从「修改已发布」进入的存草稿：转入草稿编辑模式，后续发布走草稿关联（同步更新原条目）
+    if (editingTemplate?.id) {
+      setEditingTemplateId(null);
+      setEditingDraftId(id);
+    }
     showNotice("success", "草稿已保存");
   }
 
