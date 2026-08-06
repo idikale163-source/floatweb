@@ -666,6 +666,17 @@ export function PhoneQaApp({ onClose }: PhoneQaAppProps) {
               </button>
             )}
           </div>
+          <div
+            className={`qa-context-meter ${snapshot.isCompacting ? "is-compacting" : ""}`}
+            title="上下文用量：满 100% 时自动压缩成摘要并从头累计"
+          >
+            <div className="qa-context-meter-track" aria-hidden>
+              <i style={{ width: `${Math.min(100, Math.round(snapshot.contextUsage * 100))}%` }} />
+            </div>
+            <span className="qa-context-meter-label">
+              {snapshot.isCompacting ? "压缩上下文中…" : `上下文 ${Math.min(999, Math.round(snapshot.contextUsage * 100))}%`}
+            </span>
+          </div>
         </div>
       </footer>
 

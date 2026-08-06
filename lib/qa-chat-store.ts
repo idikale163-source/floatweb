@@ -1,4 +1,4 @@
-import { callQaAgent, formatQaErrorMessage } from "./qa-agent-engine";
+import { callQaAgent, compactQaContext, formatQaErrorMessage, type QaContextEntry } from "./qa-agent-engine";
 import { QA_TOOLS, type QaCreatedContent, type QaProposedCommit } from "./qa-agent-tools";
 import { loadQaGithubConfig } from "./qa-github";
 import { commitQaFiles, revertQaCommit, type QaCommitResult } from "./qa-github-write";
@@ -41,6 +41,8 @@ export type QaSession = {
     createdAt: number;
     updatedAt: number;
     messages: QaMsg[];
+    /** 模型侧完整上下文（含工具调用与结果），跨轮保留；触顶时压缩为摘要 */
+    context?: QaContextEntry[];
     /** 本会话中 agent 创建/更新过的本机内容（APP/游戏/剧场），供工坊内预览直接打开 */
     createdContent?: QaCreatedContent[];
 };
@@ -50,7 +52,75 @@ export type QaChatSnapshot = {
     activeSessionId: string | null;
     hydrated: boolean;
     isGenerating: boolean;
+    /** 当前会话上下文用量（0-1+，达到 1 触发压缩） */
+    contextUsage: number;
+    isCompacting: boolean;
 };
+
+// ── 上下文预算与压缩 ──
+// 预算按字符估算（中文 ≈1 字符/角标 token 量级）。可用 localStorage
+// 键 ai_phone_qa_context_budget_chars 覆盖（调参/测试用）。
+const DEFAULT_CONTEXT_BUDGET_CHARS = 100_000;
+
+function getContextBudget(): number {
+    try {
+        const raw = Number(localStorage.getItem("ai_phone_qa_context_budget_chars"));
+        if (Number.isFinite(raw) && raw >= 2_000 && raw <= 2_000_000) return Math.floor(raw);
+    } catch {
+        // ignore
+    }
+    return DEFAULT_CONTEXT_BUDGET_CHARS;
+}
+
+function entryChars(entry: QaContextEntry): number {
+    let total = entry.content.length;
+    for (const call of entry.toolCalls ?? []) {
+        total += call.name.length + JSON.stringify(call.args ?? {}).length;
+    }
+    return total;
+}
+
+/** 旧会话没有 context 字段：用可见消息引导出初始上下文 */
+function sessionContext(session: QaSession): QaContextEntry[] {
+    if (session.context?.length) return session.context;
+    return session.messages
+        .filter((m) => !m.error && m.content.trim())
+        .map((m) => ({ role: m.role, content: m.content }));
+}
+
+function contextUsageOf(session: QaSession | null): number {
+    if (!session) return 0;
+    const total = sessionContext(session).reduce((sum, entry) => sum + entryChars(entry), 0);
+    return total / getContextBudget();
+}
+
+let isCompacting = false;
+
+/** 压缩：整段上下文 → 备忘录摘要，失败时保留原上下文下轮再试 */
+async function compactSessionContext(sessionId: string): Promise<void> {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session || isCompacting) return;
+    const entries = sessionContext(session);
+    if (entries.length === 0) return;
+    isCompacting = true;
+    emit();
+    try {
+        const summary = await compactQaContext(entries);
+        if (!summary) throw new Error("空摘要");
+        updateSession(sessionId, (s) => ({
+            ...s,
+            context: [{
+                role: "user",
+                content: `[之前对话的压缩摘要，供你延续上下文；具体内容可用工具重新读取]\n${summary}`,
+            }],
+        }));
+    } catch {
+        // 压缩失败不阻塞对话：保留原上下文，下次触顶再试
+    } finally {
+        isCompacting = false;
+        emit();
+    }
+}
 
 type PersistedState = { sessions: QaSession[]; activeSessionId: string | null };
 
@@ -61,7 +131,7 @@ let hydrated = false;
 let hydratePromise: Promise<void> | null = null;
 let isGenerating = false;
 let abortController: AbortController | null = null;
-let snapshot: QaChatSnapshot = { sessions, activeSessionId, hydrated, isGenerating };
+let snapshot: QaChatSnapshot = { sessions, activeSessionId, hydrated, isGenerating, contextUsage: 0, isCompacting: false };
 
 function makeId(): string {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -78,7 +148,14 @@ function openQaDb(): IDBOpenDBRequest {
 }
 
 function emit() {
-    snapshot = { sessions, activeSessionId, hydrated, isGenerating };
+    snapshot = {
+        sessions,
+        activeSessionId,
+        hydrated,
+        isGenerating,
+        contextUsage: contextUsageOf(sessions.find((s) => s.id === activeSessionId) ?? null),
+        isCompacting,
+    };
     for (const listener of listeners) listener();
 }
 
@@ -234,6 +311,11 @@ export async function sendQaMessage(text: string): Promise<void> {
     }
     const sessionId = session.id;
 
+    // 触顶先压缩再开新轮（Claude Code 同款时机）
+    if (contextUsageOf(session) >= 1) {
+        await compactSessionContext(sessionId);
+    }
+
     const userMsg: QaMsg = { id: makeId(), role: "user", content: trimmed, ts: Date.now() };
     const assistantMsg: QaMsg = { id: makeId(), role: "assistant", content: "", ts: Date.now() };
 
@@ -242,6 +324,7 @@ export async function sendQaMessage(text: string): Promise<void> {
         title: s.messages.length === 0 ? autoTitle(trimmed) : s.title,
         updatedAt: Date.now(),
         messages: [...s.messages, userMsg, assistantMsg].slice(-MAX_MESSAGES_PER_SESSION),
+        context: [...sessionContext(s), { role: "user", content: trimmed, turn: assistantMsg.id }],
     }));
 
     isGenerating = true;
@@ -278,11 +361,20 @@ export async function sendQaMessage(text: string): Promise<void> {
         const history = (getActiveSession()?.messages ?? [])
             .filter((m) => m.id !== assistantMsg.id && !m.error)
             .map((m) => ({ role: m.role, content: m.content }));
+        const contextForTurn = sessionContext(sessions.find((s) => s.id === sessionId) ?? session);
 
         const autoCommit = loadQaGithubConfig()?.writeMode === "auto";
         await callQaAgent(history, {
             signal: controller.signal,
             autoCommit,
+            context: contextForTurn,
+            onContext: (entry) => {
+                updateSession(
+                    sessionId,
+                    (s) => ({ ...s, context: [...sessionContext(s), { ...entry, turn: assistantMsg.id }] }),
+                    { persist: false },
+                );
+            },
             callbacks: {
                 onDelta: (delta) => {
                     streamedContent += delta;
@@ -359,6 +451,10 @@ export async function sendQaMessage(text: string): Promise<void> {
         if (autoCommit && stagedCommit?.status === "pending" && !stagedCommit.error) {
             await applyQaCommit(assistantMsg.id);
         }
+        // 本轮结束后触顶：立即压缩（进度条回到低位）
+        if (contextUsageOf(sessions.find((s) => s.id === sessionId) ?? null) >= 1) {
+            await compactSessionContext(sessionId);
+        }
     } catch (error) {
         const finalTools = toolStatuses.length ? toolStatuses.map((t) => (t.running ? { ...t, running: false } : t)) : undefined;
         if (controller.signal.aborted) {
@@ -390,6 +486,8 @@ export async function retryQaMessage(assistantMsgId: string): Promise<void> {
     updateSession(session.id, (s) => ({
         ...s,
         messages: s.messages.filter((m) => m.id !== assistantMsgId && m.id !== userMsg.id),
+        // 同步裁掉该轮的上下文条目，避免重发后出现重复轮次
+        context: s.context?.filter((entry) => entry.turn !== assistantMsgId),
     }));
     await sendQaMessage(userMsg.content);
 }

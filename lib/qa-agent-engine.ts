@@ -6,6 +6,7 @@ import {
     stripHallucinatedTimestamps,
     type LlmRequestMessage,
     type LlmRequestPayload,
+    type LlmToolCall,
 } from "./llm-provider-adapter";
 import { sendLLMToolStreamRequest, type LLMToolRequestResult } from "./chat-engine";
 import { loadApiConfigs, loadBindingConfig } from "./settings-storage";
@@ -322,7 +323,100 @@ function hasTruncatedDirective(content: string): boolean {
     return !/[)）]\s*\]/.test(text.slice(start));
 }
 
-type QaAgentOptions = { signal?: AbortSignal; callbacks?: QaAgentCallbacks; autoCommit?: boolean };
+// ── 持久化上下文 ──────────────────────────────────
+// 与 Claude Code / Codex 一致：工具调用与结果作为普通消息跨轮保留，
+// 由 store 持久化并在接近预算时压缩。协议无关的存储形态，两种协议互相可回放。
+
+export type QaContextEntry = {
+    role: "user" | "assistant" | "tool";
+    content: string;
+    /** assistant：原生协议的工具调用（文本协议轮次不填，指令已在 content 里） */
+    toolCalls?: LlmToolCall[];
+    /** tool：来源调用 id（原生轮次才有）与工具名 */
+    toolCallId?: string;
+    name?: string;
+    /** 归属的 UI 轮次 id（store 填写，用于重试时裁剪对应条目） */
+    turn?: string;
+};
+
+/** 文本协议回放：tool 条目转系统结果块；原生 assistant 条目补写指令文本 */
+function contextToTextMessages(entries: QaContextEntry[]): LlmRequestMessage[] {
+    const nativeToZh = new Map<string, string>();
+    for (const [nat, zh] of buildQaNativeNameMap()) nativeToZh.set(nat, zh);
+    const out: LlmRequestMessage[] = [];
+    for (const entry of entries) {
+        if (entry.role === "user") {
+            out.push({ role: "user", content: entry.content });
+        } else if (entry.role === "assistant") {
+            let content = entry.content;
+            if (entry.toolCalls?.length) {
+                const directives = entry.toolCalls
+                    .map((call) => `[执行动作:${nativeToZh.get(call.name) ?? call.name}(${JSON.stringify(call.args ?? {})})]`)
+                    .join("\n");
+                content = content ? `${content}\n${directives}` : directives;
+            }
+            out.push({ role: "assistant", content });
+        } else {
+            out.push({
+                role: "user",
+                content: `[系统工具结果，用户不可见]\n【${entry.name ?? "工具"}】\n${entry.content}\n\n请基于以上结果继续回答用户的问题。`,
+            });
+        }
+    }
+    return out;
+}
+
+/** 原生协议回放：带 callId 的 tool 条目走 tool 消息；文本轮次的结果退化为 user 块 */
+function contextToNativeMessages(entries: QaContextEntry[]): LlmRequestMessage[] {
+    const out: LlmRequestMessage[] = [];
+    for (const entry of entries) {
+        if (entry.role === "user") {
+            out.push({ role: "user", content: entry.content });
+        } else if (entry.role === "assistant") {
+            out.push({ role: "assistant", content: entry.content, toolCalls: entry.toolCalls?.length ? entry.toolCalls : undefined });
+        } else if (entry.toolCallId) {
+            out.push({ role: "tool", content: entry.content, name: entry.name ?? "", toolCallId: entry.toolCallId });
+        } else {
+            out.push({
+                role: "user",
+                content: `[系统工具结果，用户不可见]\n【${entry.name ?? "工具"}】\n${entry.content}\n\n请基于以上结果继续回答用户的问题。`,
+            });
+        }
+    }
+    return out;
+}
+
+/** 把整段上下文压缩成延续工作的备忘录（供 store 在预算触顶时调用） */
+export async function compactQaContext(entries: QaContextEntry[], options?: { signal?: AbortSignal }): Promise<string> {
+    const apiConfig = requireQaApiConfig();
+    const lines = entries.map((entry) => {
+        const head = entry.role === "user" ? "用户" : entry.role === "assistant" ? "助手" : `工具结果(${entry.name ?? "工具"})`;
+        const body = entry.content.length > 4000 ? `${entry.content.slice(0, 4000)}…（截断）` : entry.content;
+        const calls = entry.toolCalls?.length
+            ? `\n[调用工具] ${entry.toolCalls.map((c) => `${c.name}(${JSON.stringify(c.args ?? {}).slice(0, 400)})`).join("；")}`
+            : "";
+        return `【${head}】${body}${calls}`;
+    });
+    let transcript = lines.join("\n\n");
+    if (transcript.length > 150_000) transcript = transcript.slice(-150_000);
+    const result = await requestQaCompletion(apiConfig, [
+        {
+            role: "system",
+            content: "你是对话上下文压缩器。把下面这段人机协作对话（含工具调用与结果）压缩成延续工作所需的中文备忘录，保留：用户的目标与偏好、已完成的操作与关键结论、涉及的文件/内容名称与关键参数、未完成事项与下一步计划。直接输出备忘录正文，不要评论。",
+        },
+        { role: "user", content: transcript },
+    ], { signal: options?.signal });
+    return stripThinkBlocks(result.content).trim();
+}
+
+type QaAgentOptions = {
+    signal?: AbortSignal;
+    callbacks?: QaAgentCallbacks;
+    autoCommit?: boolean;
+    /** 持久化上下文：提供时作为模型侧完整历史（替代 history），本轮新增条目经 onContext 回报 */
+    context?: QaContextEntry[];
+    onContext?: (entry: QaContextEntry) => void;
+};
 
 function buildQaToolContext(options?: QaAgentOptions) {
     return {
@@ -350,9 +444,13 @@ export async function callQaAgent(history: QaEngineMessage[], options?: QaAgentO
 
 async function callQaAgentText(apiConfig: ApiConfig, history: QaEngineMessage[], options?: QaAgentOptions): Promise<void> {
     const callbacks = options?.callbacks;
-    const latestUser = [...history].reverse().find((m) => m.role === "user");
+    const latestUser = options?.context
+        ? [...options.context].reverse().find((m) => m.role === "user")
+        : [...history].reverse().find((m) => m.role === "user");
     const systemPrompt = `${buildQaSystemPrompt(latestUser?.content ?? "")}\n\n${buildQaToolsPrompt()}`;
-    const working: LlmRequestMessage[] = historyToRequestMessages(history);
+    const working: LlmRequestMessage[] = options?.context
+        ? contextToTextMessages(options.context)
+        : historyToRequestMessages(history);
 
     let emittedAny = false;
     for (let round = 0; round < QA_MAX_ROUNDS; round++) {
@@ -380,21 +478,29 @@ async function callQaAgentText(apiConfig: ApiConfig, history: QaEngineMessage[],
         const { toolCalls } = parseToolCalls(stripThinkBlocks(result.content));
         if (hasTruncatedDirective(result.content)) {
             await callbacks?.onDelta?.(QA_TRUNCATED_NOTICE);
+            options?.onContext?.({ role: "assistant", content: stripThinkBlocks(result.content) + QA_TRUNCATED_NOTICE });
             return;
         }
-        if (toolCalls.length === 0) return;
+        if (toolCalls.length === 0) {
+            options?.onContext?.({ role: "assistant", content: result.content });
+            return;
+        }
         if (round === QA_MAX_ROUNDS - 1) {
             await callbacks?.onDelta?.(QA_ROUNDS_EXHAUSTED_NOTICE);
+            options?.onContext?.({ role: "assistant", content: result.content + QA_ROUNDS_EXHAUSTED_NOTICE });
             return;
         }
 
         working.push({ role: "assistant", content: result.content });
+        options?.onContext?.({ role: "assistant", content: result.content });
         const resultBlocks: string[] = [];
         for (const call of toolCalls) {
             if (options?.signal?.aborted) throw new DOMException("aborted", "AbortError");
             await callbacks?.onToolStart?.(call.name, call.args);
             const toolResult = await runQaToolCall(call, buildQaToolContext(options));
             await callbacks?.onToolDone?.(call.name, toolResult.success, toolResult.resultForModel);
+            const block = `${toolResult.success ? "" : "（失败）"}${toolResult.resultForModel}`;
+            options?.onContext?.({ role: "tool", name: toolResult.name, content: block });
             resultBlocks.push(`【${toolResult.name}】${toolResult.success ? "" : "（失败）"}\n${toolResult.resultForModel}`);
         }
         working.push({
@@ -408,13 +514,17 @@ async function callQaAgentText(apiConfig: ApiConfig, history: QaEngineMessage[],
 
 async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[], options?: QaAgentOptions): Promise<void> {
     const callbacks = options?.callbacks;
-    const latestUser = [...history].reverse().find((m) => m.role === "user");
+    const latestUser = options?.context
+        ? [...options.context].reverse().find((m) => m.role === "user")
+        : [...history].reverse().find((m) => m.role === "user");
     // 原生协议下工具经请求体声明，系统提示词只保留身份与行为规则
     const systemPrompt = [
         buildQaSystemPrompt(latestUser?.content ?? ""),
         "你有原生工具可以调用（见请求中的 tools 定义）。排查问题优先实际调用工具检测，不要凭空猜测；收到工具结果后用人话向用户解释结论和建议。",
     ].join("\n\n");
-    const working: LlmRequestMessage[] = historyToRequestMessages(history);
+    const working: LlmRequestMessage[] = options?.context
+        ? contextToNativeMessages(options.context)
+        : historyToRequestMessages(history);
     const nameMap = buildQaNativeNameMap();
 
     let emittedAny = false;
@@ -479,11 +589,17 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
         const nativeCalls = result.toolCalls || [];
         const textParsed = parseToolCalls(stripThinkBlocks(result.content || ""));
         if (nativeCalls.length === 0 && textParsed.toolCalls.length === 0) {
-            if (hasTruncatedDirective(result.content || "")) await callbacks?.onDelta?.(QA_TRUNCATED_NOTICE);
+            if (hasTruncatedDirective(result.content || "")) {
+                await callbacks?.onDelta?.(QA_TRUNCATED_NOTICE);
+                options?.onContext?.({ role: "assistant", content: stripThinkBlocks(result.content || "") + QA_TRUNCATED_NOTICE });
+            } else {
+                options?.onContext?.({ role: "assistant", content: result.content || "" });
+            }
             return;
         }
         if (round === QA_MAX_ROUNDS - 1) {
             await callbacks?.onDelta?.(QA_ROUNDS_EXHAUSTED_NOTICE);
+            options?.onContext?.({ role: "assistant", content: (result.content || "") + QA_ROUNDS_EXHAUSTED_NOTICE });
             return;
         }
 
@@ -494,6 +610,11 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
             reasoning: result.reasoning,
             openRouterReasoningDetails: result.openRouterReasoningDetails,
         });
+        options?.onContext?.({
+            role: "assistant",
+            content: result.content || "",
+            toolCalls: nativeCalls.length > 0 ? nativeCalls : undefined,
+        });
 
         // 原生调用：结果以 tool 消息回传（带 toolCallId）
         for (const nc of nativeCalls) {
@@ -502,12 +623,9 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
             await callbacks?.onToolStart?.(displayName, nc.args);
             const toolResult = await runQaToolCall({ name: displayName, args: nc.args }, buildQaToolContext(options));
             await callbacks?.onToolDone?.(displayName, toolResult.success, toolResult.resultForModel);
-            working.push({
-                role: "tool",
-                content: toolResult.success ? toolResult.resultForModel : `（失败）${toolResult.resultForModel}`,
-                name: nc.name,
-                toolCallId: nc.id,
-            });
+            const content = toolResult.success ? toolResult.resultForModel : `（失败）${toolResult.resultForModel}`;
+            working.push({ role: "tool", content, name: nc.name, toolCallId: nc.id });
+            options?.onContext?.({ role: "tool", content, name: nc.name, toolCallId: nc.id });
         }
 
         // 文本协议兜底调用：结果以 user 消息块回传
@@ -518,6 +636,8 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
                 await callbacks?.onToolStart?.(call.name, call.args);
                 const toolResult = await runQaToolCall(call, buildQaToolContext(options));
                 await callbacks?.onToolDone?.(call.name, toolResult.success, toolResult.resultForModel);
+                const block = `${toolResult.success ? "" : "（失败）"}${toolResult.resultForModel}`;
+                options?.onContext?.({ role: "tool", name: toolResult.name, content: block });
                 resultBlocks.push(`【${toolResult.name}】${toolResult.success ? "" : "（失败）"}\n${toolResult.resultForModel}`);
             }
             working.push({

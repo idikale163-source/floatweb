@@ -545,6 +545,43 @@
   background: linear-gradient(180deg, transparent 0%, var(--qa-bg-canvas) 55%);
 }
 /* 两行卡片：上文本框，下工具栏。无描边，柔和阴影 */
+/* 上下文用量条：接近压缩阈值的进度，满 100% 自动压缩后回落 */
+.qa-context-meter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px 0;
+}
+.qa-context-meter-track {
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(60, 50, 90, 0.1);
+  overflow: hidden;
+}
+.qa-context-meter-track i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(147, 122, 246, 0.55), rgba(147, 122, 246, 0.95));
+  transition: width 0.4s ease;
+}
+.qa-context-meter-label {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--qa-text-tertiary);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.qa-context-meter.is-compacting .qa-context-meter-track i {
+  background: linear-gradient(90deg, rgba(240, 170, 80, 0.6), rgba(240, 170, 80, 0.95));
+  animation: qa-compacting-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes qa-compacting-pulse {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
+}
+
 .qa-composer {
   pointer-events: auto;
   display: flex;
