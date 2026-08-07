@@ -47,6 +47,7 @@ import { useAccount } from "@/lib/account-context";
 import { OnlineRoomConnection, onlineCloudApi } from "@/lib/online-room-client";
 import { submitContentReport } from "@/lib/moderation-client";
 import { buildGameRolePackage, callGameLLM } from "@/lib/game-engine";
+import { downloadFile } from "@/lib/download-utils";
 import {
   createDefaultGameDraft,
   deleteGameProjectionEvent,
@@ -766,6 +767,7 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
   const [profileDraftAvatar, setProfileDraftAvatar] = useState("");
   const [relativeNow, setRelativeNow] = useState<number | null>(null);
   const htmlFileInputRef = useRef<HTMLInputElement | null>(null);
+  const draftFileInputRef = useRef<HTMLInputElement | null>(null);
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
   const previewGameSaveRef = useRef<unknown>(null);
@@ -1329,6 +1331,44 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
     setDrafts(current => saveGameDrafts(current.filter(item => item.id !== id)));
     if (editingDraftId === id) setEditingDraftId(null);
     showNotice("info", "草稿已删除");
+  }
+
+  // 导出草稿为 JSON 文件（blob 下载，不触发页面刷新），可发给别人从草稿箱「从文件导入」
+  async function exportDraftFile(item: GameHallDraft): Promise<void> {
+    try {
+      const payload = { type: "ai-phone-game-draft", version: 1, title: item.title, draft: item.draft };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      await downloadFile(blob, `${item.title.trim() || "游戏草稿"}.json`);
+      showNotice("success", "草稿已导出为文件");
+    } catch (err) {
+      showNotice("error", err instanceof Error ? err.message : "导出失败");
+    }
+  }
+
+  async function importDraftFile(file: File): Promise<void> {
+    try {
+      const payload = JSON.parse(await file.text()) as { type?: string; draft?: Record<string, unknown>; title?: string };
+      if (payload?.type !== "ai-phone-game-draft" || !payload.draft || typeof payload.draft !== "object") {
+        throw new Error("不是有效的游戏草稿文件（需要从草稿箱「导出文件」生成）");
+      }
+      // 只吸收与默认草稿同名同类型的字段，忽略其余内容
+      const base = createDefaultGameDraft();
+      const incoming = payload.draft;
+      const importedDraft = { ...base } as Record<string, unknown>;
+      for (const key of Object.keys(base)) {
+        const value = incoming[key];
+        if (typeof value === typeof (base as Record<string, unknown>)[key]) importedDraft[key] = value;
+      }
+      const now = new Date().toISOString();
+      const title = (typeof payload.title === "string" && payload.title.trim()) || (importedDraft.title as string)?.trim() || "导入的游戏";
+      setDrafts(current => saveGameDrafts([
+        { id: createDraftId(), title, draft: importedDraft as GameTemplateDraft, createdAt: now, updatedAt: now },
+        ...current,
+      ]));
+      showNotice("success", `已导入草稿「${title}」`);
+    } catch (err) {
+      showNotice("error", err instanceof Error ? err.message : "导入失败");
+    }
   }
 
   async function editPublished(template: GameTemplate): Promise<void> {
@@ -2373,6 +2413,7 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
           {menuOpen ? (
             <div className="game-studio-card-menu-pop" onClick={event => event.stopPropagation()}>
               <button type="button" onClick={() => { setStudioMenuId(null); editDraft(item); }}>编辑</button>
+              <button type="button" onClick={() => { setStudioMenuId(null); void exportDraftFile(item); }}>导出文件</button>
               <button type="button" className="is-danger" onClick={() => { setStudioMenuId(null); deleteDraft(item.id); }}>删除</button>
             </div>
           ) : null}
@@ -2792,13 +2833,31 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
               ) : null}
 
               {studioMode === "drafts" ? (
-                drafts.length === 0 ? (
-                  <div className="game-empty">还没有保存过草稿。</div>
-                ) : (
-                  <div className="game-published-list">
-                    {drafts.map(renderDraftStudioCard)}
+                <>
+                  <div className="game-draft-import-row">
+                    <button type="button" className="game-soft-wide-button" onClick={() => draftFileInputRef.current?.click()}>
+                      <Upload size={14} /> 从文件导入
+                    </button>
+                    <input
+                      ref={draftFileInputRef}
+                      type="file"
+                      accept=".json,application/json"
+                      style={{ display: "none" }}
+                      onChange={event => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (file) void importDraftFile(file);
+                      }}
+                    />
                   </div>
-                )
+                  {drafts.length === 0 ? (
+                    <div className="game-empty">还没有保存过草稿。</div>
+                  ) : (
+                    <div className="game-published-list">
+                      {drafts.map(renderDraftStudioCard)}
+                    </div>
+                  )}
+                </>
               ) : null}
 
               </>

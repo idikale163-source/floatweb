@@ -3,6 +3,8 @@
 // 黑市剧场（工作室·本机测试）。全部只写浏览器本地存储，可在对应 UI 里删除，不碰远端。
 
 import { getQaPageChars } from "./qa-prefs";
+import { createCustomAppPackageFile } from "./custom-app-package";
+import { downloadFile } from "./download-utils";
 import {
     upsertLocalTestGame,
     isLocalTestGameId,
@@ -757,6 +759,62 @@ const listContentTool: QaContentTool = {
     },
 };
 
+// ── 导出文件（分享给别人）──
+
+const exportContentTool: QaContentTool = {
+    name: "导出文件",
+    nativeName: "export_local_content",
+    parameters: {
+        type: "object",
+        properties: {
+            type: { type: "string", enum: ["app", "game", "theater"], description: "内容类型" },
+            name: { type: "string", description: "APP 名 / 游戏草稿标题 / 剧场草稿标题" },
+        },
+        required: ["type", "name"],
+    },
+    description:
+        "把一条本机内容导出为文件下载（blob 下载，不刷新页面），用户可发给别人导入：APP 导出市场同款 zip 安装包（对方从应用市场上传导入）；游戏/剧场导出草稿 JSON（对方从草稿箱「从文件导入」）。游戏/剧场只支持草稿——本机测试内容先用对应的存草稿工具转成草稿再导出。",
+    schemaLines: [
+        "  参数：",
+        "    · type (必填) — app / game / theater",
+        "    · name (必填) — APP 名 / 游戏草稿标题 / 剧场草稿标题",
+        '  调用：[执行动作:导出文件({"type":"app","name":"番茄钟"})]',
+    ],
+    async run(args) {
+        const type = text(args.type, 20);
+        const name = text(args.name, 80);
+        if (!name) return "缺少 name。先用「本机内容清单」看看本机有什么。";
+        try {
+            if (type === "app") {
+                const app = loadInstalledCustomApps().find((item) => norm(item.name) === norm(name));
+                if (!app) return `没找到名为「${name}」的本机 APP。用「本机内容清单」核对名称。`;
+                const file = await createCustomAppPackageFile(app);
+                await downloadFile(file, file.name);
+                return `已导出「${app.name}」安装包（${file.name}）。对方在 应用市场 → 发布 → 上传安装包 即可导入。`;
+            }
+            if (type === "game") {
+                const draft = loadGameDrafts().find((item) => norm(item.title) === norm(name));
+                if (!draft) return `游戏草稿箱里没有「${name}」。如果它在本机测试里，先用「保存游戏草稿」转成草稿再导出。`;
+                const payload = { type: "ai-phone-game-draft", version: 1, title: draft.title, draft: draft.draft };
+                const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+                await downloadFile(blob, `${draft.title.trim() || "游戏草稿"}.json`);
+                return `已导出游戏草稿「${draft.title}」。对方在 游戏大厅 → 创作工坊 → 草稿箱 → 从文件导入 即可导入。`;
+            }
+            if (type === "theater") {
+                const draft = loadBmDrafts().find((item) => norm(item.title) === norm(name));
+                if (!draft) return `剧场草稿箱里没有「${name}」。如果它在本机测试里，先用「保存剧场草稿」转成草稿再导出。`;
+                const payload = { type: "ai-phone-theater-draft", version: 1, title: draft.title, draft: draft.draft };
+                const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+                await downloadFile(blob, `${draft.title.trim() || "剧场草稿"}.json`);
+                return `已导出剧场草稿「${draft.title}」。对方在 黑市 → 工作室 → 草稿箱 → 从文件导入 即可导入。`;
+            }
+            return "type 需为 app / game / theater 之一。";
+        } catch (error) {
+            return `导出失败：${error instanceof Error ? error.message : String(error)}`;
+        }
+    },
+};
+
 export const QA_CONTENT_TOOLS = [
     contentGuideTool,
     listContentTool,
@@ -766,4 +824,5 @@ export const QA_CONTENT_TOOLS = [
     installTheaterTool,
     saveGameDraftTool,
     saveTheaterDraftTool,
+    exportContentTool,
 ];

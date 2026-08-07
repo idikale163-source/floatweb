@@ -4542,3 +4542,14 @@
   line-height: 1.45;
   white-space: nowrap;
 }
+
+/* 草稿箱「从文件导入」行 */
+.game-draft-import-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+.game-draft-import-row .game-soft-wide-button {
+  width: auto;
+  padding: 7px 14px;
+}
