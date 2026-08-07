@@ -1652,20 +1652,19 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
     }
   }
 
+  // 导入草稿 JSON：整张创建表单自动填好（入口在「创建发布」表单顶部）
   async function importStudioDraftFile(file: File): Promise<void> {
     try {
       const payload = JSON.parse(await file.text()) as { type?: string; draft?: unknown; title?: string };
       if (payload?.type !== "ai-phone-theater-draft" || !payload.draft || typeof payload.draft !== "object") {
-        throw new Error("不是有效的剧场草稿文件（需要从草稿箱「导出」生成）");
+        throw new Error("不是有效的剧场草稿文件（需要从草稿箱「EXPORT」生成）");
       }
-      const draft = normalizeStudioDraftPayload(payload.draft);
-      const now = new Date().toISOString();
-      const title = (typeof payload.title === "string" && payload.title.trim()) || draft.title.trim() || "导入的剧场";
-      setStudioDrafts(current => saveBlackMarketStudioDrafts([
-        { id: createStudioDraftId(), title, draft, createdAt: now, updatedAt: now },
-        ...current,
-      ]));
-      showNotice("success", `已导入草稿「${title}」`);
+      const importedDraft = normalizeStudioDraftPayload(payload.draft);
+      setEditingDraftId(null);
+      setEditingTemplateId(null);
+      setDraft(importedDraft);
+      const title = (typeof payload.title === "string" && payload.title.trim()) || importedDraft.title.trim() || "导入的剧场";
+      showNotice("success", `已导入草稿「${title}」，检查后可存草稿或发布`);
     } catch (err) {
       showNotice("error", err instanceof Error ? err.message : "导入失败");
     }
@@ -2162,22 +2161,6 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
               <div className="cp-black-market-studio-panel">
                 <h3>草稿箱</h3>
                 <p className="cp-black-market-studio-hint">草稿只保存在当前设备，不会进入共享市场。</p>
-                <div className="cp-bm-draft-import-row">
-                  <button type="button" onClick={() => studioDraftFileInputRef.current?.click()}>
-                    <Upload size={14} /> 从文件导入
-                  </button>
-                  <input
-                    ref={studioDraftFileInputRef}
-                    type="file"
-                    accept=".json,application/json"
-                    style={{ display: "none" }}
-                    onChange={event => {
-                      const file = event.target.files?.[0];
-                      event.target.value = "";
-                      if (file) void importStudioDraftFile(file);
-                    }}
-                  />
-                </div>
                 {studioDrafts.length === 0 ? (
                   <div className="cp-black-market-empty">还没有保存过草稿。</div>
                 ) : (
@@ -2232,6 +2215,22 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
                 <div className="cp-black-market-studio-panel">
                   <h3>商品档案</h3>
                   <p className="cp-black-market-studio-hint">只需要填写用户会看到的标题和介绍；内部编号会自动处理，发布昵称可每次单独设置。</p>
+                  <div className="cp-bm-draft-import-row">
+                    <button type="button" onClick={() => studioDraftFileInputRef.current?.click()}>
+                      <Upload size={14} /> 导入草稿文件
+                    </button>
+                    <input
+                      ref={studioDraftFileInputRef}
+                      type="file"
+                      accept=".json,application/json"
+                      style={{ display: "none" }}
+                      onChange={event => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (file) void importStudioDraftFile(file);
+                      }}
+                    />
+                  </div>
                   <label>
                     档案名字
                     <input value={draft.title} onFocus={() => clearDraftSampleOnFocus("title")} onChange={event => updateDraft("title", event.target.value)} />

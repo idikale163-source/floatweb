@@ -798,7 +798,7 @@ const exportContentTool: QaContentTool = {
                 const payload = { type: "ai-phone-game-draft", version: 1, title: draft.title, draft: draft.draft };
                 const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
                 await downloadFile(blob, `${draft.title.trim() || "游戏草稿"}.json`);
-                return `已导出游戏草稿「${draft.title}」。对方在 游戏大厅 → 创作工坊 → 草稿箱 → 从文件导入 即可导入。`;
+                return `已导出游戏草稿「${draft.title}」。对方在 游戏大厅 → 创作工坊 → 创建页 →「上传 HTML / 草稿」选择该文件即可导入。`;
             }
             if (type === "theater") {
                 const draft = loadBmDrafts().find((item) => norm(item.title) === norm(name));
@@ -806,7 +806,7 @@ const exportContentTool: QaContentTool = {
                 const payload = { type: "ai-phone-theater-draft", version: 1, title: draft.title, draft: draft.draft };
                 const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
                 await downloadFile(blob, `${draft.title.trim() || "剧场草稿"}.json`);
-                return `已导出剧场草稿「${draft.title}」。对方在 黑市 → 工作室 → 草稿箱 → 从文件导入 即可导入。`;
+                return `已导出剧场草稿「${draft.title}」。对方在 黑市 → 工作室 → 创建发布 →「导入草稿文件」选择该文件即可导入。`;
             }
             return "type 需为 app / game / theater 之一。";
         } catch (error) {

@@ -767,7 +767,6 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
   const [profileDraftAvatar, setProfileDraftAvatar] = useState("");
   const [relativeNow, setRelativeNow] = useState<number | null>(null);
   const htmlFileInputRef = useRef<HTMLInputElement | null>(null);
-  const draftFileInputRef = useRef<HTMLInputElement | null>(null);
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
   const previewGameSaveRef = useRef<unknown>(null);
@@ -1345,7 +1344,8 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
     }
   }
 
-  async function importDraftFile(file: File): Promise<void> {
+  // 导入草稿 JSON：整张创建表单自动填好（与「上传 HTML」共用一个入口，按扩展名分流）
+  async function importDraftIntoForm(file: File): Promise<void> {
     try {
       const payload = JSON.parse(await file.text()) as { type?: string; draft?: Record<string, unknown>; title?: string };
       if (payload?.type !== "ai-phone-game-draft" || !payload.draft || typeof payload.draft !== "object") {
@@ -1359,13 +1359,13 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
         const value = incoming[key];
         if (typeof value === typeof (base as Record<string, unknown>)[key]) importedDraft[key] = value;
       }
-      const now = new Date().toISOString();
-      const title = (typeof payload.title === "string" && payload.title.trim()) || (importedDraft.title as string)?.trim() || "导入的游戏";
-      setDrafts(current => saveGameDrafts([
-        { id: createDraftId(), title, draft: importedDraft as GameTemplateDraft, createdAt: now, updatedAt: now },
-        ...current,
-      ]));
-      showNotice("success", `已导入草稿「${title}」`);
+      const nextDraft = importedDraft as GameTemplateDraft;
+      setEditingDraftId(null);
+      setEditingTemplateId(null);
+      setDraft(nextDraft);
+      setAdvancedStudioOpen(parseGameRoleSlots(nextDraft.roleSlotsText).length > 0);
+      const title = (typeof payload.title === "string" && payload.title.trim()) || nextDraft.title.trim() || "导入的游戏";
+      showNotice("success", `已导入草稿「${title}」，检查后可存草稿或发布`);
     } catch (err) {
       showNotice("error", err instanceof Error ? err.message : "导入失败");
     }
@@ -1400,9 +1400,13 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
 
   async function uploadGameHtmlFile(file: File | null): Promise<void> {
     if (!file) return;
+    if (/\.json$/i.test(file.name) || file.type === "application/json") {
+      await importDraftIntoForm(file);
+      return;
+    }
     const isHtmlFile = /\.(html?|xhtml)$/i.test(file.name) || file.type === "text/html";
     if (!isHtmlFile) {
-      showNotice("error", "请选择 HTML 文件");
+      showNotice("error", "请选择 HTML 或草稿 JSON 文件");
       return;
     }
     try {
@@ -2833,31 +2837,13 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
               ) : null}
 
               {studioMode === "drafts" ? (
-                <>
-                  <div className="game-draft-import-row">
-                    <button type="button" className="game-soft-wide-button" onClick={() => draftFileInputRef.current?.click()}>
-                      <Upload size={14} /> 从文件导入
-                    </button>
-                    <input
-                      ref={draftFileInputRef}
-                      type="file"
-                      accept=".json,application/json"
-                      style={{ display: "none" }}
-                      onChange={event => {
-                        const file = event.target.files?.[0];
-                        event.target.value = "";
-                        if (file) void importDraftFile(file);
-                      }}
-                    />
+                drafts.length === 0 ? (
+                  <div className="game-empty">还没有保存过草稿。</div>
+                ) : (
+                  <div className="game-published-list">
+                    {drafts.map(renderDraftStudioCard)}
                   </div>
-                  {drafts.length === 0 ? (
-                    <div className="game-empty">还没有保存过草稿。</div>
-                  ) : (
-                    <div className="game-published-list">
-                      {drafts.map(renderDraftStudioCard)}
-                    </div>
-                  )}
-                </>
+                )
               ) : null}
 
               </>
@@ -2970,8 +2956,8 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
                     ref={htmlFileInputRef}
                     className="game-file-input"
                     type="file"
-                    accept=".html,.htm,text/html"
-                    aria-label="上传 HTML 文件"
+                    accept=".html,.htm,.json,text/html,application/json"
+                    aria-label="上传 HTML 或草稿文件"
                     onChange={event => {
                       const file = event.currentTarget.files?.[0] ?? null;
                       event.currentTarget.value = "";
@@ -2979,7 +2965,7 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
                     }}
                   />
                   <div className="game-html-import">
-                    <button type="button" className="game-soft-wide-button" onClick={() => htmlFileInputRef.current?.click()}><Upload size={14} /> 上传 HTML</button>
+                    <button type="button" className="game-soft-wide-button" onClick={() => htmlFileInputRef.current?.click()}><Upload size={14} /> 上传 HTML / 草稿</button>
                   </div>
                   <textarea value={draft.gameHtml} rows={18} spellCheck={false} onChange={event => updateDraft("gameHtml", event.target.value)} />
                 </div>
