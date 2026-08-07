@@ -644,7 +644,7 @@ export async function retryQaMessage(assistantMsgId: string): Promise<void> {
     updateSession(session.id, (s) => ({
         ...s,
         messages: hadProgress
-            ? s.messages.map((m) => (m.id === assistantMsgId ? { ...m, error: undefined, streamNote: "本轮中途报错，已在下方继续" } : m))
+            ? s.messages.map((m) => (m.id === assistantMsgId ? { ...m, error: undefined } : m))
             : s.messages.filter((m) => m.id !== assistantMsgId),
     }));
     await sendQaMessage(
