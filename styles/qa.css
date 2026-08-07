@@ -191,11 +191,11 @@
   /* iOS 惯性滚动 + 边界橡皮筋回弹（contain 保留自身回弹但不牵动外层） */
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  /* 顶部留出顶栏高度；底部留足输入栏高度（键盘弹起时随 --qa-kb-inset 加高），避免最后一条被压住 */
+  /* 顶部留出顶栏高度；底部留足输入栏高度，避免最后一条被压住 */
   padding:
     calc(var(--page-header-safe-top, 48px) + var(--page-header-content-height, 42px) + 8px)
     16px
-    calc(env(safe-area-inset-bottom, 0px) + 152px + var(--qa-kb-inset, 0px));
+    calc(env(safe-area-inset-bottom, 0px) + 152px);
   position: relative;
   z-index: 1;
 }
@@ -557,13 +557,11 @@
   position: absolute;
   left: 0;
   right: 0;
-  /* iOS 键盘弹起时随 --qa-kb-inset 抬高（JS 维护），顶栏保持固定 */
-  bottom: var(--qa-kb-inset, 0px);
+  bottom: 0;
   padding: 20px 12px calc(env(safe-area-inset-bottom, 0px) + 14px);
   z-index: 6;
   pointer-events: none;
   background: linear-gradient(180deg, transparent 0%, var(--qa-bg-canvas) 55%);
-  transition: bottom 0.18s cubic-bezier(0.22, 1, 0.36, 1);
 }
 /* 两行卡片：上文本框，下工具栏。无描边，柔和阴影 */
 /* 上下文用量：输入栏右上方的小装饰条，满 100% 自动压缩后回落 */

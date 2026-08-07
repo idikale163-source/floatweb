@@ -574,48 +574,6 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const stickToBottomRef = useRef(true);
-  const shellRef = useRef<HTMLDivElement | null>(null);
-
-  // iOS 键盘处理：Safari 弹键盘时会把整页往上顶来露出输入框，顶栏被顶出屏幕。
-  // 改为：键盘弹起时把输入栏在壳内抬高（跟随 visualViewport 的键盘高度），
-  // 并把浏览器自动产生的页面滚动压回 0——顶栏固定，只有消息区在动。
-  // Android 已有全局 --mobile-keyboard-lift 抬升机制（desktop-shell），这里跳过避免双重补偿。
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv || /Android/i.test(navigator.userAgent)) return;
-    let raf = 0;
-    const update = () => {
-      raf = 0;
-      const shell = shellRef.current;
-      if (!shell) return;
-      const active = document.activeElement;
-      const focusedInShell =
-        active instanceof HTMLElement && shell.contains(active) &&
-        (active.tagName === "TEXTAREA" || active.tagName === "INPUT");
-      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      const apply = focusedInShell && inset > 60 ? inset : 0;
-      shell.style.setProperty("--qa-kb-inset", `${apply}px`);
-      if (apply > 0 && window.scrollY > 0) window.scrollTo(0, 0);
-      if (apply > 0 && stickToBottomRef.current && bodyRef.current) {
-        bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-      }
-    };
-    const requestUpdate = () => {
-      if (raf) window.cancelAnimationFrame(raf);
-      raf = window.requestAnimationFrame(update);
-    };
-    vv.addEventListener("resize", requestUpdate);
-    vv.addEventListener("scroll", requestUpdate);
-    document.addEventListener("focusin", requestUpdate);
-    document.addEventListener("focusout", requestUpdate);
-    return () => {
-      if (raf) window.cancelAnimationFrame(raf);
-      vv.removeEventListener("resize", requestUpdate);
-      vv.removeEventListener("scroll", requestUpdate);
-      document.removeEventListener("focusin", requestUpdate);
-      document.removeEventListener("focusout", requestUpdate);
-    };
-  }, []);
 
   const refreshComposerMeta = useCallback(() => {
     setApiReady(resolveQaApiConfig() != null);
@@ -735,7 +693,7 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
       : null;
 
   return (
-    <div className="qa-app-shell" ref={shellRef}>
+    <div className="qa-app-shell">
       <QaSessionDrawer
         sessions={snapshot.sessions}
         activeId={snapshot.activeSessionId}
