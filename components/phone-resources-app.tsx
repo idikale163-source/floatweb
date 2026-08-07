@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MoreHorizontal } from "lucide-react";
-import { Brain, Sparkle } from "@phosphor-icons/react";
+import { Brain, MoreHorizontal, Sparkles } from "lucide-react";
 import { MemoryBankPage } from "./memory/memory-bank-page";
 import { VnAssetPage } from "./vn/vn-asset-page";
 import { loadCharacters } from "@/lib/character-storage";
@@ -19,14 +18,14 @@ const RESOURCE_MENU: Omit<FeaturedCardItem, "onClick">[] = [
         icon: Brain,
         label: "记忆库",
         desc: "角色记忆档案",
-        iconColor: "#6366F1",
+        iconColor: BINDING_ACCENTS.memory,
     },
     {
         id: "vn_assets",
-        icon: Sparkle,
+        icon: Sparkles,
         label: "漫卷资源",
         desc: "场景与角色立绘",
-        iconColor: "#EC4899",
+        iconColor: CONTENT_APP_ACCENTS.vn,
     },
 ];
 

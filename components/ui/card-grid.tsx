@@ -1,13 +1,12 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { ChevronRight } from "lucide-react";
-import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
+import { ChevronRight, type LucideIcon } from "lucide-react";
 
 /* ── Card item definition ── */
 export type CardItem = {
   id: string;
-  icon: PhosphorIcon;
+  icon: LucideIcon;
   label: string;
   desc?: string;
   iconColor: string;
@@ -42,7 +41,7 @@ export function CardGrid({
               onClick={item.onClick}
             >
               <span className="card-icon" style={cardIconStyle(item.iconColor)}>
-                <Icon size={22} weight="fill" />
+                <Icon size={22} strokeWidth={1.75} />
               </span>
               <span className="card-card-body">
                 <span className="card-label">{item.label}</span>
@@ -69,7 +68,7 @@ export function FeaturedCard({ item }: { item: FeaturedCardItem }) {
       onClick={item.onClick}
     >
       <span className="card-icon" style={cardIconStyle(item.iconColor)}>
-        <Icon size={22} weight="fill" />
+        <Icon size={22} strokeWidth={1.75} />
       </span>
       <div className="card-featured-body">
         <div className="card-featured-label">{item.label}</div>
@@ -83,7 +82,7 @@ export function FeaturedCard({ item }: { item: FeaturedCardItem }) {
 /* ── Hero card (large visual card) ── */
 export type HeroCardItem = {
   id: string;
-  icon: PhosphorIcon;
+  icon: LucideIcon;
   label: string;
   description: string;
   color: string;
@@ -106,7 +105,7 @@ export function HeroCard({ item }: { item: HeroCardItem }) {
           "--icon-glow": item.glow,
         } as React.CSSProperties}
       >
-        <item.icon size={32} weight="fill" />
+        <item.icon size={32} strokeWidth={1.5} />
       </span>
       <span className="card-hero-title">{item.label}</span>
       <span className="card-hero-desc">{item.description}</span>

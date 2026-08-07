@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, createContext, type CSSProperties, type ReactNode } from "react";
-import { Check, ChevronRight, Loader2, LogOut, X } from "lucide-react";
-import { ChatTeardrop, Clock, Database, FileText, Fingerprint, Globe, HardDrives, Image, Info, Key, LinkSimple, Microphone, SignOut, SlidersHorizontal, Stack, UserCircle, Wrench } from "@phosphor-icons/react";
+import { Check, ChevronRight, Clock, Database, FileText, Fingerprint, Globe, HardDrive, Image, Info, KeyRound, Layers, Link2, Loader2, LogOut, MessageSquare, Mic, SlidersHorizontal, UserCircle, Wrench, X } from "lucide-react";
 import { ConfirmDialog } from "./ui/modal";
 import { useAccount } from "@/lib/account-context";
 import { changeAccountPassword } from "@/lib/account-client";
@@ -55,18 +54,18 @@ type SubPage =
     | "about";
 
 const SETTINGS_MENU = [
-    { id: "api", icon: HardDrives, label: "API 设置", desc: "大模型接口", iconColor: "#3B82F6" },
-    { id: "voice", icon: Microphone, label: "语音 API", desc: "语音合成", iconColor: "#8B5CF6" },
+    { id: "api", icon: HardDrive, label: "API 设置", desc: "大模型接口", iconColor: BINDING_ACCENTS.api },
+    { id: "voice", icon: Mic, label: "语音 API", desc: "语音合成", iconColor: BINDING_ACCENTS.voice },
     { id: "imageGeneration", icon: Image, label: "图像生成 API", desc: "模型、参考图与提示词", iconColor: CONTENT_APP_ACCENTS.moments },
-    { id: "presets", icon: Fingerprint, label: "预设", desc: "角色预设", iconColor: "#EC4899" },
-    { id: "worldbook", icon: Globe, label: "世界书", desc: "世界观设定", iconColor: "#14B8A6" },
-    { id: "regex", icon: Database, label: "正则规则", desc: "文本替换", iconColor: "#F97316" },
-    { id: "data", icon: Stack, label: "数据管理", desc: "导入导出", iconColor: "#6366F1" },
-    { id: "binding", icon: LinkSimple, label: "配置绑定", desc: "管理全局默认、角色与应用的配置绑定关系", iconColor: "#10B981" },
-    { id: "weixin", icon: ChatTeardrop, label: "微信接入", desc: "iLink Bot", iconColor: CONTENT_APP_ACCENTS.chat },
-    { id: "toolbox", icon: Wrench, label: "聊天工具箱", desc: "外部工具调用", iconColor: "#F59E0B" },
-    { id: "identity", icon: UserCircle, label: "用户身份", desc: "个人信息", iconColor: "#0EA5E9" },
-    { id: "about", icon: Info, label: "关于与声明", desc: "版本与协议", iconColor: "#64748B" },
+    { id: "presets", icon: Fingerprint, label: "预设", desc: "角色预设", iconColor: BINDING_ACCENTS.preset },
+    { id: "worldbook", icon: Globe, label: "世界书", desc: "世界观设定", iconColor: BINDING_ACCENTS.worldBook },
+    { id: "regex", icon: Database, label: "正则规则", desc: "文本替换", iconColor: BINDING_ACCENTS.regex },
+    { id: "data", icon: Layers, label: "数据管理", desc: "导入导出", iconColor: BINDING_ACCENTS.api },
+    { id: "binding", icon: Link2, label: "配置绑定", desc: "管理全局默认、角色与应用的配置绑定关系", iconColor: BINDING_ACCENTS.identity },
+    { id: "weixin", icon: MessageSquare, label: "微信接入", desc: "iLink Bot", iconColor: CONTENT_APP_ACCENTS.chat },
+    { id: "toolbox", icon: Wrench, label: "聊天工具箱", desc: "外部工具调用", iconColor: BINDING_ACCENTS.voice },
+    { id: "identity", icon: UserCircle, label: "用户身份", desc: "个人信息", iconColor: BINDING_ACCENTS.identity },
+    { id: "about", icon: Info, label: "关于与声明", desc: "版本与协议", iconColor: BINDING_ACCENTS.memory },
 ] as const;
 
 const realtimeIconStyle = {
@@ -361,7 +360,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                             <h3 className="settings-menu-section-title">Realtime</h3>
                             <div className="app-card card-featured settings-toggle-card">
                                 <span className="card-icon" style={realtimeIconStyle}>
-                                    <Clock size={22} weight="fill" />
+                                    <Clock size={22} strokeWidth={1.75} />
                                 </span>
                                 <div className="card-featured-body">
                                     <div className="card-featured-label">真实时间感知</div>
@@ -375,7 +374,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                 <h3 className="settings-menu-section-title">Moderation</h3>
                                 <div className="app-card card-featured settings-toggle-card" role="button" tabIndex={0} style={{ cursor: "pointer" }} onClick={() => setCurrentPage("moderation")}>
                                     <span className="card-icon" style={accountIconStyle}>
-                                        <SlidersHorizontal size={22} weight="fill" />
+                                        <SlidersHorizontal size={22} strokeWidth={1.75} />
                                     </span>
                                     <div className="card-featured-body">
                                         <div className="card-featured-label">管理中心</div>
@@ -390,7 +389,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                             <div className="menu-group settings-tools-menu">
                                 <div className="menu-item settings-tools-menu-item">
                                     <span className="card-icon" style={promptViewerIconStyle}>
-                                        <FileText size={22} weight="fill" />
+                                        <FileText size={22} strokeWidth={1.75} />
                                     </span>
                                     <span className="settings-tools-menu-copy">
                                         <span className="menu-label appearance-menu-item-label">提示词查看器</span>
@@ -402,7 +401,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                 </div>
                                 <div className="menu-item settings-tools-menu-item">
                                     <span className="card-icon" style={quickActionIconStyle}>
-                                        <SlidersHorizontal size={22} weight="fill" />
+                                        <SlidersHorizontal size={22} strokeWidth={1.75} />
                                     </span>
                                     <span className="settings-tools-menu-copy">
                                         <span className="menu-label appearance-menu-item-label">快捷操作</span>
@@ -431,7 +430,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                         <div className="menu-group">
                                             <div className="menu-item settings-tools-menu-item">
                                                 <span className="card-icon" style={accountIconStyle}>
-                                                    <UserCircle size={22} weight="fill" />
+                                                    <UserCircle size={22} strokeWidth={1.75} />
                                                 </span>
                                                 <span className="settings-tools-menu-copy">
                                                     <span className="menu-label appearance-menu-item-label">当前账号</span>
@@ -443,7 +442,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                             </div>
                                             <button type="button" className="menu-item settings-tools-menu-item w-full text-left" onClick={() => { setAccountSheetOpen(false); setPwdModalOpen(true); }}>
                                                 <span className="card-icon" style={passwordIconStyle}>
-                                                    <Key size={22} weight="fill" />
+                                                    <KeyRound size={22} strokeWidth={1.75} />
                                                 </span>
                                                 <span className="settings-tools-menu-copy">
                                                     <span className="menu-label appearance-menu-item-label">修改密码</span>
@@ -453,7 +452,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                             </button>
                                             <button type="button" className="menu-item settings-tools-menu-item w-full text-left" onClick={() => { setAccountSheetOpen(false); setConfirmLogout(true); }}>
                                                 <span className="card-icon" style={logoutIconStyle}>
-                                                    <SignOut size={22} weight="fill" />
+                                                    <LogOut size={22} strokeWidth={1.75} />
                                                 </span>
                                                 <span className="settings-tools-menu-copy">
                                                     <span className="menu-label appearance-menu-item-label" style={{ color: "var(--c-danger)" }}>退出登录</span>

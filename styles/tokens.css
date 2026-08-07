@@ -11,8 +11,6 @@
   /* 页面内容区底色 */
   --c-card: rgba(255, 255, 255, 0.7);
   /* 选项卡片底色 */
-  --c-icon-tile-base: #FFFFFF;
-  /* 设置类页面卡片图标的浅色底（与强调色混合出粉彩色块） */
   --c-card-border: #E0E0E0;
   /* 选项卡片边框 */
   --c-polaroid: #FEFEFE;
