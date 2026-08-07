@@ -28,3 +28,32 @@ export function setQaPageChars(chars: number | null): void {
         // ignore
     }
 }
+
+// 单轮工具调用上限：一次提问里 agent 最多连续执行多少轮工具，用完提示「回复继续」。
+// localStorage 键 ai_phone_qa_max_rounds 覆盖（调参/测试用）。
+export const QA_DEFAULT_MAX_ROUNDS = 8;
+export const QA_MAX_ROUNDS_MIN = 1;
+export const QA_MAX_ROUNDS_MAX = 50;
+
+export function getQaMaxRounds(): number {
+    try {
+        const raw = Number(localStorage.getItem("ai_phone_qa_max_rounds"));
+        if (Number.isFinite(raw) && raw >= QA_MAX_ROUNDS_MIN && raw <= QA_MAX_ROUNDS_MAX) return Math.floor(raw);
+    } catch {
+        // ignore
+    }
+    return QA_DEFAULT_MAX_ROUNDS;
+}
+
+/** 设置单轮工具调用上限（null = 恢复默认） */
+export function setQaMaxRounds(rounds: number | null): void {
+    try {
+        if (rounds == null) localStorage.removeItem("ai_phone_qa_max_rounds");
+        else {
+            const clamped = Math.min(QA_MAX_ROUNDS_MAX, Math.max(QA_MAX_ROUNDS_MIN, Math.floor(rounds)));
+            localStorage.setItem("ai_phone_qa_max_rounds", String(clamped));
+        }
+    } catch {
+        // ignore
+    }
+}

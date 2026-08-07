@@ -13,6 +13,7 @@ import type { LLMContentPart } from "./llm-prompt-assembler";
 import { loadApiConfigs, loadBindingConfig } from "./settings-storage";
 import type { ApiConfig } from "./settings-types";
 import { buildQaSystemPrompt } from "./qa-knowledge";
+import { getQaMaxRounds } from "./qa-prefs";
 import { parseToolCalls } from "./tool-executor";
 import {
     buildQaNativeNameMap,
@@ -344,7 +345,7 @@ export type QaAgentCallbacks = {
     onToolDrafting?: (drafting: boolean) => void | Promise<void>;
 };
 
-const QA_MAX_ROUNDS = 8;
+// 单轮工具调用上限：默认 8，可在工坊配置里调节（qa-prefs）
 
 // 轮数用尽/输出截断时给用户的可见提示——否则未执行的指令被流过滤器隐藏，
 // 表现为"话说到一半突然断了"
@@ -506,8 +507,9 @@ async function callQaAgentText(apiConfig: ApiConfig, history: QaEngineMessage[],
         ? contextToTextMessages(options.context)
         : historyToRequestMessages(history);
 
+    const maxRounds = getQaMaxRounds();
     let emittedAny = false;
-    for (let round = 0; round < QA_MAX_ROUNDS; round++) {
+    for (let round = 0; round < maxRounds; round++) {
         let pendingBreak = emittedAny;
         const filter = createQaStreamFilter(async (text) => {
             if (pendingBreak && text.trim()) {
@@ -539,7 +541,7 @@ async function callQaAgentText(apiConfig: ApiConfig, history: QaEngineMessage[],
             options?.onContext?.({ role: "assistant", content: result.content });
             return;
         }
-        if (round === QA_MAX_ROUNDS - 1) {
+        if (round === maxRounds - 1) {
             await callbacks?.onDelta?.(QA_ROUNDS_EXHAUSTED_NOTICE);
             options?.onContext?.({ role: "assistant", content: result.content + QA_ROUNDS_EXHAUSTED_NOTICE });
             return;
@@ -581,8 +583,9 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
         : historyToRequestMessages(history);
     const nameMap = buildQaNativeNameMap();
 
+    const maxRounds = getQaMaxRounds();
     let emittedAny = false;
-    for (let round = 0; round < QA_MAX_ROUNDS; round++) {
+    for (let round = 0; round < maxRounds; round++) {
         const tools = getQaNativeToolDefinitions();
         let pendingBreak = emittedAny;
         // 仍套用文本过滤器：弱模型可能在正文里混写文本协议指令，隐藏之
@@ -651,7 +654,7 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
             }
             return;
         }
-        if (round === QA_MAX_ROUNDS - 1) {
+        if (round === maxRounds - 1) {
             await callbacks?.onDelta?.(QA_ROUNDS_EXHAUSTED_NOTICE);
             options?.onContext?.({ role: "assistant", content: (result.content || "") + QA_ROUNDS_EXHAUSTED_NOTICE });
             return;

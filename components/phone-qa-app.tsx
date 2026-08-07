@@ -42,6 +42,11 @@ import {
   QA_DEFAULT_PAGE_CHARS,
   QA_PAGE_CHARS_MIN,
   QA_PAGE_CHARS_MAX,
+  getQaMaxRounds,
+  setQaMaxRounds,
+  QA_DEFAULT_MAX_ROUNDS,
+  QA_MAX_ROUNDS_MIN,
+  QA_MAX_ROUNDS_MAX,
 } from "@/lib/qa-prefs";
 import { resolveQaApiConfig } from "@/lib/qa-agent-engine";
 import {
@@ -360,6 +365,7 @@ function QaSessionDrawer({
 function QaSettingsSheet({ onClose, onNotice }: { onClose: () => void; onNotice?: (msg: string) => void }) {
   const [budget, setBudget] = useState(() => String(getQaContextBudgetChars()));
   const [pageChars, setPageChars] = useState(() => String(getQaPageChars()));
+  const [maxRounds, setMaxRounds] = useState(() => String(getQaMaxRounds()));
   const usedChars = getQaActiveContextChars();
   const pct = Math.round((usedChars / getQaContextBudgetChars()) * 100);
 
@@ -374,8 +380,14 @@ function QaSettingsSheet({ onClose, onNotice }: { onClose: () => void; onNotice?
       onNotice?.(`单页字符数需为 ${QA_PAGE_CHARS_MIN.toLocaleString()} - ${QA_PAGE_CHARS_MAX.toLocaleString()} 之间的数字。`);
       return;
     }
+    const parsedRounds = Number(maxRounds);
+    if (!Number.isFinite(parsedRounds) || parsedRounds < QA_MAX_ROUNDS_MIN || parsedRounds > QA_MAX_ROUNDS_MAX) {
+      onNotice?.(`工具调用上限需为 ${QA_MAX_ROUNDS_MIN} - ${QA_MAX_ROUNDS_MAX} 之间的数字。`);
+      return;
+    }
     setQaContextBudgetChars(parsed);
     setQaPageChars(parsedPage);
+    setQaMaxRounds(parsedRounds);
     onNotice?.("已保存工坊配置。");
     onClose();
   };
@@ -383,8 +395,10 @@ function QaSettingsSheet({ onClose, onNotice }: { onClose: () => void; onNotice?
   const reset = () => {
     setQaContextBudgetChars(null);
     setQaPageChars(null);
+    setQaMaxRounds(null);
     setBudget(String(QA_DEFAULT_CONTEXT_BUDGET_CHARS));
     setPageChars(String(QA_DEFAULT_PAGE_CHARS));
+    setMaxRounds(String(QA_DEFAULT_MAX_ROUNDS));
     onNotice?.("已恢复默认配置。");
   };
 
@@ -422,6 +436,21 @@ function QaSettingsSheet({ onClose, onNotice }: { onClose: () => void; onNotice?
         </label>
         <div className="qa-settings-hint">
           小坊翻页读答疑文档 / 本机内容 / 仓库源码时，每页返回的字符数。默认 {QA_DEFAULT_PAGE_CHARS.toLocaleString()}；调大读得快但更占上下文，小上下文模型建议调小。
+        </div>
+        <label className="qa-settings-field">
+          <span>单轮工具调用上限（次）</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={QA_MAX_ROUNDS_MIN}
+            max={QA_MAX_ROUNDS_MAX}
+            step={1}
+            value={maxRounds}
+            onChange={(e) => setMaxRounds(e.target.value)}
+          />
+        </label>
+        <div className="qa-settings-hint">
+          一次提问里小坊最多连续执行多少轮工具，用完会提示「回复继续」。默认 {QA_DEFAULT_MAX_ROUNDS}；复杂任务（写游戏、改代码）可调大，想控制 token 消耗可调小。
         </div>
         <div className="qa-devnotice-actions is-row">
           <button type="button" className="qa-devnotice-btn" onClick={reset}>恢复默认</button>
