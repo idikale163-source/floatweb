@@ -1324,7 +1324,7 @@
 .menu-item .card-icon {
   width: 36px;
   height: 36px;
-  border-radius: 999px;
+  border-radius: 12px;
   color: var(--icon-color, var(--c-text-title));
   background: color-mix(in srgb, var(--icon-color, var(--c-text-title)) 10%, var(--c-page-body-bg));
   box-shadow: none;
@@ -1364,7 +1364,7 @@
 .card-icon {
   width: 48px;
   height: 48px;
-  border-radius: 999px;
+  border-radius: 15px;
   display: grid;
   place-items: center;
   color: var(--icon-color, var(--c-text-title));

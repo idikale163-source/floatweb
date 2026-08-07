@@ -3,18 +3,24 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSPr
 import { createPortal } from "react-dom";
 import {
   AlertCircle,
-  AppWindow,
-  Code2,
   Download,
-  LayoutGrid,
   PaintBucket,
   Plus,
   RotateCcw,
-  Smartphone,
   Type,
   Upload,
-  Wallpaper,
 } from "lucide-react";
+import {
+  AppWindow as AppWindowFill,
+  ArrowCounterClockwise,
+  Code as CodeFill,
+  DeviceMobile,
+  DownloadSimple,
+  Image as ImageFill,
+  PaintBucket as PaintBucketFill,
+  SquaresFour,
+  TextAa,
+} from "@phosphor-icons/react";
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { normalizeThemeProfile, resolveActiveIconSkins, DEFAULT_THEME_PROFILE, type ThemeProfile } from "@/lib/theme-types";
 import type { DesktopIconId, IconId } from "@/lib/desktop-config";
@@ -96,39 +102,39 @@ function IconChevronRight() {
 }
 
 function IconPalette() {
-  return <PaintBucket size={22} strokeWidth={1.75} />;
+  return <PaintBucketFill size={22} weight="fill" />;
 }
 
 function IconWallpaper() {
-  return <Wallpaper size={22} strokeWidth={1.75} />;
+  return <ImageFill size={22} weight="fill" />;
 }
 
 function IconGrid() {
-  return <LayoutGrid size={22} strokeWidth={1.75} />;
+  return <SquaresFour size={22} weight="fill" />;
 }
 
 function IconWidgets() {
-  return <AppWindow size={22} strokeWidth={1.75} />;
+  return <AppWindowFill size={22} weight="fill" />;
 }
 
 function IconCase() {
-  return <Smartphone size={22} strokeWidth={1.75} />;
+  return <DeviceMobile size={22} weight="fill" />;
 }
 
 function IconText() {
-  return <Type size={22} strokeWidth={1.75} />;
+  return <TextAa size={22} weight="fill" />;
 }
 
 function IconCode() {
-  return <Code2 size={22} strokeWidth={1.75} />;
+  return <CodeFill size={22} weight="fill" />;
 }
 
 function IconTransfer() {
-  return <Download size={22} strokeWidth={1.75} />;
+  return <DownloadSimple size={22} weight="fill" />;
 }
 
 function IconReset() {
-  return <RotateCcw size={22} strokeWidth={1.75} />;
+  return <ArrowCounterClockwise size={22} weight="fill" />;
 }
 
 const MENU_ITEMS: Array<{
