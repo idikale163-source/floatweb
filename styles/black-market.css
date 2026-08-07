@@ -2879,21 +2879,26 @@
   flex-wrap: wrap;
 }
 
-/* 草稿箱「从文件导入」行 */
+/* 创建发布「导入草稿文件」：整行宽，跟随终端绿风格（与昵称快捷按钮同构） */
 .cp-bm-draft-import-row {
-  display: flex;
-  justify-content: flex-end;
   margin-bottom: 10px;
 }
 .cp-bm-draft-import-row button {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  color: inherit;
-  font-size: 12px;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(82, 255, 158, 0.24);
+  background: rgba(82, 255, 158, 0.06);
+  color: #8dffbd;
+  padding: 0 10px;
+  font: 800 calc(11px*var(--app-text-scale,1)) "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.08em;
   cursor: pointer;
+}
+.cp-bm-draft-import-row button:active {
+  transform: translateY(1px);
+  background: rgba(82, 255, 158, 0.12);
 }
