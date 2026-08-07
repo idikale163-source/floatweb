@@ -19,14 +19,14 @@ const RESOURCE_MENU: Omit<FeaturedCardItem, "onClick">[] = [
         icon: Brain,
         label: "记忆库",
         desc: "角色记忆档案",
-        iconColor: BINDING_ACCENTS.memory,
+        iconColor: "#6366F1",
     },
     {
         id: "vn_assets",
         icon: Sparkle,
         label: "漫卷资源",
         desc: "场景与角色立绘",
-        iconColor: CONTENT_APP_ACCENTS.vn,
+        iconColor: "#EC4899",
     },
 ];
 

@@ -55,18 +55,18 @@ type SubPage =
     | "about";
 
 const SETTINGS_MENU = [
-    { id: "api", icon: HardDrives, label: "API 设置", desc: "大模型接口", iconColor: BINDING_ACCENTS.api },
-    { id: "voice", icon: Microphone, label: "语音 API", desc: "语音合成", iconColor: BINDING_ACCENTS.voice },
+    { id: "api", icon: HardDrives, label: "API 设置", desc: "大模型接口", iconColor: "#3B82F6" },
+    { id: "voice", icon: Microphone, label: "语音 API", desc: "语音合成", iconColor: "#8B5CF6" },
     { id: "imageGeneration", icon: Image, label: "图像生成 API", desc: "模型、参考图与提示词", iconColor: CONTENT_APP_ACCENTS.moments },
-    { id: "presets", icon: Fingerprint, label: "预设", desc: "角色预设", iconColor: BINDING_ACCENTS.preset },
-    { id: "worldbook", icon: Globe, label: "世界书", desc: "世界观设定", iconColor: BINDING_ACCENTS.worldBook },
-    { id: "regex", icon: Database, label: "正则规则", desc: "文本替换", iconColor: BINDING_ACCENTS.regex },
-    { id: "data", icon: Stack, label: "数据管理", desc: "导入导出", iconColor: BINDING_ACCENTS.api },
-    { id: "binding", icon: LinkSimple, label: "配置绑定", desc: "管理全局默认、角色与应用的配置绑定关系", iconColor: BINDING_ACCENTS.identity },
+    { id: "presets", icon: Fingerprint, label: "预设", desc: "角色预设", iconColor: "#EC4899" },
+    { id: "worldbook", icon: Globe, label: "世界书", desc: "世界观设定", iconColor: "#14B8A6" },
+    { id: "regex", icon: Database, label: "正则规则", desc: "文本替换", iconColor: "#F97316" },
+    { id: "data", icon: Stack, label: "数据管理", desc: "导入导出", iconColor: "#6366F1" },
+    { id: "binding", icon: LinkSimple, label: "配置绑定", desc: "管理全局默认、角色与应用的配置绑定关系", iconColor: "#10B981" },
     { id: "weixin", icon: ChatTeardrop, label: "微信接入", desc: "iLink Bot", iconColor: CONTENT_APP_ACCENTS.chat },
-    { id: "toolbox", icon: Wrench, label: "聊天工具箱", desc: "外部工具调用", iconColor: BINDING_ACCENTS.voice },
-    { id: "identity", icon: UserCircle, label: "用户身份", desc: "个人信息", iconColor: BINDING_ACCENTS.identity },
-    { id: "about", icon: Info, label: "关于与声明", desc: "版本与协议", iconColor: BINDING_ACCENTS.memory },
+    { id: "toolbox", icon: Wrench, label: "聊天工具箱", desc: "外部工具调用", iconColor: "#F59E0B" },
+    { id: "identity", icon: UserCircle, label: "用户身份", desc: "个人信息", iconColor: "#0EA5E9" },
+    { id: "about", icon: Info, label: "关于与声明", desc: "版本与协议", iconColor: "#64748B" },
 ] as const;
 
 const realtimeIconStyle = {

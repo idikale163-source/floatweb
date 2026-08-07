@@ -1320,13 +1320,21 @@
 .card-card:nth-child(4) { animation-delay: 240ms; }
 
 .card-card .card-icon,
-.card-featured .card-icon,
-.menu-item .card-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+.card-featured .card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
   color: var(--icon-color, var(--c-text-title));
-  background: color-mix(in srgb, var(--icon-color, var(--c-text-title)) 10%, var(--c-page-body-bg));
+  background: color-mix(in srgb, var(--icon-color, var(--c-text-title)) 13%, var(--c-icon-tile-base, #fff));
+  box-shadow: none;
+}
+
+.menu-item .card-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  color: var(--icon-color, var(--c-text-title));
+  background: color-mix(in srgb, var(--icon-color, var(--c-text-title)) 13%, var(--c-icon-tile-base, #fff));
   box-shadow: none;
 }
 
@@ -1364,11 +1372,11 @@
 .card-icon {
   width: 48px;
   height: 48px;
-  border-radius: 15px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
   color: var(--icon-color, var(--c-text-title));
-  background: color-mix(in srgb, var(--icon-color, var(--c-text-title)) 10%, var(--c-page-body-bg));
+  background: color-mix(in srgb, var(--icon-color, var(--c-text-title)) 13%, var(--c-icon-tile-base, #fff));
   box-shadow: none;
   transition: box-shadow 200ms ease;
 }

@@ -145,15 +145,15 @@ const MENU_ITEMS: Array<{
   color?: string;
   glow?: string;
 }> = [
-  { section: "palette", icon: IconPalette, label: "主题色", desc: "调色板预设", color: BINDING_ACCENTS.preset, glow: `color-mix(in srgb, ${BINDING_ACCENTS.preset} 35%, transparent)` },
-  { section: "wallpaper", icon: IconWallpaper, label: "壁纸", desc: "桌面背景", color: BINDING_ACCENTS.api, glow: `color-mix(in srgb, ${BINDING_ACCENTS.api} 35%, transparent)` },
-  { section: "icons", icon: IconGrid, label: "图标", desc: "应用图标", color: BINDING_ACCENTS.regex, glow: `color-mix(in srgb, ${BINDING_ACCENTS.regex} 35%, transparent)` },
-  { section: "widgets", icon: IconWidgets, label: "桌面组件", desc: "小组件", color: BINDING_ACCENTS.voice, glow: `color-mix(in srgb, ${BINDING_ACCENTS.voice} 35%, transparent)` },
-  { section: "case", icon: IconCase, label: "状态栏", color: BINDING_ACCENTS.memory },
-  { section: "text", icon: IconText, label: "文字", color: BINDING_ACCENTS.identity, glow: `color-mix(in srgb, ${BINDING_ACCENTS.identity} 35%, transparent)` },
-  { section: "css", icon: IconCode, label: "CSS 变量", desc: "自定义全局样式变量", color: BINDING_ACCENTS.embedding, glow: `color-mix(in srgb, ${BINDING_ACCENTS.embedding} 35%, transparent)` },
-  { section: "transfer", icon: IconTransfer, label: "主题导入 / 导出", desc: "备份与迁移", color: BINDING_ACCENTS.api, glow: `color-mix(in srgb, ${BINDING_ACCENTS.api} 35%, transparent)` },
-  { section: "reset", icon: IconReset, label: "恢复默认", desc: "重置外观", color: BINDING_ACCENTS.regex, glow: `color-mix(in srgb, ${BINDING_ACCENTS.regex} 30%, transparent)` },
+  { section: "palette", icon: IconPalette, label: "主题色", desc: "调色板预设", color: "#EC4899", glow: `color-mix(in srgb, #EC4899 35%, transparent)` },
+  { section: "wallpaper", icon: IconWallpaper, label: "壁纸", desc: "桌面背景", color: "#3B82F6", glow: `color-mix(in srgb, #3B82F6 35%, transparent)` },
+  { section: "icons", icon: IconGrid, label: "图标", desc: "应用图标", color: "#F97316", glow: `color-mix(in srgb, #F97316 35%, transparent)` },
+  { section: "widgets", icon: IconWidgets, label: "桌面组件", desc: "小组件", color: "#8B5CF6", glow: `color-mix(in srgb, #8B5CF6 35%, transparent)` },
+  { section: "case", icon: IconCase, label: "状态栏", color: "#6366F1"},
+  { section: "text", icon: IconText, label: "文字", color: "#10B981", glow: `color-mix(in srgb, #10B981 35%, transparent)` },
+  { section: "css", icon: IconCode, label: "CSS 变量", desc: "自定义全局样式变量", color: "#14B8A6", glow: `color-mix(in srgb, #14B8A6 35%, transparent)` },
+  { section: "transfer", icon: IconTransfer, label: "主题导入 / 导出", desc: "备份与迁移", color: "#0EA5E9", glow: `color-mix(in srgb, #0EA5E9 35%, transparent)` },
+  { section: "reset", icon: IconReset, label: "恢复默认", desc: "重置外观", color: "#64748B", glow: `color-mix(in srgb, #64748B 30%, transparent)` },
 ];
 
 const menuIconStyle = (color?: string): CSSProperties => ({
