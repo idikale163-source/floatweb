@@ -16,6 +16,11 @@ const MAX_MESSAGES_PER_SESSION = 200;
 
 export type QaToolStatus = { name: string; running: boolean; success?: boolean; detail?: string; result?: string };
 
+/** 消息内的时序分段：文字与工具行按实际发生顺序交错展示 */
+export type QaSegment =
+    | { kind: "text"; text: string }
+    | { kind: "tool"; tool: QaToolStatus };
+
 export type QaPendingCommit = {
     proposal: QaProposedCommit;
     status: "pending" | "applying" | "applied" | "reverting" | "reverted" | "canceled";
@@ -33,6 +38,8 @@ export type QaMsg = {
     error?: string;
     aborted?: boolean;
     tools?: QaToolStatus[];
+    /** 时序分段（文字/工具交错）；无此字段的旧消息回退「工具在顶、文字在下」布局 */
+    segments?: QaSegment[];
     pendingCommit?: QaPendingCommit;
     /** 流过滤器正在缓冲长工具指令：显示"编写工具调用中"占位（瞬态，不持久） */
     toolDrafting?: boolean;
@@ -400,6 +407,7 @@ export async function sendQaMessage(text: string, images?: string[]): Promise<vo
     let streamedContent = "";
     let streamedReasoning = "";
     let toolStatuses: QaToolStatus[] = [];
+    let segments: QaSegment[] = [];
     let stagedCommit: QaPendingCommit | undefined;
     let lastPaintAt = 0;
     let lastPaintLength = 0;
@@ -443,7 +451,13 @@ export async function sendQaMessage(text: string, images?: string[]): Promise<vo
             callbacks: {
                 onDelta: (delta) => {
                     streamedContent += delta;
-                    paintAssistant({ content: streamedContent, reasoning: streamedReasoning }, { persist: false });
+                    const last = segments[segments.length - 1];
+                    if (last?.kind === "text") {
+                        segments = [...segments.slice(0, -1), { kind: "text", text: last.text + delta }];
+                    } else {
+                        segments = [...segments, { kind: "text", text: delta }];
+                    }
+                    paintAssistant({ content: streamedContent, reasoning: streamedReasoning, segments }, { persist: false });
                 },
                 onReasoningDelta: (delta) => {
                     streamedReasoning += delta;
@@ -451,17 +465,28 @@ export async function sendQaMessage(text: string, images?: string[]): Promise<vo
                 },
                 onToolStart: (name, args) => {
                     const detail = args && Object.keys(args).length > 0 ? JSON.stringify(args, null, 2) : undefined;
-                    toolStatuses = [...toolStatuses, { name: toolLabel(name), running: true, detail }];
-                    paintAssistant({ tools: toolStatuses }, { force: true, persist: false });
+                    const status: QaToolStatus = { name: toolLabel(name), running: true, detail };
+                    toolStatuses = [...toolStatuses, status];
+                    segments = [...segments, { kind: "tool", tool: status }];
+                    paintAssistant({ tools: toolStatuses, segments }, { force: true, persist: false });
                 },
                 onToolDone: (name, success, result) => {
                     let patched = false;
+                    const done: QaToolStatus[] = [];
                     toolStatuses = toolStatuses.map((t) =>
                         !patched && t.running && t.name === toolLabel(name)
-                            ? ((patched = true), { ...t, running: false, success, result })
+                            ? ((patched = true), done[0] = { ...t, running: false, success, result }, done[0])
                             : t,
                     );
-                    paintAssistant({ tools: toolStatuses }, { force: true, persist: false });
+                    if (done[0]) {
+                        let segPatched = false;
+                        segments = segments.map((seg) =>
+                            !segPatched && seg.kind === "tool" && seg.tool.running && seg.tool.name === toolLabel(name)
+                                ? ((segPatched = true), { kind: "tool" as const, tool: done[0] })
+                                : seg,
+                        );
+                    }
+                    paintAssistant({ tools: toolStatuses, segments }, { force: true, persist: false });
                 },
                 onStageCommit: (proposal) => {
                     stagedCommit = { proposal, status: "pending" };
@@ -517,6 +542,7 @@ export async function sendQaMessage(text: string, images?: string[]): Promise<vo
                 content: streamedContent,
                 reasoning: streamedReasoning || undefined,
                 tools: toolStatuses.length ? toolStatuses : undefined,
+                segments: segments.length ? segments : undefined,
                 pendingCommit: stagedCommit,
                 toolDrafting: undefined,
             },
@@ -532,6 +558,9 @@ export async function sendQaMessage(text: string, images?: string[]): Promise<vo
         }
     } catch (error) {
         const finalTools = toolStatuses.length ? toolStatuses.map((t) => (t.running ? { ...t, running: false } : t)) : undefined;
+        const finalSegments = segments.length
+            ? segments.map((seg) => (seg.kind === "tool" && seg.tool.running ? { kind: "tool" as const, tool: { ...seg.tool, running: false } } : seg))
+            : undefined;
         if (controller.signal.aborted) {
             // 中断续接：已执行的工具调用/结果已在上下文里；这里补齐悬空的原生调用结果、
             // 记录已流出的可见文本，下一轮「继续」能接上，原生协议也不会因缺 tool 结果报错
@@ -558,12 +587,12 @@ export async function sendQaMessage(text: string, images?: string[]): Promise<vo
                 return patches.length > 0 ? { ...s, context: [...entries, ...patches] } : s;
             });
             paintAssistant(
-                { content: streamedContent, reasoning: streamedReasoning || undefined, tools: finalTools, aborted: true, toolDrafting: undefined },
+                { content: streamedContent, reasoning: streamedReasoning || undefined, tools: finalTools, segments: finalSegments, aborted: true, toolDrafting: undefined },
                 { force: true },
             );
         } else {
             paintAssistant(
-                { content: streamedContent, reasoning: streamedReasoning || undefined, tools: finalTools, error: formatQaErrorMessage(error), toolDrafting: undefined },
+                { content: streamedContent, reasoning: streamedReasoning || undefined, tools: finalTools, segments: finalSegments, error: formatQaErrorMessage(error), toolDrafting: undefined },
                 { force: true },
             );
         }
