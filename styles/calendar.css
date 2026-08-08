@@ -1186,10 +1186,6 @@
   align-items: center;
 }
 
-.calendar-emoji-input {
-  width: 104px;
-  flex: none;
-}
 
 .calendar-emoji-preset {
   width: 32px;

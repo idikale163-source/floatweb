@@ -18,7 +18,11 @@ export type CalendarEventDraft = {
   colorKey?: CalendarColorKey;
 };
 
-const EMOJI_PRESETS = ["📌", "💼", "📚", "🏃", "🍽️", "☕", "🎬", "🎮", "🛒", "💤", "❤️", "🎂"];
+const EMOJI_PRESETS = [
+  "📌", "💼", "📚", "💻", "🏃", "🏋️", "🍽️", "☕", "🎬",
+  "🎮", "🎵", "🛒", "🛍️", "✈️", "🏥", "📞", "💤", "❤️",
+  "🎂", "🎨", "🧹", "🐾",
+];
 
 const COLOR_LABELS: Record<CalendarColorKey, string> = {
   blue: "蓝",
@@ -121,14 +125,19 @@ export function CalendarEventEditModal({
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="menu-desc ml-1">图标</label>
+            <label className="menu-desc ml-1">图标（点选，再点一次取消）</label>
             <div className="calendar-emoji-row">
-              <Input
-                value={draft.emoji}
-                onChange={e => onChange({ ...draft, emoji: e.target.value })}
-                placeholder="选一个 emoji"
-                className="calendar-emoji-input"
-              />
+              {draft.emoji && !EMOJI_PRESETS.includes(draft.emoji) ? (
+                <button
+                  type="button"
+                  className="calendar-emoji-preset"
+                  data-active="true"
+                  onClick={() => onChange({ ...draft, emoji: "" })}
+                  aria-label={`取消 ${draft.emoji}`}
+                >
+                  {draft.emoji}
+                </button>
+              ) : null}
               {EMOJI_PRESETS.map(emoji => (
                 <button
                   key={emoji}
