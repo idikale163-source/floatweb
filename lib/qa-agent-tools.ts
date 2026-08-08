@@ -43,6 +43,7 @@ import {
     type QaCreatedContent,
 } from "./qa-content-tools";
 import { searchQaFaq, readQaFaqPage } from "./qa-faq";
+import { kvGet, kvSet } from "./kv-db";
 import { getQaPageChars } from "./qa-prefs";
 
 export type { QaCreatedContent } from "./qa-content-tools";
@@ -582,14 +583,38 @@ const githubBranchTool: QaTool = {
 // 先分多轮 append 到内存暂存区，再在「提交修改」里用 {path, fromStaged:true} 引用。
 // 改已有文件不需要它：走「提交修改」的 find/replace 片段替换。
 
-const COMMIT_STAGING = new Map<string, string>();
+// 与应用暂存区同理：持久化到 kv，页面重载后分段写入/编辑的内容不丢
+const COMMIT_STAGING_KEY = "ai_phone_qa_commit_staging_v1";
+const COMMIT_STAGING_MEM = new Map<string, string>();
+let commitStagingLoaded = false;
+
+function commitStaging(): Map<string, string> {
+    if (!commitStagingLoaded) {
+        commitStagingLoaded = true;
+        try {
+            const parsed = JSON.parse(kvGet(COMMIT_STAGING_KEY) || "[]") as Array<[string, string]>;
+            if (Array.isArray(parsed)) {
+                for (const [key, value] of parsed) {
+                    if (typeof key === "string" && typeof value === "string") COMMIT_STAGING_MEM.set(key, value);
+                }
+            }
+        } catch {
+            // ignore
+        }
+    }
+    return COMMIT_STAGING_MEM;
+}
+
+function persistCommitStaging(): void {
+    kvSet(COMMIT_STAGING_KEY, JSON.stringify([...commitStaging()]));
+}
 const COMMIT_STAGE_MAX_FILES = 40;
 const COMMIT_STAGE_MAX_FILE_CHARS = 2_000_000;
 const COMMIT_STAGE_MAX_TOTAL_CHARS = 10_000_000;
 
 function commitStagingSummary(): string {
-    if (COMMIT_STAGING.size === 0) return "（提交暂存区为空）";
-    return [...COMMIT_STAGING.entries()].map(([path, c]) => `${path}(${c.length})`).join("、");
+    if (commitStaging().size === 0) return "（提交暂存区为空）";
+    return [...commitStaging().entries()].map(([path, c]) => `${path}(${c.length})`).join("、");
 }
 
 const githubStageFileTool: QaTool = {
@@ -616,20 +641,22 @@ const githubStageFileTool: QaTool = {
     ],
     async run(args) {
         if (args.clear === true) {
-            COMMIT_STAGING.clear();
+            commitStaging().clear();
+            persistCommitStaging();
             return "✓ 提交暂存区已清空。";
         }
         const path = typeof args.path === "string" ? args.path.trim().replace(/^\.?\//, "") : "";
         if (!path || path.includes("..") || path.length > 200) return "path 无效（仓库内相对路径，不允许 ..）。";
         const content = typeof args.content === "string" ? args.content : "";
         if (!content) return "缺少 content。";
-        if (COMMIT_STAGING.size >= COMMIT_STAGE_MAX_FILES && !COMMIT_STAGING.has(path)) return `暂存文件数已达上限 ${COMMIT_STAGE_MAX_FILES}。`;
-        const next = args.append === true ? (COMMIT_STAGING.get(path) ?? "") + content : content;
+        if (commitStaging().size >= COMMIT_STAGE_MAX_FILES && !commitStaging().has(path)) return `暂存文件数已达上限 ${COMMIT_STAGE_MAX_FILES}。`;
+        const next = args.append === true ? (commitStaging().get(path) ?? "") + content : content;
         if (next.length > COMMIT_STAGE_MAX_FILE_CHARS) return `单文件暂存超限（${next.length} > ${COMMIT_STAGE_MAX_FILE_CHARS} 字符）。`;
         let total = next.length;
-        for (const [k, c] of COMMIT_STAGING) { if (k !== path) total += c.length; }
+        for (const [k, c] of commitStaging()) { if (k !== path) total += c.length; }
         if (total > COMMIT_STAGE_MAX_TOTAL_CHARS) return `暂存区总量超限（${total} > ${COMMIT_STAGE_MAX_TOTAL_CHARS} 字符）。`;
-        COMMIT_STAGING.set(path, next);
+        commitStaging().set(path, next);
+        persistCommitStaging();
         return `✓ 已暂存 ${path}（当前 ${next.length.toLocaleString()} 字符${args.append === true ? "，本次为追加" : ""}）。暂存区：${commitStagingSummary()}。继续追加或暂存其他文件；全部写完后用「发布」type=repo 提交（需 message）。`;
     },
 };
@@ -690,8 +717,8 @@ const githubCommitTool: QaTool = {
             const path = typeof entry.path === "string" ? entry.path.trim() : "";
             if (!path) continue;
             if (entry.fromStaged === true) {
-                const stagedKey = COMMIT_STAGING.has(path) ? path : path.replace(/^\.?\//, "");
-                const staged = COMMIT_STAGING.get(stagedKey);
+                const stagedKey = commitStaging().has(path) ? path : path.replace(/^\.?\//, "");
+                const staged = commitStaging().get(stagedKey);
                 if (staged == null) return `文件 ${path}：提交暂存区里没有它。先用「暂存提交文件」写入。当前暂存区：${commitStagingSummary()}`;
                 resolved.set(path, staged);
                 consumedStaged.push(stagedKey);
@@ -733,7 +760,10 @@ const githubCommitTool: QaTool = {
             files.length ? `改 ${files.length} 个：${files.map((f) => f.path).join("、")}` : "",
             deletes.length ? `删 ${deletes.length} 个：${deletes.join("、")}` : "",
         ].filter(Boolean).join("；");
-        const releaseStaged = () => { for (const key of consumedStaged) COMMIT_STAGING.delete(key); };
+        const releaseStaged = () => {
+            for (const key of consumedStaged) commitStaging().delete(key);
+            if (consumedStaged.length) persistCommitStaging();
+        };
         if (context?.autoCommit) {
             // 立即提交：后续工具（创建PR 等）依赖提交已经落到分支上
             if (context.commitNow) {
@@ -996,7 +1026,7 @@ const listTool: QaTool = {
     async run(args, context) {
         if (args.scope === "repo") return githubTreeTool.run({ filter: args.filter }, context);
         const local = await contentToolByNative("list_local_content").run({}, context);
-        return `${local}\n${getAppStagingNote()}\n提交暂存区：${COMMIT_STAGING.size === 0 ? "（空）" : commitStagingSummary()}`;
+        return `${local}\n${getAppStagingNote()}\n提交暂存区：${commitStaging().size === 0 ? "（空）" : commitStagingSummary()}`;
     },
 };
 
@@ -1029,7 +1059,7 @@ const readTool: QaTool = {
         if (args.type === "repo") {
             // 提交暂存区的工作副本优先：分段写入/编辑过的文件，续写要基于暂存版本而不是仓库旧版
             const path = typeof args.path === "string" ? args.path.trim().replace(/^\.?\//, "") : "";
-            const staged = path ? COMMIT_STAGING.get(path) : undefined;
+            const staged = path ? commitStaging().get(path) : undefined;
             if (staged != null) {
                 const lines = staged.split("\n");
                 const start = typeof args.start === "number" ? Math.max(1, args.start) : 1;
@@ -1042,7 +1072,7 @@ const readTool: QaTool = {
             return githubReadTool.run({ path: args.path, start: args.start, end: args.end }, context);
         }
         if (args.type === "app" && typeof args.path === "string" && args.path.trim()) {
-            return readStagedAppFile(args.path, args.page);
+            return readStagedAppFile(args.path, args.page, args.start, args.end);
         }
         const result = await contentToolByNative("read_local_content").run({ type: args.type, name: args.name, page: args.page }, context);
         if (args.type === "app" && result.startsWith("没有找到名为") && !getAppStagingNote().includes("（暂存区为空）")) {
@@ -1118,7 +1148,7 @@ const editTool: QaTool = {
             const find = typeof args.find === "string" ? args.find : "";
             const replace = typeof args.replace === "string" ? args.replace : "";
             if (!find) return "缺少 find（要被替换的原文片段）。";
-            let base = COMMIT_STAGING.get(path);
+            let base = commitStaging().get(path);
             const fromStaging = base != null;
             if (base == null) {
                 try {
@@ -1131,7 +1161,8 @@ const editTool: QaTool = {
             if (count === 0) return `文件 ${path}：找不到 find 片段。先用「读取」type=repo 核对原文（空格与换行须完全一致）。`;
             if (count > 1 && args.all !== true) return `文件 ${path}：find 片段匹配了 ${count} 处。加长片段使其唯一，或加 all:true 替换全部。`;
             const next = args.all === true ? base.split(find).join(replace) : base.replace(find, replace);
-            COMMIT_STAGING.set(path, next);
+            commitStaging().set(path, next);
+            persistCommitStaging();
             return `✓ 已替换 ${path} 的 ${args.all === true ? count : 1} 处并暂存（${fromStaging ? "基于暂存内容" : "基于仓库当前内容"}，现 ${next.length.toLocaleString()} 字符）。全部修改就绪后用「发布」type=repo 提交。`;
         }
         return workbenchEditLocal(args as Record<string, unknown>, context);
@@ -1168,14 +1199,15 @@ const publishTool: QaTool = {
     async run(args, context) {
         if (args.type === "repo") {
             if (args.clear === true) {
-                COMMIT_STAGING.clear();
+                commitStaging().clear();
+                persistCommitStaging();
                 return "✓ 提交暂存区已清空。";
             }
             const deletes = Array.isArray(args.deletes) ? args.deletes : [];
-            if (COMMIT_STAGING.size === 0 && deletes.length === 0) return "提交暂存区为空，也没有 deletes。先用「写入」或「编辑」type=repo 修改文件。";
+            if (commitStaging().size === 0 && deletes.length === 0) return "提交暂存区为空，也没有 deletes。先用「写入」或「编辑」type=repo 修改文件。";
             const message = typeof args.message === "string" ? args.message.trim() : "";
             if (!message) return "发布 repo 需要 message（提交说明）。";
-            const files = [...COMMIT_STAGING.keys()].map((path) => ({ path, fromStaged: true }));
+            const files = [...commitStaging().keys()].map((path) => ({ path, fromStaged: true }));
             return githubCommitTool.run({ message, branch: args.branch, files, deletes: deletes.length ? deletes : undefined }, context);
         }
         return workbenchPublishLocal(args as Record<string, unknown>, context);
