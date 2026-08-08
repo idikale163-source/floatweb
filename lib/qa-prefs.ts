@@ -29,6 +29,36 @@ export function setQaPageChars(chars: number | null): void {
     }
 }
 
+// 单次最大输出 token（物理护栏）：设置后工坊每次请求带 max_tokens，超长输出被服务端
+// 安全截断而不是把连接拖崩；引擎会把该预算写进系统提示，并在截断后自动续接。
+// 默认 null = 不传该参数（兼容不支持 max_tokens 的模型/中转，各家用自己的默认值）。
+// localStorage 键 ai_phone_qa_max_output_tokens 覆盖（调参/测试用）。
+export const QA_MAX_OUTPUT_TOKENS_MIN = 256;
+export const QA_MAX_OUTPUT_TOKENS_MAX = 1_000_000;
+
+export function getQaMaxOutputTokens(): number | null {
+    try {
+        const raw = Number(localStorage.getItem("ai_phone_qa_max_output_tokens"));
+        if (Number.isFinite(raw) && raw >= QA_MAX_OUTPUT_TOKENS_MIN && raw <= QA_MAX_OUTPUT_TOKENS_MAX) return Math.floor(raw);
+    } catch {
+        // ignore
+    }
+    return null;
+}
+
+/** 设置单次最大输出 token（null = 不传该参数） */
+export function setQaMaxOutputTokens(tokens: number | null): void {
+    try {
+        if (tokens == null) localStorage.removeItem("ai_phone_qa_max_output_tokens");
+        else {
+            const clamped = Math.min(QA_MAX_OUTPUT_TOKENS_MAX, Math.max(QA_MAX_OUTPUT_TOKENS_MIN, Math.floor(tokens)));
+            localStorage.setItem("ai_phone_qa_max_output_tokens", String(clamped));
+        }
+    } catch {
+        // ignore
+    }
+}
+
 // 单轮工具调用上限：一次提问里 agent 最多连续执行多少轮工具，用完提示「回复继续」。
 // localStorage 键 ai_phone_qa_max_rounds 覆盖（调参/测试用）。
 export const QA_DEFAULT_MAX_ROUNDS = 8;

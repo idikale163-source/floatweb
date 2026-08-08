@@ -14,7 +14,7 @@ import { loadApiConfigs, loadBindingConfig } from "./settings-storage";
 import type { ApiConfig } from "./settings-types";
 import { buildQaSystemPrompt } from "./qa-knowledge";
 import { createSseJsonParser } from "./sse-json";
-import { getQaMaxRounds } from "./qa-prefs";
+import { getQaMaxOutputTokens, getQaMaxRounds } from "./qa-prefs";
 import { parseToolCalls } from "./tool-executor";
 import {
     buildQaNativeNameMap,
@@ -188,6 +188,19 @@ function historyToRequestMessages(history: QaEngineMessage[]): LlmRequestMessage
     );
 }
 
+// ── 分段续写协议（CONTINUE 尾标）──────────────────────
+// 大内容分多轮写时，模型在正文末尾标 <!--CONTINUE--> 表示"没写完，让我继续"，
+// 引擎自动喂系统提示接力，无需用户回复「继续」。<!--DONE--> 不参与判定
+// （正常收尾即视为完成），但同样从可见文本里隐藏，防止弱模型照猫画虎写出来。
+
+const QA_SEGMENT_MARKER_RE = /<!--\s*(?:CONTINUE|DONE)\s*-->/gi;
+const QA_CONTINUE_TAIL_RE = /<!--\s*CONTINUE\s*-->\s*$/i;
+
+/** 正文（去思考块后）以 CONTINUE 尾标结束：模型主动请求续写 */
+function hasContinueMarker(content: string): boolean {
+    return QA_CONTINUE_TAIL_RE.test(stripThinkBlocks(content));
+}
+
 // ── 流式显示过滤：隐藏 [执行动作:…] 指令与 <think> 块 ──
 
 type QaVisibleSink = (text: string) => void | Promise<void>;
@@ -254,12 +267,13 @@ function createQaStreamFilter(sink: QaVisibleSink, onHolding?: (holding: boolean
         return findDirectiveEnd(text, start);
     };
 
-    // 尾部可能是尚未流完的指令/标签前缀，暂扣不显示
+    // 尾部可能是尚未流完的指令/标签前缀，暂扣不显示。
+    // 角括号阈值取 24：需覆盖分段续写标记 <!--CONTINUE--> 的未完前缀（最长 16 字符）
     const tailHoldIndex = (text: string): number => {
         const bracket = text.lastIndexOf("[");
         if (bracket !== -1 && !text.slice(bracket).includes("]") && text.length - bracket < 120) return bracket;
         const angle = text.lastIndexOf("<");
-        if (angle !== -1 && !text.slice(angle).includes(">") && text.length - angle < 15) return angle;
+        if (angle !== -1 && !text.slice(angle).includes(">") && text.length - angle < 24) return angle;
         return text.length;
     };
 
@@ -273,6 +287,7 @@ function createQaStreamFilter(sink: QaVisibleSink, onHolding?: (holding: boolean
             if (end == null) {
                 out += work.slice(0, start);
                 buffer = final ? "" : work.slice(start);
+                out = out.replace(QA_SEGMENT_MARKER_RE, "");
                 if (out) await sink(out);
                 // 正在缓冲一段未收尾的指令（如大段安装调用）：告知 UI 显示"编写工具调用中"，
                 // 否则长时间无可见增量会被误认为卡住
@@ -290,6 +305,8 @@ function createQaStreamFilter(sink: QaVisibleSink, onHolding?: (holding: boolean
             out += work.slice(0, hold);
             buffer = work.slice(hold);
         }
+        // 分段续写标记只给引擎看，不展示给用户（未流完的前缀由 tailHoldIndex 暂扣）
+        out = out.replace(QA_SEGMENT_MARKER_RE, "");
         if (out) await sink(out);
         await setHolding(false);
     };
@@ -315,15 +332,18 @@ async function requestQaCompletion(
     messages: LlmRequestMessage[],
     options?: { signal?: AbortSignal; callbacks?: QaStreamCallbacks },
 ): Promise<{ content: string; reasoning: string }> {
+    // 输出护栏：配置了「单次最大输出 token」时每次请求带 max_tokens，
+    // 写超被服务端安全截断（agent 循环里会自动续接），而不是拖垮整轮
+    const maxTokens = getQaMaxOutputTokens() ?? undefined;
     try {
-        const streamRequest = buildProviderRequest(apiConfig, null, messages, { stream: true });
+        const streamRequest = buildProviderRequest(apiConfig, null, messages, { stream: true, maxTokens });
         const result = await streamQaProviderRequest(streamRequest, { signal: options?.signal }, options?.callbacks);
         if (!result.content.trim()) throw new Error("LLM 返回了空内容");
         return result;
     } catch (streamError) {
         if (options?.signal?.aborted) throw streamError;
         await options?.callbacks?.onStreamFallback?.(formatQaErrorMessage(streamError));
-        const request = buildProviderRequest(apiConfig, null, messages);
+        const request = buildProviderRequest(apiConfig, null, messages, { maxTokens });
         const response = await fetch(request.url, {
             method: "POST",
             headers: request.headers,
@@ -376,9 +396,37 @@ export type QaAgentCallbacks = {
 // 单轮工具调用上限：默认 8，可在工坊配置里调节（qa-prefs）
 
 // 轮数用尽/输出截断时给用户的可见提示——否则未执行的指令被流过滤器隐藏，
-// 表现为"话说到一半突然断了"
+// 表现为"话说到一半突然断了"。截断本身会自动续接，提示只在轮数预算也用完时出现。
 const QA_ROUNDS_EXHAUSTED_NOTICE = "\n\n（这轮的工具调用次数用完了，还有操作没执行——回复「继续」我会接着完成。）";
-const QA_TRUNCATED_NOTICE = "\n\n（回复被模型的输出长度上限截断，最后一个操作没能完整生成——回复「继续」我会重试；经常出现的话，建议在预设里调大最大输出 token，或让我改用分段写入——大 APP 走暂存、大游戏走草稿追加。）";
+const QA_TRUNCATED_NOTICE = "\n\n（回复被输出长度上限截断，且本轮的自动续写次数也用完了——回复「继续」我会接着写；经常出现的话，建议在工坊配置里调大「单轮工具调用上限」。）";
+
+// 截断/CONTINUE 尾标后的自动接力提示（作为用户不可见的系统消息喂回给模型）
+const QA_AUTO_CONTINUE_TRUNCATED =
+    "你上一条输出到达单次输出上限被截断，残缺的工具调用已被安全丢弃（之前已完整生成的调用照常执行了）。请从中断处继续：大字段改用分段工具追加（暂存应用文件 append / 保存游戏草稿 gameHtmlAppend / 保存剧场草稿 openingHtmlAppend），每段写到自然收尾就停，别硬凑一次写完。";
+const QA_AUTO_CONTINUE_MARKED =
+    "收到你的 CONTINUE 标记，请从上次停下的地方继续写；全部完成后正常收尾（不要再输出 CONTINUE）。";
+const QA_CONTINUE_FALLBACK_PROMPT = "请基于以上结果继续回答用户的问题。";
+
+// ── 输出预算提示：告诉模型 max_tokens 护栏与分段写入节奏 ──
+function buildQaOutputBudgetPrompt(): string {
+    const lines: string[] = ["===== 输出预算与分段写入 ====="];
+    const budget = getQaMaxOutputTokens();
+    if (budget) {
+        lines.push(
+            `本会话你单次回复的输出上限被设置为 ${budget.toLocaleString()} token（约 ${Math.round(budget * 0.75).toLocaleString()}–${budget.toLocaleString()} 个汉字），写超会被服务端安全截断，截断后系统会自动让你续写，不会报废已完成的部分。`,
+        );
+    } else {
+        lines.push("模型单次回复有输出长度上限（max_tokens），一次写太长会被截断。");
+    }
+    lines.push("写大 APP / 大游戏 / 超长剧场开场时，不要试图一次输出全部内容，改用分段写入：");
+    lines.push("· 大 APP：「暂存应用文件」首轮写骨架，后续轮 append=true 追加，全部就绪后「安装暂存应用」；");
+    lines.push("· 大游戏：「保存游戏草稿」首轮传 gameHtml，后续轮 gameHtmlAppend 追加，写完「安装本机游戏」fromDraft=true；");
+    lines.push("· 超长剧场开场：「保存剧场草稿」openingHtmlAppend 分轮追加，写完「上架本机剧场」fromDraft=true。");
+    lines.push(
+        "每段写到自然收尾（标签、函数、语句的闭合处）就停，下一轮接着写。内容没写完、这条回复又不打算调用工具时，在正文末尾单独一行写 <!--CONTINUE-->，系统会自动让你继续；全部完成后正常收尾即可，不要输出 <!--CONTINUE-->。",
+    );
+    return lines.join("\n");
+}
 
 /** 正文末尾残留未闭合的 [执行动作: 指令：输出被 max_tokens 截断的典型特征 */
 function hasTruncatedDirective(content: string): boolean {
@@ -530,7 +578,7 @@ async function callQaAgentText(apiConfig: ApiConfig, history: QaEngineMessage[],
     const latestUser = options?.context
         ? [...options.context].reverse().find((m) => m.role === "user")
         : [...history].reverse().find((m) => m.role === "user");
-    const systemPrompt = `${buildQaSystemPrompt(latestUser?.content ?? "")}\n\n${buildQaToolsPrompt()}`;
+    const systemPrompt = `${buildQaSystemPrompt(latestUser?.content ?? "")}\n\n${buildQaToolsPrompt()}\n\n${buildQaOutputBudgetPrompt()}`;
     const working: LlmRequestMessage[] = options?.context
         ? contextToTextMessages(options.context)
         : historyToRequestMessages(history);
@@ -560,18 +608,18 @@ async function callQaAgentText(apiConfig: ApiConfig, history: QaEngineMessage[],
         await filter.flush();
 
         const { toolCalls } = parseToolCalls(stripThinkBlocks(result.content));
-        if (hasTruncatedDirective(result.content)) {
-            await callbacks?.onDelta?.(QA_TRUNCATED_NOTICE);
-            options?.onContext?.({ role: "assistant", content: stripThinkBlocks(result.content) + QA_TRUNCATED_NOTICE });
-            return;
-        }
-        if (toolCalls.length === 0) {
+        // 截断（残缺指令）与 CONTINUE 尾标都不再终止本轮：已完整的调用照常执行，
+        // 然后喂系统提示自动接力，直到模型正常收尾或轮数用尽
+        const truncated = hasTruncatedDirective(result.content);
+        const wantsContinue = hasContinueMarker(result.content);
+        if (!truncated && !wantsContinue && toolCalls.length === 0) {
             options?.onContext?.({ role: "assistant", content: result.content });
             return;
         }
         if (round === maxRounds - 1) {
-            await callbacks?.onDelta?.(QA_ROUNDS_EXHAUSTED_NOTICE);
-            options?.onContext?.({ role: "assistant", content: result.content + QA_ROUNDS_EXHAUSTED_NOTICE });
+            const notice = truncated ? QA_TRUNCATED_NOTICE : QA_ROUNDS_EXHAUSTED_NOTICE;
+            await callbacks?.onDelta?.(notice);
+            options?.onContext?.({ role: "assistant", content: stripThinkBlocks(result.content) + notice });
             return;
         }
 
@@ -587,9 +635,12 @@ async function callQaAgentText(apiConfig: ApiConfig, history: QaEngineMessage[],
             options?.onContext?.({ role: "tool", name: toolResult.name, content: block });
             resultBlocks.push(`【${toolResult.name}】${toolResult.success ? "" : "（失败）"}\n${toolResult.resultForModel}`);
         }
+        const followUp = truncated ? QA_AUTO_CONTINUE_TRUNCATED : wantsContinue ? QA_AUTO_CONTINUE_MARKED : QA_CONTINUE_FALLBACK_PROMPT;
         working.push({
             role: "user",
-            content: `[系统工具结果，用户不可见]\n${resultBlocks.join("\n\n")}\n\n请基于以上结果继续回答用户的问题。`,
+            content: resultBlocks.length
+                ? `[系统工具结果，用户不可见]\n${resultBlocks.join("\n\n")}\n\n${followUp}`
+                : `[系统提示，用户不可见]\n${followUp}`,
         });
     }
 }
@@ -605,6 +656,7 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
     const systemPrompt = [
         buildQaSystemPrompt(latestUser?.content ?? ""),
         "你有原生工具可以调用（见请求中的 tools 定义）。排查问题优先实际调用工具检测，不要凭空猜测；收到工具结果后用人话向用户解释结论和建议。",
+        buildQaOutputBudgetPrompt(),
     ].join("\n\n");
     const working: LlmRequestMessage[] = options?.context
         ? contextToNativeMessages(options.context)
@@ -636,7 +688,7 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
                 tools,
                 [],
                 { characterName: "工坊", userName: "用户" },
-                { appId: "qa", signal: options?.signal },
+                { appId: "qa", signal: options?.signal, maxTokens: getQaMaxOutputTokens() ?? undefined },
                 {
                     async onDelta(delta) {
                         await filter.push(delta);
@@ -649,7 +701,7 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
         } catch (streamError) {
             if (options?.signal?.aborted) throw streamError;
             await callbacks?.onStreamFallback?.(formatQaErrorMessage(streamError));
-            const fallbackRequest = buildProviderRequest(apiConfig, null, messages, { tools });
+            const fallbackRequest = buildProviderRequest(apiConfig, null, messages, { tools, maxTokens: getQaMaxOutputTokens() ?? undefined });
             const response = await fetch(fallbackRequest.url, {
                 method: "POST",
                 headers: fallbackRequest.headers,
@@ -673,24 +725,18 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
         // 原生调用为主；同时兜底解析正文里的文本协议指令（弱模型混写时也能执行）
         const nativeCalls = result.toolCalls || [];
         const textParsed = parseToolCalls(stripThinkBlocks(result.content || ""));
-        // 原生调用参数被输出上限截断（残缺 JSON 已在下层丢弃）：按截断处理，提示重试/分段
-        if (nativeCalls.length === 0 && textParsed.toolCalls.length === 0 && result.truncatedToolCalls?.length) {
-            await callbacks?.onDelta?.(QA_TRUNCATED_NOTICE);
-            options?.onContext?.({ role: "assistant", content: stripThinkBlocks(result.content || "") + QA_TRUNCATED_NOTICE });
-            return;
-        }
-        if (nativeCalls.length === 0 && textParsed.toolCalls.length === 0) {
-            if (hasTruncatedDirective(result.content || "")) {
-                await callbacks?.onDelta?.(QA_TRUNCATED_NOTICE);
-                options?.onContext?.({ role: "assistant", content: stripThinkBlocks(result.content || "") + QA_TRUNCATED_NOTICE });
-            } else {
-                options?.onContext?.({ role: "assistant", content: result.content || "" });
-            }
+        // 截断（原生参数残缺已在下层丢弃 / 文本指令未闭合）与 CONTINUE 尾标都不再终止
+        // 本轮：已完整的调用照常执行，然后喂系统提示自动接力
+        const truncated = Boolean(result.truncatedToolCalls?.length) || hasTruncatedDirective(result.content || "");
+        const wantsContinue = hasContinueMarker(result.content || "");
+        if (nativeCalls.length === 0 && textParsed.toolCalls.length === 0 && !truncated && !wantsContinue) {
+            options?.onContext?.({ role: "assistant", content: result.content || "" });
             return;
         }
         if (round === maxRounds - 1) {
-            await callbacks?.onDelta?.(QA_ROUNDS_EXHAUSTED_NOTICE);
-            options?.onContext?.({ role: "assistant", content: (result.content || "") + QA_ROUNDS_EXHAUSTED_NOTICE });
+            const notice = truncated ? QA_TRUNCATED_NOTICE : QA_ROUNDS_EXHAUSTED_NOTICE;
+            await callbacks?.onDelta?.(notice);
+            options?.onContext?.({ role: "assistant", content: stripThinkBlocks(result.content || "") + notice });
             return;
         }
 
@@ -719,7 +765,8 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
             options?.onContext?.({ role: "tool", content, name: nc.name, toolCallId: nc.id });
         }
 
-        // 文本协议兜底调用：结果以 user 消息块回传
+        // 文本协议兜底调用：结果以 user 消息块回传；截断/CONTINUE 时把接力提示并入同一条
+        const followUp = truncated ? QA_AUTO_CONTINUE_TRUNCATED : wantsContinue ? QA_AUTO_CONTINUE_MARKED : QA_CONTINUE_FALLBACK_PROMPT;
         if (textParsed.toolCalls.length > 0) {
             const resultBlocks: string[] = [];
             for (const call of textParsed.toolCalls) {
@@ -733,8 +780,11 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
             }
             working.push({
                 role: "user",
-                content: `[系统工具结果，用户不可见]\n${resultBlocks.join("\n\n")}\n\n请基于以上结果继续回答用户的问题。`,
+                content: `[系统工具结果，用户不可见]\n${resultBlocks.join("\n\n")}\n\n${followUp}`,
             });
+        } else if (truncated || wantsContinue) {
+            // 没有任何可执行调用（纯截断或纯 CONTINUE 尾标）：单独喂接力提示
+            working.push({ role: "user", content: `[系统提示，用户不可见]\n${followUp}` });
         }
     }
 }
