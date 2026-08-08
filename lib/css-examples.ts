@@ -1838,53 +1838,48 @@ export const CALENDAR_CSS_EXAMPLE = `/* ═════════════�
 }
 
 /* ━━ 顶栏 ━━ */
-.calendar-topbar-title strong {
-  /* letter-spacing: 0.04em; */
+.calendar-header-eyebrow {
+  /* letter-spacing: 0.3em; */
 }
-.calendar-icon-btn,
-.calendar-today-btn {
+.calendar-header-action {
   /* border-radius: 999px; */  /* 圆形按钮 */
 }
 
 /* ━━ 主人切换条 ━━ */
-.calendar-owner-chip {
-  /* border-radius: 12px; */
+.calendar-owner-chip .ui-avatar {
+  /* border-radius: 14px !important; */  /* 方圆头像 */
 }
 
-/* ━━ 月视图 ━━ */
-.calendar-day-num {
+/* ━━ 周卡片 / 月历 ━━ */
+.calendar-week-card,
+.calendar-menstrual-card,
+.calendar-grid-card {
+  /* border-radius: 24px; */
+}
+.calendar-hero-stat strong {
+  /* color: var(--c-calendar-today); */
+}
+.calendar-unified-date {
   /* font-family: Georgia, "Songti SC", serif; */  /* 衬线数字 */
 }
-.calendar-day-lunar {
+.calendar-unified-lunar {
   /* display: none; */  /* 隐藏农历小字 */
 }
-.calendar-event-chip {
-  /* border-radius: 8px; */
-}
-.calendar-event-chip-time {
-  /* display: none; */  /* 隐藏格内时间行，更紧凑 */
-}
-.calendar-more-count {
-  /* color: var(--c-calendar-sub); */
+.calendar-unified-row[data-current="true"] {
+  /* background: var(--c-calendar-surface-2); */
 }
 
-/* ━━ 当日详情弹层 ━━ */
-.calendar-day-sheet {
-  /* border-radius: 28px 28px 0 0; */
+/* ━━ 周课表 ━━ */
+.calendar-event-block {
+  /* border-radius: 10px; */
 }
-.calendar-sheet-event {
-  /* border-radius: 16px; */
-}
-.calendar-ai-badge {
-  /* opacity: 0.6; */
+.calendar-hour-cell:nth-child(odd) {
+  /* opacity: 0.3; */  /* 减淡小时条纹 */
 }
 
-/* ━━ 周概览 ━━ */
-.calendar-week-event {
-  /* border-radius: 4px; */
-}
-.calendar-now-line {
-  /* border-top-style: dashed; */
+/* ━━ 经期卡片 ━━ */
+.calendar-menstrual-pill[data-active="true"] {
+  /* background: var(--c-calendar-ev-violet-bg); color: var(--c-calendar-ev-violet-fg); */
 }
 
 /* ━━ 浮动按钮 ━━ */
