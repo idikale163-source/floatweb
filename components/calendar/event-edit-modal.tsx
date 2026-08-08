@@ -8,6 +8,8 @@ import { CALENDAR_COLOR_KEYS } from "@/lib/calendar-utils";
 export type CalendarEventDraft = {
   id?: string;
   date: string;
+  /** 结束日期（含当天）；留空视为单天。跨多天时保存会按天生成日程 */
+  endDate?: string;
   startTime: string;
   endTime: string;
   location: string;
@@ -56,13 +58,29 @@ export function CalendarEventEditModal({
         </div>
 
         <div className="modal-body hide-scrollbar flex flex-col gap-3 pb-10" data-ui="modal-body">
-          <div className="flex flex-col gap-1">
-            <label className="menu-desc ml-1">日期</label>
-            <Input
-              type="date"
-              value={draft.date}
-              onChange={e => onChange({ ...draft, date: e.target.value })}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="menu-desc ml-1">开始日期</label>
+              <Input
+                type="date"
+                value={draft.date}
+                onChange={e => {
+                  const nextDate = e.target.value;
+                  const currentEnd = draft.endDate || draft.date;
+                  // 结束日期跟随开始日期，除非用户已把结束日期改到更晚
+                  onChange({ ...draft, date: nextDate, endDate: currentEnd > nextDate ? currentEnd : nextDate });
+                }}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="menu-desc ml-1">结束日期</label>
+              <Input
+                type="date"
+                value={draft.endDate || draft.date}
+                min={draft.date}
+                onChange={e => onChange({ ...draft, endDate: e.target.value })}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
