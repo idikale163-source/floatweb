@@ -73,7 +73,7 @@ export type QaChatSnapshot = {
 // ── 上下文预算与压缩 ──
 // 预算按字符估算（中文 ≈1 字符/角标 token 量级）。可用 localStorage
 // 键 ai_phone_qa_context_budget_chars 覆盖（调参/测试用）。
-const DEFAULT_CONTEXT_BUDGET_CHARS = 100_000;
+const DEFAULT_CONTEXT_BUDGET_CHARS = 1_000_000;
 
 function getContextBudget(): number {
     try {

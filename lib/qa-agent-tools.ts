@@ -220,7 +220,7 @@ const errorLogTool: QaTool = {
         const lines: string[] = [];
         const errors = getQaErrorEntries();
         if (errors.length === 0) {
-            lines.push("本次会话没有捕获到页面报错。");
+            lines.push("本次会话没有捕获到运行时报错。（收集范围：宿主页面与本机测试游戏/剧场 iframe；自定义 APP 内部报错不在此列，「没有报错」不代表你写的代码没问题——排查代码问题请用「读取」看源码。）");
         } else {
             lines.push(`捕获到 ${errors.length} 条报错（最近 10 条）：`);
             for (const entry of errors.slice(-10)) {
@@ -1220,13 +1220,13 @@ const diagnoseTool: QaTool = {
     parameters: {
         type: "object",
         properties: {
-            scope: { type: "string", enum: ["api", "storage", "errors", "device"], description: "检查什么：api=LLM API 连通性；storage=浏览器存储占用；errors=本次会话页面报错；device=设备与运行环境" },
+            scope: { type: "string", enum: ["api", "storage", "errors", "device"], description: "检查什么：api=LLM API 连通性；storage=浏览器存储占用；errors=运行时报错收集（见工具说明的覆盖范围）；device=设备与运行环境" },
             name: { type: "string", description: "scope=api 时只测指定名称的配置" },
         },
         required: ["scope"],
     },
     description:
-        "排查环境问题：api=逐个真实测试已配置的 LLM API 连通性；storage=存储配额与占用；errors=页面 JS 报错与 LLM 请求快照；device=浏览器/视口/PWA/通知权限。",
+        "排查运行环境问题：api=逐个真实测试已配置的 LLM API 连通性；storage=存储配额与占用；device=浏览器/视口/PWA/通知权限；errors=本次会话收集到的运行时报错（宿主页面 + 本机测试游戏/剧场 iframe）与 LLM 请求快照。注意 errors 只收运行时报错，不做代码静态检查，也收不到自定义 APP 内部的报错——排查你写的 APP/游戏代码问题，用「读取」看源码分析。",
     schemaLines: [
         "  参数：",
         "    · scope (必填) — api / storage / errors / device",

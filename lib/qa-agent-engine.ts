@@ -395,7 +395,7 @@ export type QaAgentCallbacks = {
     onAutoContinue?: (reason: "truncated" | "marked") => void | Promise<void>;
 };
 
-// 单轮工具调用上限：默认 8，可在工坊配置里调节（qa-prefs）
+// 单轮工具调用上限：默认 20，可在工坊配置里调节（qa-prefs）
 
 // 轮数用尽/输出截断时给用户的可见提示——否则未执行的指令被流过滤器隐藏，
 // 表现为"话说到一半突然断了"。截断本身会自动续接，提示只在轮数预算也用完时出现。
