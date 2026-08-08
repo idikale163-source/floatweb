@@ -185,13 +185,6 @@
   min-width: 0;
 }
 
-.calendar-hero-kicker {
-  font-size: calc(10.5px * var(--app-text-scale, 1));
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--c-calendar-sub);
-}
-
 .calendar-week-title {
   display: flex;
   align-items: baseline;
@@ -200,7 +193,7 @@
 }
 
 .calendar-week-title strong {
-  font-size: calc(18px * var(--app-text-scale, 1));
+  font-size: calc(15px * var(--app-text-scale, 1));
   font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
@@ -683,10 +676,6 @@
   font-weight: 800;
 }
 
-.calendar-grid-heading span {
-  font-size: calc(10.5px * var(--app-text-scale, 1));
-  color: var(--c-calendar-sub);
-}
 
 .calendar-grid-counter {
   flex: none;
@@ -707,7 +696,7 @@
 
 .calendar-grid-days-head {
   display: grid;
-  grid-template-columns: 46px 1fr;
+  grid-template-columns: 40px 1fr;
   align-items: end;
 }
 
@@ -773,7 +762,7 @@
 
 .calendar-grid-layout {
   display: grid;
-  grid-template-columns: 46px 1fr;
+  grid-template-columns: 40px 1fr;
   min-height: 480px;
 }
 
@@ -784,8 +773,8 @@
 .calendar-time-column span {
   font-size: calc(9px * var(--app-text-scale, 1));
   color: var(--c-calendar-faint);
-  text-align: right;
-  padding-right: 7px;
+  text-align: left;
+  padding-right: 4px;
   transform: translateY(-5px);
   font-variant-numeric: tabular-nums;
 }
@@ -908,8 +897,90 @@
   color: var(--c-calendar-sub);
 }
 
-.calendar-fab-secondary[data-loading="true"] {
+.calendar-fab-secondary[data-loading="true"],
+.calendar-fab-primary[data-loading="true"] {
   animation: calendarPulse 1.2s ease-in-out infinite;
+}
+
+.calendar-fab-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 19;
+}
+
+.calendar-fab-menu {
+  position: absolute;
+  right: 0;
+  bottom: 58px;
+  z-index: 21;
+  background: var(--c-calendar-sheet);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px var(--c-calendar-scrim);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 168px;
+  transform-origin: bottom right;
+  animation: calendarFabMenuIn 0.16s ease;
+}
+
+@keyframes calendarFabMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.94);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.calendar-fab-menu-item {
+  border: none;
+  background: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: calc(13px * var(--app-text-scale, 1));
+  font-weight: 600;
+  color: var(--c-calendar-ink);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.calendar-fab-menu-item:hover {
+  background: var(--c-calendar-surface);
+}
+
+.calendar-fab-menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.calendar-fab-menu-item svg {
+  color: var(--c-calendar-sub);
+  flex: none;
+}
+
+.calendar-fab-menu-state {
+  margin-left: auto;
+  font-size: calc(10px * var(--app-text-scale, 1));
+  font-weight: 700;
+  font-style: normal;
+  color: var(--c-calendar-sub);
+  background: var(--c-calendar-surface);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.calendar-fab-menu-item[data-on="true"] .calendar-fab-menu-state {
+  background: var(--c-calendar-ev-green-bg);
+  color: var(--c-calendar-ev-green-fg);
 }
 
 @keyframes calendarPulse {
@@ -1541,6 +1612,10 @@
   }
 
   .calendar-generating-dots i {
+    animation: none !important;
+  }
+
+  .calendar-fab-menu {
     animation: none !important;
   }
 
