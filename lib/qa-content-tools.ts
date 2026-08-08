@@ -255,7 +255,33 @@ const installAppTool: QaContentTool = {
 // 支持完整应用包（manifest.json + 入口 + presets.json + 资源），组包后与上传 zip 等价。
 
 type StagedAppFile = { text?: string; base64?: string };
-const APP_STAGING = new Map<string, StagedAppFile>();
+
+// 暂存区持久化到 kv（IndexedDB）：手机上切后台/改设置随时可能触发页面重载，
+// 纯内存 Map 会把已分段写入的几万字直接蒸发。懒加载 + 每次变更整份落盘。
+const APP_STAGING_KEY = "ai_phone_qa_app_staging_v1";
+const APP_STAGING_MEM = new Map<string, StagedAppFile>();
+let appStagingLoaded = false;
+
+function appStaging(): Map<string, StagedAppFile> {
+    if (!appStagingLoaded) {
+        appStagingLoaded = true;
+        try {
+            const parsed = JSON.parse(kvGet(APP_STAGING_KEY) || "[]") as Array<[string, StagedAppFile]>;
+            if (Array.isArray(parsed)) {
+                for (const [key, file] of parsed) {
+                    if (typeof key === "string" && file && typeof file === "object") APP_STAGING_MEM.set(key, file);
+                }
+            }
+        } catch {
+            // ignore
+        }
+    }
+    return APP_STAGING_MEM;
+}
+
+function persistAppStaging(): void {
+    kvSet(APP_STAGING_KEY, JSON.stringify([...appStaging()]));
+}
 const STAGE_MAX_FILES = 40;
 const STAGE_MAX_FILE_CHARS = 2_000_000;
 const STAGE_MAX_TOTAL_CHARS = 10_000_000;
@@ -265,8 +291,8 @@ function stagePath(value: unknown): string {
 }
 
 function stagingSummary(): string {
-    if (APP_STAGING.size === 0) return "（暂存区为空）";
-    return [...APP_STAGING.entries()]
+    if (appStaging().size === 0) return "（暂存区为空）";
+    return [...appStaging().entries()]
         .map(([path, f]) => `${path}(${(f.text ?? f.base64 ?? "").length})`)
         .join("、");
 }
@@ -298,9 +324,9 @@ const stageAppFileTool: QaContentTool = {
         if (!path || path.includes("..") || path.length > 100) return "path 无效（相对包内路径，不允许 ..）。";
         const content = typeof args.content === "string" ? args.content : "";
         if (!content) return "缺少 content。";
-        if (APP_STAGING.size >= STAGE_MAX_FILES && !APP_STAGING.has(path)) return `暂存文件数已达上限 ${STAGE_MAX_FILES}。`;
+        if (appStaging().size >= STAGE_MAX_FILES && !appStaging().has(path)) return `暂存文件数已达上限 ${STAGE_MAX_FILES}。`;
         const isBase64 = args.base64 === true;
-        const existing = APP_STAGING.get(path);
+        const existing = appStaging().get(path);
         let next: StagedAppFile;
         if (args.append === true && existing?.text != null && !isBase64) {
             next = { text: existing.text + content };
@@ -312,9 +338,10 @@ const stageAppFileTool: QaContentTool = {
         const size = (next.text ?? next.base64 ?? "").length;
         if (size > STAGE_MAX_FILE_CHARS) return `单文件暂存超限（${size} > ${STAGE_MAX_FILE_CHARS} 字符）。`;
         let total = size;
-        for (const [k, f] of APP_STAGING) { if (k !== path) total += (f.text ?? f.base64 ?? "").length; }
+        for (const [k, f] of appStaging()) { if (k !== path) total += (f.text ?? f.base64 ?? "").length; }
         if (total > STAGE_MAX_TOTAL_CHARS) return `暂存区总量超限（${total} > ${STAGE_MAX_TOTAL_CHARS} 字符）。`;
-        APP_STAGING.set(path, next);
+        appStaging().set(path, next);
+        persistAppStaging();
         return `✓ 已暂存 ${path}（当前 ${size.toLocaleString()} 字符${args.append === true ? "，本次为追加" : ""}）。暂存区：${stagingSummary()}。继续追加或暂存其他文件；全部就绪后用「发布」type=app 组包安装。`;
     },
 };
@@ -335,15 +362,16 @@ const installStagedAppTool: QaContentTool = {
     ],
     async run(args, context) {
         if (args.clear === true) {
-            APP_STAGING.clear();
+            appStaging().clear();
+            persistAppStaging();
             return "✓ 暂存区已清空。";
         }
-        if (APP_STAGING.size === 0) return "暂存区为空。先用「写入」type=app 写入 manifest.json 与入口 HTML（单文件应用只需 index.html）。";
-        if (!APP_STAGING.has("manifest.json")) return `暂存区缺少 manifest.json。当前：${stagingSummary()}`;
+        if (appStaging().size === 0) return "暂存区为空。先用「写入」type=app 写入 manifest.json 与入口 HTML（单文件应用只需 index.html）。";
+        if (!appStaging().has("manifest.json")) return `暂存区缺少 manifest.json。当前：${stagingSummary()}`;
         try {
             const JSZip = (await import("jszip")).default;
             const zip = new JSZip();
-            for (const [path, f] of APP_STAGING) {
+            for (const [path, f] of appStaging()) {
                 if (f.base64 != null) {
                     const binary = atob(f.base64);
                     const bytes = new Uint8Array(binary.length);
@@ -384,7 +412,8 @@ const installStagedAppTool: QaContentTool = {
             } catch {
                 // 注册失败不阻塞安装
             }
-            APP_STAGING.clear();
+            appStaging().clear();
+            persistAppStaging();
             context?.onContentCreated?.({ type: "app", refId: installed.id, title: installed.name });
             const toolCount = installed.manifest?.extensions?.tools?.length ?? 0;
             const toolNote = toolCount > 0 ? `声明了 ${toolCount} 个聊天工具。` : "";
@@ -1205,12 +1234,13 @@ export async function workbenchEditLocal(args: Record<string, unknown>, context?
 
     if (type === "app") {
         const path = stagePath(args.path);
-        if (path && APP_STAGING.has(path)) {
-            const staged = APP_STAGING.get(path)!;
+        if (path && appStaging().has(path)) {
+            const staged = appStaging().get(path)!;
             if (staged.text == null) return `${path} 是二进制暂存，不支持编辑。`;
             const result = applyReplace(staged.text, find, replace, all);
             if ("error" in result) return `暂存文件 ${path}：${result.error}`;
-            APP_STAGING.set(path, { text: result.next });
+            appStaging().set(path, { text: result.next });
+            persistAppStaging();
             return `✓ 已替换暂存文件 ${path} 的 ${result.count} 处（现 ${result.next.length.toLocaleString()} 字符）。就绪后「发布」type=app 组包安装。`;
         }
         if (!name) return "编辑 app 需要 name（已装应用名）或 path（暂存文件路径）。";
@@ -1271,17 +1301,20 @@ export async function workbenchPublishLocal(args: Record<string, unknown>, conte
 
     if (type === "app") {
         if (args.clear === true) return findTool("install_staged_app").run({ clear: true }, context);
-        if (APP_STAGING.has("manifest.json")) return findTool("install_staged_app").run({}, context);
+        if (appStaging().has("manifest.json")) return findTool("install_staged_app").run({}, context);
         // 单文件应用：暂存里的 index.html（或唯一的 .html）+ name 走单文件安装
-        const htmlEntries = [...APP_STAGING.entries()].filter(([p, f]) => p.endsWith(".html") && f.text != null);
-        const html = APP_STAGING.get("index.html")?.text ?? (htmlEntries.length === 1 ? htmlEntries[0][1].text : undefined);
+        const htmlEntries = [...appStaging().entries()].filter(([p, f]) => p.endsWith(".html") && f.text != null);
+        const html = appStaging().get("index.html")?.text ?? (htmlEntries.length === 1 ? htmlEntries[0][1].text : undefined);
         if (html != null) {
             if (!name) return "单文件应用发布需要 name（应用名）。";
             const result = await findTool("install_local_app").run(
                 { name, html, description: args.description, permissions: args.permissions },
                 context,
             );
-            if (result.startsWith("✓")) APP_STAGING.clear();
+            if (result.startsWith("✓")) {
+                appStaging().clear();
+                persistAppStaging();
+            }
             return result;
         }
         return `应用暂存区没有可发布的内容（当前：${stagingSummary()}）。先用「写入」type=app 写 index.html（单文件）或 manifest.json + 入口 HTML（完整包）。`;
@@ -1303,13 +1336,25 @@ export function getAppStagingNote(): string {
 }
 
 /** 读取应用暂存区文件（分页）：分段写大文件时核实进度/续写衔接用 */
-export function readStagedAppFile(pathArg: unknown, pageArg: unknown): string {
+export function readStagedAppFile(pathArg: unknown, pageArg: unknown, startArg?: unknown, endArg?: unknown): string {
     const path = stagePath(pathArg);
     if (!path) return "缺少 path。";
-    const staged = APP_STAGING.get(path);
+    const staged = appStaging().get(path);
     if (!staged) return `应用暂存区里没有 ${path}。当前：${stagingSummary()}`;
     if (staged.base64 != null) return `${path} 是二进制暂存（base64 ${staged.base64.length.toLocaleString()} 字符），不支持读取内容。`;
-    return paginate(staged.text ?? "", pageArg, `暂存文件 ${path}`);
+    const content = staged.text ?? "";
+    const start = typeof startArg === "number" && Number.isFinite(startArg) ? Math.max(1, Math.floor(startArg)) : null;
+    const end = typeof endArg === "number" && Number.isFinite(endArg) ? Math.floor(endArg) : null;
+    if (start != null || end != null) {
+        const lines = content.split("\n");
+        const from = start ?? 1;
+        const to = Math.min(lines.length, end ?? lines.length);
+        const numbered = lines.slice(from - 1, to).map((line, i) => `${from + i}\t${line}`).join("\n");
+        const body = `暂存文件 ${path}（共 ${lines.length} 行，显示 ${from}-${to}）：\n${numbered}`;
+        const limit = getQaPageChars();
+        return body.length > limit ? `${body.slice(0, limit)}\n…（已截断，缩小行范围继续读）` : body;
+    }
+    return paginate(content, pageArg, `暂存文件 ${path}`);
 }
 
 export const QA_CONTENT_TOOLS = [
