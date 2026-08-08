@@ -11,7 +11,6 @@ import {
 import { sendLLMToolStreamRequest, type LLMToolRequestResult } from "./chat-engine";
 import type { LLMContentPart } from "./llm-prompt-assembler";
 import { loadApiConfigs, loadBindingConfig } from "./settings-storage";
-import { loadQaGithubConfig } from "./qa-github";
 import type { ApiConfig } from "./settings-types";
 import { buildQaSystemPrompt } from "./qa-knowledge";
 import { createSseJsonParser } from "./sse-json";
@@ -403,7 +402,7 @@ const QA_TRUNCATED_NOTICE = "\n\n（回复被输出长度上限截断，且本�
 
 // 截断/CONTINUE 尾标后的自动接力提示（作为用户不可见的系统消息喂回给模型）
 const QA_AUTO_CONTINUE_TRUNCATED =
-    "你上一条输出到达单次输出上限被截断，残缺的工具调用已被安全丢弃（之前已完整生成的调用照常执行了）。请从中断处继续：大字段改用分段工具追加（暂存应用文件 append / 保存游戏草稿 gameHtmlAppend / 保存剧场草稿 openingHtmlAppend），每段写到自然收尾就停，别硬凑一次写完。";
+    "你上一条输出到达单次输出上限被截断，残缺的工具调用已被安全丢弃（之前已完整生成的调用照常执行了）。请从中断处继续：大内容改用「写入」append=true 分段追加，每段写到自然收尾就停，别硬凑一次写完。";
 const QA_AUTO_CONTINUE_MARKED =
     "收到你的 CONTINUE 标记，请从上次停下的地方继续写；全部完成后正常收尾（不要再输出 CONTINUE）。";
 const QA_CONTINUE_FALLBACK_PROMPT = "请基于以上结果继续回答用户的问题。";
@@ -419,13 +418,9 @@ function buildQaOutputBudgetPrompt(): string {
     } else {
         lines.push("模型单次回复有输出长度上限（max_tokens），一次写太长会被截断。");
     }
-    lines.push("写大 APP / 大游戏 / 超长剧场开场时，不要试图一次输出全部内容，改用分段写入：");
-    lines.push("· 大 APP：「暂存应用文件」首轮写骨架，后续轮 append=true 追加，全部就绪后「安装暂存应用」；");
-    lines.push("· 大游戏：「保存游戏草稿」首轮传 gameHtml，后续轮 gameHtmlAppend 追加，写完「安装本机游戏」fromDraft=true；");
-    lines.push("· 超长剧场开场：「保存剧场草稿」openingHtmlAppend 分轮追加，写完「上架本机剧场」fromDraft=true。");
-    if (loadQaGithubConfig()?.token) {
-        lines.push("· 往仓库新写大文件：「暂存提交文件」分轮 append，写完在「提交修改」files 里用 {path, fromStaged:true} 引用；改已有文件用 find/replace 片段替换，只输出改动片段。");
-    }
+    lines.push("写大内容（大 APP / 大游戏 / 超长剧场开场 / 仓库大文件）时，不要试图一次输出全部，统一用「写入」分段：");
+    lines.push("· 首轮写骨架，后续轮 append=true 追加（app 按包内 path，game/theater 按 name+field，repo 按仓库 path），全部写完后「发布」落地；");
+    lines.push("· 改已有内容一律用「编辑」（find/replace）只输出改动片段，绝不整体重写大文件。");
     lines.push(
         "每段写到自然收尾（标签、函数、语句的闭合处）就停，下一轮接着写。内容没写完、这条回复又不打算调用工具时，在正文末尾单独一行写 <!--CONTINUE-->，系统会自动让你继续；全部完成后正常收尾即可，不要输出 <!--CONTINUE-->。",
     );

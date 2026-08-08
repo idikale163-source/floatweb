@@ -315,7 +315,7 @@ const stageAppFileTool: QaContentTool = {
         for (const [k, f] of APP_STAGING) { if (k !== path) total += (f.text ?? f.base64 ?? "").length; }
         if (total > STAGE_MAX_TOTAL_CHARS) return `暂存区总量超限（${total} > ${STAGE_MAX_TOTAL_CHARS} 字符）。`;
         APP_STAGING.set(path, next);
-        return `✓ 已暂存 ${path}（当前 ${size.toLocaleString()} 字符${args.append === true ? "，本次为追加" : ""}）。暂存区：${stagingSummary()}。继续追加或暂存其他文件；全部就绪后用「安装暂存应用」。`;
+        return `✓ 已暂存 ${path}（当前 ${size.toLocaleString()} 字符${args.append === true ? "，本次为追加" : ""}）。暂存区：${stagingSummary()}。继续追加或暂存其他文件；全部就绪后用「发布」type=app 组包安装。`;
     },
 };
 
@@ -338,7 +338,7 @@ const installStagedAppTool: QaContentTool = {
             APP_STAGING.clear();
             return "✓ 暂存区已清空。";
         }
-        if (APP_STAGING.size === 0) return "暂存区为空。先用「暂存应用文件」写入 manifest.json 与入口 HTML。";
+        if (APP_STAGING.size === 0) return "暂存区为空。先用「写入」type=app 写入 manifest.json 与入口 HTML（单文件应用只需 index.html）。";
         if (!APP_STAGING.has("manifest.json")) return `暂存区缺少 manifest.json。当前：${stagingSummary()}`;
         try {
             const JSZip = (await import("jszip")).default;
@@ -464,11 +464,13 @@ const installGameTool: QaContentTool = {
         let sourceDraft: GameTemplateDraft | null = null;
         if (args.fromDraft === true) {
             const found = loadGameDrafts().find((item) => norm(item.title) === norm(title));
-            if (!found) return `草稿箱里没有「${title}」。先用「保存游戏草稿」写入（大游戏可分段追加），再 fromDraft 安装。`;
+            if (!found) return `草稿箱里没有「${title}」。先用「写入」type=game 写入草稿（大游戏可分段追加），再发布。`;
             sourceDraft = found.draft;
         }
         const gameHtml = sourceDraft ? sourceDraft.gameHtml : typeof args.gameHtml === "string" ? args.gameHtml : "";
-        if (!gameHtml.trim()) return "缺少 gameHtml（游戏单文件 HTML）。大游戏可先分段「保存游戏草稿」再 fromDraft=true 安装。";
+        // fromDraft 时陈列字段与 tags 也取自草稿（否则 fromDraft 安装会丢掉草稿里的标签）
+        const draftTags = sourceDraft ? sourceDraft.tagsText.split(/[\s,，]+/).filter(Boolean).slice(0, 8) : null;
+        if (!gameHtml.trim()) return "缺少 gameHtml（游戏单文件 HTML）。大游戏先用「写入」type=game field=gameHtml 分段写进草稿，再发布。";
         const roleSlots = sourceDraft ? parseGameRoleSlots(sourceDraft.roleSlotsText) : normalizeRoleSlots(args.roleSlots);
         const pickerHtml = sourceDraft ? sourceDraft.pickerHtml.trim() : typeof args.pickerHtml === "string" ? args.pickerHtml.trim() : "";
         if (roleSlots.length > 0 && !pickerHtml) return "启用 roleSlots 时必须提供 pickerHtml（角色选择界面）。";
@@ -483,7 +485,7 @@ const installGameTool: QaContentTool = {
             synopsis: sourceDraft ? text(sourceDraft.synopsis, 600) : text(args.synopsis, 600),
             playNote: sourceDraft ? text(sourceDraft.playNote, 3000) : text(args.playNote, 3000),
             coverImage: "",
-            tags: normalizeStringArray(args.tags, 8, 24),
+            tags: draftTags ?? normalizeStringArray(args.tags, 8, 24),
             authorId: "qa_workshop",
             authorName: "工坊",
             authorAvatar: "",
@@ -549,7 +551,7 @@ const installTheaterTool: QaContentTool = {
         let theaterDraft: Record<string, unknown> | null = null;
         if (args.fromDraft === true) {
             const found = loadBmDrafts().find((item) => norm(item.title) === norm(title));
-            if (!found) return `剧场草稿箱里没有「${title}」。先用「保存剧场草稿」写入（大字段可分段追加），再 fromDraft 上架。`;
+            if (!found) return `剧场草稿箱里没有「${title}」。先用「写入」type=theater 写入草稿（大字段可分段追加），再发布。`;
             theaterDraft = found.draft as unknown as Record<string, unknown>;
         }
         const pick = (key: string, arg: unknown): string =>
@@ -570,7 +572,11 @@ const installTheaterTool: QaContentTool = {
             subtitle: text(args.subtitle, 160) || pick("subtitle", ""),
             synopsis: text(args.synopsis, 600) || pick("synopsis", ""),
             storyText: text(args.storyText, 2000) || pick("storyText", ""),
-            tags: normalizeStringArray(args.tags, 8, 24),
+            tags: normalizeStringArray(args.tags, 8, 24).length
+                ? normalizeStringArray(args.tags, 8, 24)
+                : theaterDraft
+                    ? String(theaterDraft.tagsText ?? "").split(/[\s,，]+/).filter(Boolean).slice(0, 8)
+                    : [],
             rarity,
             glyph: text(args.glyph, 8) || "◆",
             price: 0,
@@ -659,7 +665,7 @@ const readContentTool: QaContentTool = {
         type: "object",
         properties: {
             type: { type: "string", enum: ["app", "game", "theater"], description: "内容类型" },
-            name: { type: "string", description: "APP 名 / 游戏标题 / 剧场档案名（先用「本机内容清单」查有什么）" },
+            name: { type: "string", description: "APP 名 / 游戏标题 / 剧场档案名（先用「清单」查有什么）" },
             page: { type: "number", description: "内容较长时分页返回，默认第 1 页" },
         },
         required: ["type", "name"],
@@ -676,11 +682,11 @@ const readContentTool: QaContentTool = {
     async run(args) {
         const type = text(args.type, 20);
         const name = text(args.name, 80);
-        if (!name) return "缺少 name。先用「本机内容清单」看看本机有什么。";
+        if (!name) return "缺少 name。先用「清单」看看本机有什么。";
 
         if (type === "app") {
             const app = loadInstalledCustomApps().find((item) => norm(item.name) === norm(name));
-            if (!app) return `没有找到名为「${name}」的自定义 APP。先用「本机内容清单」确认名称。`;
+            if (!app) return `没有找到名为「${name}」的自定义 APP。先用「清单」确认名称。`;
             const assets = Object.values(app.assets).map((a) => a.path);
             const doc = [
                 `名称：${app.name} · v${app.version}`,
@@ -712,7 +718,7 @@ const readContentTool: QaContentTool = {
             }
             const installed = loadGameState().installedGames
                 .find((g) => isLocalTestGameId(g.localId) && norm(g.templateSnapshot.title) === norm(name));
-            if (!installed) return `草稿箱和本机测试里都没有找到「${name}」。先用「本机内容清单」确认名称。`;
+            if (!installed) return `草稿箱和本机测试里都没有找到「${name}」。先用「清单」确认名称。`;
             const t = installed.templateSnapshot;
             const doc = [
                 `来源：本机测试（localId ${installed.localId}）`,
@@ -748,7 +754,7 @@ const readContentTool: QaContentTool = {
             }
             const owned = loadBlackMarketState().ownedTheaters
                 .find((t) => isLocalTestTheaterId(t.localId) && norm(t.templateSnapshot.title) === norm(name));
-            if (!owned) return `草稿箱和本机测试里都没有找到「${name}」。先用「本机内容清单」确认名称。`;
+            if (!owned) return `草稿箱和本机测试里都没有找到「${name}」。先用「清单」确认名称。`;
             const t = owned.templateSnapshot;
             const doc = [
                 `来源：本机测试（localId ${owned.localId}）`,
@@ -949,7 +955,7 @@ const listContentTool: QaContentTool = {
         lines.push(`剧场草稿箱（${bmDrafts.length} 个）：${bmDrafts.length ? bmDrafts.map((d) => `${d.title}${draftMark(Boolean(d.sourceTemplateId), d.hasUnpublishedChanges)}`).join("、") : "无"}`);
         const theaters = loadBlackMarketState().ownedTheaters.filter((t) => isLocalTestTheaterId(t.localId));
         lines.push(`本机测试剧场（${theaters.length} 个）：${theaters.length ? theaters.map((t) => t.templateSnapshot.title).join("、") : "无"}`);
-        lines.push("用「读取本机内容」查看某条内容的完整源码；用「保存游戏草稿/保存剧场草稿/安装本机应用」修改。");
+        lines.push("用「读取」查看某条内容的完整源码；小改用「编辑」（find/replace），大改/新写用「写入」，写完「发布」。");
         return lines.join("\n");
     },
 };
@@ -978,18 +984,18 @@ const exportContentTool: QaContentTool = {
     async run(args) {
         const type = text(args.type, 20);
         const name = text(args.name, 80);
-        if (!name) return "缺少 name。先用「本机内容清单」看看本机有什么。";
+        if (!name) return "缺少 name。先用「清单」看看本机有什么。";
         try {
             if (type === "app") {
                 const app = loadInstalledCustomApps().find((item) => norm(item.name) === norm(name));
-                if (!app) return `没找到名为「${name}」的本机 APP。用「本机内容清单」核对名称。`;
+                if (!app) return `没找到名为「${name}」的本机 APP。用「清单」核对名称。`;
                 const file = await createCustomAppPackageFile(app);
                 await downloadFile(file, file.name);
                 return `已导出「${app.name}」安装包（${file.name}）。对方在 应用市场 → 发布 → 上传安装包 即可导入。`;
             }
             if (type === "game") {
                 const draft = loadGameDrafts().find((item) => norm(item.title) === norm(name));
-                if (!draft) return `游戏草稿箱里没有「${name}」。如果它在本机测试里，先用「保存游戏草稿」转成草稿再导出。`;
+                if (!draft) return `游戏草稿箱里没有「${name}」。如果它在本机测试里，先用「编辑」改一处（会自动转成草稿）再导出。`;
                 const payload = { type: "ai-phone-game-draft", version: 1, title: draft.title, draft: draft.draft };
                 const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
                 await downloadFile(blob, `${draft.title.trim() || "游戏草稿"}.json`);
@@ -997,7 +1003,7 @@ const exportContentTool: QaContentTool = {
             }
             if (type === "theater") {
                 const draft = loadBmDrafts().find((item) => norm(item.title) === norm(name));
-                if (!draft) return `剧场草稿箱里没有「${name}」。如果它在本机测试里，先用「保存剧场草稿」转成草稿再导出。`;
+                if (!draft) return `剧场草稿箱里没有「${name}」。如果它在本机测试里，先用「编辑」改一处（会自动转成草稿）再导出。`;
                 const payload = { type: "ai-phone-theater-draft", version: 1, title: draft.title, draft: draft.draft };
                 const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
                 await downloadFile(blob, `${draft.title.trim() || "剧场草稿"}.json`);
@@ -1009,6 +1015,292 @@ const exportContentTool: QaContentTool = {
         }
     },
 };
+
+// ── 统一工作台（清单/读取/写入/编辑/发布 的本机半边）──────
+// 供 qa-agent-tools 的统一 CRUD 工具路由调用：按 type+name+field 寻址草稿字段，
+// 允许逐字段建草稿（发布时才校验必填），并支持对草稿/暂存/已装 APP 的 find/replace 编辑。
+
+type WbContext = { signal?: AbortSignal; onContentCreated?: (item: QaCreatedContent) => void };
+
+const WB_FIELD_CHAR_LIMIT = 2_000_000;
+
+/** game 对外字段名 → 草稿内部字段 */
+const GAME_FIELD_MAP: Record<string, keyof GameTemplateDraft> = {
+    gameHtml: "gameHtml",
+    pickerHtml: "pickerHtml",
+    roleSlots: "roleSlotsText",
+    subtitle: "subtitle",
+    synopsis: "synopsis",
+    playNote: "playNote",
+    tags: "tagsText",
+};
+
+/** theater 对外字段名 → 草稿内部字段 */
+const THEATER_FIELD_MAP: Record<string, string> = {
+    openingHtml: "openingHtml",
+    aiInstruction: "aiInstruction",
+    outputContract: "outputContract",
+    renderRules: "renderRulesText",
+    renderCss: "renderCss",
+    memorySummaryPrompt: "memorySummaryPrompt",
+    subtitle: "subtitle",
+    synopsis: "synopsis",
+    storyText: "storyText",
+    tags: "tagsText",
+};
+
+const EMPTY_GAME_DRAFT: Omit<GameTemplateDraft, "title"> = {
+    codeName: "QA", subtitle: "", synopsis: "", playNote: "", coverImage: "",
+    tagsText: "互动", authorName: "工坊", roleSlotsText: "[]", pickerHtml: "", gameHtml: "",
+    allowExternalControl: false,
+};
+
+const EMPTY_THEATER_DRAFT: Record<string, unknown> = {
+    codeName: "QA", subtitle: "", synopsis: "", storyText: "", tagsText: "",
+    price: "0", authorName: "工坊", openingHtml: "", allowExternalControl: false,
+    aiInstruction: "", outputContract: "", renderRulesText: "[]", renderCss: "", memorySummaryPrompt: "",
+};
+
+function applyReplace(baseText: string, find: string, replace: string, all: boolean): { next: string; count: number } | { error: string } {
+    const count = baseText.split(find).length - 1;
+    if (count === 0) return { error: "找不到 find 片段。先用「读取」核对原文（空格与换行须完全一致）。" };
+    if (count > 1 && !all) return { error: `find 片段匹配了 ${count} 处。加长片段使其唯一，或加 all:true 替换全部。` };
+    return { next: all ? baseText.split(find).join(replace) : baseText.replace(find, replace), count: all ? count : 1 };
+}
+
+/** 找游戏草稿；只有本机测试时自动物化成草稿（编辑已装内容的前置步骤） */
+function findOrMaterializeGameDraft(name: string): { record: GameHallDraft; materialized: boolean } | { error: string } {
+    const existing = loadGameDrafts().find((item) => norm(item.title) === norm(name));
+    if (existing) return { record: existing, materialized: false };
+    const installed = loadGameState().installedGames
+        .find((g) => isLocalTestGameId(g.localId) && norm(g.templateSnapshot.title) === norm(name));
+    if (!installed) return { error: `草稿箱和本机测试里都没有「${name}」。先用「清单」确认名称。` };
+    const t = installed.templateSnapshot;
+    const now = new Date().toISOString();
+    return {
+        materialized: true,
+        record: {
+            id: `qa_draft_${stableSlug(t.title)}`,
+            title: t.title,
+            draft: {
+                title: t.title, codeName: t.codeName || "QA", subtitle: t.subtitle, synopsis: t.synopsis,
+                playNote: t.playNote, coverImage: t.coverImage || "", tagsText: t.tags.join(" "),
+                authorName: t.authorName || "工坊", roleSlotsText: JSON.stringify(t.roleSlots),
+                pickerHtml: t.pickerHtml, gameHtml: t.gameHtml, allowExternalControl: t.allowExternalControl,
+            },
+            createdAt: now,
+            updatedAt: now,
+        },
+    };
+}
+
+/** 找剧场草稿；只有本机测试时自动物化成草稿 */
+function findOrMaterializeTheaterDraft(name: string): { record: BmStudioDraftRecord; materialized: boolean } | { error: string } {
+    const existing = loadBmDrafts().find((item) => norm(item.title) === norm(name));
+    if (existing) return { record: existing, materialized: false };
+    const owned = loadBlackMarketState().ownedTheaters
+        .find((t) => isLocalTestTheaterId(t.localId) && norm(t.templateSnapshot.title) === norm(name));
+    if (!owned) return { error: `草稿箱和本机测试里都没有「${name}」。先用「清单」确认名称。` };
+    const t = owned.templateSnapshot;
+    const now = new Date().toISOString();
+    return {
+        materialized: true,
+        record: {
+            id: `qa_draft_${stableSlug(t.title)}`,
+            title: t.title,
+            draft: {
+                title: t.title, codeName: t.codeName || "QA", subtitle: t.subtitle, synopsis: t.synopsis,
+                storyText: t.storyText, tagsText: t.tags.join(","), price: "0", authorName: t.authorName || "工坊",
+                openingHtml: t.openingHtml, allowExternalControl: t.allowExternalControl,
+                aiInstruction: t.aiInstruction, outputContract: t.outputContract,
+                renderRulesText: JSON.stringify(t.renderRules), renderCss: t.renderCss,
+                memorySummaryPrompt: t.memorySummaryPrompt,
+            },
+            createdAt: now,
+            updatedAt: now,
+        },
+    };
+}
+
+function saveGameDraftRecord(record: GameHallDraft, draft: GameTemplateDraft): void {
+    const now = new Date().toISOString();
+    const next: GameHallDraft = {
+        ...record,
+        draft,
+        hasUnpublishedChanges: record.publishedTemplateId ? true : record.hasUnpublishedChanges,
+        updatedAt: now,
+    };
+    saveGameDrafts([next, ...loadGameDrafts().filter((item) => item.id !== record.id)]);
+}
+
+function saveBmDraftRecord(record: BmStudioDraftRecord, draft: Record<string, unknown>): void {
+    const now = new Date().toISOString();
+    const next: BmStudioDraftRecord = {
+        ...record,
+        draft,
+        hasUnpublishedChanges: record.sourceTemplateId ? true : record.hasUnpublishedChanges,
+        updatedAt: now,
+    };
+    saveBmDrafts([next, ...loadBmDrafts().filter((item) => item.id !== record.id)]);
+}
+
+/** 统一「写入」的 game/theater 半边：按字段写草稿，允许逐字段建稿、append 分段追加 */
+export async function workbenchWriteLocal(args: Record<string, unknown>): Promise<string> {
+    const type = text(args.type, 20);
+    const name = text(args.name, 80);
+    const content = typeof args.content === "string" ? args.content : "";
+    const append = args.append === true;
+    if (!name) return "写入 game/theater 需要 name（草稿标题）。";
+    if (!content) return "缺少 content。";
+
+    if (type === "game") {
+        const key = text(args.field, 40) || "gameHtml";
+        const mapped = GAME_FIELD_MAP[key];
+        if (!mapped) return `game 没有字段「${key}」。可用：${Object.keys(GAME_FIELD_MAP).join("、")}。`;
+        if (key === "roleSlots") {
+            try { if (!Array.isArray(JSON.parse(content))) throw new Error(); } catch { return "roleSlots 需为 JSON 数组文本，如 [{\"id\":\"hero\",\"label\":\"主角\"}]。"; }
+        }
+        const drafts = loadGameDrafts();
+        const existing = drafts.find((item) => norm(item.title) === norm(name));
+        const base: GameTemplateDraft = existing?.draft ?? { title: name, ...EMPTY_GAME_DRAFT };
+        const prev = String(base[mapped] ?? "");
+        const next = append ? prev + content : content;
+        if (next.length > WB_FIELD_CHAR_LIMIT) return `${key} 超过 ${WB_FIELD_CHAR_LIMIT.toLocaleString()} 字符上限。`;
+        const now = new Date().toISOString();
+        const record: GameHallDraft = existing ?? { id: `qa_draft_${stableSlug(name)}`, title: name, draft: base, createdAt: now, updatedAt: now };
+        saveGameDraftRecord(record, { ...base, title: name, [mapped]: next });
+        return `✓ 已写入游戏草稿「${name}」的 ${key}（当前 ${next.length.toLocaleString()} 字符${append ? "，本次为追加" : ""}）。继续写其他字段或分段追加；全部写完后用「发布」type=game 装进本机测试。`;
+    }
+
+    if (type === "theater") {
+        const key = text(args.field, 40) || "openingHtml";
+        const mapped = THEATER_FIELD_MAP[key];
+        if (!mapped) return `theater 没有字段「${key}」。可用：${Object.keys(THEATER_FIELD_MAP).join("、")}。`;
+        if (key === "renderRules") {
+            try { if (!Array.isArray(JSON.parse(content))) throw new Error(); } catch { return "renderRules 需为 JSON 数组文本。"; }
+        }
+        const drafts = loadBmDrafts();
+        const existing = drafts.find((item) => norm(item.title) === norm(name));
+        const base: Record<string, unknown> = existing?.draft ?? { title: name, ...EMPTY_THEATER_DRAFT };
+        const prev = String(base[mapped] ?? "");
+        const next = append ? prev + content : content;
+        if (next.length > WB_FIELD_CHAR_LIMIT) return `${key} 超过 ${WB_FIELD_CHAR_LIMIT.toLocaleString()} 字符上限。`;
+        const now = new Date().toISOString();
+        const record: BmStudioDraftRecord = existing ?? { id: `qa_draft_${stableSlug(name)}`, title: name, draft: base, createdAt: now, updatedAt: now };
+        saveBmDraftRecord(record, { ...base, title: name, [mapped]: next });
+        return `✓ 已写入剧场草稿「${name}」的 ${key}（当前 ${next.length.toLocaleString()} 字符${append ? "，本次为追加" : ""}）。继续写其他字段或分段追加；全部写完后用「发布」type=theater 上架本机测试。`;
+    }
+
+    return "type 需为 game / theater（app 走包内 path 写入，repo 走仓库路径写入）。";
+}
+
+/** 统一「编辑」的本机半边：find/replace 改草稿字段 / 应用暂存文件 / 已装 APP */
+export async function workbenchEditLocal(args: Record<string, unknown>, context?: WbContext): Promise<string> {
+    const type = text(args.type, 20);
+    const name = text(args.name, 80);
+    const find = typeof args.find === "string" ? args.find : "";
+    const replace = typeof args.replace === "string" ? args.replace : "";
+    const all = args.all === true;
+    if (!find) return "缺少 find（要被替换的原文片段）。";
+
+    if (type === "app") {
+        const path = stagePath(args.path);
+        if (path && APP_STAGING.has(path)) {
+            const staged = APP_STAGING.get(path)!;
+            if (staged.text == null) return `${path} 是二进制暂存，不支持编辑。`;
+            const result = applyReplace(staged.text, find, replace, all);
+            if ("error" in result) return `暂存文件 ${path}：${result.error}`;
+            APP_STAGING.set(path, { text: result.next });
+            return `✓ 已替换暂存文件 ${path} 的 ${result.count} 处（现 ${result.next.length.toLocaleString()} 字符）。就绪后「发布」type=app 组包安装。`;
+        }
+        if (!name) return "编辑 app 需要 name（已装应用名）或 path（暂存文件路径）。";
+        const apps = loadInstalledCustomApps();
+        const app = apps.find((item) => norm(item.name) === norm(name));
+        if (!app) return `没找到已安装应用「${name}」${path ? `，暂存区也没有 ${path}` : ""}。先用「清单」确认。`;
+        const result = applyReplace(app.entryHtml, find, replace, all);
+        if ("error" in result) return `应用「${app.name}」：${result.error}`;
+        const updated: InstalledCustomApp = {
+            ...app,
+            entryHtml: result.next,
+            hasUnpublishedChanges: app.marketItemId ? true : app.hasUnpublishedChanges,
+            updatedAt: new Date().toISOString(),
+        };
+        await saveInstalledCustomAppsAsync([updated, ...apps.filter((item) => item.id !== app.id)]);
+        context?.onContentCreated?.({ type: "app", refId: app.id, title: app.name });
+        return `✓ 已修改应用「${app.name}」（替换 ${result.count} 处，立即生效）。请告诉用户可直接打开测试。`;
+    }
+
+    if (type === "game") {
+        if (!name) return "缺少 name（游戏标题）。";
+        const key = text(args.field, 40) || "gameHtml";
+        const mapped = GAME_FIELD_MAP[key];
+        if (!mapped) return `game 没有字段「${key}」。可用：${Object.keys(GAME_FIELD_MAP).join("、")}。`;
+        const found = findOrMaterializeGameDraft(name);
+        if ("error" in found) return found.error;
+        const base = found.record.draft;
+        const result = applyReplace(String(base[mapped] ?? ""), find, replace, all);
+        if ("error" in result) return `游戏「${name}」的 ${key}：${result.error}`;
+        saveGameDraftRecord(found.record, { ...base, [mapped]: result.next });
+        const note = found.materialized ? "（该游戏原本只在本机测试，已自动转为草稿）" : "";
+        return `✓ 已替换游戏草稿「${name}」${key} 的 ${result.count} 处${note}。改完用「发布」type=game 重新安装生效。`;
+    }
+
+    if (type === "theater") {
+        if (!name) return "缺少 name（剧场档案名）。";
+        const key = text(args.field, 40) || "openingHtml";
+        const mapped = THEATER_FIELD_MAP[key];
+        if (!mapped) return `theater 没有字段「${key}」。可用：${Object.keys(THEATER_FIELD_MAP).join("、")}。`;
+        const found = findOrMaterializeTheaterDraft(name);
+        if ("error" in found) return found.error;
+        const base = found.record.draft;
+        const result = applyReplace(String(base[mapped] ?? ""), find, replace, all);
+        if ("error" in result) return `剧场「${name}」的 ${key}：${result.error}`;
+        saveBmDraftRecord(found.record, { ...base, [mapped]: result.next });
+        const note = found.materialized ? "（该剧场原本只在本机测试，已自动转为草稿）" : "";
+        return `✓ 已替换剧场草稿「${name}」${key} 的 ${result.count} 处${note}。改完用「发布」type=theater 重新上架生效。`;
+    }
+
+    return "type 需为 app / game / theater（repo 编辑由仓库路由处理）。";
+}
+
+/** 统一「发布」的本机半边：暂存组包 / 单文件安装 / 草稿安装上架 */
+export async function workbenchPublishLocal(args: Record<string, unknown>, context?: WbContext): Promise<string> {
+    const type = text(args.type, 20);
+    const name = text(args.name, 80);
+    const findTool = (native: string) => QA_CONTENT_TOOLS.find((tool) => tool.nativeName === native)!;
+
+    if (type === "app") {
+        if (args.clear === true) return findTool("install_staged_app").run({ clear: true }, context);
+        if (APP_STAGING.has("manifest.json")) return findTool("install_staged_app").run({}, context);
+        // 单文件应用：暂存里的 index.html（或唯一的 .html）+ name 走单文件安装
+        const htmlEntries = [...APP_STAGING.entries()].filter(([p, f]) => p.endsWith(".html") && f.text != null);
+        const html = APP_STAGING.get("index.html")?.text ?? (htmlEntries.length === 1 ? htmlEntries[0][1].text : undefined);
+        if (html != null) {
+            if (!name) return "单文件应用发布需要 name（应用名）。";
+            const result = await findTool("install_local_app").run(
+                { name, html, description: args.description, permissions: args.permissions },
+                context,
+            );
+            if (result.startsWith("✓")) APP_STAGING.clear();
+            return result;
+        }
+        return `应用暂存区没有可发布的内容（当前：${stagingSummary()}）。先用「写入」type=app 写 index.html（单文件）或 manifest.json + 入口 HTML（完整包）。`;
+    }
+    if (type === "game") {
+        if (!name) return "缺少 name（草稿标题）。";
+        return findTool("install_local_game").run({ title: name, fromDraft: true }, context);
+    }
+    if (type === "theater") {
+        if (!name) return "缺少 name（草稿标题）。";
+        return findTool("install_local_theater").run({ title: name, fromDraft: true }, context);
+    }
+    return "type 需为 app / game / theater（repo 由仓库路由处理）。";
+}
+
+/** 应用暂存区状态（统一「清单」附加显示用） */
+export function getAppStagingNote(): string {
+    return `应用暂存区：${stagingSummary()}`;
+}
 
 export const QA_CONTENT_TOOLS = [
     contentGuideTool,
