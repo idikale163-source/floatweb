@@ -172,10 +172,10 @@
 
 .calendar-hero {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 2px 6px 16px;
+  padding: 2px 6px 14px;
 }
 
 .calendar-hero-copy {
@@ -210,21 +210,20 @@
 .calendar-hero-stat {
   flex: none;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: 6px;
   background: var(--c-calendar-surface);
-  border-radius: 12px;
-  padding: 8px 15px;
+  border-radius: 999px;
+  padding: 5px 13px;
 }
 
 .calendar-hero-stat span {
-  font-size: calc(9.5px * var(--app-text-scale, 1));
+  font-size: calc(10.5px * var(--app-text-scale, 1));
   color: var(--c-calendar-sub);
 }
 
 .calendar-hero-stat strong {
-  font-size: calc(19px * var(--app-text-scale, 1));
+  font-size: calc(14px * var(--app-text-scale, 1));
   font-weight: 800;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
