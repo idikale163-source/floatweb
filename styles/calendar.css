@@ -1139,6 +1139,21 @@
   color: var(--c-calendar-ink);
 }
 
+/* iOS WebKit 的 date/time 原生输入框有固有宽度，不重置会撑破弹窗 */
+.calendar-edit-modal .ui-input[type="date"],
+.calendar-edit-modal .ui-input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.calendar-edit-modal .modal-body .grid > * {
+  min-width: 0;
+}
+
 .calendar-icon-btn {
   width: 32px;
   height: 32px;
