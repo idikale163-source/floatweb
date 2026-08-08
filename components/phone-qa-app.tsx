@@ -221,7 +221,10 @@ function QaToolRow({ tool }: { tool: QaToolStatus }) {
         disabled={!hasDetail}
       >
         {tool.running ? <Loader2 size={13} className="qa-spin" /> : <Wrench size={13} />}
-        <span className="qa-tool-row-summary">{summary}</span>
+        <span className="qa-tool-row-summary">
+          {summary}
+          {tool.subtitle && <span className="qa-tool-row-sub">{tool.subtitle}</span>}
+        </span>
         {hasDetail && <ChevronRight size={14} className={`qa-tool-row-chevron ${open ? "is-open" : ""}`} />}
       </button>
       {open && hasDetail && (

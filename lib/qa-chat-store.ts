@@ -1,5 +1,5 @@
 import { callQaAgent, compactQaContext, formatQaErrorMessage, type QaContextEntry } from "./qa-agent-engine";
-import { QA_TOOLS, type QaCreatedContent, type QaProposedCommit } from "./qa-agent-tools";
+import { QA_TOOLS, formatQaToolSubtitle, type QaCreatedContent, type QaProposedCommit } from "./qa-agent-tools";
 import { loadQaGithubConfig } from "./qa-github";
 import { commitQaFiles, revertQaCommit, type QaCommitResult } from "./qa-github-write";
 
@@ -14,7 +14,7 @@ const QA_STATE_KEY = "state";
 const MAX_SESSIONS = 30;
 const MAX_MESSAGES_PER_SESSION = 200;
 
-export type QaToolStatus = { name: string; running: boolean; success?: boolean; detail?: string; result?: string };
+export type QaToolStatus = { name: string; running: boolean; success?: boolean; detail?: string; result?: string; subtitle?: string };
 
 /** 消息内的时序分段：文字与工具行按实际发生顺序交错展示 */
 export type QaSegment =
@@ -469,7 +469,8 @@ export async function sendQaMessage(
                 },
                 onToolStart: (name, args) => {
                     const detail = args && Object.keys(args).length > 0 ? JSON.stringify(args, null, 2) : undefined;
-                    const status: QaToolStatus = { name: toolLabel(name), running: true, detail };
+                    const subtitle = formatQaToolSubtitle(name, args) || undefined;
+                    const status: QaToolStatus = { name: toolLabel(name), running: true, detail, subtitle };
                     toolStatuses = [...toolStatuses, status];
                     segments = [...segments, { kind: "tool", tool: status }];
                     paintAssistant({ tools: toolStatuses, segments }, { force: true, persist: false });
