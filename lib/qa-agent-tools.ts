@@ -1226,7 +1226,7 @@ const diagnoseTool: QaTool = {
         required: ["scope"],
     },
     description:
-        "排查运行环境问题：api=逐个真实测试已配置的 LLM API 连通性；storage=存储配额与占用；device=浏览器/视口/PWA/通知权限；errors=本次会话收集到的运行时报错（宿主页面 + 本机测试游戏/剧场 iframe）与 LLM 请求快照。注意 errors 只收运行时报错，不做代码静态检查，也收不到自定义 APP 内部的报错——排查你写的 APP/游戏代码问题，用「读取」看源码分析。",
+        "只排查运行环境问题：api=逐个真实测试已配置的 LLM API 连通性；storage=存储配额与占用；device=浏览器/视口/PWA/通知权限；errors=本次会话收集到的运行时报错（宿主页面 + 本机测试游戏/剧场 iframe）与 LLM 请求快照。某个 APP/游戏自身功能不对不是环境问题，别来这里排查——用「读取」看它的源码；errors 也不做代码静态检查、收不到自定义 APP 内部的报错。",
     schemaLines: [
         "  参数：",
         "    · scope (必填) — api / storage / errors / device",
@@ -1364,7 +1364,11 @@ export function buildQaToolsPrompt(): string {
     const tools = getQaTools();
     const lines: string[] = [];
     lines.push("===== 你的工具 =====");
-    lines.push("排查用户问题时优先实际检测，不要凭空猜测。可用工具：");
+    lines.push("排查用户问题先分诊，再选工具，不要凭空猜测、也不要把工具挨个跑一遍：");
+    lines.push("· 某个 APP/游戏/剧场自身行为不对（界面不显示、按钮没反应、数据不对）→ 这是它的代码问题，「读取」它的源码定位逻辑，与环境无关；");
+    lines.push("· 环境问题（API 连不上、存储满、整个页面崩溃报错、设备兼容）→「诊断」对应 scope；");
+    lines.push("· 产品用法问题（功能怎么用、设置在哪）→「答疑文档」。");
+    lines.push("可用工具：");
     lines.push("");
     for (const tool of tools) {
         lines.push(`【${tool.name}】${tool.description}`);
