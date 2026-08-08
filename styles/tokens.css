@@ -137,6 +137,8 @@
   --c-calendar-sel-fg: #FFFFFF;
   --c-calendar-scrim: rgba(0, 0, 0, 0.32);
   /* 弹层遮罩 */
+  --c-calendar-hair: rgba(60, 60, 67, 0.10);
+  /* 发丝分隔线（课表整点线等） */
   /* 事件色（糖果色三元组：浅底 bg + 同色系深字 fg） */
   --c-calendar-ev-blue-bg: #CFE8FF;
   --c-calendar-ev-blue-fg: #2263AE;
@@ -282,6 +284,7 @@
   --c-calendar-sel-bg: #E9E7E3;
   --c-calendar-sel-fg: #1A1A1A;
   --c-calendar-scrim: rgba(0, 0, 0, 0.55);
+  --c-calendar-hair: rgba(255, 255, 255, 0.10);
   /* 深色下事件色整体压暗（同色相、降饱和、提字亮度） */
   --c-calendar-ev-blue-bg: #1E3A57;
   --c-calendar-ev-blue-fg: #9CC9FF;

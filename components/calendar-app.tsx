@@ -913,7 +913,13 @@ export function PhoneCalendarApp({
                       <span key={hour}>{String(hour).padStart(2, "0")}:00</span>
                     ))}
                   </div>
-                  <div className="calendar-day-columns" style={expandedDate ? { gridTemplateColumns: weekDates.map(d => d === expandedDate ? "3fr" : "1fr").join(" ") } : undefined}>
+                  <div
+                    className="calendar-day-columns"
+                    style={{
+                      ...(expandedDate ? { gridTemplateColumns: weekDates.map(d => d === expandedDate ? "3fr" : "1fr").join(" ") } : null),
+                      "--calendar-grid-rows": String(gridHourEnd - gridHourStart),
+                    } as React.CSSProperties}
+                  >
                     {weekDates.map(date => (
                       <div key={date} className="calendar-day-column">
                         {Array.from({ length: gridHourEnd - gridHourStart }, (_, idx) => (
