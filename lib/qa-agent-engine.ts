@@ -662,7 +662,7 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
     // 原生协议下工具经请求体声明，系统提示词只保留身份与行为规则
     const systemPrompt = [
         buildQaSystemPrompt(latestUser?.content ?? ""),
-        "你有原生工具可以调用（见请求中的 tools 定义）。排查问题先分诊再选工具，不要凭空猜测、也不要把工具挨个跑一遍：某个 APP/游戏/剧场自身行为不对是它的代码问题，「读取」源码定位；环境问题（API 连不上/存储满/页面崩溃/设备兼容）才用「诊断」；产品用法问题查「答疑文档」。收到工具结果后用人话向用户解释结论和建议。",
+        "你有原生工具可以调用（见请求中的 tools 定义）。排查问题先分诊再选工具，不要凭空猜测、也不要把工具挨个跑一遍：某个 APP/游戏/剧场自身行为不对是它的代码问题，「读取」源码定位；环境问题（API 连不上/存储满/页面崩溃/设备兼容）才用「环境体检」；产品用法问题查「答疑文档」。收到工具结果后用人话向用户解释结论和建议。",
         buildQaOutputBudgetPrompt(),
     ].join("\n\n");
     const working: LlmRequestMessage[] = options?.context

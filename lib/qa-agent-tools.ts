@@ -1215,8 +1215,8 @@ const publishTool: QaTool = {
 };
 
 const diagnoseTool: QaTool = {
-    name: "诊断",
-    nativeName: "run_diagnostics",
+    name: "环境体检",
+    nativeName: "env_check",
     parameters: {
         type: "object",
         properties: {
@@ -1226,12 +1226,12 @@ const diagnoseTool: QaTool = {
         required: ["scope"],
     },
     description:
-        "只排查运行环境问题：api=逐个真实测试已配置的 LLM API 连通性；storage=存储配额与占用；device=浏览器/视口/PWA/通知权限；errors=本次会话收集到的运行时报错（宿主页面 + 本机测试游戏/剧场 iframe）与 LLM 请求快照。某个 APP/游戏自身功能不对不是环境问题，别来这里排查——用「读取」看它的源码；errors 也不做代码静态检查、收不到自定义 APP 内部的报错。",
+        "检查运行环境本身是否健康：api=逐个真实测试已配置的 LLM API 连通性；storage=存储配额与占用；device=浏览器/视口/PWA/通知权限；errors=本次会话收集到的运行时报错（宿主页面 + 本机测试游戏/剧场 iframe）与 LLM 请求快照。它只看环境，不分析任何内容代码——某个 APP/游戏自身功能不对，用「读取」看它的源码。",
     schemaLines: [
         "  参数：",
         "    · scope (必填) — api / storage / errors / device",
         "    · name (可选) — scope=api 时只测该名称的配置",
-        '  调用：[执行动作:诊断({"scope":"api"})]',
+        '  调用：[执行动作:环境体检({"scope":"api"})]',
     ],
     async run(args, context) {
         if (args.scope === "api") return apiCheckTool.run({ name: args.name }, context);
@@ -1240,6 +1240,16 @@ const diagnoseTool: QaTool = {
         if (args.scope === "device") return deviceInfoTool.run({}, context);
         return "scope 需为 api / storage / errors / device 之一。";
     },
+};
+
+// 「诊断」旧名别名：改名「环境体检」前的会话回放/弱模型旧指令仍可执行（隐藏，不进提示词）
+const diagnoseLegacyAliasTool: QaTool = {
+    name: "诊断",
+    nativeName: "run_diagnostics",
+    parameters: diagnoseTool.parameters,
+    description: diagnoseTool.description,
+    schemaLines: diagnoseTool.schemaLines,
+    run: (args, context) => diagnoseTool.run(args, context),
 };
 
 const repoQueryTool: QaTool = {
@@ -1337,6 +1347,7 @@ export const QA_TOOLS: QaTool[] = [...new Set([
     ...UNIFIED_BASE_TOOLS,
     ...UNIFIED_GITHUB_READ_TOOLS,
     ...UNIFIED_GITHUB_WRITE_TOOLS,
+    diagnoseLegacyAliasTool,
     ...BASE_TOOLS,
     ...GITHUB_TOOLS,
     ...GITHUB_WRITE_TOOLS,
@@ -1366,7 +1377,7 @@ export function buildQaToolsPrompt(): string {
     lines.push("===== 你的工具 =====");
     lines.push("排查用户问题先分诊，再选工具，不要凭空猜测、也不要把工具挨个跑一遍：");
     lines.push("· 某个 APP/游戏/剧场自身行为不对（界面不显示、按钮没反应、数据不对）→ 这是它的代码问题，「读取」它的源码定位逻辑，与环境无关；");
-    lines.push("· 环境问题（API 连不上、存储满、整个页面崩溃报错、设备兼容）→「诊断」对应 scope；");
+    lines.push("· 环境问题（API 连不上、存储满、整个页面崩溃报错、设备兼容）→「环境体检」对应 scope；");
     lines.push("· 产品用法问题（功能怎么用、设置在哪）→「答疑文档」。");
     lines.push("可用工具：");
     lines.push("");
