@@ -203,6 +203,7 @@ export function PhoneCalendarApp({
   const [isGenerating, setIsGenerating] = useState(false);
   const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
   const [showAutoConfirm, setShowAutoConfirm] = useState(false);
+  const [fabMenuOpen, setFabMenuOpen] = useState(false);
   const autoAttemptedRef = useRef<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<(CalendarEventDraft & { originalDate?: string }) | null>(null);
 
@@ -676,6 +677,7 @@ export function PhoneCalendarApp({
                     return;
                   }
                   isClicking.current = true;
+                  setFabMenuOpen(false);
                   setSelectedKey(owner.key);
                   setWeekStart(getWeekStartIso(new Date()));
                   setSelectedDate(formatIsoDate(new Date()));
@@ -690,11 +692,8 @@ export function PhoneCalendarApp({
           <div className="calendar-week-card">
             <div className="calendar-hero">
               <div className="calendar-hero-copy">
-                <span className="calendar-hero-kicker">
-                  {selectedOwner?.ownerType === "user" ? "手动管理" : "角色周程"}
-                </span>
                 <div className="calendar-week-title">
-                  <strong>{selectedOwner?.name || "日程"}</strong>
+                  <strong>{selectedOwner?.ownerType === "user" ? "我的周程" : "角色周程"}</strong>
                   <span className="calendar-week-owner">{formatWeekRangeLabel(weekStart)}</span>
                 </div>
               </div>
@@ -864,7 +863,6 @@ export function PhoneCalendarApp({
             <div className="calendar-grid-header" onClick={() => setExpandedDate(null)} style={{ cursor: "pointer" }}>
               <div className="calendar-grid-heading">
                 <strong>本周安排</strong>
-                <span>{selectedOwner?.ownerType === "user" ? "手动维护你的时间表" : "像课表一样查看角色的时间块"}</span>
               </div>
               <span className="calendar-grid-counter">{weekEventCount} 项</span>
             </div>
@@ -964,36 +962,63 @@ export function PhoneCalendarApp({
           </div>
         </div>
 
+          {fabMenuOpen ? <div className="calendar-fab-backdrop" onClick={() => setFabMenuOpen(false)} /> : null}
           <div className="calendar-fab-stack">
-            {selectedOwner?.ownerType === "character" ? (
-              <>
+            {fabMenuOpen && selectedOwner?.ownerType === "character" ? (
+              <div className="calendar-fab-menu" role="menu">
                 <button
                   type="button"
-                  className={`calendar-fab ${autoGenerateEnabled ? 'calendar-fab-primary' : 'calendar-fab-secondary'}`}
-                  onClick={() => setShowAutoConfirm(true)}
-                  aria-label="切换自动生成"
+                  className="calendar-fab-menu-item"
+                  onClick={() => {
+                    setFabMenuOpen(false);
+                    setEditingItem(createDefaultScheduleDraft(selectedDate));
+                  }}
                 >
-                  <Bot size={18} />
+                  <Plus size={15} />
+                  新增日程
                 </button>
                 <button
                   type="button"
-                  className="calendar-fab calendar-fab-secondary"
-                  onClick={() => setShowGenerateConfirm(true)}
+                  className="calendar-fab-menu-item"
                   disabled={isGenerating}
-                  data-loading={isGenerating ? "true" : undefined}
-                  aria-label="AI 生成并覆盖本周日程"
+                  onClick={() => {
+                    setFabMenuOpen(false);
+                    setShowGenerateConfirm(true);
+                  }}
                 >
-                  <Wand2 size={18} />
+                  <Wand2 size={15} />
+                  {isGenerating ? "生成中…" : "AI 生成本周"}
                 </button>
-              </>
+                <button
+                  type="button"
+                  className="calendar-fab-menu-item"
+                  data-on={autoGenerateEnabled ? "true" : undefined}
+                  onClick={() => {
+                    setFabMenuOpen(false);
+                    setShowAutoConfirm(true);
+                  }}
+                >
+                  <Bot size={15} />
+                  每周自动生成
+                  <i className="calendar-fab-menu-state">{autoGenerateEnabled ? "已开" : "已关"}</i>
+                </button>
+              </div>
             ) : null}
             <button
               type="button"
               className="calendar-fab calendar-fab-primary"
-              onClick={() => setEditingItem(createDefaultScheduleDraft(selectedDate))}
-              aria-label="新增事项"
+              data-loading={isGenerating ? "true" : undefined}
+              onClick={() => {
+                if (selectedOwner?.ownerType === "character") {
+                  setFabMenuOpen(prev => !prev);
+                } else {
+                  setEditingItem(createDefaultScheduleDraft(selectedDate));
+                }
+              }}
+              aria-label={selectedOwner?.ownerType === "character" ? "日程操作菜单" : "新增事项"}
+              aria-expanded={selectedOwner?.ownerType === "character" ? fabMenuOpen : undefined}
             >
-              <Plus size={18} />
+              <Plus size={20} style={{ transform: fabMenuOpen ? "rotate(45deg)" : undefined, transition: "transform 0.2s" }} />
             </button>
           </div>
       </div>
