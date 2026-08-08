@@ -418,9 +418,11 @@ function buildQaOutputBudgetPrompt(): string {
     } else {
         lines.push("模型单次回复有输出长度上限（max_tokens），一次写太长会被截断。");
     }
-    lines.push("写大内容（大 APP / 大游戏 / 超长剧场开场 / 仓库大文件）时，不要试图一次输出全部，统一用「写入」分段：");
-    lines.push("· 首轮写骨架，后续轮 append=true 追加（app 按包内 path，game/theater 按 name+field，repo 按仓库 path），全部写完后「发布」落地；");
-    lines.push("· 改已有内容一律用「编辑」（find/replace）只输出改动片段，绝不整体重写大文件。");
+    lines.push("写入策略按优先级：");
+    lines.push("① 改已有内容一律「编辑」（find/replace）——只输出改动片段，绝不整体重写大文件；");
+    lines.push("② 新写内容正常一次写完即可，多数文件都在预算内，不必刻意分段；APP 的图片/字体/CSS 等资源拆成包内独立文件（「写入」type=app 按 path 多文件暂存），别 base64 塞进 index.html；");
+    lines.push("③ 只有单个文件/字段可能超出输出预算时（大游戏 gameHtml、超长剧场开场等），才用「写入」append=true 分段：首轮骨架、后续轮追加、每段写到自然收尾（标签/函数闭合处）就停，全部写完后「发布」；");
+    lines.push("④ 预算判断不准也没关系：写超被截断的残缺调用会被安全丢弃并自动让你续写，已完成的部分不会丢。");
     lines.push(
         "每段写到自然收尾（标签、函数、语句的闭合处）就停，下一轮接着写。内容没写完、这条回复又不打算调用工具时，在正文末尾单独一行写 <!--CONTINUE-->，系统会自动让你继续；全部完成后正常收尾即可，不要输出 <!--CONTINUE-->。",
     );
