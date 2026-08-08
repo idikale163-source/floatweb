@@ -1180,20 +1180,19 @@
 
 /* ── emoji 选择 ── */
 .calendar-emoji-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 8px 6px;
 }
 
 
 .calendar-emoji-preset {
-  width: 32px;
-  height: 32px;
+  width: 100%;
+  aspect-ratio: 1;
   border: none;
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--c-calendar-surface);
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1;
   display: inline-flex;
   align-items: center;
@@ -1211,27 +1210,26 @@
 
 /* ── 颜色选择 ── */
 .calendar-color-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 8px 6px;
+  align-items: stretch;
 }
 
 .calendar-color-swatch {
-  width: 28px;
-  height: 28px;
+  width: 100%;
+  aspect-ratio: 1;
   border: none;
   border-radius: 50%;
   background: var(--ev-bg);
   cursor: pointer;
   position: relative;
-  flex: none;
 }
 
 .calendar-color-swatch::after {
   content: "";
   position: absolute;
-  inset: 8px;
+  inset: 30%;
   border-radius: 50%;
   background: var(--ev-fg);
   opacity: 0;
@@ -1243,14 +1241,20 @@
 }
 
 .calendar-color-swatch-auto {
-  width: auto;
-  height: 28px;
-  padding: 0 12px;
+  grid-column: span 2;
+  width: 100%;
+  aspect-ratio: auto;
+  height: 100%;
+  min-height: 30px;
+  padding: 0;
   border-radius: 999px;
   background: var(--c-calendar-surface);
   color: var(--c-calendar-sub);
   font-size: calc(11.5px * var(--app-text-scale, 1));
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .calendar-color-swatch-auto::after {
