@@ -578,11 +578,17 @@ const githubCommitTool: QaTool = {
             message: { type: "string", description: "提交说明（一句话，中文）" },
             files: {
                 type: "array",
-                description: "要写入的文件，每项 {path, content}，content 是完整新内容",
+                description: "要修改的文件。两种形态：整写 {path, content}；片段替换 {path, find, replace}（改大文件用，只输出改动片段）",
                 items: {
                     type: "object",
-                    properties: { path: { type: "string" }, content: { type: "string" } },
-                    required: ["path", "content"],
+                    properties: {
+                        path: { type: "string" },
+                        content: { type: "string", description: "整写：该文件完整新内容" },
+                        find: { type: "string", description: "片段替换：要被替换的原文片段（须在文件中唯一，含足够上下文）" },
+                        replace: { type: "string", description: "片段替换：替换后的新片段" },
+                        all: { type: "boolean", description: "片段替换：true=替换全部匹配处（默认要求唯一匹配）" },
+                    },
+                    required: ["path"],
                 },
             },
             deletes: { type: "array", items: { type: "string" }, description: "要删除的文件路径" },
@@ -591,15 +597,15 @@ const githubCommitTool: QaTool = {
         required: ["message"],
     },
     description:
-        "把对仓库文件的修改（新增/覆盖/删除）提交上去。给出完整的新文件内容（不是 diff）。确认模式下会先展示给用户确认再提交；全自动模式下直接提交。修改前应先用「读取仓库文件」拿到原内容再改。",
+        "把对仓库文件的修改（新增/覆盖/删除）提交上去。两种改法：新建/整写用 {path, content}；改已有大文件优先用片段替换 {path, find, replace}——只输出改动片段，省 token 且不会被输出上限截断。确认模式下会先展示给用户确认再提交；全自动模式下直接提交。片段替换前先用「读取仓库文件」确认原文。",
     schemaLines: [
         "  参数：",
         "    · message (必填) — 提交说明（一句话，中文）",
-        "    · files (可选) — 数组，每项 {path, content}，content 是该文件的完整新内容",
+        "    · files (可选) — 数组。整写：{path, content}；片段替换：{path, find, replace[, all]}——改大文件优先用它，find 须是文件中唯一的原文片段（带足够上下文），all=true 替换全部匹配",
         "    · deletes (可选) — 要删除的文件路径数组；重命名 = 新路径写入 files + 旧路径放 deletes",
         "    · branch (可选) — 目标分支，默认仓库默认分支；分支不存在会自动从默认分支创建",
         "    · files 与 deletes 至少给一个",
-        '  调用：[执行动作:提交修改({"message":"更新标题","files":[{"path":"README.md","content":"# 新标题\\n"}],"deletes":["old.md"]})]',
+        '  调用：[执行动作:提交修改({"message":"更新标题","files":[{"path":"README.md","find":"# 旧标题","replace":"# 新标题"}]})]',
     ],
     async run(args, context) {
         const config = loadQaGithubConfig();
@@ -607,9 +613,39 @@ const githubCommitTool: QaTool = {
         if (!config.token) return "写操作需要 PAT。请引导用户在工坊「仓库」里填入有写权限的 fine-grained PAT。";
         const message = typeof args.message === "string" ? args.message.trim() : "";
         const rawFiles = Array.isArray(args.files) ? args.files : [];
-        const files: QaCommitFile[] = rawFiles
-            .filter((f): f is { path: string; content: string } => !!f && typeof f === "object" && typeof (f as { path?: unknown }).path === "string" && typeof (f as { content?: unknown }).content === "string")
-            .map((f) => ({ path: f.path.trim(), content: f.content }));
+        // 两种形态：整写 {path, content}；片段替换 {path, find, replace[, all]}——
+        // 替换在此处解析成完整内容（读当前文件→替换→交给原提交管线），确认面板展示的即最终内容
+        const files: QaCommitFile[] = [];
+        const resolved = new Map<string, string>(); // 同文件多条编辑按顺序叠加
+        for (const raw of rawFiles) {
+            if (!raw || typeof raw !== "object") continue;
+            const entry = raw as { path?: unknown; content?: unknown; find?: unknown; replace?: unknown; all?: unknown };
+            const path = typeof entry.path === "string" ? entry.path.trim() : "";
+            if (!path) continue;
+            if (typeof entry.content === "string") {
+                resolved.set(path, entry.content);
+                continue;
+            }
+            if (typeof entry.find === "string" && typeof entry.replace === "string") {
+                if (!entry.find) return `文件 ${path}：find 不能为空。`;
+                let base = resolved.get(path);
+                if (base == null) {
+                    try {
+                        base = (await readQaGithubFile(config, path, context?.signal)).text;
+                    } catch (error) {
+                        return `片段替换失败：读取 ${path} 出错——${error instanceof Error ? error.message : String(error)}。新文件请用 {path, content} 整写。`;
+                    }
+                }
+                const count = base.split(entry.find).length - 1;
+                if (count === 0) return `文件 ${path}：找不到 find 片段。先用「读取仓库文件」核对原文（注意空格与换行须完全一致）。`;
+                if (count > 1 && entry.all !== true) return `文件 ${path}：find 片段匹配了 ${count} 处。加长片段使其唯一，或加 all:true 替换全部。`;
+                base = entry.all === true ? base.split(entry.find).join(entry.replace) : base.replace(entry.find, entry.replace);
+                resolved.set(path, base);
+                continue;
+            }
+            return `文件 ${path}：需给 content（整写）或 find+replace（片段替换）。`;
+        }
+        for (const [path, content] of resolved) files.push({ path, content });
         const deletes = (Array.isArray(args.deletes) ? args.deletes : [])
             .map((p) => (typeof p === "string" ? p.trim() : ""))
             .filter(Boolean);
