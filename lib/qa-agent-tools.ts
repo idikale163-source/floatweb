@@ -39,6 +39,7 @@ import {
     workbenchEditLocal,
     workbenchPublishLocal,
     getAppStagingNote,
+    readStagedAppFile,
     type QaCreatedContent,
 } from "./qa-content-tools";
 import { searchQaFaq, readQaFaqPage } from "./qa-faq";
@@ -1007,26 +1008,47 @@ const readTool: QaTool = {
         properties: {
             type: { type: "string", enum: ["app", "game", "theater", "repo"], description: "内容类型" },
             name: { type: "string", description: "app/game/theater：APP 名 / 游戏标题 / 剧场档案名" },
-            path: { type: "string", description: "repo：仓库文件路径" },
-            page: { type: "number", description: "本机内容较长时分页，默认第 1 页" },
+            path: { type: "string", description: "repo：仓库文件路径；app：读应用暂存区的包文件（分段写入时核实进度用）" },
+            page: { type: "number", description: "本机内容/暂存文件较长时分页，默认第 1 页（最后一页可看结尾）" },
             start: { type: "number", description: "repo：起始行" },
             end: { type: "number", description: "repo：结束行" },
         },
         required: ["type"],
     },
     description:
-        "读取一条内容的完整源码与字段：本机 APP/游戏/剧场用 type+name（可分页），仓库文件用 type=repo + path（可 start/end 行号范围）。修改前先读，基于真实内容再动手。",
+        "读取一条内容的完整源码与字段：本机 APP/游戏/剧场用 type+name（可分页）；仓库文件用 type=repo + path（可 start/end 行号范围，暂存区有未提交修改时读到的是暂存版本）；应用暂存区的包文件用 type=app + path。修改前/续写前先读，基于真实内容再动手。",
     schemaLines: [
         "  参数：",
         "    · type (必填) — app / game / theater / repo",
-        "    · name — 本机内容的名称（type=app/game/theater 必填）",
-        "    · path — 仓库文件路径（type=repo 必填）",
-        "    · page (可选) — 本机内容分页；start/end (可选) — 仓库文件行号范围",
-        '  调用：[执行动作:读取({"type":"game","name":"五子棋"})] 或 [执行动作:读取({"type":"repo","path":"lib/chat-engine.ts","start":1,"end":80})]',
+        "    · name — 本机内容的名称（type=app/game/theater 已装内容用）",
+        "    · path — 仓库文件路径（type=repo）/ 应用暂存区包文件路径（type=app，分段写入时核实进度）",
+        "    · page (可选) — 本机内容/暂存文件分页；start/end (可选) — 仓库文件行号范围",
+        '  调用：[执行动作:读取({"type":"game","name":"五子棋"})] 或 [执行动作:读取({"type":"app","path":"index.html","page":2})]',
     ],
     async run(args, context) {
-        if (args.type === "repo") return githubReadTool.run({ path: args.path, start: args.start, end: args.end }, context);
-        return contentToolByNative("read_local_content").run({ type: args.type, name: args.name, page: args.page }, context);
+        if (args.type === "repo") {
+            // 提交暂存区的工作副本优先：分段写入/编辑过的文件，续写要基于暂存版本而不是仓库旧版
+            const path = typeof args.path === "string" ? args.path.trim().replace(/^\.?\//, "") : "";
+            const staged = path ? COMMIT_STAGING.get(path) : undefined;
+            if (staged != null) {
+                const lines = staged.split("\n");
+                const start = typeof args.start === "number" ? Math.max(1, args.start) : 1;
+                const end = typeof args.end === "number" ? Math.min(lines.length, args.end) : lines.length;
+                const numbered = lines.slice(start - 1, end).map((line, i) => `${start + i}\t${line}`).join("\n");
+                const body = `${path}（提交暂存区的未提交版本，共 ${lines.length} 行，显示 ${start}-${Math.min(end, lines.length)}）：\n${numbered}`;
+                const limit = getQaPageChars();
+                return body.length > limit ? `${body.slice(0, limit)}\n…（已截断，用 start/end 行号范围继续读）` : body;
+            }
+            return githubReadTool.run({ path: args.path, start: args.start, end: args.end }, context);
+        }
+        if (args.type === "app" && typeof args.path === "string" && args.path.trim()) {
+            return readStagedAppFile(args.path, args.page);
+        }
+        const result = await contentToolByNative("read_local_content").run({ type: args.type, name: args.name, page: args.page }, context);
+        if (args.type === "app" && result.startsWith("没有找到名为") && !getAppStagingNote().includes("（暂存区为空）")) {
+            return `${result}\n${getAppStagingNote()}——暂存区文件还没安装，读它们要用 path 参数（如 {"type":"app","path":"index.html"}）。`;
+        }
+        return result;
     },
 };
 
