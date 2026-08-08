@@ -116,7 +116,7 @@
   /* 已点赞红心 */
 
   /* ── 日历色（v2 · 黑白灰色块 + 糖果事件色，默认 = light 主题） ── */
-  --c-calendar-bg: #FAFAF8;
+  --c-calendar-bg: #FFFFFF;
   /* 页面底色 */
   --c-calendar-surface: #F1F0EC;
   /* 灰色块（按钮/胶囊/次级底） */
