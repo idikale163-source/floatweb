@@ -569,6 +569,63 @@ const githubBranchTool: QaTool = {
     },
 };
 
+// ── 提交暂存区（分段写入 → 提交引用）────────────────
+// 与应用包暂存区同思路：往仓库新写大文件时，单次输出可能被 max_tokens 截断——
+// 先分多轮 append 到内存暂存区，再在「提交修改」里用 {path, fromStaged:true} 引用。
+// 改已有文件不需要它：走「提交修改」的 find/replace 片段替换。
+
+const COMMIT_STAGING = new Map<string, string>();
+const COMMIT_STAGE_MAX_FILES = 40;
+const COMMIT_STAGE_MAX_FILE_CHARS = 2_000_000;
+const COMMIT_STAGE_MAX_TOTAL_CHARS = 10_000_000;
+
+function commitStagingSummary(): string {
+    if (COMMIT_STAGING.size === 0) return "（提交暂存区为空）";
+    return [...COMMIT_STAGING.entries()].map(([path, c]) => `${path}(${c.length})`).join("、");
+}
+
+const githubStageFileTool: QaTool = {
+    name: "暂存提交文件",
+    nativeName: "stage_commit_file",
+    parameters: {
+        type: "object",
+        properties: {
+            path: { type: "string", description: "仓库内路径，如 src/app.js" },
+            content: { type: "string", description: "文件内容（文本）" },
+            append: { type: "boolean", description: "true=追加到该路径已暂存内容末尾（大文件分多轮写）" },
+            clear: { type: "boolean", description: "true=清空整个提交暂存区（重来），此时可不传 path/content" },
+        },
+    },
+    description:
+        "把要提交到仓库的文件内容写入暂存区（只在本机内存，不动仓库）。新写大文件超过单次输出上限时分多轮：首轮写骨架，后续轮 append=true 追加，绝不会被 max_tokens 截断。写完后在「提交修改」的 files 里用 {path, fromStaged:true} 引用即可提交。改已有文件优先用「提交修改」的 find/replace 片段替换，不必走暂存。",
+    schemaLines: [
+        "  参数：",
+        "    · path (必填) — 仓库内路径",
+        "    · content (必填) — 文件内容（文本）",
+        "    · append (可选) — true=追加到该路径已暂存内容末尾（大文件分轮写）",
+        "    · clear (可选) — true=清空提交暂存区",
+        '  调用：[执行动作:暂存提交文件({"path":"src/app.js","content":"…","append":true})]',
+    ],
+    async run(args) {
+        if (args.clear === true) {
+            COMMIT_STAGING.clear();
+            return "✓ 提交暂存区已清空。";
+        }
+        const path = typeof args.path === "string" ? args.path.trim().replace(/^\.?\//, "") : "";
+        if (!path || path.includes("..") || path.length > 200) return "path 无效（仓库内相对路径，不允许 ..）。";
+        const content = typeof args.content === "string" ? args.content : "";
+        if (!content) return "缺少 content。";
+        if (COMMIT_STAGING.size >= COMMIT_STAGE_MAX_FILES && !COMMIT_STAGING.has(path)) return `暂存文件数已达上限 ${COMMIT_STAGE_MAX_FILES}。`;
+        const next = args.append === true ? (COMMIT_STAGING.get(path) ?? "") + content : content;
+        if (next.length > COMMIT_STAGE_MAX_FILE_CHARS) return `单文件暂存超限（${next.length} > ${COMMIT_STAGE_MAX_FILE_CHARS} 字符）。`;
+        let total = next.length;
+        for (const [k, c] of COMMIT_STAGING) { if (k !== path) total += c.length; }
+        if (total > COMMIT_STAGE_MAX_TOTAL_CHARS) return `暂存区总量超限（${total} > ${COMMIT_STAGE_MAX_TOTAL_CHARS} 字符）。`;
+        COMMIT_STAGING.set(path, next);
+        return `✓ 已暂存 ${path}（当前 ${next.length.toLocaleString()} 字符${args.append === true ? "，本次为追加" : ""}）。暂存区：${commitStagingSummary()}。继续追加或暂存其他文件；写完后在「提交修改」files 里用 {"path":"${path}","fromStaged":true} 引用提交。`;
+    },
+};
+
 const githubCommitTool: QaTool = {
     name: "提交修改",
     nativeName: "commit_changes",
@@ -578,7 +635,7 @@ const githubCommitTool: QaTool = {
             message: { type: "string", description: "提交说明（一句话，中文）" },
             files: {
                 type: "array",
-                description: "要修改的文件。两种形态：整写 {path, content}；片段替换 {path, find, replace}（改大文件用，只输出改动片段）",
+                description: "要修改的文件。三种形态：整写 {path, content}；片段替换 {path, find, replace}（改大文件用，只输出改动片段）；引用暂存 {path, fromStaged:true}（新写大文件先用「暂存提交文件」分轮写完）",
                 items: {
                     type: "object",
                     properties: {
@@ -587,6 +644,7 @@ const githubCommitTool: QaTool = {
                         find: { type: "string", description: "片段替换：要被替换的原文片段（须在文件中唯一，含足够上下文）" },
                         replace: { type: "string", description: "片段替换：替换后的新片段" },
                         all: { type: "boolean", description: "片段替换：true=替换全部匹配处（默认要求唯一匹配）" },
+                        fromStaged: { type: "boolean", description: "true=内容取自「暂存提交文件」暂存区的同路径文件（大文件分段写完后用）" },
                     },
                     required: ["path"],
                 },
@@ -597,11 +655,11 @@ const githubCommitTool: QaTool = {
         required: ["message"],
     },
     description:
-        "把对仓库文件的修改（新增/覆盖/删除）提交上去。两种改法：新建/整写用 {path, content}；改已有大文件优先用片段替换 {path, find, replace}——只输出改动片段，省 token 且不会被输出上限截断。确认模式下会先展示给用户确认再提交；全自动模式下直接提交。片段替换前先用「读取仓库文件」确认原文。",
+        "把对仓库文件的修改（新增/覆盖/删除）提交上去。三种改法：新建/整写用 {path, content}；改已有大文件优先用片段替换 {path, find, replace}——只输出改动片段，省 token 且不会被输出上限截断；新写大文件先用「暂存提交文件」分轮写完，再用 {path, fromStaged:true} 引用。确认模式下会先展示给用户确认再提交；全自动模式下直接提交。片段替换前先用「读取仓库文件」确认原文。",
     schemaLines: [
         "  参数：",
         "    · message (必填) — 提交说明（一句话，中文）",
-        "    · files (可选) — 数组。整写：{path, content}；片段替换：{path, find, replace[, all]}——改大文件优先用它，find 须是文件中唯一的原文片段（带足够上下文），all=true 替换全部匹配",
+        "    · files (可选) — 数组。整写：{path, content}；片段替换：{path, find, replace[, all]}——改大文件优先用它，find 须是文件中唯一的原文片段（带足够上下文），all=true 替换全部匹配；引用暂存：{path, fromStaged:true}——新写大文件先「暂存提交文件」分轮写完再引用",
         "    · deletes (可选) — 要删除的文件路径数组；重命名 = 新路径写入 files + 旧路径放 deletes",
         "    · branch (可选) — 目标分支，默认仓库默认分支；分支不存在会自动从默认分支创建",
         "    · files 与 deletes 至少给一个",
@@ -617,11 +675,20 @@ const githubCommitTool: QaTool = {
         // 替换在此处解析成完整内容（读当前文件→替换→交给原提交管线），确认面板展示的即最终内容
         const files: QaCommitFile[] = [];
         const resolved = new Map<string, string>(); // 同文件多条编辑按顺序叠加
+        const consumedStaged: string[] = []; // 引用了暂存区的路径：提案落地后才清空（提交失败可重试）
         for (const raw of rawFiles) {
             if (!raw || typeof raw !== "object") continue;
-            const entry = raw as { path?: unknown; content?: unknown; find?: unknown; replace?: unknown; all?: unknown };
+            const entry = raw as { path?: unknown; content?: unknown; find?: unknown; replace?: unknown; all?: unknown; fromStaged?: unknown };
             const path = typeof entry.path === "string" ? entry.path.trim() : "";
             if (!path) continue;
+            if (entry.fromStaged === true) {
+                const stagedKey = COMMIT_STAGING.has(path) ? path : path.replace(/^\.?\//, "");
+                const staged = COMMIT_STAGING.get(stagedKey);
+                if (staged == null) return `文件 ${path}：提交暂存区里没有它。先用「暂存提交文件」写入。当前暂存区：${commitStagingSummary()}`;
+                resolved.set(path, staged);
+                consumedStaged.push(stagedKey);
+                continue;
+            }
             if (typeof entry.content === "string") {
                 resolved.set(path, entry.content);
                 continue;
@@ -658,15 +725,20 @@ const githubCommitTool: QaTool = {
             files.length ? `改 ${files.length} 个：${files.map((f) => f.path).join("、")}` : "",
             deletes.length ? `删 ${deletes.length} 个：${deletes.join("、")}` : "",
         ].filter(Boolean).join("；");
+        const releaseStaged = () => { for (const key of consumedStaged) COMMIT_STAGING.delete(key); };
         if (context?.autoCommit) {
             // 立即提交：后续工具（创建PR 等）依赖提交已经落到分支上
             if (context.commitNow) {
                 const result = await context.commitNow(proposal);
-                if (!result.ok) return `提交失败：${result.error ?? "未知错误"}。请把失败原因告诉用户，不要假装已提交。`;
+                if (!result.ok) return `提交失败：${result.error ?? "未知错误"}${consumedStaged.length ? "（暂存文件已保留，可修正后重试）" : ""}。请把失败原因告诉用户，不要假装已提交。`;
+                releaseStaged();
                 return `✓ 已提交（${summary}）到 ${branch || "默认分支"}：${result.htmlUrl ?? ""}。请向用户简述你做的修改和影响。`;
             }
+            releaseStaged();
             return `修改提案已生成（${summary}），当前是全自动模式，系统会直接提交。请向用户简述你做的修改和影响。`;
         }
+        // 确认模式：内容已复制进提案（用户点「应用」时用提案里的内容），暂存区可释放
+        releaseStaged();
         return `已生成修改提案（${summary}），已在界面展示给用户，等待用户点「应用」确认。请告诉用户你准备做的修改和影响，让他确认。不要假装已经提交成功。`;
     },
 };
@@ -814,6 +886,7 @@ const GITHUB_TOOLS: QaTool[] = [
 const GITHUB_WRITE_TOOLS: QaTool[] = [
     githubBranchTool,
     githubBranchDeleteTool,
+    githubStageFileTool,
     githubCommitTool,
     githubPullCreateTool,
     githubPullMergeTool,

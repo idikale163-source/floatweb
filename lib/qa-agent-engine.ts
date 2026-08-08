@@ -11,6 +11,7 @@ import {
 import { sendLLMToolStreamRequest, type LLMToolRequestResult } from "./chat-engine";
 import type { LLMContentPart } from "./llm-prompt-assembler";
 import { loadApiConfigs, loadBindingConfig } from "./settings-storage";
+import { loadQaGithubConfig } from "./qa-github";
 import type { ApiConfig } from "./settings-types";
 import { buildQaSystemPrompt } from "./qa-knowledge";
 import { createSseJsonParser } from "./sse-json";
@@ -422,6 +423,9 @@ function buildQaOutputBudgetPrompt(): string {
     lines.push("· 大 APP：「暂存应用文件」首轮写骨架，后续轮 append=true 追加，全部就绪后「安装暂存应用」；");
     lines.push("· 大游戏：「保存游戏草稿」首轮传 gameHtml，后续轮 gameHtmlAppend 追加，写完「安装本机游戏」fromDraft=true；");
     lines.push("· 超长剧场开场：「保存剧场草稿」openingHtmlAppend 分轮追加，写完「上架本机剧场」fromDraft=true。");
+    if (loadQaGithubConfig()?.token) {
+        lines.push("· 往仓库新写大文件：「暂存提交文件」分轮 append，写完在「提交修改」files 里用 {path, fromStaged:true} 引用；改已有文件用 find/replace 片段替换，只输出改动片段。");
+    }
     lines.push(
         "每段写到自然收尾（标签、函数、语句的闭合处）就停，下一轮接着写。内容没写完、这条回复又不打算调用工具时，在正文末尾单独一行写 <!--CONTINUE-->，系统会自动让你继续；全部完成后正常收尾即可，不要输出 <!--CONTINUE-->。",
     );
