@@ -6,6 +6,7 @@ import { getQaPageChars } from "./qa-prefs";
 import { createCustomAppPackageFile } from "./custom-app-package";
 import { downloadFile } from "./download-utils";
 import {
+    parseGameRoleSlots,
     upsertLocalTestGame,
     isLocalTestGameId,
     loadGameState,
@@ -440,8 +441,9 @@ const installGameTool: QaContentTool = {
             pickerHtml: { type: "string", description: "角色选择界面 HTML（启用 roleSlots 时必填）" },
             subtitle: { type: "string" }, synopsis: { type: "string" }, playNote: { type: "string" },
             tags: { type: "array", items: { type: "string" } },
+            fromDraft: { type: "boolean", description: "true=从同标题草稿读取全部内容安装（分段写完大游戏后用，不必重新传 gameHtml）" },
         },
-        required: ["title", "gameHtml"],
+        required: ["title"],
     },
     description:
         "把写好的小游戏安装到 游戏大厅 → 创作工坊 → 本机测试（不发布市场）。同标题重复安装会更新同一条目。写之前先读「创作指南」type=game 了解游戏 HTML 与宿主的通信协议。",
@@ -452,15 +454,23 @@ const installGameTool: QaContentTool = {
         "    · roleSlots (可选) — 角色槽位数组 [{id,label,description,required,min,max}]；不填则为无角色游戏",
         "    · pickerHtml (启用 roleSlots 时必填) — 角色选择界面 HTML",
         "    · subtitle / synopsis / playNote / tags (可选) — 陈列信息",
-        '  调用：[执行动作:安装本机游戏({"title":"五子棋","gameHtml":"<!doctype html>…"})]',
+        "    · fromDraft (可选) — true=从同标题草稿读取全部内容安装（大游戏先分段存草稿再用它）",
+        '  调用：[执行动作:安装本机游戏({"title":"五子棋","gameHtml":"<!doctype html>…"})] 或 [执行动作:安装本机游戏({"title":"五子棋","fromDraft":true})]',
     ],
     async run(args, context) {
         const title = text(args.title, 80);
-        const gameHtml = typeof args.gameHtml === "string" ? args.gameHtml : "";
         if (!title) return "缺少 title（游戏名）。";
-        if (!gameHtml.trim()) return "缺少 gameHtml（游戏单文件 HTML）。";
-        const roleSlots = normalizeRoleSlots(args.roleSlots);
-        const pickerHtml = typeof args.pickerHtml === "string" ? args.pickerHtml.trim() : "";
+        // fromDraft：从同标题草稿取内容（大游戏分段存草稿后安装，不必重新传大字段）
+        let sourceDraft: GameTemplateDraft | null = null;
+        if (args.fromDraft === true) {
+            const found = loadGameDrafts().find((item) => norm(item.title) === norm(title));
+            if (!found) return `草稿箱里没有「${title}」。先用「保存游戏草稿」写入（大游戏可分段追加），再 fromDraft 安装。`;
+            sourceDraft = found.draft;
+        }
+        const gameHtml = sourceDraft ? sourceDraft.gameHtml : typeof args.gameHtml === "string" ? args.gameHtml : "";
+        if (!gameHtml.trim()) return "缺少 gameHtml（游戏单文件 HTML）。大游戏可先分段「保存游戏草稿」再 fromDraft=true 安装。";
+        const roleSlots = sourceDraft ? parseGameRoleSlots(sourceDraft.roleSlotsText) : normalizeRoleSlots(args.roleSlots);
+        const pickerHtml = sourceDraft ? sourceDraft.pickerHtml.trim() : typeof args.pickerHtml === "string" ? args.pickerHtml.trim() : "";
         if (roleSlots.length > 0 && !pickerHtml) return "启用 roleSlots 时必须提供 pickerHtml（角色选择界面）。";
 
         const slug = stableSlug(title);
@@ -469,9 +479,9 @@ const installGameTool: QaContentTool = {
             id: `qa_game_${slug}`,
             title,
             codeName: `QA-${slug.toUpperCase()}`,
-            subtitle: text(args.subtitle, 160),
-            synopsis: text(args.synopsis, 600),
-            playNote: text(args.playNote, 3000),
+            subtitle: sourceDraft ? text(sourceDraft.subtitle, 160) : text(args.subtitle, 160),
+            synopsis: sourceDraft ? text(sourceDraft.synopsis, 600) : text(args.synopsis, 600),
+            playNote: sourceDraft ? text(sourceDraft.playNote, 3000) : text(args.playNote, 3000),
             coverImage: "",
             tags: normalizeStringArray(args.tags, 8, 24),
             authorId: "qa_workshop",
@@ -516,8 +526,9 @@ const installTheaterTool: QaContentTool = {
             tags: { type: "array", items: { type: "string" } },
             rarity: { type: "string", enum: ["common", "rare", "legend", "encrypted"] },
             glyph: { type: "string" }, durationTurns: { type: "number", description: "回合数上限 1-30，默认 8" },
+            fromDraft: { type: "boolean", description: "true=从同标题草稿读取内容上架（分段写完超长开场后用，不必重新传大字段）" },
         },
-        required: ["title", "aiInstruction", "openingHtml"],
+        required: ["title"],
     },
     description:
         "把写好的黑市剧场（夜间档案）上架到 黑市剧场 → 工作室 → 本机测试（不发布市场、不扣钱）。同标题重复上架会更新同一条目。写之前先读「创作指南」type=theater。",
@@ -528,13 +539,23 @@ const installTheaterTool: QaContentTool = {
         "    · openingHtml (必填) — 开场画面 HTML",
         "    · outputContract / renderRules / renderCss / memorySummaryPrompt (可选) — 输出与渲染控制",
         "    · subtitle / synopsis / storyText / tags / rarity / glyph / durationTurns (可选) — 陈列与回合数",
-        '  调用：[执行动作:上架本机剧场({"title":"雨夜档案","aiInstruction":"…","openingHtml":"<div>…</div>"})]',
+        "    · fromDraft (可选) — true=从同标题草稿读取内容上架（大字段先分段存草稿再用它）",
+        '  调用：[执行动作:上架本机剧场({"title":"雨夜档案","aiInstruction":"…","openingHtml":"<div>…</div>"})] 或 [执行动作:上架本机剧场({"title":"雨夜档案","fromDraft":true})]',
     ],
     async run(args, context) {
         const title = text(args.title, 80);
-        const aiInstruction = typeof args.aiInstruction === "string" ? args.aiInstruction.trim() : "";
-        const openingHtml = typeof args.openingHtml === "string" ? args.openingHtml.trim() : "";
         if (!title) return "缺少 title（档案名）。";
+        // fromDraft：从同标题草稿取内容（超长字段分段存草稿后上架）
+        let theaterDraft: Record<string, unknown> | null = null;
+        if (args.fromDraft === true) {
+            const found = loadBmDrafts().find((item) => norm(item.title) === norm(title));
+            if (!found) return `剧场草稿箱里没有「${title}」。先用「保存剧场草稿」写入（大字段可分段追加），再 fromDraft 上架。`;
+            theaterDraft = found.draft as unknown as Record<string, unknown>;
+        }
+        const pick = (key: string, arg: unknown): string =>
+            typeof arg === "string" && arg.trim() ? arg.trim() : theaterDraft ? String(theaterDraft[key] ?? "").trim() : "";
+        const aiInstruction = pick("aiInstruction", args.aiInstruction);
+        const openingHtml = pick("openingHtml", args.openingHtml);
         if (!aiInstruction) return "缺少 aiInstruction（演出指令）。";
         if (!openingHtml) return "缺少 openingHtml（开场画面）。";
 
@@ -546,9 +567,9 @@ const installTheaterTool: QaContentTool = {
             id: `qa_theater_${slug}`,
             title,
             codeName: `QA-${slug.toUpperCase()}`,
-            subtitle: text(args.subtitle, 160),
-            synopsis: text(args.synopsis, 600),
-            storyText: text(args.storyText, 2000),
+            subtitle: text(args.subtitle, 160) || pick("subtitle", ""),
+            synopsis: text(args.synopsis, 600) || pick("synopsis", ""),
+            storyText: text(args.storyText, 2000) || pick("storyText", ""),
             tags: normalizeStringArray(args.tags, 8, 24),
             rarity,
             glyph: text(args.glyph, 8) || "◆",
@@ -561,10 +582,16 @@ const installTheaterTool: QaContentTool = {
             allowExternalControl: false,
             openingHtml,
             aiInstruction,
-            outputContract: text(args.outputContract, 12000),
-            renderRules: Array.isArray(args.renderRules) ? (args.renderRules as BlackMarketTheaterTemplate["renderRules"]) : [],
-            renderCss: text(args.renderCss, 20000),
-            memorySummaryPrompt: text(args.memorySummaryPrompt, 12000),
+            outputContract: text(args.outputContract, 12000) || pick("outputContract", "").slice(0, 12000),
+            renderRules: Array.isArray(args.renderRules)
+                ? (args.renderRules as BlackMarketTheaterTemplate["renderRules"])
+                : theaterDraft
+                    ? ((): BlackMarketTheaterTemplate["renderRules"] => {
+                        try { const r = JSON.parse(String(theaterDraft.renderRulesText ?? "[]")); return Array.isArray(r) ? r : []; } catch { return []; }
+                    })()
+                    : [],
+            renderCss: text(args.renderCss, 20000) || pick("renderCss", "").slice(0, 20000),
+            memorySummaryPrompt: text(args.memorySummaryPrompt, 12000) || pick("memorySummaryPrompt", "").slice(0, 12000),
             purchaseCount: 0,
             rating: 0,
             createdAt: now,
@@ -751,7 +778,8 @@ const saveGameDraftTool: QaContentTool = {
         type: "object",
         properties: {
             title: { type: "string", description: "草稿标题（匹配现有草稿则更新，否则新建）" },
-            gameHtml: { type: "string", description: "游戏正体单文件 HTML（新建时必填）" },
+            gameHtml: { type: "string", description: "游戏正体单文件 HTML（新建时必填；整体覆盖）" },
+            gameHtmlAppend: { type: "string", description: "追加到草稿现有 gameHtml 末尾（大游戏分多轮写，绕开单次输出上限）" },
             roleSlots: { type: "array", description: "角色槽位；传 [] 表示无角色游戏", items: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, description: { type: "string" }, required: { type: "boolean" }, min: { type: "number" }, max: { type: "number" } } } },
             pickerHtml: { type: "string", description: "角色选择界面 HTML" },
             subtitle: { type: "string" }, synopsis: { type: "string" }, playNote: { type: "string" },
@@ -764,7 +792,8 @@ const saveGameDraftTool: QaContentTool = {
     schemaLines: [
         "  参数：",
         "    · title (必填) — 草稿标题（匹配现有草稿则更新，否则新建）",
-        "    · gameHtml (新建时必填) — 游戏正体单文件 HTML",
+        "    · gameHtml (新建时必填) — 游戏正体单文件 HTML（整体覆盖）",
+        "    · gameHtmlAppend (可选) — 追加到现有 gameHtml 末尾：大游戏第一轮用 gameHtml 写骨架，后续轮用它分段续写",
         "    · roleSlots / pickerHtml / subtitle / synopsis / playNote / tags (可选) — 只传要改的字段",
         '  调用：[执行动作:保存游戏草稿({"title":"五子棋","synopsis":"新简介"})]',
     ],
@@ -773,8 +802,11 @@ const saveGameDraftTool: QaContentTool = {
         if (!title) return "缺少 title（草稿标题）。";
         const drafts = loadGameDrafts();
         const existing = drafts.find((item) => norm(item.title) === norm(title));
-        const gameHtml = typeof args.gameHtml === "string" && args.gameHtml.trim() ? args.gameHtml : existing?.draft.gameHtml ?? "";
+        const appendHtml = typeof args.gameHtmlAppend === "string" ? args.gameHtmlAppend : "";
+        let gameHtml = typeof args.gameHtml === "string" && args.gameHtml.trim() ? args.gameHtml : existing?.draft.gameHtml ?? "";
+        if (appendHtml) gameHtml = (gameHtml || "") + appendHtml;
         if (!gameHtml.trim()) return `草稿箱里没有「${title}」，新建草稿必须提供 gameHtml。`;
+        if (gameHtml.length > 2_000_000) return "gameHtml 超过 2MB 上限。";
 
         const base: GameTemplateDraft = existing?.draft ?? {
             title, codeName: "QA", subtitle: "", synopsis: "", playNote: "", coverImage: "",
@@ -807,7 +839,8 @@ const saveGameDraftTool: QaContentTool = {
         const linked = existing?.publishedTemplateId
             ? "该草稿关联了已发布条目，卡片会显示「有未发布改动」，用户在草稿编辑器点「更新发布」即可同步到共享大厅。"
             : "用户可在草稿编辑器里点「本机测试」试玩或「发布共享」上架。";
-        return `✓ 已${existing ? "更新" : "新建"}游戏草稿「${title}」（游戏大厅 → 创作工坊 → 草稿箱）。${linked}`;
+        const appendNote = appendHtml ? `本次追加 ${appendHtml.length.toLocaleString()} 字符，gameHtml 当前共 ${gameHtml.length.toLocaleString()} 字符。写完后可用「安装本机游戏」fromDraft 上架试玩。` : "";
+        return `✓ 已${existing ? "更新" : "新建"}游戏草稿「${title}」（游戏大厅 → 创作工坊 → 草稿箱）。${appendNote}${linked}`;
     },
 };
 
@@ -821,7 +854,8 @@ const saveTheaterDraftTool: QaContentTool = {
         properties: {
             title: { type: "string", description: "档案名（匹配现有草稿则更新，否则新建）" },
             aiInstruction: { type: "string", description: "给 AI 的完整演出指令（新建时必填）" },
-            openingHtml: { type: "string", description: "开场画面 HTML（新建时必填）" },
+            openingHtml: { type: "string", description: "开场画面 HTML（新建时必填；整体覆盖）" },
+            openingHtmlAppend: { type: "string", description: "追加到草稿现有 openingHtml 末尾（超长开场分多轮写）" },
             outputContract: { type: "string" },
             renderRules: { type: "array", items: { type: "object", properties: { pattern: { type: "string" }, flags: { type: "string" }, className: { type: "string" }, template: { type: "string" } } } },
             renderCss: { type: "string" }, memorySummaryPrompt: { type: "string" },
@@ -836,6 +870,7 @@ const saveTheaterDraftTool: QaContentTool = {
         "  参数：",
         "    · title (必填) — 档案名（匹配现有草稿则更新，否则新建）",
         "    · aiInstruction / openingHtml (新建时必填) — 演出指令 / 开场画面",
+        "    · openingHtmlAppend (可选) — 追加到现有 openingHtml 末尾（超长开场分多轮写）",
         "    · outputContract / renderRules / renderCss / memorySummaryPrompt / subtitle / synopsis / storyText / tags (可选) — 只传要改的字段",
         '  调用：[执行动作:保存剧场草稿({"title":"雨夜档案","synopsis":"新简介"})]',
     ],
@@ -850,7 +885,10 @@ const saveTheaterDraftTool: QaContentTool = {
             aiInstruction: "", outputContract: "", renderRulesText: "[]", renderCss: "", memorySummaryPrompt: "",
         };
         const aiInstruction = typeof args.aiInstruction === "string" && args.aiInstruction.trim() ? args.aiInstruction : String(base.aiInstruction ?? "");
-        const openingHtml = typeof args.openingHtml === "string" && args.openingHtml.trim() ? args.openingHtml : String(base.openingHtml ?? "");
+        const openingAppend = typeof args.openingHtmlAppend === "string" ? args.openingHtmlAppend : "";
+        let openingHtml = typeof args.openingHtml === "string" && args.openingHtml.trim() ? args.openingHtml : String(base.openingHtml ?? "");
+        if (openingAppend) openingHtml = (openingHtml || "") + openingAppend;
+        if (openingHtml.length > 2_000_000) return "openingHtml 超过 2MB 上限。";
         if (!aiInstruction.trim() || !openingHtml.trim()) {
             return `草稿箱里没有「${title}」，新建草稿必须同时提供 aiInstruction 和 openingHtml。`;
         }
