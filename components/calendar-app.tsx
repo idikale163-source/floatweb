@@ -488,28 +488,45 @@ export function PhoneCalendarApp({
       onNotice?.(error);
       return;
     }
-    const nextWeekStart = getWeekStartIso(parseIsoDate(editingItem.date));
+    const startDate = editingItem.date;
+    const endDate = editingItem.endDate || editingItem.date;
+    if (endDate < startDate) {
+      onNotice?.("结束日期不能早于开始日期");
+      return;
+    }
+    const dayCount = Math.round((parseIsoDate(endDate).getTime() - parseIsoDate(startDate).getTime()) / 86400000) + 1;
+    if (dayCount > 31) {
+      onNotice?.("一次最多创建 31 天的日程");
+      return;
+    }
+    const firstWeekStart = getWeekStartIso(parseIsoDate(startDate));
     // 跨周移动：先从原来的周删除
     if (editingItem.id && editingItem.originalDate) {
       const originalWeekStart = getWeekStartIso(parseIsoDate(editingItem.originalDate));
-      if (originalWeekStart !== nextWeekStart) {
+      if (originalWeekStart !== firstWeekStart) {
         deleteCalendarScheduleItem(selectedOwner.ownerType, selectedOwner.ownerId, originalWeekStart, editingItem.id);
       }
     }
-    upsertCalendarScheduleItem(selectedOwner.ownerType, selectedOwner.ownerId, nextWeekStart, {
-      id: editingItem.id,
-      date: editingItem.date,
-      startTime: editingItem.startTime,
-      endTime: editingItem.endTime,
-      location: editingItem.location,
-      title: editingItem.title,
-      emoji: sanitizeScheduleEmoji(editingItem.emoji),
-      source: "manual",
-      colorKey: editingItem.colorKey ?? pickScheduleColorKey(editingItem.startTime),
-    });
+    // 多天：第一天沿用原 id（编辑场景），其余每天各生成一条独立日程
+    for (let offset = 0; offset < dayCount; offset++) {
+      const day = parseIsoDate(startDate);
+      day.setDate(day.getDate() + offset);
+      const dayIso = formatIsoDate(day);
+      upsertCalendarScheduleItem(selectedOwner.ownerType, selectedOwner.ownerId, getWeekStartIso(parseIsoDate(dayIso)), {
+        id: offset === 0 ? editingItem.id : undefined,
+        date: dayIso,
+        startTime: editingItem.startTime,
+        endTime: editingItem.endTime,
+        location: editingItem.location,
+        title: editingItem.title,
+        emoji: sanitizeScheduleEmoji(editingItem.emoji),
+        source: "manual",
+        colorKey: editingItem.colorKey ?? pickScheduleColorKey(editingItem.startTime),
+      });
+    }
     setEditingItem(null);
     refreshPlans();
-    onNotice?.("日程已保存");
+    onNotice?.(dayCount > 1 ? `已创建 ${dayCount} 天的日程` : "日程已保存");
   };
 
   const handleDeleteItem = () => {
@@ -941,6 +958,7 @@ export function PhoneCalendarApp({
                                 setEditingItem({
                                   id: item.id,
                                   date: item.date,
+                                  endDate: item.date,
                                   originalDate: item.date,
                                   startTime: item.startTime,
                                   endTime: item.endTime,
