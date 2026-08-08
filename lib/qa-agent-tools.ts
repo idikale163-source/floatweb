@@ -1187,7 +1187,7 @@ const publishTool: QaTool = {
         required: ["type"],
     },
     description:
-        "把写好的内容落地：app=用应用暂存区组包安装到桌面（有 manifest.json 走完整包，只有 index.html 时配 name 走单文件）；game/theater=把草稿装进本机测试（游戏大厅/黑市剧场）；repo=把提交暂存区的全部修改提交到仓库（需 message，确认模式会先给用户确认）。",
+        "把写好的内容落地：app=用应用暂存区组包安装到桌面（有 manifest.json 走完整包，只有 index.html 时配 name 走单文件）；game/theater=把草稿装进本机测试（游戏大厅/黑市剧场）；repo=把提交暂存区的全部修改提交到仓库（需 message，确认模式会先给用户确认）。app/game 发布前会做结构体检（文档收尾位置、script 配平、内联脚本语法试编译），不过会返回具体问题——按提示「编辑」修复后重新发布即可。",
     schemaLines: [
         "  参数：",
         "    · type (必填) — app / game / theater / repo",

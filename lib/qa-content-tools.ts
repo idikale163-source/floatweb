@@ -106,6 +106,53 @@ const THEATER_GUIDE_MD = `# 黑市剧场（夜间档案）制作说明
 - 想要花字/特效：renderRules 匹配 AI 按 outputContract 输出的标记，renderCss 上样式。
 - 写完用「上架本机剧场」装进 黑市剧场 → 工作室 → 本机测试，可反复试演（写记忆、可删除）。`;
 
+// ── 发布前结构体检 ────────────────────────────────────
+// 拦下"装上才发现全按钮失灵"的两类事故：①分段接缝把文档提前收尾（</html> 后
+// 还挂着几万字，浏览器当纯文本）；②内联脚本语法错误（一个多余的大括号让整块
+// 脚本被拒绝执行）。体检不过 → 拒绝安装并返回具体问题，模型用「编辑」修复。
+
+const SCRIPT_BLOCK_RE = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+
+function validateGeneratedHtml(html: string, fileLabel: string): string | null {
+    const problems: string[] = [];
+    const lower = html.toLowerCase();
+    const htmlClose = lower.lastIndexOf("</html>");
+    if (htmlClose !== -1) {
+        const after = html.slice(htmlClose + "</html>".length).trim();
+        if (after) {
+            problems.push(`</html> 之后还有 ${after.length.toLocaleString()} 字符内容——文档被提前收尾（分段接缝常见错误），这些内容会被浏览器当纯文本，代码不执行`);
+        }
+    }
+    // 配平检查基于"完整块剥离后是否还有孤立标签"：字符串里出现 </script> 时
+    // 真实浏览器同样会提前终止脚本，标出来是正确行为
+    const withoutBlocks = html.replace(SCRIPT_BLOCK_RE, "");
+    if (/<script\b/i.test(withoutBlocks) || /<\/script>/i.test(withoutBlocks)) {
+        problems.push("存在未配对的 <script> 标签（多余的开/闭标签，或脚本字符串里出现了 </script>）");
+    }
+    // 内联脚本试编译：语法错误会让整块脚本被浏览器静默拒绝执行
+    let match: RegExpExecArray | null;
+    let blockIndex = 0;
+    SCRIPT_BLOCK_RE.lastIndex = 0;
+    while ((match = SCRIPT_BLOCK_RE.exec(html)) !== null) {
+        blockIndex += 1;
+        const attrs = match[1] ?? "";
+        if (/\bsrc\s*=/i.test(attrs)) continue;
+        const typeAttr = /\btype\s*=\s*["']?([^"'\s>]+)/i.exec(attrs)?.[1];
+        if (typeAttr && !/javascript/i.test(typeAttr)) continue; // module/json 等语法不同，跳过
+        const code = match[2] ?? "";
+        if (!code.trim()) continue;
+        try {
+            // eslint-disable-next-line no-new-func
+            new Function(code);
+        } catch (error) {
+            const line = html.slice(0, match.index).split("\n").length;
+            problems.push(`第 ${blockIndex} 个脚本块（约第 ${line} 行起）语法错误：${error instanceof Error ? error.message : String(error)}——整块脚本会被浏览器拒绝执行，所有交互失灵`);
+        }
+    }
+    if (problems.length === 0) return null;
+    return `${fileLabel} 发布体检未通过，已拒绝安装：\n${problems.map((p) => `· ${p}`).join("\n")}\n用「读取」核对对应位置原文，用「编辑」修复后重新发布。`;
+}
+
 const contentGuideTool: QaContentTool = {
     name: "创作指南",
     nativeName: "read_creation_guide",
@@ -196,6 +243,8 @@ const installAppTool: QaContentTool = {
         const html = typeof args.html === "string" ? args.html : "";
         if (!name) return "缺少 name（应用名）。";
         if (!html.trim()) return "缺少 html（完整单文件 HTML 内容）。";
+        const problem = validateGeneratedHtml(html, `应用「${name}」的 HTML`);
+        if (problem) return problem;
         const description = text(args.description, 200);
         // 可选自定义权限：透传字符串，读取时 normalizeInstalledApp 会过滤无效项
         const customPerms = Array.isArray(args.permissions)
@@ -368,6 +417,11 @@ const installStagedAppTool: QaContentTool = {
         }
         if (appStaging().size === 0) return "暂存区为空。先用「写入」type=app 写入 manifest.json 与入口 HTML（单文件应用只需 index.html）。";
         if (!appStaging().has("manifest.json")) return `暂存区缺少 manifest.json。当前：${stagingSummary()}`;
+        for (const [path, staged] of appStaging()) {
+            if (staged.text == null || !/\.html?$/i.test(path)) continue;
+            const problem = validateGeneratedHtml(staged.text, `暂存文件 ${path}`);
+            if (problem) return problem;
+        }
         try {
             const JSZip = (await import("jszip")).default;
             const zip = new JSZip();
@@ -500,6 +554,8 @@ const installGameTool: QaContentTool = {
         // fromDraft 时陈列字段与 tags 也取自草稿（否则 fromDraft 安装会丢掉草稿里的标签）
         const draftTags = sourceDraft ? sourceDraft.tagsText.split(/[\s,，]+/).filter(Boolean).slice(0, 8) : null;
         if (!gameHtml.trim()) return "缺少 gameHtml（游戏单文件 HTML）。大游戏先用「写入」type=game field=gameHtml 分段写进草稿，再发布。";
+        const gameHtmlProblem = validateGeneratedHtml(gameHtml, `游戏「${title}」的 gameHtml`);
+        if (gameHtmlProblem) return gameHtmlProblem;
         const roleSlots = sourceDraft ? parseGameRoleSlots(sourceDraft.roleSlotsText) : normalizeRoleSlots(args.roleSlots);
         const pickerHtml = sourceDraft ? sourceDraft.pickerHtml.trim() : typeof args.pickerHtml === "string" ? args.pickerHtml.trim() : "";
         if (roleSlots.length > 0 && !pickerHtml) return "启用 roleSlots 时必须提供 pickerHtml（角色选择界面）。";
