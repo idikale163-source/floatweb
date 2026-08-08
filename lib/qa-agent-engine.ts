@@ -378,7 +378,7 @@ export type QaAgentCallbacks = {
 // 轮数用尽/输出截断时给用户的可见提示——否则未执行的指令被流过滤器隐藏，
 // 表现为"话说到一半突然断了"
 const QA_ROUNDS_EXHAUSTED_NOTICE = "\n\n（这轮的工具调用次数用完了，还有操作没执行——回复「继续」我会接着完成。）";
-const QA_TRUNCATED_NOTICE = "\n\n（回复被模型的输出长度上限截断，最后一个操作没能完整生成——回复「继续」我会重试；经常出现的话，建议在预设里调大最大输出 token。）";
+const QA_TRUNCATED_NOTICE = "\n\n（回复被模型的输出长度上限截断，最后一个操作没能完整生成——回复「继续」我会重试；经常出现的话，建议在预设里调大最大输出 token，或让我改用分段写入——大 APP 走暂存、大游戏走草稿追加。）";
 
 /** 正文末尾残留未闭合的 [执行动作: 指令：输出被 max_tokens 截断的典型特征 */
 function hasTruncatedDirective(content: string): boolean {
@@ -673,6 +673,12 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
         // 原生调用为主；同时兜底解析正文里的文本协议指令（弱模型混写时也能执行）
         const nativeCalls = result.toolCalls || [];
         const textParsed = parseToolCalls(stripThinkBlocks(result.content || ""));
+        // 原生调用参数被输出上限截断（残缺 JSON 已在下层丢弃）：按截断处理，提示重试/分段
+        if (nativeCalls.length === 0 && textParsed.toolCalls.length === 0 && result.truncatedToolCalls?.length) {
+            await callbacks?.onDelta?.(QA_TRUNCATED_NOTICE);
+            options?.onContext?.({ role: "assistant", content: stripThinkBlocks(result.content || "") + QA_TRUNCATED_NOTICE });
+            return;
+        }
         if (nativeCalls.length === 0 && textParsed.toolCalls.length === 0) {
             if (hasTruncatedDirective(result.content || "")) {
                 await callbacks?.onDelta?.(QA_TRUNCATED_NOTICE);
