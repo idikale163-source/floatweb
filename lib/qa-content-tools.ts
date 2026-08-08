@@ -1302,6 +1302,16 @@ export function getAppStagingNote(): string {
     return `应用暂存区：${stagingSummary()}`;
 }
 
+/** 读取应用暂存区文件（分页）：分段写大文件时核实进度/续写衔接用 */
+export function readStagedAppFile(pathArg: unknown, pageArg: unknown): string {
+    const path = stagePath(pathArg);
+    if (!path) return "缺少 path。";
+    const staged = APP_STAGING.get(path);
+    if (!staged) return `应用暂存区里没有 ${path}。当前：${stagingSummary()}`;
+    if (staged.base64 != null) return `${path} 是二进制暂存（base64 ${staged.base64.length.toLocaleString()} 字符），不支持读取内容。`;
+    return paginate(staged.text ?? "", pageArg, `暂存文件 ${path}`);
+}
+
 export const QA_CONTENT_TOOLS = [
     contentGuideTool,
     listContentTool,

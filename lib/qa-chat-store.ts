@@ -475,6 +475,18 @@ export async function sendQaMessage(
                     segments = [...segments, { kind: "tool", tool: status }];
                     paintAssistant({ tools: toolStatuses, segments }, { force: true, persist: false });
                 },
+                // 引擎静默续接时给用户一行可见说明——否则模型突然谈"被截断"显得没头没脑
+                onAutoContinue: (reason) => {
+                    const status: QaToolStatus = {
+                        name: "自动续写",
+                        running: false,
+                        success: true,
+                        subtitle: reason === "truncated" ? "输出到达单次上限被截断，已自动接力" : "分段未完，自动继续",
+                    };
+                    toolStatuses = [...toolStatuses, status];
+                    segments = [...segments, { kind: "tool", tool: status }];
+                    paintAssistant({ tools: toolStatuses, segments }, { force: true, persist: false });
+                },
                 onToolDone: (name, success, result) => {
                     let patched = false;
                     const done: QaToolStatus[] = [];

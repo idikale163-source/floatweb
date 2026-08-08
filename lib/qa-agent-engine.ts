@@ -391,6 +391,8 @@ export type QaAgentCallbacks = {
     onContentCreated?: (item: QaCreatedContent) => void;
     /** 流过滤器正在缓冲一段长指令（无可见增量）：UI 据此显示"编写工具调用中" */
     onToolDrafting?: (drafting: boolean) => void | Promise<void>;
+    /** 引擎自动续接（截断/CONTINUE 尾标）：UI 据此显示一行提示，用户不再莫名其妙 */
+    onAutoContinue?: (reason: "truncated" | "marked") => void | Promise<void>;
 };
 
 // 单轮工具调用上限：默认 8，可在工坊配置里调节（qa-prefs）
@@ -402,7 +404,7 @@ const QA_TRUNCATED_NOTICE = "\n\n（回复被输出长度上限截断，且本�
 
 // 截断/CONTINUE 尾标后的自动接力提示（作为用户不可见的系统消息喂回给模型）
 const QA_AUTO_CONTINUE_TRUNCATED =
-    "你上一条输出到达单次输出上限被截断，残缺的工具调用已被安全丢弃（之前已完整生成的调用照常执行了）。请从中断处继续：大内容改用「写入」append=true 分段追加，每段写到自然收尾就停，别硬凑一次写完。";
+    "你上一条输出到达单次输出上限被截断，残缺的工具调用已被安全丢弃（之前已完整生成的调用照常执行了）。请从中断处继续，不要重写已完成的部分：先根据最近一次成功的工具结果确认写到了哪（需要核实内容时用「读取」——应用暂存文件 type=app 带 path、仓库暂存 type=repo 带 path、草稿字段 type=game/theater 带 name，page 翻到最后一页看结尾），然后用「写入」append=true 接着追加，每段写到自然收尾就停。";
 const QA_AUTO_CONTINUE_MARKED =
     "收到你的 CONTINUE 标记，请从上次停下的地方继续写；全部完成后正常收尾（不要再输出 CONTINUE）。";
 const QA_CONTINUE_FALLBACK_PROMPT = "请基于以上结果继续回答用户的问题。";
@@ -636,6 +638,7 @@ async function callQaAgentText(apiConfig: ApiConfig, history: QaEngineMessage[],
             options?.onContext?.({ role: "tool", name: toolResult.name, content: block });
             resultBlocks.push(`【${toolResult.name}】${toolResult.success ? "" : "（失败）"}\n${toolResult.resultForModel}`);
         }
+        if (truncated || wantsContinue) await callbacks?.onAutoContinue?.(truncated ? "truncated" : "marked");
         const followUp = truncated ? QA_AUTO_CONTINUE_TRUNCATED : wantsContinue ? QA_AUTO_CONTINUE_MARKED : QA_CONTINUE_FALLBACK_PROMPT;
         working.push({
             role: "user",
@@ -767,6 +770,7 @@ async function callQaAgentNative(apiConfig: ApiConfig, history: QaEngineMessage[
         }
 
         // 文本协议兜底调用：结果以 user 消息块回传；截断/CONTINUE 时把接力提示并入同一条
+        if (truncated || wantsContinue) await callbacks?.onAutoContinue?.(truncated ? "truncated" : "marked");
         const followUp = truncated ? QA_AUTO_CONTINUE_TRUNCATED : wantsContinue ? QA_AUTO_CONTINUE_MARKED : QA_CONTINUE_FALLBACK_PROMPT;
         if (textParsed.toolCalls.length > 0) {
             const resultBlocks: string[] = [];
