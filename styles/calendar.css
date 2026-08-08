@@ -92,9 +92,15 @@
   min-height: 0;
   overflow-y: auto;
   padding: 6px 14px calc(110px + env(safe-area-inset-bottom, 0px));
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.calendar-scroll-bounce {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  will-change: transform;
 }
 
 /* ── 主人条（横向滚动 + 吸附） ── */
@@ -161,21 +167,21 @@
   flex-shrink: 0;
   background: var(--c-calendar-sheet);
   border-radius: 18px;
-  padding: 14px 14px 6px;
+  padding: 18px 16px 8px;
 }
 
 .calendar-hero {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
-  padding: 2px 4px 10px;
+  gap: 12px;
+  padding: 2px 6px 16px;
 }
 
 .calendar-hero-copy {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 5px;
   min-width: 0;
 }
 
@@ -213,10 +219,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0;
+  gap: 1px;
   background: var(--c-calendar-surface);
   border-radius: 12px;
-  padding: 6px 12px;
+  padding: 8px 15px;
 }
 
 .calendar-hero-stat span {
@@ -239,13 +245,13 @@
   color: var(--c-calendar-faint);
   text-align: center;
   letter-spacing: 0.05em;
-  padding-bottom: 4px;
+  padding-bottom: 8px;
 }
 
 .calendar-unified-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 5px;
 }
 
 .calendar-unified-row {
@@ -262,11 +268,11 @@
   min-width: 0;
   border: none;
   background: none;
-  padding: 5px 0 4px;
+  padding: 8px 0 7px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: 2.5px;
   cursor: pointer;
   border-radius: 10px;
   color: inherit;
@@ -355,8 +361,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 22px;
-  padding: 4px 0 6px;
+  gap: 26px;
+  padding: 8px 0 8px;
 }
 
 .calendar-nav-btn,
@@ -768,7 +774,7 @@
 .calendar-grid-layout {
   display: grid;
   grid-template-columns: 46px 1fr;
-  min-height: 640px;
+  min-height: 480px;
 }
 
 .calendar-time-column {

@@ -272,6 +272,46 @@ export function PhoneCalendarApp({
   const scrollLeft = useRef(0);
   const scrollTimeout = useRef<NodeJS.Timeout | undefined>(undefined);
 
+  // 滚动区顶/底橡皮筋回弹
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const bounceInnerRef = useRef<HTMLDivElement>(null);
+  const bounceState = useRef({ startY: 0, offset: 0, tracking: false });
+
+  const handleBounceTouchStart = (e: React.TouchEvent) => {
+    bounceState.current.startY = e.touches[0].clientY;
+    bounceState.current.offset = 0;
+    bounceState.current.tracking = true;
+  };
+
+  const handleBounceTouchMove = (e: React.TouchEvent) => {
+    const scroller = scrollAreaRef.current;
+    const inner = bounceInnerRef.current;
+    if (!scroller || !inner || !bounceState.current.tracking) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const dy = e.touches[0].clientY - bounceState.current.startY;
+    const atTop = scroller.scrollTop <= 0;
+    const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+    if ((atTop && dy > 0) || (atBottom && dy < 0)) {
+      // 阻尼拉伸，最多 90px
+      const damped = Math.max(-90, Math.min(90, dy * 0.32));
+      bounceState.current.offset = damped;
+      inner.style.transition = "none";
+      inner.style.transform = `translateY(${damped}px)`;
+    } else if (bounceState.current.offset !== 0) {
+      bounceState.current.offset = 0;
+      inner.style.transform = "";
+    }
+  };
+
+  const handleBounceTouchEnd = () => {
+    const inner = bounceInnerRef.current;
+    bounceState.current.tracking = false;
+    if (!inner || bounceState.current.offset === 0) return;
+    bounceState.current.offset = 0;
+    inner.style.transition = "transform 0.34s cubic-bezier(0.22, 1.1, 0.36, 1)";
+    inner.style.transform = "translateY(0)";
+  };
+
   useEffect(() => {
     if (!selectedOwner) return;
     setPlan(loadCalendarWeekPlan(selectedOwner.ownerType, selectedOwner.ownerId, weekStart));
@@ -604,7 +644,15 @@ export function PhoneCalendarApp({
           </div>
         </header>
 
-        <div className="calendar-scroll hide-scrollbar">
+        <div
+          className="calendar-scroll hide-scrollbar"
+          ref={scrollAreaRef}
+          onTouchStart={handleBounceTouchStart}
+          onTouchMove={handleBounceTouchMove}
+          onTouchEnd={handleBounceTouchEnd}
+          onTouchCancel={handleBounceTouchEnd}
+        >
+          <div className="calendar-scroll-bounce" ref={bounceInnerRef}>
           <section
             ref={ownerStripRef}
             className="calendar-owner-strip hide-scrollbar"
@@ -912,6 +960,7 @@ export function PhoneCalendarApp({
             )}
           </div>
 
+          </div>
         </div>
 
           <div className="calendar-fab-stack">
