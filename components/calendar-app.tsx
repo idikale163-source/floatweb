@@ -225,16 +225,17 @@ export function PhoneCalendarApp({
     }
     return map;
   }, [plan]);
-  // 时间轴范围跟随事件伸缩：默认 08:00-23:00，有更早/更晚的事件时自动扩展
+  // 时间轴范围跟随事件伸缩：更早/更晚的事件自动扩展，最晚事件结束即收尾（至少展示 10 小时）
   const [gridHourStart, gridHourEnd] = useMemo(() => {
     let start = 8;
-    let end = 23;
+    let end = 0;
     for (const item of plan?.items ?? []) {
       const s = timeToMinutes(item.startTime);
       const e = timeToMinutes(item.endTime);
       if (!Number.isNaN(s)) start = Math.min(start, Math.floor(s / 60));
-      if (!Number.isNaN(e)) end = Math.max(end, Math.min(24, Math.ceil(e / 60)));
+      if (!Number.isNaN(e)) end = Math.max(end, Math.ceil(e / 60));
     }
+    end = Math.min(24, Math.max(end, start + 10));
     return [start, end];
   }, [plan]);
   const gridTotalMinutes = (gridHourEnd - gridHourStart) * 60;
