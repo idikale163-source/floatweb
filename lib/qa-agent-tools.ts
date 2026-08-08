@@ -1329,6 +1329,53 @@ export function buildQaToolsPrompt(): string {
     return lines.join("\n");
 }
 
+/**
+ * 工具行副标题：从参数里提炼一句人能看懂的摘要（统一工具名太泛，"读取/写入"
+ * 不带参数没有信息量）。规则通用，旧工具的 title/query/path 也能覆盖。
+ * 例：读取 → repo:lib/chat-engine.ts 1-80行；写入 → app:index.html 3.2k字·追加。
+ */
+export function formatQaToolSubtitle(name: string, args?: Record<string, unknown>): string {
+    void name;
+    if (!args || typeof args !== "object") return "";
+    const str = (v: unknown): string => (typeof v === "string" && v.trim() ? v.trim() : "");
+    const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    const clipText = (v: string, max: number): string => (v.length > max ? `${v.slice(0, max)}…` : v);
+
+    const kind = str(args.type) || str(args.scope) || str(args.kind) || str(args.action);
+    const target = str(args.path) || str(args.name) || str(args.title);
+    const field = str(args.field);
+    const parts: string[] = [];
+    if (kind && target) parts.push(`${kind}:${clipText(target, 36)}${field ? `·${field}` : ""}`);
+    else if (kind) parts.push(kind + (field ? `·${field}` : ""));
+    else if (target) parts.push(clipText(target, 36) + (field ? `·${field}` : ""));
+
+    const query = str(args.query) || (!target ? str(args.find) : "");
+    if (query) parts.push(clipText(query, 24));
+    const sha = str(args.sha);
+    if (sha) parts.push(sha.slice(0, 8));
+    const number = num(args.number);
+    if (number != null) parts.push(`#${number}`);
+    const page = num(args.page);
+    if (page != null && page > 1) parts.push(`第${page}页`);
+    const start = num(args.start);
+    const end = num(args.end);
+    if (start != null || end != null) parts.push(`${start ?? 1}-${end ?? ""}行`);
+
+    const contentLen = typeof args.content === "string" ? args.content.length : 0;
+    if (contentLen > 0) {
+        const size = contentLen >= 1000 ? `${(contentLen / 1000).toFixed(1)}k` : String(contentLen);
+        parts.push(`${size}字${args.append === true ? "·追加" : ""}`);
+    } else if (args.append === true) {
+        parts.push("追加");
+    }
+    if (args.fromDraft === true) parts.push("从草稿");
+    if (args.fromStaged === true) parts.push("从暂存");
+    if (args.clear === true) parts.push("清空");
+    const message = str(args.message);
+    if (message) parts.push(clipText(message, 20));
+    return parts.join(" ");
+}
+
 export async function runQaToolCall(call: ToolCall, context?: QaToolContext): Promise<QaToolRunResult> {
     const tool = QA_TOOLS.find((t) => t.name === call.name);
     if (!tool) {
