@@ -509,7 +509,7 @@ export function PhoneCalendarApp({
             setSelectedDate(todayIso);
           }}
         >
-          <Avatar src={owner.avatar || undefined} name={owner.name} size="sm" />
+          <Avatar src={owner.avatar || undefined} name={owner.name} size="md" />
           <span>{owner.name}</span>
         </button>
       ))}
