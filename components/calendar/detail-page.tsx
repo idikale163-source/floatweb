@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Settings2 } from "lucide-react";
 import type { CalendarScheduleItem } from "@/lib/calendar-types";
 import type { MenstrualDayState } from "@/lib/menstrual-storage";
 import { formatIsoDate, parseIsoDate, timeToMinutes } from "@/lib/calendar-utils";
@@ -83,6 +84,7 @@ export function CalendarDetailPage({
   itemsByDate,
   cycleMap,
   cyclePanel,
+  onOpenCycleSettings,
   onBack,
   onSelectedChange,
   onEditItem,
@@ -93,6 +95,8 @@ export function CalendarDetailPage({
   cycleMap: Map<string, MenstrualDayState> | null;
   /** 经期打卡行（仅用户视图传入），渲染在周条下方 */
   cyclePanel: ReactNode;
+  /** 周期设置入口（仅用户视图传入），渲染在右上角 */
+  onOpenCycleSettings: (() => void) | null;
   onBack: () => void;
   onSelectedChange: (iso: string) => void;
   onEditItem: (item: CalendarScheduleItem) => void;
@@ -294,6 +298,11 @@ export function CalendarDetailPage({
           <span aria-hidden="true">‹</span> {backLabel}
         </button>
         <span className="calendar-topbar-space" />
+        {onOpenCycleSettings ? (
+          <button type="button" className="calendar-icon-btn" onClick={onOpenCycleSettings} aria-label="周期设置">
+            <Settings2 size={17} />
+          </button>
+        ) : null}
       </div>
 
       <div className="calendar-weekday-head calendar-strip-head" aria-hidden="true">

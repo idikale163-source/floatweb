@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Check, ChevronLeft, HeartPulse, Plus, Settings2, Trash2, Wand2, X } from "lucide-react";
+import { Bot, Check, ChevronLeft, HeartPulse, Plus, Trash2, Wand2, X } from "lucide-react";
 import { Avatar } from "./ui/primitives";
 import { SessionCustomCSS } from "@/components/ui/session-custom-css";
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
@@ -489,9 +489,6 @@ export function PhoneCalendarApp({
           onNotice?.("已记录经期走了");
         }}>经期走了</button>
       )}
-      <button type="button" className="calendar-mini-btn calendar-mini-btn-icon" data-variant="ghost" onClick={openMenstrualSettings} aria-label="周期设置">
-        <Settings2 size={14} />
-      </button>
     </div>
   ) : null;
 
@@ -544,6 +541,7 @@ export function PhoneCalendarApp({
             itemsByDate={itemsByDate}
             cycleMap={cycleMap}
             cyclePanel={cyclePanel}
+            onOpenCycleSettings={selectedOwner?.ownerType === "user" ? openMenstrualSettings : null}
             onBack={() => setView("month")}
             onSelectedChange={setSelectedDate}
             onEditItem={openEditItem}

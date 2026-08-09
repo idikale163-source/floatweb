@@ -547,10 +547,6 @@
   cursor: default;
 }
 
-.calendar-mini-btn-icon {
-  padding: 5px 8px;
-}
-
 /* ── 详情页：双日时间轴 ── */
 .calendar-tl-vscroll {
   flex: 1;
