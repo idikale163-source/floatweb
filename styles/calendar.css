@@ -674,12 +674,26 @@
   border-radius: 6px;
   background: var(--ev-bg);
   border-left: 3.5px solid var(--ev-fg);
-  padding: 2px 6px;
+  padding: 3px 6px;
   overflow: hidden;
   line-height: 1.3;
   text-align: left;
   cursor: pointer;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+/* 空间不足时优先保标题：标题不收缩（超出由块裁掉），时间行让位 */
+.calendar-tl-event b {
+  flex-shrink: 0;
+}
+
+.calendar-tl-event span {
+  flex-shrink: 1;
+  min-height: 0;
 }
 
 .calendar-tl-event b {
@@ -687,9 +701,9 @@
   font-size: calc(11.5px * var(--app-text-scale, 1));
   font-weight: 700;
   color: var(--ev-fg);
-  white-space: nowrap;
+  overflow-wrap: break-word;
+  word-break: break-all;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .calendar-tl-event span {
