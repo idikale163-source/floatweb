@@ -426,21 +426,29 @@ function useAnchoredFrameHeight(
   minHeight: number,
 ): [number, (next: number) => void] {
   const [height, setHeight] = useState(minHeight);
+  const heightRef = useRef(minHeight);
   const pendingAdjustRef = useRef(0);
 
   const applyHeight = (raw: number) => {
     const next = Math.max(minHeight, Math.round(raw));
-    setHeight(prev => {
-      if (next === prev) return prev;
-      const el = iframeRef.current;
-      const scroller = findScrollParent(el);
-      if (el && scroller) {
-        const frameBottom = el.getBoundingClientRect().bottom;
-        const viewTop = scroller.getBoundingClientRect().top;
-        if (frameBottom <= viewTop + 1) pendingAdjustRef.current += next - prev;
+    const prev = heightRef.current;
+    if (next === prev) return;
+    const el = iframeRef.current;
+    const scroller = findScrollParent(el);
+    if (el && scroller) {
+      if (next < prev) {
+        // 贴底钳位保护：缩小会减短 scrollHeight，若剩余可滚距离不够，
+        // scrollTop 会被浏览器钳位、视口瞬间上跳——此时放弃本次缩小，
+        // 等桥接脚本下次上报（离开底部后）再收紧。
+        const slack = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
+        if (prev - next > slack - 4) return;
       }
-      return next;
-    });
+      const frameBottom = el.getBoundingClientRect().bottom;
+      const viewTop = scroller.getBoundingClientRect().top;
+      if (frameBottom <= viewTop + 1) pendingAdjustRef.current += next - prev;
+    }
+    heightRef.current = next;
+    setHeight(next);
   };
 
   useLayoutEffect(() => {
@@ -451,6 +459,34 @@ function useAnchoredFrameHeight(
   });
 
   return [height, applyHeight];
+}
+
+/** 终端时钟（独立组件：避免每秒把整个黑市页拉着重渲染） */
+function BlackMarketTerminalClock() {
+  const [time, setTime] = useState("00:00:00");
+  useEffect(() => {
+    const tick = () => {
+      const date = new Date();
+      const pad = (value: number) => String(value).padStart(2, "0");
+      setTime(`${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`);
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return <>{time}</>;
+}
+
+/** 假延迟数字（独立组件：避免每 2.6 秒整页重渲染） */
+function BlackMarketLatencyMeter() {
+  const [latency, setLatency] = useState(147);
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setLatency(118 + Math.floor(Math.random() * 74));
+    }, 2600);
+    return () => window.clearInterval(timer);
+  }, []);
+  return <>{latency}ms</>;
 }
 
 function BlackMarketTheaterHtmlFrame({
@@ -884,8 +920,6 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
   const [deleteTarget, setDeleteTarget] = useState<BlackMarketDeleteTarget | null>(null);
   const [recordMenuId, setRecordMenuId] = useState<string | null>(null);
   const [previewNonce, setPreviewNonce] = useState(0);
-  const [terminalTime, setTerminalTime] = useState("00:00:00");
-  const [latency, setLatency] = useState(147);
   const [launchOwnedId, setLaunchOwnedId] = useState<string | null>(null);
   const [launchCharacterId, setLaunchCharacterId] = useState("");
   const [activeScene, setActiveScene] = useState<BlackMarketSceneSession | null>(null);
@@ -1024,24 +1058,6 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
       active = false;
     };
   }, [account.id]);
-
-  useEffect(() => {
-    const tick = () => {
-      const date = new Date();
-      const pad = (value: number) => String(value).padStart(2, "0");
-      setTerminalTime(`${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`);
-    };
-    tick();
-    const timer = window.setInterval(tick, 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setLatency(118 + Math.floor(Math.random() * 74));
-    }, 2600);
-    return () => window.clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -2005,9 +2021,9 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
           <span className="is-green">CONNECTED</span>
           <span>·</span>
           <span>TOR://night-channel.onion</span>
-          <b>{terminalTime}</b>
+          <b><BlackMarketTerminalClock /></b>
           <span>·</span>
-          <span>{latency}ms</span>
+          <span><BlackMarketLatencyMeter /></span>
         </section>
 
         <div className="cp-black-market-warning">△ THIS SESSION IS BEING MONITORED △</div>
@@ -2026,7 +2042,7 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
           <div className="cp-black-market-camera" aria-hidden="true">
             <span className="cp-black-market-camera-rec">● REC</span>
             <span className="cp-black-market-camera-sig">SIG -72dB</span>
-            <span className="cp-black-market-camera-id">OPERATOR_03 / {terminalTime}</span>
+            <span className="cp-black-market-camera-id">OPERATOR_03 / <BlackMarketTerminalClock /></span>
           </div>
           <div className="cp-black-market-operator-info">
             <div className="cp-black-market-operator-label">OPERATOR_03</div>
