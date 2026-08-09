@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
@@ -248,6 +248,26 @@ function QaToolRow({ tool }: { tool: QaToolStatus }) {
   );
 }
 
+// 已完成文本的 Markdown 渲染：memo 缓存——流式期间每次增量都全文重排 remark 是
+// 低端机 WebView OOM 崩溃的主因（几万字 × 每秒多次解析）。文本不变就不重渲。
+const QaMarkdownBlock = memo(function QaMarkdownBlock({ text }: { text: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={QA_MARKDOWN_COMPONENTS}>
+      {text}
+    </ReactMarkdown>
+  );
+});
+
+// 正在生长的活跃段：纯文本渲染（零解析成本），生成结束后换回完整 Markdown
+function QaStreamingText({ text }: { text: string }) {
+  return (
+    <>
+      <div className="qa-stream-text">{text}</div>
+      <span className="qa-cursor" />
+    </>
+  );
+}
+
 function QaMessageItem({ msg, isStreaming, onRetry, onViewImage }: { msg: QaMsg; isStreaming: boolean; onRetry: (id: string) => void; onViewImage: (url: string) => void }) {
   if (msg.role === "user") {
     return (
@@ -297,12 +317,13 @@ function QaMessageItem({ msg, isStreaming, onRetry, onViewImage }: { msg: QaMsg;
                 <QaToolRow key={`${tool.name}-${j}`} tool={tool} />
               ))}
             </div>
+          ) : isStreaming && i === segmentBlocks.length - 1 ? (
+            <div className="qa-markdown" key={i}>
+              <QaStreamingText text={block.text} />
+            </div>
           ) : (
             <div className="qa-markdown" key={i}>
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={QA_MARKDOWN_COMPONENTS}>
-                {block.text}
-              </ReactMarkdown>
-              {isStreaming && i === segmentBlocks.length - 1 && <span className="qa-cursor" />}
+              <QaMarkdownBlock text={block.text} />
             </div>
           ),
         )
@@ -317,12 +338,13 @@ function QaMessageItem({ msg, isStreaming, onRetry, onViewImage }: { msg: QaMsg;
           )}
           {thinkingOnly ? (
             <div className="qa-thinking">{msg.toolDrafting ? "正在编写工具调用…" : msg.reasoning ? "正在思考…" : "正在生成…"}</div>
+          ) : isStreaming ? (
+            <div className="qa-markdown">
+              <QaStreamingText text={msg.content} />
+            </div>
           ) : (
             <div className="qa-markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={QA_MARKDOWN_COMPONENTS}>
-                {msg.content}
-              </ReactMarkdown>
-              {isStreaming && <span className="qa-cursor" />}
+              <QaMarkdownBlock text={msg.content} />
             </div>
           )}
         </>
