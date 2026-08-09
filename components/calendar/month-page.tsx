@@ -152,8 +152,14 @@ export function CalendarMonthPage({
       </div>
 
       <div className="calendar-month-scroll hide-scrollbar" ref={scrollRef} onScroll={handleScroll}>
-        {months.map(block => (
+        {months.map(block => {
+          const firstWeekday = block.weeks[0]?.[0]?.weekday ?? 0;
+          const isCurrentMonth = block.ym === `${new Date(`${todayIso}T00:00:00`).getFullYear()}-${new Date(`${todayIso}T00:00:00`).getMonth()}`;
+          return (
           <div key={block.ym} className="calendar-month-block" data-ym={block.ym}>
+            <div className="calendar-month-label" style={{ marginLeft: `${(firstWeekday / 7) * 100}%` }}>
+              <strong data-current={isCurrentMonth ? "true" : undefined}>{block.month + 1}月</strong>
+            </div>
             {block.weeks.map((week, wi) => (
               <div key={wi} className="calendar-month-week">
                 {week.map(cell => {
@@ -181,7 +187,8 @@ export function CalendarMonthPage({
               </div>
             ))}
           </div>
-        ))}
+          );
+        })}
       </div>
 
     </div>
