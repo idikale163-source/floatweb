@@ -12,7 +12,7 @@ const WEEK_LABEL = ["周日", "周一", "周二", "周三", "周四", "周五", 
 const HOUR_H = 48;
 const DAY_MS = 86400000;
 const STRIP_RADIUS = 8;   // 周条 ±8 周
-const DAY_RADIUS = 15;    // 时间轴 ±15 天
+const DAY_RADIUS = 21;    // 时间轴 ±21 天（7 天/页时也够滑三页，且整周对齐）
 
 const addDaysIso = (iso: string, n: number) => formatIsoDate(new Date(parseIsoDate(iso).getTime() + n * DAY_MS));
 const sundayStartOf = (iso: string) => {
@@ -97,7 +97,7 @@ export function CalendarDetailPage({
   cycleMap: Map<string, MenstrualDayState> | null;
   /** 经期打卡行（仅用户视图传入），渲染在周条下方 */
   cyclePanel: ReactNode;
-  /** 时间轴一页显示的天数（1–3） */
+  /** 时间轴一页显示的天数（1/2/3/5/7） */
   daysPerPage: number;
   /** 打开“每页天数”选择弹窗 */
   onOpenDaysPicker: () => void;
@@ -389,8 +389,17 @@ export function CalendarDetailPage({
               return (
                 <div key={iso} className="calendar-tl-day" data-today={iso === todayIso ? "true" : undefined}>
                   <header>
-                    <b>{d.getMonth() + 1}月{d.getDate()}日 – {WEEK_LABEL[d.getDay()]}</b>
-                    <span>{lunar ? `${lunar.monthLabel}${lunar.isFirstDay ? "" : lunar.dayLabel}` : ""}</span>
+                    {daysPerPage >= 5 ? (
+                      <>
+                        <b>{d.getDate()}日</b>
+                        <span>{WEEK_LABEL[d.getDay()]}</span>
+                      </>
+                    ) : (
+                      <>
+                        <b>{d.getMonth() + 1}月{d.getDate()}日 – {WEEK_LABEL[d.getDay()]}</b>
+                        <span>{lunar ? `${lunar.monthLabel}${lunar.isFirstDay ? "" : lunar.dayLabel}` : ""}</span>
+                      </>
+                    )}
                   </header>
                   <div className="calendar-tl-body">
                     {iso === todayIso ? (

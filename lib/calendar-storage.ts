@@ -27,7 +27,7 @@ type PersistedCalendarStore = {
 export type CalendarConfig = {
   autoGenerateEnabled: boolean;
   theme: string;
-  /** 详情页时间轴一页显示的天数（1–3），默认 2 */
+  /** 详情页时间轴一页显示的天数（1/2/3/5/7），默认 2 */
   daysPerPage: number;
 };
 
@@ -37,7 +37,7 @@ const DEFAULT_CALENDAR_CONFIG: CalendarConfig = {
   daysPerPage: 2,
 };
 
-export const CALENDAR_DAYS_PER_PAGE_OPTIONS = [1, 2, 3] as const;
+export const CALENDAR_DAYS_PER_PAGE_OPTIONS = [1, 2, 3, 5, 7] as const;
 
 export function normalizeCalendarDaysPerPage(value: unknown): number {
   const num = typeof value === "number" ? Math.round(value) : NaN;
