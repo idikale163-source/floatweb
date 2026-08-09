@@ -525,6 +525,21 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
     }
   }
 
+  // 已发布 APP 直接导出安装包：拉线上包还原后打包下载，不经过编辑器
+  async function exportMarketApp(item: CustomAppMarketItem) {
+    setBusy(true);
+    try {
+      const app = await loadCustomAppMarketPackageApp(item);
+      const file = await createCustomAppPackageFile(app);
+      await downloadFile(file, file.name);
+      onNotice?.(`已导出「${item.name}」安装包`);
+    } catch (err) {
+      showErrorDialog(err, "导出失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // 编辑本地测试 APP：直接以本机安装的包为底稿打开单文件编辑器，不用下载线上包
   function openLocalManualBuilder(app: InstalledCustomApp) {
     manualLoadSeqRef.current += 1;
@@ -1223,6 +1238,10 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                           <button type="button" className="am-action-chip" onClick={() => startMarketPackageUpdate(item)} aria-label={`替换${item.name}应用包`}>
                             <Upload size={16} />
                             <span>换包</span>
+                          </button>
+                          <button type="button" className="am-action-chip" disabled={busy} onClick={() => void exportMarketApp(item)} aria-label={`导出${item.name}安装包`}>
+                            <Download size={16} />
+                            <span>导出</span>
                           </button>
                           <button type="button" className="am-action-chip" onClick={() => setConfirmMarketDelete(item)} aria-label={`删除${item.name}`}>
                             <Trash2 size={16} />

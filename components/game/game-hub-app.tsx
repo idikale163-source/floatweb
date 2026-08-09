@@ -1342,6 +1342,24 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
   }
 
   // 导出草稿为 JSON 文件（blob 下载，不触发页面刷新），可发给别人从草稿箱「从文件导入」
+  // 已发布游戏直接导出为草稿文件（拉全量模板转换，不经过创建表单）
+  async function exportPublishedGameFile(template: GameTemplate): Promise<void> {
+    try {
+      const fullTemplate = await ensureFullGameTemplate(template);
+      const payload = {
+        type: "ai-phone-game-draft",
+        version: 1,
+        title: fullTemplate.title,
+        draft: draftFromTemplate(fullTemplate),
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      await downloadFile(blob, `${fullTemplate.title.trim() || "游戏草稿"}.json`);
+      showNotice("success", "已导出为草稿文件");
+    } catch (err) {
+      showNotice("error", err instanceof Error ? err.message : "导出失败");
+    }
+  }
+
   async function exportDraftFile(item: GameHallDraft): Promise<void> {
     try {
       const payload = { type: "ai-phone-game-draft", version: 1, title: item.title, draft: item.draft };
@@ -2380,6 +2398,7 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
             <div className="game-studio-card-menu-pop" onClick={event => event.stopPropagation()}>
               <button type="button" onClick={() => { setStudioMenuId(null); void editPublished(template); }}>编辑</button>
               <button type="button" onClick={() => { setStudioMenuId(null); openTemplateDetails(template); }}>查看详情</button>
+              <button type="button" onClick={() => { setStudioMenuId(null); void exportPublishedGameFile(template); }}>导出文件</button>
               <button type="button" className="is-danger" onClick={() => { setStudioMenuId(null); void deletePublished(template); }}>删除</button>
             </div>
           ) : null}

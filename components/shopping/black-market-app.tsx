@@ -1731,6 +1731,24 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
     }
   }
 
+  // 已发布档案直接导出为草稿文件（拉全量模板转换，不经过创建表单）
+  async function exportPublishedTemplateFile(template: BlackMarketTheaterTemplate): Promise<void> {
+    try {
+      const fullTemplate = await ensureFullTheaterTemplate(template);
+      const payload = {
+        type: "ai-phone-theater-draft",
+        version: 1,
+        title: fullTemplate.title,
+        draft: createDraftFromTemplate(fullTemplate),
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      await downloadFile(blob, `${fullTemplate.title.trim() || "剧场草稿"}.json`);
+      showNotice("success", "已导出为草稿文件");
+    } catch (err) {
+      showNotice("error", err instanceof Error ? err.message : "导出失败");
+    }
+  }
+
   // 导入草稿 JSON：整张创建表单自动填好（入口在「创建发布」表单顶部）
   async function importStudioDraftFile(file: File): Promise<void> {
     try {
@@ -2217,6 +2235,10 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
                           <button type="button" onClick={() => void beginEditPublished(template)}>
                             <Pencil size={14} />
                             MODIFY
+                          </button>
+                          <button type="button" onClick={() => void exportPublishedTemplateFile(template)}>
+                            <Download size={14} />
+                            EXPORT
                           </button>
                           <button
                             type="button"
