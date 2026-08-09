@@ -123,6 +123,16 @@ export function CalendarMonthPage({
           ‹
         </button>
         <span className="calendar-topbar-space" />
+        <button
+          type="button"
+          className="calendar-pill-btn"
+          onClick={() => {
+            const d = new Date(`${todayIso}T00:00:00`);
+            scrollToYm(`${d.getFullYear()}-${d.getMonth()}`, true);
+          }}
+        >
+          今天
+        </button>
         <button type="button" className="calendar-icon-btn calendar-theme-btn" onClick={onOpenTheme} aria-label="主题与自定义">
           Aa
         </button>
@@ -173,18 +183,6 @@ export function CalendarMonthPage({
         ))}
       </div>
 
-      <div className="calendar-float-bar">
-        <button
-          type="button"
-          className="calendar-pill-btn"
-          onClick={() => {
-            const d = new Date(`${todayIso}T00:00:00`);
-            scrollToYm(`${d.getFullYear()}-${d.getMonth()}`, true);
-          }}
-        >
-          今天
-        </button>
-      </div>
     </div>
   );
 }

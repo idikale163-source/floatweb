@@ -136,13 +136,13 @@ export function CalendarDetailPage({
     cell.classList.add("is-selected");
     const bubble = panel.querySelector<HTMLElement>(".calendar-strip-bubble");
     if (!bubble) return;
-    const x = cell.offsetLeft + cell.offsetWidth / 2 - 28;
+    const x = cell.offsetLeft + cell.offsetWidth / 2 - 24;
     bubble.style.display = "block";
     bubble.classList.toggle("is-today", sel === todayIso);
     const samePanelPrev = prevIso && sundayStartOf(prevIso) === sundayStartOf(sel);
     if (animate && samePanelPrev && !reducedMotion) {
       const prevCell = panel.querySelector<HTMLElement>(`[data-date="${prevIso}"]`);
-      const x0 = prevCell ? prevCell.offsetLeft + prevCell.offsetWidth / 2 - 28 : x;
+      const x0 = prevCell ? prevCell.offsetLeft + prevCell.offsetWidth / 2 - 24 : x;
       bubble.style.transform = `translateX(${x}px)`;
       bubble.animate(
         [
@@ -230,7 +230,8 @@ export function CalendarDetailPage({
       paintSelection(false);
       updateRangePill(daysRef.current.indexOf(sel));
       if (tlVRef.current && tlVRef.current.scrollTop === 0) {
-        tlVRef.current.scrollTop = 7.5 * HOUR_H;
+        // 默认视角从 08:00 开始，往上滚动可查看更早时间
+        tlVRef.current.scrollTop = 8 * HOUR_H;
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -257,6 +258,32 @@ export function CalendarDetailPage({
     }
   };
 
+  // 当前时间红线（每分钟刷新）
+  const [nowMinutes, setNowMinutes] = useState(() => {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  });
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = new Date();
+      setNowMinutes(now.getHours() * 60 + now.getMinutes());
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const nowTop = (nowMinutes / 60) * HOUR_H;
+  const nowLabel = `${String(Math.floor(nowMinutes / 60)).padStart(2, "0")}:${String(nowMinutes % 60).padStart(2, "0")}`;
+
+  const gotoToday = () => {
+    if (!daysRef.current.includes(todayIso)) {
+      selectedRef.current = todayIso;
+      setSelectedIso(todayIso);
+      onSelectedChange(todayIso);
+      setCenter(todayIso);
+      return;
+    }
+    applySelection(todayIso, { fromStrip: true });
+  };
+
   const selectedDate = parseIsoDate(selectedIso);
   const backLabel = `${selectedDate.getMonth() + 1}月`;
 
@@ -267,6 +294,9 @@ export function CalendarDetailPage({
           <span aria-hidden="true">‹</span> {backLabel}
         </button>
         <span className="calendar-topbar-space" />
+        <button type="button" className="calendar-pill-btn" onClick={gotoToday}>
+          今天
+        </button>
       </div>
 
       <div className="calendar-weekday-head calendar-strip-head" aria-hidden="true">
@@ -313,6 +343,7 @@ export function CalendarDetailPage({
             {Array.from({ length: 24 }, (_, h) => (
               <span key={h}>{String(h).padStart(2, "0")}:00</span>
             ))}
+            <i className="calendar-now-badge" style={{ top: `${50 + nowTop}px` }}>{nowLabel}</i>
           </div>
           <div className="calendar-tl-hscroll hide-scrollbar" ref={tlHRef} onScroll={handleTimelineScroll}>
             {days.map(iso => {
@@ -326,6 +357,9 @@ export function CalendarDetailPage({
                     <span>{lunar ? `${lunar.monthLabel}${lunar.isFirstDay ? "" : lunar.dayLabel}` : ""}</span>
                   </header>
                   <div className="calendar-tl-body">
+                    {iso === todayIso ? (
+                      <i className="calendar-now-line" style={{ top: `${nowTop}px` }} aria-hidden="true" />
+                    ) : null}
                     {positioned.map(pos => (
                       <button
                         key={pos.item.id}
@@ -357,24 +391,6 @@ export function CalendarDetailPage({
         </div>
       </div>
 
-      <div className="calendar-float-bar">
-        <button
-          type="button"
-          className="calendar-pill-btn"
-          onClick={() => {
-            if (!daysRef.current.includes(todayIso)) {
-              selectedRef.current = todayIso;
-              setSelectedIso(todayIso);
-              onSelectedChange(todayIso);
-              setCenter(todayIso);
-              return;
-            }
-            applySelection(todayIso, { fromStrip: true });
-          }}
-        >
-          今天
-        </button>
-      </div>
     </div>
   );
 }
