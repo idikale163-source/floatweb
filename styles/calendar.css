@@ -235,7 +235,8 @@
   padding-top: 2px;
 }
 
-/* 每月行内标签：对齐当月 1 号所在列；左侧一段发丝线延伸到文字左缘 */
+/* 每月行内标签：对齐当月 1 号所在列；
+   下方一条发丝线：左起文字左缘，右至行末（与周分隔线右端对齐） */
 .calendar-month-label {
   position: relative;
   padding: 16px 6px 4px;
@@ -245,9 +246,9 @@
 .calendar-month-label::before {
   content: "";
   position: absolute;
-  left: 0;
-  bottom: 12px;
-  width: var(--label-offset, 0%);
+  left: var(--label-offset, 0%);
+  right: 0;
+  bottom: 0;
   height: 1px;
   background: var(--c-calendar-hair);
 }
@@ -270,7 +271,7 @@
   min-height: 68px;
 }
 
-.calendar-month-block .calendar-month-week:first-child {
+.calendar-month-label + .calendar-month-week {
   border-top: none;
 }
 
