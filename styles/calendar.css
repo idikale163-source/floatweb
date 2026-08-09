@@ -73,10 +73,6 @@
   background: var(--c-calendar-surface-2);
 }
 
-.calendar-theme-btn {
-  font-size: calc(14px * var(--app-text-scale, 1));
-  letter-spacing: 0.02em;
-}
 
 .calendar-pill-btn {
   display: inline-flex;
@@ -131,13 +127,6 @@
   max-width: 64px;
 }
 
-.calendar-owner-chip:first-child {
-  margin-left: auto;
-}
-
-.calendar-owner-chip:last-child {
-  margin-right: auto;
-}
 
 .calendar-owner-chip span {
   white-space: nowrap;

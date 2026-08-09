@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ChevronLeft, Palette } from "lucide-react";
 import type { CalendarScheduleItem } from "@/lib/calendar-types";
 import type { MenstrualDayState } from "@/lib/menstrual-storage";
 import { formatIsoDate } from "@/lib/calendar-utils";
@@ -120,7 +121,7 @@ export function CalendarMonthPage({
     <div className="calendar-page calendar-page-month">
       <div className="calendar-apple-topbar">
         <button type="button" className="calendar-icon-btn" onClick={onClose} aria-label="返回桌面">
-          ‹
+          <ChevronLeft size={19} />
         </button>
         <span className="calendar-topbar-space" />
         <button
@@ -133,8 +134,8 @@ export function CalendarMonthPage({
         >
           今天
         </button>
-        <button type="button" className="calendar-icon-btn calendar-theme-btn" onClick={onOpenTheme} aria-label="主题与自定义">
-          Aa
+        <button type="button" className="calendar-icon-btn" onClick={onOpenTheme} aria-label="主题与自定义">
+          <Palette size={17} />
         </button>
       </div>
 
