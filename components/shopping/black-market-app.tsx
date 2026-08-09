@@ -907,6 +907,8 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
   const [communityTheaters, setCommunityTheaters] = useState<BlackMarketTheaterTemplate[]>([]);
   const [communityLoading, setCommunityLoading] = useState(false);
   const [communityError, setCommunityError] = useState<string | null>(null);
+  const [communityErrorDialog, setCommunityErrorDialog] = useState<string | null>(null);
+  const dismissedCommunityErrorRef = useRef<string | null>(null);
   const [walletBusy, setWalletBusy] = useState<"sync" | "checkin" | "purchase" | null>(null);
   const [studioMode, setStudioMode] = useState<BlackMarketStudioMode>("published");
   const defaultDraft = useMemo(() => createDefaultDraft(), []);
@@ -1058,6 +1060,14 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
       active = false;
     };
   }, [account.id]);
+
+  // 云端同步失败改为一次性弹窗（同一条错误只弹一次），不再常驻横幅——自部署无云端时界面保持干净
+  useEffect(() => {
+    if (communityError && dismissedCommunityErrorRef.current !== communityError) {
+      dismissedCommunityErrorRef.current = communityError;
+      setCommunityErrorDialog(communityError);
+    }
+  }, [communityError]);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -2061,7 +2071,6 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
               </button>
             </div>
           </div>
-          {communityError ? <div className="cp-black-market-sync-error">{communityError}</div> : null}
         </section>
 
         <section className="cp-black-market-wallet">
@@ -2480,6 +2489,28 @@ export function BlackMarketApp({ onClose, autoOpenLocalId }: BlackMarketAppProps
       {notice ? (
         <div key={notice.id} className={`cp-black-market-toast cp-black-market-toast--${notice.tone}`} role="status">
           {notice.text}
+        </div>
+      ) : null}
+
+      {communityErrorDialog ? (
+        <div className="cp-black-market-modal cp-black-market-confirm-modal" role="presentation" onClick={() => setCommunityErrorDialog(null)}>
+          <section className="cp-black-market-modal-card cp-black-market-confirm-card" role="alertdialog" aria-modal="true" aria-label="云端同步失败" onClick={event => event.stopPropagation()}>
+            <div className="cp-black-market-modal-head">
+              <div>
+                <span>SYNC ERROR</span>
+                <strong>云端同步失败</strong>
+              </div>
+              <button type="button" onClick={() => setCommunityErrorDialog(null)}>关闭</button>
+            </div>
+            <div className="cp-black-market-confirm-body">
+              <div className="cp-black-market-confirm-code">OFFLINE_MODE</div>
+              <p>{communityErrorDialog}</p>
+              <span>本地暗柜、内置档案与本机测试不受影响。</span>
+            </div>
+            <div className="cp-black-market-modal-actions cp-black-market-confirm-actions">
+              <button type="button" className="is-primary" onClick={() => setCommunityErrorDialog(null)}>知道了</button>
+            </div>
+          </section>
         </div>
       ) : null}
 

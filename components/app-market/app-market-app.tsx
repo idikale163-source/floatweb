@@ -448,6 +448,15 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
     void refreshMarket();
   }, []);
 
+  // 云端市场同步失败改为一次性弹窗（同一条错误本次只弹一次），不再常驻横幅——自部署无云端时界面保持干净
+  const dismissedMarketErrorRef = useRef("");
+  useEffect(() => {
+    if (marketError && dismissedMarketErrorRef.current !== marketError) {
+      dismissedMarketErrorRef.current = marketError;
+      setErrorDialog({ title: "云端市场同步失败", message: marketError });
+    }
+  }, [marketError]);
+
   useEffect(() => {
     setInstalledActionError("");
   }, [selectedInstalledApp?.id]);
@@ -1081,8 +1090,6 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
               <Search size={16} />
               <input aria-label="搜索 APP" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索应用或作者" />
             </label>
-
-            {marketError ? <div className="app-market-error" role="alert">{marketError}</div> : null}
 
             <section className="app-market-section">
               {filteredMarketApps.length === 0 ? (

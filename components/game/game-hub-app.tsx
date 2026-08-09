@@ -708,6 +708,15 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
   const [communityGames, setCommunityGames] = useState<GameTemplate[]>([]);
   const [communityLoading, setCommunityLoading] = useState(false);
   const [communityError, setCommunityError] = useState<string | null>(null);
+  const [communityErrorDialog, setCommunityErrorDialog] = useState<string | null>(null);
+  const dismissedCommunityErrorRef = useRef<string | null>(null);
+  // 云端同步失败改为一次性弹窗（同一条错误只弹一次），不再常驻横幅——自部署无云端时界面保持干净
+  useEffect(() => {
+    if (communityError && dismissedCommunityErrorRef.current !== communityError) {
+      dismissedCommunityErrorRef.current = communityError;
+      setCommunityErrorDialog(communityError);
+    }
+  }, [communityError]);
   const [notice, setNotice] = useState<GameNotice | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<GameTemplate | null>(null);
   const [creatorPageOpen, setCreatorPageOpen] = useState(false);
@@ -2699,8 +2708,6 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
       </header>
 
       <main className={`game-hub-scroll ${creatorPageOpen || selectedTemplate ? "game-hub-scroll--page" : ""} ${selectedTemplate ? "game-hub-scroll--detail" : ""}`}>
-        {communityError ? <div className="game-error">{communityError}</div> : null}
-
         {selectedTemplate ? renderTemplateDetailPage(selectedTemplate) : null}
 
         {!selectedTemplate && !creatorPageOpen && mainView === "hall" ? (
@@ -3151,6 +3158,33 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
             <div className="game-modal-actions">
               <button type="button" onClick={() => setCoverDeleteConfirmOpen(false)}>取消</button>
               <button type="button" className="is-danger" onClick={confirmDeleteCoverImage}>确认删除</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {communityErrorDialog ? (
+        <div className="game-modal" role="presentation" onClick={() => setCommunityErrorDialog(null)}>
+          <section
+            className="game-modal-card"
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="云端同步失败"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="game-modal-head">
+              <div>
+                <span>SYNC</span>
+                <strong>云端同步失败</strong>
+              </div>
+              <button type="button" aria-label="关闭" onClick={() => setCommunityErrorDialog(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <p className="game-delete-copy">{communityErrorDialog}</p>
+            <p className="game-delete-copy">本地草稿、已装内容和本机测试不受影响；自部署未配置云端市场时可通过「导入文件」使用本地内容。</p>
+            <div className="game-modal-actions">
+              <button type="button" onClick={() => setCommunityErrorDialog(null)}>知道了</button>
             </div>
           </section>
         </div>
