@@ -33,6 +33,7 @@ import {
 } from "./custom-app-storage";
 import { applyCustomAppRegistrationsAsync, formatCustomAppRegistrationSummary } from "./custom-app-registration";
 import { CUSTOM_APP_CREATOR_GUIDE_MD } from "./custom-app-creator-guide";
+import { fetchMyCustomAppMarketItems } from "./custom-app-market-client";
 import type { CustomAppPermission, InstalledCustomApp } from "./custom-app-types";
 
 /** 本轮对话创建的内容条目（供工坊内预览打开） */
@@ -743,6 +744,22 @@ function section(label: string, value: string): string {
     return value.trim() ? `\n=== ${label} ===\n${value}` : "";
 }
 
+// 版权护栏：从市场安装的他人应用，源码读取/打包导出仅限作者本人。
+// marketItemId 既标记"从市场装的"也标记"自己发布过的"，归属只能问市场接口
+// （mine=1 返回当前账号名下条目）。查不动（未登录/断网）时宁可拒绝——护栏失效
+// 等于把整个市场的包送给会聊天的人。
+async function denyIfNotMarketAppAuthor(app: InstalledCustomApp, action: string): Promise<string | null> {
+    if (!app.marketItemId) return null;
+    let mine;
+    try {
+        mine = await fetchMyCustomAppMarketItems();
+    } catch {
+        return `「${app.name}」关联了应用市场条目，当前无法确认你是否为其作者（未登录或网络异常），为保护创作者版权，暂不能${action}。请登录后重试；如果这是你自己发布的应用，登录即可正常操作。`;
+    }
+    if (mine.some((item) => item.id === app.marketItemId)) return null;
+    return `「${app.name}」是从应用市场安装的他人作品，为保护创作者版权，${action}仅限作者本人。如需二次创作，请联系原作者或在市场中查看其授权说明。`;
+}
+
 const readContentTool: QaContentTool = {
     name: "读取本机内容",
     nativeName: "read_local_content",
@@ -772,6 +789,8 @@ const readContentTool: QaContentTool = {
         if (type === "app") {
             const app = loadInstalledCustomApps().find((item) => norm(item.name) === norm(name));
             if (!app) return `没有找到名为「${name}」的自定义 APP。先用「清单」确认名称。`;
+            const denial = await denyIfNotMarketAppAuthor(app, "读取源码");
+            if (denial) return denial;
             const assets = Object.values(app.assets).map((a) => a.path);
             const doc = [
                 `名称：${app.name} · v${app.version}`,
@@ -1074,6 +1093,8 @@ const exportContentTool: QaContentTool = {
             if (type === "app") {
                 const app = loadInstalledCustomApps().find((item) => norm(item.name) === norm(name));
                 if (!app) return `没找到名为「${name}」的本机 APP。用「清单」核对名称。`;
+                const denial = await denyIfNotMarketAppAuthor(app, "导出安装包");
+                if (denial) return denial;
                 const file = await createCustomAppPackageFile(app);
                 await downloadFile(file, file.name);
                 return `已导出「${app.name}」安装包（${file.name}）。对方在 应用市场 → 发布 → 上传安装包 即可导入。`;
