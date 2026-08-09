@@ -269,6 +269,26 @@ function QaStreamingText({ text }: { text: string }) {
 }
 
 function QaMessageItem({ msg, isStreaming, onRetry, onViewImage }: { msg: QaMsg; isStreaming: boolean; onRetry: (id: string) => void; onViewImage: (url: string) => void }) {
+  const thinkingOnly = isStreaming && !msg.content && (!msg.tools || msg.tools.length === 0);
+  // 时序分段渲染：文字与工具行按实际发生顺序交错（连续工具行合并成一组）；
+  // 旧消息没有 segments 时回退「工具在顶、文字在下」布局。
+  // hooks 必须在 user 分支 early-return 之前调用（rules-of-hooks）
+  const segmentBlocks = useMemo(() => {
+    if (!msg.segments?.length) return null;
+    const blocks: Array<{ kind: "text"; text: string } | { kind: "tools"; tools: QaToolStatus[] }> = [];
+    for (const seg of msg.segments) {
+      const last = blocks[blocks.length - 1];
+      if (seg.kind === "tool") {
+        if (last?.kind === "tools") last.tools.push(seg.tool);
+        else blocks.push({ kind: "tools", tools: [seg.tool] });
+      } else if (seg.text.trim()) {
+        if (last?.kind === "text") last.text += seg.text;
+        else blocks.push({ kind: "text", text: seg.text });
+      }
+    }
+    return blocks.length ? blocks : null;
+  }, [msg.segments]);
+
   if (msg.role === "user") {
     return (
       <div className="qa-msg-user-row">
@@ -287,25 +307,6 @@ function QaMessageItem({ msg, isStreaming, onRetry, onViewImage }: { msg: QaMsg;
       </div>
     );
   }
-
-  const thinkingOnly = isStreaming && !msg.content && (!msg.tools || msg.tools.length === 0);
-  // 时序分段渲染：文字与工具行按实际发生顺序交错（连续工具行合并成一组）；
-  // 旧消息没有 segments 时回退「工具在顶、文字在下」布局
-  const segmentBlocks = useMemo(() => {
-    if (!msg.segments?.length) return null;
-    const blocks: Array<{ kind: "text"; text: string } | { kind: "tools"; tools: QaToolStatus[] }> = [];
-    for (const seg of msg.segments) {
-      const last = blocks[blocks.length - 1];
-      if (seg.kind === "tool") {
-        if (last?.kind === "tools") last.tools.push(seg.tool);
-        else blocks.push({ kind: "tools", tools: [seg.tool] });
-      } else if (seg.text.trim()) {
-        if (last?.kind === "text") last.text += seg.text;
-        else blocks.push({ kind: "text", text: seg.text });
-      }
-    }
-    return blocks.length ? blocks : null;
-  }, [msg.segments]);
 
   return (
     <div className="qa-msg-assistant">
