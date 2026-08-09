@@ -670,10 +670,20 @@
   margin-top: 10px;
 }
 
+/* 五个操作按钮固定两排：前三个一整排，后两个一整排 */
 .cp-black-market-studio-actions {
   display: grid;
-  grid-template-columns: 0.72fr 0.9fr 1.16fr 1.18fr;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
+}
+
+.cp-black-market-studio-actions button {
+  grid-column: span 2;
+}
+
+.cp-black-market-studio-actions button:nth-child(4),
+.cp-black-market-studio-actions button:nth-child(5) {
+  grid-column: span 3;
 }
 
 .cp-black-market-studio-actions button {
