@@ -1239,10 +1239,6 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
                             <Upload size={16} />
                             <span>换包</span>
                           </button>
-                          <button type="button" className="am-action-chip" disabled={busy} onClick={() => void exportMarketApp(item)} aria-label={`导出${item.name}安装包`}>
-                            <Download size={16} />
-                            <span>导出</span>
-                          </button>
                           <button type="button" className="am-action-chip" onClick={() => setConfirmMarketDelete(item)} aria-label={`删除${item.name}`}>
                             <Trash2 size={16} />
                             <span>删除</span>
@@ -1591,6 +1587,17 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
               <strong>{marketEditTarget ? `编辑「${marketEditTarget.name}」` : localEditTarget ? `编辑「${localEditTarget.name}」（本地）` : "单文件逐项上传"}</strong>
               {localEditTarget ? (
                 <button type="button" onClick={() => void exportLocalApp(localEditTarget)} aria-label={`导出${localEditTarget.name}安装包`} title="导出安装包（zip，可发给别人导入）" disabled={busy}>
+                  <Download size={18} />
+                </button>
+              ) : null}
+              {marketEditTarget ? (
+                <button
+                  type="button"
+                  onClick={() => manualExistingApp ? void exportLocalApp(manualExistingApp) : void exportMarketApp(marketEditTarget)}
+                  aria-label={`导出${marketEditTarget.name}安装包`}
+                  title="导出安装包（zip，可发给别人导入）"
+                  disabled={busy || manualExistingLoading}
+                >
                   <Download size={18} />
                 </button>
               ) : null}
