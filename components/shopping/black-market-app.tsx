@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   Check,
@@ -404,6 +404,55 @@ ${body}
   return /<\/body>/i.test(base) ? base.replace(/<\/body>/i, `${IFRAME_ERROR_CAPTURE_SCRIPT}${bridge}</body>`) : `${base}${IFRAME_ERROR_CAPTURE_SCRIPT}${bridge}`;
 }
 
+/** 找到最近的纵向滚动祖先（用于 iframe 高度变化时的手动滚动锚定） */
+function findScrollParent(el: HTMLElement | null): HTMLElement | null {
+  let node = el?.parentElement ?? null;
+  while (node) {
+    const style = window.getComputedStyle(node);
+    if (/(auto|scroll)/.test(style.overflowY)) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+/**
+ * iframe 高度异步上报（加载后 80/500/1600ms 修正）时，若 iframe 整体位于
+ * 滚动视口上方，内容会被向下顶、视口里的内容瞬间上移（iOS 无滚动锚定）。
+ * 这里手动补偿 scrollTop 保持视觉稳定；配套 CSS 已关掉原生 overflow-anchor，
+ * 避免 Chrome 双重补偿。返回 setter：记下补偿量再更新高度。
+ */
+function useAnchoredFrameHeight(
+  iframeRef: { current: HTMLIFrameElement | null },
+  minHeight: number,
+): [number, (next: number) => void] {
+  const [height, setHeight] = useState(minHeight);
+  const pendingAdjustRef = useRef(0);
+
+  const applyHeight = (raw: number) => {
+    const next = Math.max(minHeight, Math.round(raw));
+    setHeight(prev => {
+      if (next === prev) return prev;
+      const el = iframeRef.current;
+      const scroller = findScrollParent(el);
+      if (el && scroller) {
+        const frameBottom = el.getBoundingClientRect().bottom;
+        const viewTop = scroller.getBoundingClientRect().top;
+        if (frameBottom <= viewTop + 1) pendingAdjustRef.current += next - prev;
+      }
+      return next;
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!pendingAdjustRef.current) return;
+    const scroller = findScrollParent(iframeRef.current);
+    if (scroller) scroller.scrollTop += pendingAdjustRef.current;
+    pendingAdjustRef.current = 0;
+  });
+
+  return [height, applyHeight];
+}
+
 function BlackMarketTheaterHtmlFrame({
   html,
   title,
@@ -417,7 +466,9 @@ function BlackMarketTheaterHtmlFrame({
 }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [frameId] = useState(() => `bm_theater_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
-  const [height, setHeight] = useState(BLACK_MARKET_THEATER_FRAME_MIN_HEIGHT);
+  const [height, applyHeight] = useAnchoredFrameHeight(iframeRef, BLACK_MARKET_THEATER_FRAME_MIN_HEIGHT);
+  const applyHeightRef = useRef(applyHeight);
+  applyHeightRef.current = applyHeight;
   const [collapsed, setCollapsed] = useState(false);
   const srcDoc = useMemo(() => createBlackMarketTheaterFrameSrcDoc(html, frameId), [frameId, html]);
   const canCollapse = collapsible && height > BLACK_MARKET_THEATER_FRAME_COLLAPSE_THRESHOLD;
@@ -440,7 +491,7 @@ function BlackMarketTheaterHtmlFrame({
       if (!isBridgeResize && !isLegacyResize) return;
       const nextHeight = Number(record.height);
       if (!Number.isFinite(nextHeight)) return;
-      setHeight(Math.max(BLACK_MARKET_THEATER_FRAME_MIN_HEIGHT, Math.round(nextHeight)));
+      applyHeightRef.current(nextHeight);
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
@@ -507,7 +558,9 @@ function renderSceneMessageHtml(content: string, template?: BlackMarketTheaterTe
 function BlackMarketReplyHtmlFrame({ html, title, allowExternalControl = false }: { html: string; title: string; allowExternalControl?: boolean }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [frameId] = useState(() => `bm_reply_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
-  const [height, setHeight] = useState(BLACK_MARKET_REPLY_FRAME_MIN_HEIGHT);
+  const [height, applyHeight] = useAnchoredFrameHeight(iframeRef, BLACK_MARKET_REPLY_FRAME_MIN_HEIGHT);
+  const applyHeightRef = useRef(applyHeight);
+  applyHeightRef.current = applyHeight;
   const srcDoc = useMemo(() => createBlackMarketReplyFrameSrcDoc(html, frameId), [frameId, html]);
 
   useEffect(() => {
@@ -519,7 +572,7 @@ function BlackMarketReplyHtmlFrame({ html, title, allowExternalControl = false }
       if (record.source !== "black-market-reply-canvas" || record.type !== "resize" || record.id !== frameId) return;
       const nextHeight = Number(record.height);
       if (!Number.isFinite(nextHeight)) return;
-      setHeight(Math.max(BLACK_MARKET_REPLY_FRAME_MIN_HEIGHT, Math.round(nextHeight)));
+      applyHeightRef.current(nextHeight);
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
