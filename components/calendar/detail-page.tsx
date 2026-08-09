@@ -294,9 +294,6 @@ export function CalendarDetailPage({
           <span aria-hidden="true">‹</span> {backLabel}
         </button>
         <span className="calendar-topbar-space" />
-        <button type="button" className="calendar-pill-btn" onClick={gotoToday}>
-          今天
-        </button>
       </div>
 
       <div className="calendar-weekday-head calendar-strip-head" aria-hidden="true">
@@ -391,6 +388,11 @@ export function CalendarDetailPage({
         </div>
       </div>
 
+      <div className="calendar-float-bar">
+        <button type="button" className="calendar-pill-btn" onClick={gotoToday}>
+          今天
+        </button>
+      </div>
     </div>
   );
 }

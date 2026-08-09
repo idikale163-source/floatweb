@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronLeft, Palette } from "lucide-react";
 import type { CalendarScheduleItem } from "@/lib/calendar-types";
 import type { MenstrualDayState } from "@/lib/menstrual-storage";
@@ -22,6 +22,7 @@ type MonthBlock = {
   ym: string;           // "2026-7"（月份为 0 基）
   year: number;
   month: number;        // 0 基
+  firstWeekday: number;
   weeks: MonthCell[][];
 };
 
@@ -52,7 +53,7 @@ function buildMonths(todayIso: string): MonthBlock[] {
       });
     }
     if (week.length > 0) weeks.push(week);
-    blocks.push({ ym: `${year}-${month}`, year, month, weeks });
+    blocks.push({ ym: `${year}-${month}`, year, month, firstWeekday: first.getDay(), weeks });
   }
   return blocks;
 }
@@ -75,27 +76,46 @@ export function CalendarMonthPage({
   onOpenTheme: () => void;
 }) {
   const months = useMemo(() => buildMonths(todayIso), [todayIso]);
-  const [titleYm, setTitleYm] = useState(() => {
+  const todayYm = useMemo(() => {
     const d = new Date(`${todayIso}T00:00:00`);
     return `${d.getFullYear()}-${d.getMonth()}`;
-  });
+  }, [todayIso]);
+  const [titleYm, setTitleYm] = useState(todayYm);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerH, setHeaderH] = useState(0);
+  const headerHRef = useRef(0);
+  headerHRef.current = headerH;
   const tickingRef = useRef(false);
+
+  // 顶部玻璃悬浮层高度 → 滚动区 padding-top
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const measure = () => setHeaderH(header.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
 
   const scrollToYm = (ym: string, smooth: boolean) => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     const block = scroller.querySelector<HTMLElement>(`[data-ym="${ym}"]`);
     if (!block) return;
-    scroller.scrollTo({ top: block.offsetTop - scroller.offsetTop, behavior: smooth ? "smooth" : "auto" });
+    scroller.scrollTo({ top: block.offsetTop - headerHRef.current, behavior: smooth ? "smooth" : "auto" });
     setTitleYm(ym);
   };
 
+  // 首次定位到当前月（等 header 量高后）
+  const didInitRef = useRef(false);
   useEffect(() => {
-    const d = new Date(`${todayIso}T00:00:00`);
-    requestAnimationFrame(() => scrollToYm(`${d.getFullYear()}-${d.getMonth()}`, false));
+    if (didInitRef.current || headerH === 0) return;
+    didInitRef.current = true;
+    requestAnimationFrame(() => scrollToYm(todayYm, false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [headerH]);
 
   const handleScroll = () => {
     if (tickingRef.current) return;
@@ -104,11 +124,12 @@ export function CalendarMonthPage({
       tickingRef.current = false;
       const scroller = scrollRef.current;
       if (!scroller) return;
-      const probe = scroller.scrollTop + 60;
+      const probe = scroller.scrollTop + headerHRef.current + 60;
       for (const child of Array.from(scroller.children) as HTMLElement[]) {
-        if (child.offsetTop - scroller.offsetTop + child.offsetHeight > probe) {
+        if (!(child instanceof HTMLElement) || !child.dataset.ym) continue;
+        if (child.offsetTop + child.offsetHeight > probe) {
           const ym = child.dataset.ym;
-          if (ym) setTitleYm(prev => (prev === ym ? prev : ym));
+          setTitleYm(prev => (prev === ym ? prev : ym));
           break;
         }
       }
@@ -119,46 +140,14 @@ export function CalendarMonthPage({
 
   return (
     <div className="calendar-page calendar-page-month">
-      <div className="calendar-apple-topbar">
-        <button type="button" className="calendar-icon-btn" onClick={onClose} aria-label="返回桌面">
-          <ChevronLeft size={19} />
-        </button>
-        <span className="calendar-topbar-space" />
-        <button
-          type="button"
-          className="calendar-pill-btn"
-          onClick={() => {
-            const d = new Date(`${todayIso}T00:00:00`);
-            scrollToYm(`${d.getFullYear()}-${d.getMonth()}`, true);
-          }}
-        >
-          今天
-        </button>
-        <button type="button" className="calendar-icon-btn" onClick={onOpenTheme} aria-label="主题与自定义">
-          <Palette size={17} />
-        </button>
-      </div>
-
-      {ownerStrip}
-
-      <div className="calendar-month-title">
-        <strong>{MONTH_CN[titleMonth] ?? ""}</strong>
-        <small>{titleYear}年</small>
-      </div>
-      <div className="calendar-weekday-head" aria-hidden="true">
-        {WEEKDAY_CN.map(w => (
-          <span key={w}>{w}</span>
-        ))}
-      </div>
-
-      <div className="calendar-month-scroll hide-scrollbar" ref={scrollRef} onScroll={handleScroll}>
-        {months.map(block => {
-          const firstWeekday = block.weeks[0]?.[0]?.weekday ?? 0;
-          const isCurrentMonth = block.ym === `${new Date(`${todayIso}T00:00:00`).getFullYear()}-${new Date(`${todayIso}T00:00:00`).getMonth()}`;
-          return (
+      <div className="calendar-month-scroll hide-scrollbar" ref={scrollRef} onScroll={handleScroll} style={{ paddingTop: headerH }}>
+        {months.map(block => (
           <div key={block.ym} className="calendar-month-block" data-ym={block.ym}>
-            <div className="calendar-month-label" style={{ marginLeft: `${(firstWeekday / 7) * 100}%` }}>
-              <strong data-current={isCurrentMonth ? "true" : undefined}>{block.month + 1}月</strong>
+            <div
+              className="calendar-month-label"
+              style={{ "--label-offset": `${(block.firstWeekday / 7) * 100}%` } as CSSProperties}
+            >
+              <strong data-current={block.ym === todayYm ? "true" : undefined}>{block.month + 1}月</strong>
             </div>
             {block.weeks.map((week, wi) => (
               <div key={wi} className="calendar-month-week">
@@ -187,10 +176,42 @@ export function CalendarMonthPage({
               </div>
             ))}
           </div>
-          );
-        })}
+        ))}
       </div>
 
+      {/* 顶部玻璃悬浮层：周几及以上区域，日历内容从下方透出 */}
+      <div className="calendar-month-header" ref={headerRef}>
+        <div className="calendar-apple-topbar">
+          <button type="button" className="calendar-pill-btn calendar-back-btn" onClick={onClose} aria-label="返回桌面">
+            <ChevronLeft size={19} />
+            {titleYear}年
+          </button>
+          <span className="calendar-topbar-space" />
+          <button type="button" className="calendar-icon-btn" onClick={onOpenTheme} aria-label="主题与自定义">
+            <Palette size={17} />
+          </button>
+        </div>
+
+        {ownerStrip}
+
+        <div className="calendar-month-title">
+          <strong>{MONTH_CN[titleMonth] ?? ""}</strong>
+        </div>
+        <div className="calendar-weekday-head" aria-hidden="true">
+          {WEEKDAY_CN.map(w => (
+            <span key={w}>{w}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* 底部渐隐模糊 */}
+      <div className="calendar-bottom-fade" aria-hidden="true" />
+
+      <div className="calendar-float-bar">
+        <button type="button" className="calendar-pill-btn" onClick={() => scrollToYm(todayYm, true)}>
+          今天
+        </button>
+      </div>
     </div>
   );
 }
