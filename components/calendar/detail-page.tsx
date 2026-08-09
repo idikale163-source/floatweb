@@ -113,6 +113,7 @@ export function CalendarDetailPage({
 
   const stripRef = useRef<HTMLDivElement>(null);
   const tlHRef = useRef<HTMLDivElement>(null);
+  const tlHeadRef = useRef<HTMLDivElement>(null);
   const tlVRef = useRef<HTMLDivElement>(null);
   const suppressRef = useRef(false);
   const reducedMotion = useMemo(
@@ -267,6 +268,7 @@ export function CalendarDetailPage({
   const handleTimelineScroll = () => {
     const tl = tlHRef.current;
     if (!tl) return;
+    if (tlHeadRef.current) tlHeadRef.current.scrollLeft = tl.scrollLeft;
     const colW = tl.clientWidth / dppRef.current;
     if (colW <= 0) return;
     const fIdx = tl.scrollLeft / colW;
@@ -368,13 +370,43 @@ export function CalendarDetailPage({
 
       {cyclePanel}
 
+      {/* 列头版头：固定在时间轴上方，横向随时间轴同步滚动 */}
+      <div className="calendar-tl-headrow">
+        <div className="calendar-tl-headrow-gutter" aria-hidden="true" />
+        <div
+          className="calendar-tl-headrow-days hide-scrollbar"
+          ref={tlHeadRef}
+          style={{ "--tl-day-w": `${100 / daysPerPage}%` } as CSSProperties}
+        >
+          {days.map(iso => {
+            const d = parseIsoDate(iso);
+            const lunar = getLunarInfoByIso(iso);
+            return (
+              <div key={iso} className="calendar-tl-day-head" data-today={iso === todayIso ? "true" : undefined}>
+                {daysPerPage >= 5 ? (
+                  <>
+                    <b>{d.getDate()}日</b>
+                    <span>{WEEK_LABEL[d.getDay()]}</span>
+                  </>
+                ) : (
+                  <>
+                    <b>{d.getMonth() + 1}月{d.getDate()}日 – {WEEK_LABEL[d.getDay()]}</b>
+                    <span>{lunar ? `${lunar.monthLabel}${lunar.isFirstDay ? "" : lunar.dayLabel}` : ""}</span>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="calendar-tl-vscroll hide-scrollbar" ref={tlVRef}>
         <div className="calendar-tl-row">
           <div className="calendar-tl-gutter" aria-hidden="true">
             {Array.from({ length: 24 }, (_, h) => (
               <span key={h}>{String(h).padStart(2, "0")}:00</span>
             ))}
-            <i className="calendar-now-badge" style={{ top: `${50 + nowTop}px` }}>{nowLabel}</i>
+            <i className="calendar-now-badge" style={{ top: `${nowTop}px` }}>{nowLabel}</i>
           </div>
           <div
             className="calendar-tl-hscroll hide-scrollbar"
@@ -383,24 +415,9 @@ export function CalendarDetailPage({
             style={{ "--tl-day-w": `${100 / daysPerPage}%` } as CSSProperties}
           >
             {days.map(iso => {
-              const d = parseIsoDate(iso);
-              const lunar = getLunarInfoByIso(iso);
               const positioned = layoutDayEvents(itemsByDate.get(iso) ?? []);
               return (
                 <div key={iso} className="calendar-tl-day" data-today={iso === todayIso ? "true" : undefined}>
-                  <header>
-                    {daysPerPage >= 5 ? (
-                      <>
-                        <b>{d.getDate()}日</b>
-                        <span>{WEEK_LABEL[d.getDay()]}</span>
-                      </>
-                    ) : (
-                      <>
-                        <b>{d.getMonth() + 1}月{d.getDate()}日 – {WEEK_LABEL[d.getDay()]}</b>
-                        <span>{lunar ? `${lunar.monthLabel}${lunar.isFirstDay ? "" : lunar.dayLabel}` : ""}</span>
-                      </>
-                    )}
-                  </header>
                   <div className="calendar-tl-body">
                     {iso === todayIso ? (
                       <i className="calendar-now-line" style={{ top: `${nowTop}px` }} aria-hidden="true" />

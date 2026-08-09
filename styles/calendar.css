@@ -564,7 +564,6 @@
 .calendar-tl-gutter {
   flex: none;
   width: 48px;
-  padding-top: 50px;
   position: relative;
 }
 
@@ -612,35 +611,52 @@
   position: relative;
 }
 
-.calendar-tl-day > header {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+/* 列头版头行：固定在时间轴上方不随纵向滚动，横向与时间轴同步 */
+.calendar-tl-headrow {
+  flex-shrink: 0;
+  display: flex;
+  background: var(--c-calendar-bg);
+  border-bottom: 1px solid var(--c-calendar-hair);
+}
+
+.calendar-tl-headrow-gutter {
+  flex: none;
+  width: 48px;
+}
+
+.calendar-tl-headrow-days {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  overflow-x: hidden;
+}
+
+.calendar-tl-day-head {
+  flex: 0 0 var(--tl-day-w, 50%);
   height: 50px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 1px;
-  background: var(--c-calendar-bg);
-  border-bottom: 1px solid var(--c-calendar-hair);
+  border-left: 1px solid var(--c-calendar-hair);
 }
 
-.calendar-tl-day > header b {
+.calendar-tl-day-head b {
   font-size: calc(13.5px * var(--app-text-scale, 1));
   font-weight: 700;
 }
 
-.calendar-tl-day > header span {
+.calendar-tl-day-head span {
   font-size: calc(10.5px * var(--app-text-scale, 1));
   color: var(--c-calendar-faint);
 }
 
-.calendar-tl-day[data-today="true"] > header b {
+.calendar-tl-day-head[data-today="true"] b {
   color: var(--c-calendar-today);
 }
 
-.calendar-tl-day[data-today="true"] > header span {
+.calendar-tl-day-head[data-today="true"] span {
   color: var(--c-calendar-today);
   opacity: 0.65;
 }
