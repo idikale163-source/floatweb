@@ -748,14 +748,14 @@
   justify-content: center;
   text-align: center;
   color: rgba(45, 43, 39, 0.58);
-  /* 空状态用系统界面字体（与弹窗一致），不跟随日记手写字体 */
-  font-family: var(--app-font-family);
+  /* 空状态与日记弹窗一致，使用手写字体（含用户自定义字体） */
+  font-family: var(--diary-entry-font-family);
 }
 
 .diary-entry-empty h2,
 .diary-entry-empty p,
 .diary-entry-empty button {
-  font-family: var(--app-font-family);
+  font-family: var(--diary-entry-font-family);
 }
 
 .diary-entry-empty h2 {
