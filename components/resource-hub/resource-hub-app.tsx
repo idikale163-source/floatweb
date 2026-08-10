@@ -131,6 +131,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [uploadFiles, setUploadFiles] = useState<File[]>([]);
     const [uploadImages, setUploadImages] = useState<File[]>([]);
     const [uploading, setUploading] = useState(false);
+    // 提交前的公开性确认（资源会进公开仓库，先让人心里有数）
+    const [confirmUpload, setConfirmUpload] = useState(false);
     const [uploadCfg, setUploadCfg] = useState<ResourceHubUploadConfig>(() => loadUploadConfig());
     // 所见即所得编辑器：贴纸选择器（标题/正文两处）、颜色面板
     const [stickerPickerFor, setStickerPickerFor] = useState<"title" | "desc" | null>(null);
@@ -410,11 +412,20 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         }
     }, [onNotice]);
 
+    /** 点提交：先把必填项查了，再弹公开性确认 */
+    const requestUpload = useCallback(() => {
+        const folder = (uploadFolder === CUSTOM_FOLDER ? uploadFolderCustom : uploadFolder).trim();
+        if (!folder || !uploadName.trim()) { onNotice?.("请填写分类和资源名称"); return; }
+        if (uploadFiles.length === 0) { onNotice?.("请选择至少一个资源文件"); return; }
+        setConfirmUpload(true);
+    }, [onNotice, uploadFiles.length, uploadFolder, uploadFolderCustom, uploadName]);
+
     const handleUploadSubmit = useCallback(async () => {
         const folder = (uploadFolder === CUSTOM_FOLDER ? uploadFolderCustom : uploadFolder).trim();
         const name = uploadName.trim();
         if (!folder || !name) { onNotice?.("请填写分类和资源名称"); return; }
         if (uploadFiles.length === 0) { onNotice?.("请选择至少一个资源文件"); return; }
+        setConfirmUpload(false);
         setUploading(true);
         try {
             const files = await Promise.all([...uploadFiles, ...uploadImages].map(fileToUploadEntry));
@@ -1106,9 +1117,28 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         </div>
                         <div className="rh-dialog-footer">
                             <button className="rh-btn" disabled={uploading} onClick={() => setShowUpload(false)}>取消</button>
-                            <button className="rh-btn rh-btn-primary" disabled={uploading} onClick={() => void handleUploadSubmit()}>
+                            <button className="rh-btn rh-btn-primary" disabled={uploading} onClick={requestUpload}>
                                 {uploading ? <><PixelHourglass size={13} /> 提交中…</> : "提交"}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 上传前的公开性确认 */}
+            {confirmUpload && (
+                <div className="rh-dialog-overlay" onClick={() => setConfirmUpload(false)}>
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar"><span className="rh-titlebar-text">确认上传</span></div>
+                        <div className="rh-dialog-body">
+                            <span className="rh-dialog-icon">⚠️</span>
+                            <span>
+                                上传文件将会上传到公开 GitHub 仓库，<b>所有人可见</b>，请确保这是你的意愿。
+                            </span>
+                        </div>
+                        <div className="rh-dialog-footer">
+                            <button className="rh-btn" onClick={() => setConfirmUpload(false)}>再想想</button>
+                            <button className="rh-btn rh-btn-primary" onClick={() => void handleUploadSubmit()}>确认上传</button>
                         </div>
                     </div>
                 </div>
