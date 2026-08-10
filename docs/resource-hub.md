@@ -64,6 +64,6 @@ jsDelivr 单文件上限 20MB；图片建议单张 ≤ 300KB。
 工具条「上传」按钮：填分类（可新建）/名称/说明 + 选文件与配图。提交走两条链路之一：
 
 - **配了 GitHub Token**（标题栏 ⚙ 里填）：有仓库写权限的 token 直接提交 main 立即上架；普通用户 token 自动 fork + 开 PR 待审核
-- **没配 Token**：匿名 POST 到独立部署的上传服务（share 仓库 `netlify/functions/upload.mjs`，从该仓库单独建 Netlify 站点 + 配 `SHARE_BOT_TOKEN` 环境变量），由机器人代开 PR 待审核。默认地址 `https://aivp-share.netlify.app/.netlify/functions/upload`，设置里可改
+- **没配 Token**：匿名 POST 到独立部署的上传服务（share 仓库 `netlify/functions/upload.mjs`，从该仓库单独建 Netlify 站点 + 配 `SHARE_BOT_TOKEN` 环境变量），由机器人代开 PR 待审核。默认地址 `https://floatshare.netlify.app/.netlify/functions/upload`，设置里可改
 
 安全设计：匿名与普通用户的提交都只生成 PR，管理员 merge 才上架；上传服务含单文件/总量体积限制（≤5MB）与 IP 频控。上传服务与主站部署完全隔离。
