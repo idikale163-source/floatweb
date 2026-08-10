@@ -30,7 +30,7 @@ import {
     uploadResource,
     type ResourceHubUploadConfig,
 } from "@/lib/resource-hub-upload";
-import { DestPixelIcon } from "@/components/resource-hub/pixel-icons";
+import { DestPixelIcon, FileTypePixelIcon, fileExtension } from "@/components/resource-hub/pixel-icons";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -49,6 +49,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [loadError, setLoadError] = useState("");
     const [activeFolder, setActiveFolder] = useState<string | null>(null);
     const [activeEntry, setActiveEntry] = useState<ShareIndexEntry | null>(null);
+    const [selectedFile, setSelectedFile] = useState<string | null>(null);
     const [busyFile, setBusyFile] = useState<string | null>(null);
     // 导入流程：选文件 → 选目的地 →（聊天室CSS再选角色）
     const [importFile, setImportFile] = useState<string | null>(null);
@@ -193,7 +194,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 </div>
 
                 {/* 内容区 */}
-                <div className="rh-body">
+                <div className={`rh-body${activeEntry ? " rh-body-detail" : ""}`}>
                     {loadState === "loading" && <div className="rh-center-hint">正在读取目录，请稍候...</div>}
 
                     {loadState === "error" && (
@@ -226,7 +227,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         folderEntries.length > 0 ? (
                             <div className="rh-entry-list">
                                 {folderEntries.map(entry => (
-                                    <button key={entry.path} className="rh-entry" onClick={() => setActiveEntry(entry)}>
+                                    <button key={entry.path} className="rh-entry" onClick={() => { setActiveEntry(entry); setSelectedFile(entry.files[0] ?? null); }}>
                                         {entry.images.length > 0 ? (
                                             // eslint-disable-next-line @next/next/no-img-element
                                             <img className="rh-entry-thumb" src={resolveResourceHubAssetUrl(source, entry.images[0])} alt="" loading="lazy" />
@@ -248,30 +249,49 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         )
                     )}
 
-                    {/* 资源详情页 */}
+                    {/* 资源详情页：上=图文内容区，下=横滑文件条 + 操作按钮 */}
                     {loadState === "ready" && activeEntry && (
-                        <div className="rh-detail">
-                            {activeEntry.images.length > 0 && (
-                                <div className="rh-detail-images">
-                                    {activeEntry.images.map(img => (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img key={img} src={resolveResourceHubAssetUrl(source, img)} alt="" loading="lazy" />
-                                    ))}
-                                </div>
-                            )}
-                            {activeEntry.description && <div className="rh-detail-desc">{activeEntry.description}</div>}
-                            <div className="rh-detail-files-title">文件列表</div>
-                            {activeEntry.files.length > 0 ? activeEntry.files.map(file => (
-                                <div key={file} className="rh-file-row">
-                                    <span className="rh-file-name">📎 {file.split("/").pop()}</span>
-                                    <span className="rh-file-actions">
-                                        <button className="rh-btn" disabled={busyFile === file} onClick={() => handleDownload(file)}>下载</button>
-                                        <button className="rh-btn rh-btn-primary" disabled={busyFile === file} onClick={() => setImportFile(file)}>
-                                            {busyFile === file ? "处理中..." : "导入"}
+                        <div className="rh-detail2">
+                            <div className="rh-detail2-main">
+                                {activeEntry.images.map(img => (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img key={img} src={resolveResourceHubAssetUrl(source, img)} alt="" loading="lazy" />
+                                ))}
+                                {activeEntry.description
+                                    ? <div className="rh-detail2-desc">{activeEntry.description}</div>
+                                    : activeEntry.images.length === 0 && <div className="rh-detail2-desc rh-detail2-desc-empty">（该资源没有说明文字）</div>}
+                            </div>
+
+                            {activeEntry.files.length > 0 ? (
+                                <>
+                                    <div className="rh-file-strip">
+                                        {activeEntry.files.map(file => {
+                                            const base = file.split("/").pop() || file;
+                                            const ext = fileExtension(base);
+                                            return (
+                                                <button
+                                                    key={file}
+                                                    className="rh-file-tile"
+                                                    data-selected={selectedFile === file ? "1" : undefined}
+                                                    onClick={() => setSelectedFile(file)}
+                                                >
+                                                    <FileTypePixelIcon filename={base} size={36} />
+                                                    <span className="rh-file-tile-ext">{ext ? `.${ext.toUpperCase()}` : "FILE"}</span>
+                                                    <span className="rh-file-tile-name">{base}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="rh-detail2-actions">
+                                        <button className="rh-btn rh-action-half" disabled={!selectedFile || busyFile === selectedFile} onClick={() => selectedFile && handleDownload(selectedFile)}>
+                                            下载
                                         </button>
-                                    </span>
-                                </div>
-                            )) : (
+                                        <button className="rh-btn rh-btn-primary rh-action-half" disabled={!selectedFile || busyFile === selectedFile} onClick={() => selectedFile && setImportFile(selectedFile)}>
+                                            {busyFile === selectedFile ? "处理中..." : "导入"}
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
                                 <div className="rh-center-hint">该资源没有可下载的文件</div>
                             )}
                         </div>
@@ -630,41 +650,83 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     white-space: pre-line;
                 }
                 .rh-entry-meta { font-size: calc(10px * var(--app-text-scale, 1)); color: #808080; }
-                /* 详情 */
-                .rh-detail { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
-                .rh-detail-images { display: flex; flex-direction: column; gap: 8px; }
-                .rh-detail-images img { max-width: 100%; border: 1px solid #808080; }
-                .rh-detail-desc {
+                /* 详情：上=图文内容区（内部滚动），下=横滑文件条 + 操作按钮（钉底） */
+                .rh-body-detail { overflow: hidden; display: flex; }
+                .rh-detail2 {
+                    flex: 1;
+                    min-height: 0;
+                    display: flex;
+                    flex-direction: column;
+                }
+                .rh-detail2-main {
+                    flex: 1;
+                    min-height: 0;
+                    overflow-y: auto;
+                    padding: 10px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                }
+                .rh-detail2-main img { max-width: 100%; border: 1px solid #808080; }
+                .rh-detail2-desc {
                     font-size: calc(12px * var(--app-text-scale, 1));
                     line-height: 1.8;
                     white-space: pre-wrap;
                     color: #000;
-                    background: #ffffe1;
-                    border: 1px solid #808080;
-                    padding: 8px 10px;
                 }
-                .rh-detail-files-title {
-                    font-size: calc(12px * var(--app-text-scale, 1));
-                    font-weight: 700;
-                    border-bottom: 1px solid #808080;
-                    padding-bottom: 3px;
-                }
-                .rh-file-row {
+                .rh-detail2-desc-empty { color: #808080; }
+                .rh-file-strip {
+                    flex-shrink: 0;
                     display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    justify-content: space-between;
-                    padding: 4px 0;
+                    gap: 6px;
+                    overflow-x: auto;
+                    padding: 8px;
+                    background: #c0c0c0;
+                    border-top: 2px solid;
+                    border-color: #808080 transparent transparent transparent;
+                    box-shadow: inset 0 1px 0 #404040;
                 }
-                .rh-file-name {
-                    flex: 1;
-                    min-width: 0;
-                    font-size: calc(12px * var(--app-text-scale, 1));
+                .rh-file-tile {
+                    flex-shrink: 0;
+                    width: 84px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 2px;
+                    padding: 7px 4px 5px;
+                    background: #fff;
+                    border: 2px solid;
+                    border-color: #ffffff #404040 #404040 #ffffff;
+                    cursor: pointer;
+                }
+                .rh-file-tile[data-selected] {
+                    border-color: #000080;
+                    background: #e4ecf7;
+                    outline: 1px solid #000080;
+                }
+                .rh-file-tile-ext {
+                    font-size: calc(9px * var(--app-text-scale, 1));
+                    font-weight: 700;
+                    color: #000080;
+                    letter-spacing: 0.04em;
+                }
+                .rh-file-tile-name {
+                    max-width: 100%;
+                    font-size: calc(10px * var(--app-text-scale, 1));
+                    color: #000;
                     overflow: hidden;
                     text-overflow: ellipsis;
                     white-space: nowrap;
                 }
-                .rh-file-actions { display: flex; gap: 6px; flex-shrink: 0; }
+                .rh-detail2-actions {
+                    flex-shrink: 0;
+                    display: flex;
+                    gap: 8px;
+                    padding: 8px;
+                    background: #c0c0c0;
+                    border-top: 1px solid #fff;
+                }
+                .rh-action-half { flex: 1; padding: 8px 0; }
                 .rh-statusbar {
                     display: flex;
                     justify-content: space-between;

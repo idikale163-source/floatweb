@@ -260,3 +260,68 @@ function renderGrid(grid: PixelGrid, size: number, className?: string) {
 export function DestPixelIcon({ dest, size = 34 }: { dest: ImportDestination; size?: number }) {
     return renderGrid(DEST_ICONS[dest], size);
 }
+
+// ── 按扩展名生成的文件图标（详情页文件条用）──
+// 统一的"折角文档"底版，"a" 为类型强调色（内容线条区）。
+
+const FILE_DOC_TEMPLATE: PixelGrid = [
+    "................",
+    "...kkkkkkkk.....",
+    "...kwwwwwwkk....",
+    "...kwwwwwwkwk...",
+    "...kwwwwwwkkkk..",
+    "...kwaaaawwwwk..",
+    "...kwwwwwwwwwk..",
+    "...kwaaaaaawwk..",
+    "...kwwwwwwwwwk..",
+    "...kwaaaaaawwk..",
+    "...kwwwwwwwwwk..",
+    "...kwaaaawwwwk..",
+    "...kwwwwwwwwwk..",
+    "...kkkkkkkkkkk..",
+    "................",
+    "................",
+];
+
+const FILE_TYPE_COLORS: Record<string, string> = {
+    zip: "#c88030",
+    json: "#4868d8",
+    txt: "#7a7a7a",
+    css: "#b868d0",
+    js: "#d8a828",
+    mjs: "#d8a828",
+    html: "#d84848",
+    htm: "#d84848",
+    png: "#38a8a0",
+    jpg: "#38a8a0",
+    jpeg: "#38a8a0",
+    webp: "#38a8a0",
+    gif: "#38a8a0",
+};
+
+export function fileExtension(filename: string): string {
+    const match = /\.([A-Za-z0-9]+)$/.exec(filename);
+    return match ? match[1].toLowerCase() : "";
+}
+
+export function FileTypePixelIcon({ filename, size = 34 }: { filename: string; size?: number }) {
+    const accent = FILE_TYPE_COLORS[fileExtension(filename)] || "#7a7a7a";
+    const rects: React.ReactNode[] = [];
+    FILE_DOC_TEMPLATE.forEach((row, y) => {
+        let x = 0;
+        while (x < row.length) {
+            const ch = row[x];
+            const fill = ch === "a" ? accent : PALETTE[ch];
+            if (!fill) { x++; continue; }
+            let end = x + 1;
+            while (end < row.length && row[end] === ch) end++;
+            rects.push(<rect key={`${x},${y}`} x={x} y={y} width={end - x} height={1} fill={fill} />);
+            x = end;
+        }
+    });
+    return (
+        <svg viewBox="0 0 16 16" width={size} height={size} shapeRendering="crispEdges" aria-hidden>
+            {rects}
+        </svg>
+    );
+}
