@@ -40,6 +40,7 @@ import { fetchFlowerCounts, hasSentFlowerToday, sendFlower, type FlowerCounts } 
 import { STICKER_NAMES, StickerPixelIcon } from "@/components/resource-hub/pixel-stickers";
 import { RICH_COLORS, RichText } from "@/components/resource-hub/rich-text";
 import { RichEditor, type RichEditorHandle } from "@/components/resource-hub/rich-editor";
+import { PixelHourglass } from "@/components/pixel-hourglass";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -69,6 +70,9 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     // 送花：各资源花数（我的货摊展示用）+ 非阻塞小提示
     const [flowerCounts, setFlowerCounts] = useState<FlowerCounts | null>(null);
     const [toast, setToast] = useState<string | null>(null);
+    // 联网中的按钮（各自显示像素沙漏）
+    const [sendingFlower, setSendingFlower] = useState(false);
+    const [importingTo, setImportingTo] = useState<string | null>(null);
     const [busyFile, setBusyFile] = useState<string | null>(null);
     // 导入流程：选文件 → 选目的地 →（聊天室CSS再选角色）
     const [importFile, setImportFile] = useState<string | null>(null);
@@ -177,9 +181,14 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
 
     // 手动送花（详情页按钮）。自动送花复用同一函数。
     const handleSendFlower = useCallback(async (entryPath: string, silent = false) => {
-        const sent = await sendFlower(loadUploadConfig().endpoint, entryPath);
-        if (sent) showToast("已送出一朵花 🌸");
-        else if (!silent) showToast("今天已经给它送过花啦");
+        if (!silent) setSendingFlower(true);
+        try {
+            const sent = await sendFlower(loadUploadConfig().endpoint, entryPath);
+            if (sent) showToast("已送出一朵花 🌸");
+            else if (!silent) showToast("今天已经给它送过花啦");
+        } finally {
+            if (!silent) setSendingFlower(false);
+        }
     }, [showToast]);
 
     const handleDownload = useCallback(async (path: string) => {
@@ -195,10 +204,11 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         }
     }, [activeEntry, handleSendFlower, onNotice, source]);
 
+    // 导入时弹窗不立刻关闭：在刚点的那个图标上转沙漏，做完再关，
+    // 免得反馈跑到别的位置去（用户看不到自己点的东西有反应）
     const runImport = useCallback(async (path: string, destination: ImportDestination, contactId?: string) => {
-        setImportFile(null);
-        setPickCharacterFor(null);
         setBusyFile(path);
+        setImportingTo(contactId ?? destination);
         try {
             const message = await importResourceHubFile(source, path, destination, { contactId });
             onNotice?.(message);
@@ -206,6 +216,9 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             onNotice?.(`导入失败：${err instanceof Error ? err.message : String(err)}`);
         } finally {
             setBusyFile(null);
+            setImportingTo(null);
+            setImportFile(null);
+            setPickCharacterFor(null);
         }
     }, [onNotice, source]);
 
@@ -312,7 +325,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             ? () => setActiveFolder(null)
             : onClose;
 
-    const renderEntryRow = (entry: ShareIndexEntry, showFolder = false, flowers?: number) => (
+    const renderEntryRow = (entry: ShareIndexEntry, showFolder = false, flowers?: number | "loading") => (
         <button key={entry.path} className="rh-entry" onClick={() => { setActiveEntry(entry); setSelectedFile(entry.files[0] ?? null); }}>
             {entry.images.length > 0 ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -325,7 +338,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 {entry.description && <span className="rh-entry-desc"><RichText text={entry.description} mode="inline" /></span>}
                 <span className="rh-entry-meta">
                     {[showFolder ? entry.folder : "", formatEntryDate(entry.updatedAt), `${entry.files.length} 个文件`,
-                        flowers !== undefined ? `🌸 ${flowers}` : ""].filter(Boolean).join(" · ")}
+                        flowers === undefined ? "" : `🌸 ${flowers === "loading" ? "…" : flowers}`].filter(Boolean).join(" · ")}
                 </span>
             </span>
         </button>
@@ -340,7 +353,9 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     <span className="rh-titlebar-text"><RichText text={title} mode="sticker" /> - 资源集市</span>
                     <span className="rh-titlebar-controls">
                         <button className="rh-tb-btn" aria-label="资源仓库设置" onClick={() => { setSourceDraft(source); setShowSourceEditor(true); }}>⚙</button>
-                        <button className="rh-tb-btn" aria-label="刷新" onClick={() => reload(source, { purge: true })}>⟳</button>
+                        <button className="rh-tb-btn" aria-label="刷新" disabled={loadState === "loading"} onClick={() => reload(source, { purge: true })}>
+                            {loadState === "loading" ? <PixelHourglass size={13} /> : "⟳"}
+                        </button>
                         <button className="rh-tb-btn" aria-label="关闭" onClick={onClose}>✕</button>
                     </span>
                 </div>
@@ -382,10 +397,12 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                             <div className="rh-entry-list">
                                 {myStall.published.length > 0 && (
                                     <div className="rh-stall-flowers">
-                                        🌸 共收到 {myStall.published.reduce((sum, e) => sum + (flowerCounts?.[e.path] ?? 0), 0)} 朵花
+                                        {flowerCounts
+                                            ? `🌸 共收到 ${myStall.published.reduce((sum, e) => sum + (flowerCounts[e.path] ?? 0), 0)} 朵花`
+                                            : <><PixelHourglass size={13} /> 正在统计收到的花…</>}
                                     </div>
                                 )}
-                                {myStall.published.map(entry => renderEntryRow(entry, true, flowerCounts?.[entry.path] ?? 0))}
+                                {myStall.published.map(entry => renderEntryRow(entry, true, flowerCounts ? (flowerCounts[entry.path] ?? 0) : "loading"))}
                                 {myStall.pending.map(item => (
                                     <div key={item.name + item.uploadedAt} className="rh-entry rh-entry-pending">
                                         <span className="rh-entry-thumb rh-entry-thumb-blank">⏳</span>
@@ -510,17 +527,23 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                     <div className="rh-detail2-actions">
                                         <button
                                             className="rh-btn rh-flower-btn"
-                                            disabled={hasSentFlowerToday(activeEntry.path)}
+                                            disabled={sendingFlower || hasSentFlowerToday(activeEntry.path)}
                                             title="给作者送一朵花"
                                             onClick={() => void handleSendFlower(activeEntry.path)}
                                         >
-                                            {hasSentFlowerToday(activeEntry.path) ? "已送🌸" : "送花🌸"}
+                                            {sendingFlower
+                                                ? <><PixelHourglass size={13} /> 送出中</>
+                                                : hasSentFlowerToday(activeEntry.path) ? "已送🌸" : "送花🌸"}
                                         </button>
                                         <button className="rh-btn rh-action-half" disabled={!selectedFile || busyFile === selectedFile} onClick={() => selectedFile && handleDownload(selectedFile)}>
-                                            下载
+                                            {busyFile === selectedFile && !importingTo
+                                                ? <><PixelHourglass size={13} /> 下载中</>
+                                                : "下载"}
                                         </button>
                                         <button className="rh-btn rh-btn-primary rh-action-half" disabled={!selectedFile || busyFile === selectedFile} onClick={() => selectedFile && setImportFile(selectedFile)}>
-                                            {busyFile === selectedFile ? "处理中..." : "导入"}
+                                            {busyFile === selectedFile && importingTo
+                                                ? <><PixelHourglass size={13} /> 导入中</>
+                                                : "导入"}
                                         </button>
                                         {(uploadCfg.githubToken.trim() || loadMyUploads().some(r => r.path === activeEntry.path)) && (
                                             <button className="rh-btn rh-action-del" onClick={() => setConfirmDeleteEntry(activeEntry)}>删除</button>
@@ -566,21 +589,23 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
 
             {/* 导入目的地选择 */}
             {importFile && (
-                <div className="rh-dialog-overlay" onClick={() => setImportFile(null)}>
+                <div className="rh-dialog-overlay" onClick={importingTo ? undefined : () => setImportFile(null)}>
                     <div className="rh-dialog" onClick={e => e.stopPropagation()}>
                         <div className="rh-titlebar">
                             <span className="rh-titlebar-text">导入到...</span>
                             <span className="rh-titlebar-controls">
-                                <button className="rh-tb-btn" onClick={() => setImportFile(null)}>✕</button>
+                                <button className="rh-tb-btn" disabled={!!importingTo} onClick={() => setImportFile(null)}>✕</button>
                             </span>
                         </div>
                         {/* 文件全名（文件条里显示不全，这里完整展示） */}
                         <div className="rh-import-filename">{importFile.split("/").pop() || importFile}</div>
                         <div className="rh-dialog-body rh-dest-grid">
                             {IMPORT_DESTINATIONS.map(dest => (
-                                <button key={dest.key} className="rh-dest-tile" title={dest.hint} onClick={() => handlePickDestination(dest.key)}>
-                                    <DestPixelIcon dest={dest.key} />
-                                    <span className="rh-dest-tile-label">{dest.label}</span>
+                                <button key={dest.key} className="rh-dest-tile" title={dest.hint}
+                                    disabled={!!importingTo} onClick={() => handlePickDestination(dest.key)}>
+                                    {/* 正在导入的那一格换成沙漏，反馈就在刚点的位置上 */}
+                                    {importingTo === dest.key ? <PixelHourglass size={34} /> : <DestPixelIcon dest={dest.key} />}
+                                    <span className="rh-dest-tile-label">{importingTo === dest.key ? "导入中…" : dest.label}</span>
                                 </button>
                             ))}
                         </div>
@@ -590,18 +615,22 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
 
             {/* 聊天室 CSS：选择角色 */}
             {pickCharacterFor && (
-                <div className="rh-dialog-overlay" onClick={() => setPickCharacterFor(null)}>
+                <div className="rh-dialog-overlay" onClick={importingTo ? undefined : () => setPickCharacterFor(null)}>
                     <div className="rh-dialog" onClick={e => e.stopPropagation()}>
                         <div className="rh-titlebar">
                             <span className="rh-titlebar-text">应用到哪个角色的聊天室？</span>
                             <span className="rh-titlebar-controls">
-                                <button className="rh-tb-btn" onClick={() => setPickCharacterFor(null)}>✕</button>
+                                <button className="rh-tb-btn" disabled={!!importingTo} onClick={() => setPickCharacterFor(null)}>✕</button>
                             </span>
                         </div>
                         <div className="rh-dialog-body rh-dest-list">
                             {chatContacts.length > 0 ? chatContacts.map(contact => (
-                                <button key={contact.contactId} className="rh-dest" onClick={() => void runImport(pickCharacterFor, "chat_session_css", contact.contactId)}>
-                                    <span className="rh-dest-label">{contact.name}</span>
+                                <button key={contact.contactId} className="rh-dest" disabled={!!importingTo}
+                                    onClick={() => void runImport(pickCharacterFor, "chat_session_css", contact.contactId)}>
+                                    <span className="rh-dest-label">
+                                        {importingTo === contact.contactId && <><PixelHourglass size={13} /> </>}
+                                        {contact.name}
+                                    </span>
                                 </button>
                             )) : (
                                 <div className="rh-center-hint">还没有聊天联系人，先去聊天里添加角色吧</div>
@@ -623,7 +652,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         <div className="rh-dialog-footer">
                             <button className="rh-btn" disabled={deleting} onClick={() => setConfirmDeleteEntry(null)}>取消</button>
                             <button className="rh-btn rh-action-del" disabled={deleting} onClick={() => void handleDeleteEntry(confirmDeleteEntry)}>
-                                {deleting ? "删除中..." : "确认删除"}
+                                {deleting ? <><PixelHourglass size={13} /> 删除中…</> : "确认删除"}
                             </button>
                         </div>
                     </div>
@@ -710,7 +739,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         <div className="rh-dialog-footer">
                             <button className="rh-btn" disabled={uploading} onClick={() => setShowUpload(false)}>取消</button>
                             <button className="rh-btn rh-btn-primary" disabled={uploading} onClick={() => void handleUploadSubmit()}>
-                                {uploading ? "提交中..." : "提交"}
+                                {uploading ? <><PixelHourglass size={13} /> 提交中…</> : "提交"}
                             </button>
                         </div>
                     </div>
@@ -865,6 +894,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     white-space: nowrap;
                 }
                 .rh-btn:active { border-color: #404040 #ffffff #ffffff #404040; }
+                /* 忙碌态：按钮里的沙漏与文字并排居中 */
+                .rh-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
                 .rh-btn:disabled { color: #808080; text-shadow: 1px 1px 0 #fff; cursor: default; }
                 .rh-btn-primary { font-weight: 700; outline: 1px solid #000; }
                 /* 浏览集市 / 我的货摊 切换（仿 Win98 标签页按钮） */

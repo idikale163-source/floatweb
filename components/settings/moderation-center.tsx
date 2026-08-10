@@ -115,7 +115,8 @@ export function ModerationCenter({ onNotice }: { onNotice?: (msg: string) => voi
   // ── 集市审核（share 仓库待审投稿；权限由 GitHub 服务端裁决）──
   const [shareItems, setShareItems] = useState<ShareSubmission[]>([]);
   const [shareLoading, setShareLoading] = useState(false);
-  const [shareBusy, setShareBusy] = useState<Record<number, boolean>>({});
+  // 记录正在进行的动作，按钮上好显示「上架中…/拒绝中…」
+  const [shareBusy, setShareBusy] = useState<Record<number, "approve" | "reject">>({});
   const [shareExpanded, setShareExpanded] = useState<number | null>(null);
   const [shareFiles, setShareFiles] = useState<Record<number, ShareSubmissionFile[] | "loading">>({});
   const [shareRejectFor, setShareRejectFor] = useState<number | null>(null);
@@ -153,7 +154,7 @@ export function ModerationCenter({ onNotice }: { onNotice?: (msg: string) => voi
   };
 
   const runShareAction = async (item: ShareSubmission, action: "approve" | "reject", reason?: string) => {
-    setShareBusy(current => ({ ...current, [item.number]: true }));
+    setShareBusy(current => ({ ...current, [item.number]: action }));
     try {
       if (action === "approve") {
         await approveShareSubmission(item.number);
@@ -362,16 +363,24 @@ export function ModerationCenter({ onNotice }: { onNotice?: (msg: string) => voi
                       placeholder="拒绝理由（可选，投稿人可见）"
                       style={{ flex: 1, minWidth: 0, border: "1px solid var(--border-soft, rgba(0,0,0,.1))", borderRadius: 10, padding: "6px 10px", fontSize: 12, background: "var(--surface-inset, rgba(0,0,0,.03))", color: "inherit", outline: "none" }}
                     />
-                    <button type="button" style={dangerBtn} disabled={shareBusy[item.number]} onClick={() => void runShareAction(item, "reject", shareRejectReason)}>确认拒绝</button>
+                    <button type="button" style={dangerBtn} disabled={!!shareBusy[item.number]} onClick={() => void runShareAction(item, "reject", shareRejectReason)}>
+                      {shareBusy[item.number] === "reject"
+                        ? <><Loader2 size={12} className="animate-spin" style={{ verticalAlign: -2 }} /> 拒绝中…</>
+                        : "确认拒绝"}
+                    </button>
                     <button type="button" style={btnStyle} onClick={() => { setShareRejectFor(null); setShareRejectReason(""); }}>取消</button>
                   </div>
                 ) : (
                   <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                    <button type="button" style={btnStyle} disabled={shareBusy[item.number]} onClick={() => void toggleShareDetail(item)}>
+                    <button type="button" style={btnStyle} disabled={!!shareBusy[item.number]} onClick={() => void toggleShareDetail(item)}>
                       {expanded ? "收起内容" : "查看内容"}
                     </button>
-                    <button type="button" style={btnStyle} disabled={shareBusy[item.number]} onClick={() => void runShareAction(item, "approve")}>通过并上架</button>
-                    <button type="button" style={dangerBtn} disabled={shareBusy[item.number]} onClick={() => setShareRejectFor(item.number)}>拒绝</button>
+                    <button type="button" style={btnStyle} disabled={!!shareBusy[item.number]} onClick={() => void runShareAction(item, "approve")}>
+                      {shareBusy[item.number] === "approve"
+                        ? <><Loader2 size={12} className="animate-spin" style={{ verticalAlign: -2 }} /> 上架中…</>
+                        : "通过并上架"}
+                    </button>
+                    <button type="button" style={dangerBtn} disabled={!!shareBusy[item.number]} onClick={() => setShareRejectFor(item.number)}>拒绝</button>
                   </div>
                 )}
               </div>
