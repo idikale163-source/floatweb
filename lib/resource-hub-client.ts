@@ -154,30 +154,36 @@ function stripHiddenFolders(index: ShareIndex): ShareIndex {
     };
 }
 
+/** 资源统一存放的仓库根目录 */
+export const RESOURCE_ROOT = "资源";
+
 /** 兜底：_index.json 不可用时，用 jsDelivr data API 的文件树现场构建索引（无时间与说明）。 */
 async function buildIndexFromTree(source: ResourceHubSource): Promise<ShareIndex> {
     const { owner, repo, branch } = source;
     const res = await fetchWithTimeout(`https://data.jsdelivr.com/v1/packages/gh/${owner}/${repo}@${branch}?structure=flat`);
     if (!res.ok) throw new Error(`文件树获取失败（HTTP ${res.status}）`);
     const data = await res.json() as { files?: Array<{ name?: string }> };
+    // 只认 资源/ 下的内容：资源/<分类>/<资源子文件夹或孤立文件>
     const paths = (data.files ?? [])
         .map(f => (f.name || "").replace(/^\/+/, ""))
-        .filter(p => p && !p.startsWith(".") && !p.startsWith("_") && !p.startsWith("scripts/"));
+        .filter(p => p.startsWith(`${RESOURCE_ROOT}/`));
 
     const folderMap = new Map<string, Map<string, ShareIndexEntry>>();
     for (const p of paths) {
         const segments = p.split("/");
-        if (segments.length < 2) continue; // 根目录孤立文件不算资源
-        const folder = segments[0];
-        if (folder.startsWith(".")) continue;
+        if (segments.length < 3) continue; // 资源/ 下的孤立文件不算资源
+        const folder = segments[1];
+        if (!folder || folder.startsWith(".") || HIDDEN_FOLDERS.has(folder)) continue;
+        const base = segments[segments.length - 1];
+        if (base.startsWith(".")) continue; // .owner 等隐藏文件
         if (!folderMap.has(folder)) folderMap.set(folder, new Map());
         const entryMap = folderMap.get(folder)!;
-        if (segments.length === 2) {
+        if (segments.length === 3) {
             // 孤立文件式资源
             const key = `file:${p}`;
             entryMap.set(key, {
                 folder,
-                name: segments[1].replace(/\.[^.]+$/, ""),
+                name: segments[2].replace(/\.[^.]+$/, ""),
                 type: "file",
                 path: p,
                 files: [p],
@@ -186,13 +192,13 @@ async function buildIndexFromTree(source: ResourceHubSource): Promise<ShareIndex
                 updatedAt: null,
             });
         } else {
-            // 子文件夹式资源（取第二层为资源名，深层文件归并进来）
-            const entryPath = `${segments[0]}/${segments[1]}`;
+            // 子文件夹式资源（取第三层为资源名，深层文件归并进来）
+            const entryPath = `${segments[0]}/${segments[1]}/${segments[2]}`;
             const key = `dir:${entryPath}`;
             if (!entryMap.has(key)) {
                 entryMap.set(key, {
                     folder,
-                    name: segments[1],
+                    name: segments[2],
                     type: "dir",
                     path: entryPath,
                     files: [],
@@ -202,7 +208,6 @@ async function buildIndexFromTree(source: ResourceHubSource): Promise<ShareIndex
                 });
             }
             const entry = entryMap.get(key)!;
-            const base = segments[segments.length - 1];
             if (IMAGE_RE.test(base)) entry.images.push(p);
             else if (!DESC_NAME_RE.test(base)) entry.files.push(p);
         }
@@ -215,6 +220,13 @@ async function buildIndexFromTree(source: ResourceHubSource): Promise<ShareIndex
         entries.push(...entryMap.values());
     }
     return { schema: "ai_phone_share_index", schemaVersion: 0, folders, entries };
+}
+
+/** 强刷 CDN 缓存（fire-and-forget；no-cors 下拿不到响应但清缓存已生效）。 */
+export function purgeShareIndexCache(source: ResourceHubSource): void {
+    if (typeof fetch === "undefined") return;
+    const url = `https://purge.jsdelivr.net/gh/${source.owner}/${source.repo}@${source.branch}/_index.json`;
+    fetch(url, { mode: "no-cors" }).catch(() => { /* 尽力而为 */ });
 }
 
 export async function fetchShareIndex(source: ResourceHubSource): Promise<ShareIndex> {
