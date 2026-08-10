@@ -412,20 +412,11 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         }
     }, [onNotice]);
 
-    /** 点提交：先把必填项查了，再弹公开性确认 */
-    const requestUpload = useCallback(() => {
-        const folder = (uploadFolder === CUSTOM_FOLDER ? uploadFolderCustom : uploadFolder).trim();
-        if (!folder || !uploadName.trim()) { onNotice?.("请填写分类和资源名称"); return; }
-        if (uploadFiles.length === 0) { onNotice?.("请选择至少一个资源文件"); return; }
-        setConfirmUpload(true);
-    }, [onNotice, uploadFiles.length, uploadFolder, uploadFolderCustom, uploadName]);
-
     const handleUploadSubmit = useCallback(async () => {
         const folder = (uploadFolder === CUSTOM_FOLDER ? uploadFolderCustom : uploadFolder).trim();
         const name = uploadName.trim();
         if (!folder || !name) { onNotice?.("请填写分类和资源名称"); return; }
         if (uploadFiles.length === 0) { onNotice?.("请选择至少一个资源文件"); return; }
-        setConfirmUpload(false);
         setUploading(true);
         try {
             const files = await Promise.all([...uploadFiles, ...uploadImages].map(fileToUploadEntry));
@@ -552,7 +543,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     <span className="rh-address">
                         地址：C:\资源集市{viewMode === "mine" ? "\\我的货摊" : ""}{activeFolder ? `\\${activeFolder}` : ""}{activeEntry ? `\\${activeEntry.name}` : ""}
                     </span>
-                    <button className="rh-btn" onClick={() => { setUploadFolder(activeFolder || ""); setUploadAuthor(profile.nickname); setShowUpload(true); }}>上传</button>
+                    <button className="rh-btn" onClick={() => setConfirmUpload(true)}>上传</button>
                 </div>
 
                 {/* 浏览集市 / 我的货摊 切换 */}
@@ -1117,7 +1108,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         </div>
                         <div className="rh-dialog-footer">
                             <button className="rh-btn" disabled={uploading} onClick={() => setShowUpload(false)}>取消</button>
-                            <button className="rh-btn rh-btn-primary" disabled={uploading} onClick={requestUpload}>
+                            <button className="rh-btn rh-btn-primary" disabled={uploading} onClick={() => void handleUploadSubmit()}>
                                 {uploading ? <><PixelHourglass size={13} /> 提交中…</> : "提交"}
                             </button>
                         </div>
@@ -1125,7 +1116,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 </div>
             )}
 
-            {/* 上传前的公开性确认 */}
+            {/* 公开性确认：点「上传」先过这一关，确认后才打开上传表单 */}
             {confirmUpload && (
                 <div className="rh-dialog-overlay" onClick={() => setConfirmUpload(false)}>
                     <div className="rh-dialog" onClick={e => e.stopPropagation()}>
@@ -1137,8 +1128,13 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                             </span>
                         </div>
                         <div className="rh-dialog-footer">
-                            <button className="rh-btn" onClick={() => setConfirmUpload(false)}>再想想</button>
-                            <button className="rh-btn rh-btn-primary" onClick={() => void handleUploadSubmit()}>确认上传</button>
+                            <button className="rh-btn" onClick={() => setConfirmUpload(false)}>取消</button>
+                            <button className="rh-btn rh-btn-primary" onClick={() => {
+                                setConfirmUpload(false);
+                                setUploadFolder(activeFolder || "");
+                                setUploadAuthor(profile.nickname);
+                                setShowUpload(true);
+                            }}>确认</button>
                         </div>
                     </div>
                 </div>
