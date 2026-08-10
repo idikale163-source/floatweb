@@ -1392,7 +1392,9 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     justify-content: center;
                     -webkit-tap-highlight-color: rgba(0, 0, 128, 0.15);
                 }
-                .rh-detail2-main img {
+                /* 只作用于配图；写成 .rh-detail2-main img 会连作者头像一起套住，
+                   头像格子才 36px 宽，88% 一算就缩成 31px，右边空出一条 */
+                .rh-detail2-imgwrap img {
                     max-width: min(300px, 88%);
                     max-height: 360px;
                     width: auto;
