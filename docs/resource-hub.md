@@ -4,12 +4,12 @@
 
 - 前端：桌面「资源集市」App（`components/resource-hub/resource-hub-app.tsx`）
 - 客户端：`lib/resource-hub-client.ts`（CDN 多镜像回退 + 各类型安装）
-- 默认资源仓库：`xiaolongbao0709/ai-phone-resource-hub@main`（App 设置里可改）
+- 默认资源仓库：`xiaolongbao0709/share@main`（App 设置里可改）
 
 ## 资源仓库结构
 
 ```
-ai-phone-resource-hub/           （公开仓库）
+share/                           （公开仓库）
 ├── index.json                   ← 总目录（市场页启动时拉这一个文件）
 ├── characters/  唐簪雪.json      ← 角色卡（ai_phone_character 导出格式）
 ├── presets/     日常向.json      ← 预设（预设管理页导出的 JSON）
