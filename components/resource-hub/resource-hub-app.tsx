@@ -39,6 +39,7 @@ import { MediaPreviewOverlay } from "@/components/chat/media-preview-overlay";
 import { fetchFlowerCounts, hasSentFlowerToday, sendFlower, type FlowerCounts } from "@/lib/resource-hub-flowers";
 import { STICKER_NAMES, StickerPixelIcon } from "@/components/resource-hub/pixel-stickers";
 import { RICH_COLORS, RichText } from "@/components/resource-hub/rich-text";
+import { RichEditor, type RichEditorHandle } from "@/components/resource-hub/rich-editor";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -87,48 +88,23 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [uploadImages, setUploadImages] = useState<File[]>([]);
     const [uploading, setUploading] = useState(false);
     const [uploadCfg, setUploadCfg] = useState<ResourceHubUploadConfig>(() => loadUploadConfig());
-    // 排版编辑器：贴纸选择器（标题/正文两处）、颜色面板；预览在有标记时自动显示
+    // 所见即所得编辑器：贴纸选择器（标题/正文两处）、颜色面板
     const [stickerPickerFor, setStickerPickerFor] = useState<"title" | "desc" | null>(null);
     const [showColorPicker, setShowColorPicker] = useState(false);
-    const uploadNameRef = useRef<HTMLInputElement | null>(null);
-    const uploadDescRef = useRef<HTMLTextAreaElement | null>(null);
+    const uploadNameRef = useRef<RichEditorHandle | null>(null);
+    const uploadDescRef = useRef<RichEditorHandle | null>(null);
 
-    // 在光标处插入标记 / 用标记包住选中文字，随后恢复焦点
     const showToast = useCallback((msg: string) => {
         setToast(msg);
         window.setTimeout(() => setToast(current => (current === msg ? null : current)), 2600);
     }, []);
 
-    const applyMarkup = useCallback((
-        ref: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null>,
-        setter: (value: string) => void,
-        before: string,
-        after = "",
-    ) => {
-        const el = ref.current;
-        if (!el) return;
-        const start = el.selectionStart ?? el.value.length;
-        const end = el.selectionEnd ?? start;
-        const next = el.value.slice(0, start) + before + el.value.slice(start, end) + after + el.value.slice(end);
-        setter(next);
-        requestAnimationFrame(() => {
-            el.focus();
-            const pos = start + before.length + (end - start) + after.length;
-            el.setSelectionRange(pos, pos);
-        });
-    }, []);
-
-    // 颜色/字号/加粗都是"选中文字再操作"：没选中就提示，不产生空标记
+    // 颜色/字号/加粗都是"选中文字再操作"：没选中就提示
     const wrapDescTag = useCallback((tag: string) => {
-        const el = uploadDescRef.current;
-        if (!el || (el.selectionStart ?? 0) === (el.selectionEnd ?? 0)) {
-            showToast("先选中要排版的文字，再点按钮");
-            return;
-        }
-        applyMarkup(uploadDescRef, setUploadDesc, `[${tag}]`, `[/${tag}]`);
-    }, [applyMarkup, showToast]);
+        if (!uploadDescRef.current?.applyTag(tag)) showToast("先选中要排版的文字，再点按钮");
+    }, [showToast]);
 
-    // 工具栏按钮按下时不抢走输入框焦点，选区才能保住（iOS 上尤其关键）
+    // 工具栏按钮按下时不抢走编辑器焦点，选区才能保住（iOS 上尤其关键）
     const keepSelection = useCallback((e: React.PointerEvent) => e.preventDefault(), []);
 
     const reload = useCallback((activeSource: ResourceHubSource, options?: { purge?: boolean }) => {
@@ -289,7 +265,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 files,
             });
             setShowUpload(false);
-            setUploadName(""); setUploadDesc(""); setUploadFiles([]); setUploadImages([]); setUploadFolderCustom("");
+            uploadNameRef.current?.setMarkup(""); uploadDescRef.current?.setMarkup("");
+            setUploadFiles([]); setUploadImages([]); setUploadFolderCustom("");
             onNotice?.(result.merged
                 ? `「${name}」已上架（CDN 缓存刷新后可见）`
                 : `「${name}」已提交，等待管理员审核上架`);
@@ -305,8 +282,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         <div className="rh-sticker-panel">
             {STICKER_NAMES.map(name => (
                 <button key={name} type="button" className="rh-sticker-btn" title={name} onPointerDown={keepSelection} onClick={() => {
-                    if (stickerPickerFor === "title") applyMarkup(uploadNameRef, setUploadName, `[${name}]`);
-                    else applyMarkup(uploadDescRef, setUploadDesc, `[${name}]`);
+                    (stickerPickerFor === "title" ? uploadNameRef : uploadDescRef).current?.insertSticker(name);
                     setStickerPickerFor(null);
                 }}>
                     <StickerPixelIcon name={name} size={24} />
@@ -680,8 +656,15 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                             <div className="rh-form-field">
                                 <span>资源名称（可加像素贴纸）</span>
                                 <div className="rh-input-row">
-                                    <input ref={uploadNameRef} className="rh-input" value={uploadName} placeholder="例如：唐簪雪" onChange={e => setUploadName(e.target.value)} />
-                                    <button type="button" className="rh-fmt-btn" data-active={stickerPickerFor === "title" ? "1" : undefined}
+                                    <RichEditor
+                                        ref={uploadNameRef}
+                                        className="rh-input rh-editor rh-editor-line"
+                                        placeholder="例如：唐簪雪"
+                                        ariaLabel="资源名称"
+                                        singleLine
+                                        onChange={setUploadName}
+                                    />
+                                    <button type="button" className="rh-fmt-btn" data-active={stickerPickerFor === "title" ? "1" : undefined} onPointerDown={keepSelection}
                                         onClick={() => { setStickerPickerFor(current => current === "title" ? null : "title"); setShowColorPicker(false); }}>贴纸</button>
                                 </div>
                                 {stickerPickerFor === "title" && stickerPanel}
@@ -702,17 +685,13 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 </div>
                                 {stickerPickerFor === "desc" && stickerPanel}
                                 {showColorPicker && colorPanel}
-                                <textarea ref={uploadDescRef} className="rh-input" rows={3} value={uploadDesc} onChange={e => setUploadDesc(e.target.value)} />
-                                {/* 用了标记才出现的实时预览，纯文字用户不被打扰 */}
-                                {(uploadName + uploadDesc).includes("[") && (
-                                    <div className="rh-desc-preview">
-                                        <div className="rh-preview-label">效果预览</div>
-                                        {uploadName.includes("[") && (
-                                            <div className="rh-preview-title"><RichText text={uploadName} mode="sticker" /></div>
-                                        )}
-                                        {uploadDesc && <RichText text={uploadDesc} mode="full" />}
-                                    </div>
-                                )}
+                                <RichEditor
+                                    ref={uploadDescRef}
+                                    className="rh-input rh-editor rh-editor-area"
+                                    placeholder="写点介绍吧～选中文字可以改颜色、字号、加粗"
+                                    ariaLabel="说明文字"
+                                    onChange={setUploadDesc}
+                                />
                             </div>
                             <label className="rh-file-picker">
                                 <span className="rh-btn">选择资源文件{uploadFiles.length > 0 ? `（已选 ${uploadFiles.length} 个）` : ""}</span>
@@ -1308,6 +1287,23 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     white-space: pre-wrap;
                     color: #000;
                 }
+                /* 所见即所得编辑器：外观与 rh-input 一致，内容直接显示排版效果 */
+                .rh-editor {
+                    line-height: 1.7;
+                    word-break: break-word;
+                    white-space: pre-wrap;
+                    -webkit-user-select: text;
+                    user-select: text;
+                    cursor: text;
+                }
+                .rh-editor-line { min-height: calc(20px * var(--app-text-scale, 1)); overflow-x: auto; white-space: nowrap; }
+                .rh-editor-area { min-height: calc(66px * var(--app-text-scale, 1)); max-height: 40vh; overflow-y: auto; }
+                .rh-editor[data-empty]::before {
+                    content: attr(data-placeholder);
+                    color: #a0a0a0;
+                    pointer-events: none;
+                }
+                .rh-editor img { display: inline; vertical-align: -0.22em; }
                 .rh-preview-label {
                     font-size: calc(10px * var(--app-text-scale, 1));
                     color: #808080;

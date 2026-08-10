@@ -320,6 +320,34 @@ export function isStickerName(name: string): boolean {
     return Object.prototype.hasOwnProperty.call(STICKERS, name);
 }
 
+/** 同色连续像素合并成 rect 列表（SVG 元素与字符串两种输出共用） */
+function gridRuns(grid: PixelGrid): Array<{ x: number; y: number; w: number; fill: string }> {
+    const runs: Array<{ x: number; y: number; w: number; fill: string }> = [];
+    grid.forEach((row, y) => {
+        let x = 0;
+        while (x < row.length) {
+            const ch = row[x];
+            if (ch === "." || !PALETTE[ch]) { x++; continue; }
+            let end = x + 1;
+            while (end < row.length && row[end] === ch) end++;
+            runs.push({ x, y, w: end - x, fill: PALETTE[ch] });
+            x = end;
+        }
+    });
+    return runs;
+}
+
+/** 贴纸的 data URL（富文本编辑器里当作一个整体字符插入 <img>） */
+export function stickerDataUrl(name: string): string {
+    const grid = STICKERS[name];
+    if (!grid) return "";
+    const rects = gridRuns(grid)
+        .map(r => `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="1" fill="${r.fill}"/>`)
+        .join("");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">${rects}</svg>`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 function renderGrid(grid: PixelGrid, size: number | string) {
     const rects: React.ReactNode[] = [];
     grid.forEach((row, y) => {
