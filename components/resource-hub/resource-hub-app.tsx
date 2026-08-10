@@ -1,63 +1,59 @@
 "use client";
 
-// 资源集市：社区资源市场（GitHub 仓库当后端，浏览走 CDN，安装进本机存储）。
-// 普通用户零配置：打开即从默认资源仓库拉目录；仓库地址可在设置里改。
+// 资源集市：社区资源市场（GitHub 仓库当后端，浏览走 CDN）。
+// 首页自动显示仓库根目录的文件夹（仿文件管理器），文件夹页为古早论坛式列表，
+// 资源可下载或导入（导入时选择目的地）。整体为复古 Windows 风格。
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, RefreshCw, Search, Settings2, Store } from "lucide-react";
-import { PageShell } from "@/components/ui/page-shell";
-import { ConfirmDialog, ContentDialog } from "@/components/ui/modal";
-import { Input } from "@/components/ui/form";
+import { loadCharacters } from "@/lib/character-storage";
+import { loadChatContacts } from "@/lib/chat-storage";
 import {
-    fetchResourceHubIndex,
-    installResourceHubItem,
-    loadInstalledResourceMap,
+    checkImportFileForDestination,
+    downloadResourceHubFile,
+    fetchShareIndex,
+    importResourceHubFile,
     loadResourceHubSource,
     resolveResourceHubAssetUrl,
     saveResourceHubSource,
 } from "@/lib/resource-hub-client";
 import {
-    RESOURCE_HUB_KIND_LABELS,
-    type ResourceHubIndex,
-    type ResourceHubItem,
-    type ResourceHubKind,
+    IMPORT_DESTINATIONS,
+    type ImportDestination,
     type ResourceHubSource,
+    type ShareIndex,
+    type ShareIndexEntry,
 } from "@/lib/resource-hub-types";
 
 type LoadState = "loading" | "ready" | "error";
-type InstallState = "installing" | "done" | "error";
 
-const KIND_FILTERS: Array<{ key: ResourceHubKind | "all"; label: string }> = [
-    { key: "all", label: "全部" },
-    { key: "character", label: RESOURCE_HUB_KIND_LABELS.character },
-    { key: "preset", label: RESOURCE_HUB_KIND_LABELS.preset },
-    { key: "worldbook", label: RESOURCE_HUB_KIND_LABELS.worldbook },
-    { key: "regex", label: RESOURCE_HUB_KIND_LABELS.regex },
-    { key: "css", label: RESOURCE_HUB_KIND_LABELS.css },
-];
+function formatEntryDate(iso: string | null): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onNotice?: (msg: string) => void }) {
     const [source, setSource] = useState<ResourceHubSource>(() => loadResourceHubSource());
-    const [index, setIndex] = useState<ResourceHubIndex | null>(null);
+    const [index, setIndex] = useState<ShareIndex | null>(null);
     const [loadState, setLoadState] = useState<LoadState>("loading");
     const [loadError, setLoadError] = useState("");
-    const [filter, setFilter] = useState<ResourceHubKind | "all">("all");
-    const [query, setQuery] = useState("");
-    const [installStates, setInstallStates] = useState<Record<string, InstallState>>({});
-    const [installedMap, setInstalledMap] = useState(() => loadInstalledResourceMap());
+    const [activeFolder, setActiveFolder] = useState<string | null>(null);
+    const [activeEntry, setActiveEntry] = useState<ShareIndexEntry | null>(null);
+    const [busyFile, setBusyFile] = useState<string | null>(null);
+    // 导入流程：选文件 → 选目的地 →（聊天室CSS再选角色）
+    const [importFile, setImportFile] = useState<string | null>(null);
+    const [pickCharacterFor, setPickCharacterFor] = useState<string | null>(null);
+    const [showConstructionNotice, setShowConstructionNotice] = useState(true);
     const [showSourceEditor, setShowSourceEditor] = useState(false);
     const [sourceDraft, setSourceDraft] = useState<ResourceHubSource>(source);
-    // 施工提示：每次进入弹一次，正式开张后移除
-    const [showConstructionNotice, setShowConstructionNotice] = useState(true);
 
     const reload = useCallback((activeSource: ResourceHubSource) => {
         setLoadState("loading");
         setLoadError("");
-        fetchResourceHubIndex(activeSource)
-            .then(data => {
-                setIndex(data);
-                setLoadState("ready");
-            })
+        fetchShareIndex(activeSource)
+            .then(data => { setIndex(data); setLoadState("ready"); })
             .catch(err => {
                 setLoadError(err instanceof Error ? err.message : String(err));
                 setLoadState("error");
@@ -66,192 +62,594 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
 
     useEffect(() => { reload(source); }, [reload, source]);
 
-    const visibleItems = useMemo(() => {
-        const items = index?.items ?? [];
-        const trimmed = query.trim().toLowerCase();
-        return items.filter(item => {
-            if (filter !== "all" && item.kind !== filter) return false;
-            if (!trimmed) return true;
-            const haystack = [item.name, item.author, item.description, ...(item.tags ?? [])]
-                .filter(Boolean).join(" ").toLowerCase();
-            return haystack.includes(trimmed);
-        });
-    }, [index, filter, query]);
+    const folderEntries = useMemo(() => {
+        if (!index || !activeFolder) return [];
+        return index.entries
+            .filter(e => e.folder === activeFolder)
+            .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "") || a.name.localeCompare(b.name, "zh"));
+    }, [index, activeFolder]);
 
-    const handleInstall = useCallback(async (item: ResourceHubItem) => {
-        setInstallStates(prev => ({ ...prev, [item.id]: "installing" }));
+    const chatContacts = useMemo(() => {
+        if (pickCharacterFor === null) return [];
+        const characters = loadCharacters();
+        return loadChatContacts().map(contact => ({
+            contactId: contact.id,
+            name: contact.nickname || characters.find(c => c.id === contact.characterId)?.name || "未知角色",
+        }));
+    }, [pickCharacterFor]);
+
+    const handleDownload = useCallback(async (path: string) => {
+        setBusyFile(path);
         try {
-            const message = await installResourceHubItem(source, item);
-            setInstallStates(prev => ({ ...prev, [item.id]: "done" }));
-            setInstalledMap(loadInstalledResourceMap());
-            onNotice?.(message);
+            await downloadResourceHubFile(source, path);
         } catch (err) {
-            setInstallStates(prev => ({ ...prev, [item.id]: "error" }));
-            onNotice?.(`安装失败：${err instanceof Error ? err.message : String(err)}`);
+            onNotice?.(`下载失败：${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setBusyFile(null);
         }
     }, [onNotice, source]);
 
-    const handleSourceSave = useCallback(() => {
-        const next: ResourceHubSource = {
-            owner: sourceDraft.owner.trim(),
-            repo: sourceDraft.repo.trim(),
-            branch: sourceDraft.branch.trim() || "main",
-        };
-        if (!next.owner || !next.repo) {
-            onNotice?.("仓库 owner 和名称不能为空");
+    const runImport = useCallback(async (path: string, destination: ImportDestination, contactId?: string) => {
+        setImportFile(null);
+        setPickCharacterFor(null);
+        setBusyFile(path);
+        try {
+            const message = await importResourceHubFile(source, path, destination, { contactId });
+            onNotice?.(message);
+        } catch (err) {
+            onNotice?.(`导入失败：${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setBusyFile(null);
+        }
+    }, [onNotice, source]);
+
+    const handlePickDestination = useCallback((destination: ImportDestination) => {
+        if (!importFile) return;
+        const typeError = checkImportFileForDestination(destination, importFile);
+        if (typeError) {
+            onNotice?.(typeError);
             return;
         }
-        saveResourceHubSource(next);
-        setSource(next);
-        setShowSourceEditor(false);
-    }, [onNotice, sourceDraft]);
+        if (destination === "chat_session_css") {
+            setPickCharacterFor(importFile);
+            setImportFile(null);
+            return;
+        }
+        void runImport(importFile, destination);
+    }, [importFile, onNotice, runImport]);
 
-    const renderItemCard = (item: ResourceHubItem) => {
-        const state = installStates[item.id];
-        const installedRecord = installedMap[item.id];
-        const isInstalled = state === "done" || (!!installedRecord && installedRecord.version === item.version);
-        const busy = state === "installing";
-        return (
-            <div key={item.id} className="ui-group-card">
-                <div className="flex items-start gap-3">
-                    {item.cover && (
-                        <div className="w-12 h-12 shrink-0 rounded-xl overflow-hidden bg-black/5 dark:bg-white/10">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={resolveResourceHubAssetUrl(source, item.cover)} alt="" className="w-full h-full object-cover" loading="lazy" />
-                        </div>
-                    )}
-                    <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <span className="menu-label truncate">{item.name}</span>
-                            <span className="ts-11 shrink-0 px-1.5 py-0.5 rounded-md bg-black/5 dark:bg-white/10 text-[var(--c-icon)]">
-                                {RESOURCE_HUB_KIND_LABELS[item.kind]}
-                            </span>
-                        </div>
-                        <span className="menu-desc !mt-0">
-                            {[item.author && `by ${item.author}`, item.version && `v${item.version}`].filter(Boolean).join(" · ")}
-                        </span>
-                        {item.description && <span className="menu-desc !mt-0 line-clamp-2">{item.description}</span>}
-                    </div>
-                    <button
-                        className={`ui-btn ${isInstalled ? "ui-btn-ghost" : "ui-btn-primary"} shrink-0 !px-3`}
-                        disabled={busy || isInstalled}
-                        onClick={() => handleInstall(item)}
-                    >
-                        {busy ? "安装中..." : isInstalled ? "已安装" : (
-                            <span className="flex items-center gap-1"><Download size={13} />安装</span>
-                        )}
-                    </button>
-                </div>
-            </div>
-        );
-    };
+    const title = activeEntry ? activeEntry.name : activeFolder ? activeFolder : "资源集市";
+    const handleBack = activeEntry
+        ? () => setActiveEntry(null)
+        : activeFolder
+            ? () => setActiveFolder(null)
+            : onClose;
 
     return (
-        <PageShell
-            title="资源集市"
-            onBack={onClose}
-            rightAction={
-                <div className="flex items-center gap-1">
-                    <button className="ui-bare-btn" aria-label="刷新" onClick={() => reload(source)}>
-                        <RefreshCw size={18} strokeWidth={1.75} className={loadState === "loading" ? "is-spinning" : undefined} />
-                    </button>
-                    <button className="ui-bare-btn" aria-label="资源仓库设置" onClick={() => { setSourceDraft(source); setShowSourceEditor(true); }}>
-                        <Settings2 size={18} strokeWidth={1.75} />
-                    </button>
-                </div>
-            }
-        >
-            <div className="flex flex-col gap-3 p-4">
-                <div className="relative">
-                    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--c-icon)] pointer-events-none" />
-                    <input
-                        className="ui-input w-full !pl-9"
-                        value={query}
-                        onChange={e => setQuery(e.target.value)}
-                        placeholder="搜索资源、作者、标签..."
-                    />
+        <div className="rh-root page-shell">
+            {/* 窗口标题栏 */}
+            <div className="rh-window">
+                <div className="rh-titlebar">
+                    <span className="rh-titlebar-icon">🗂️</span>
+                    <span className="rh-titlebar-text">{title} - 资源集市</span>
+                    <span className="rh-titlebar-controls">
+                        <button className="rh-tb-btn" aria-label="资源仓库设置" onClick={() => { setSourceDraft(source); setShowSourceEditor(true); }}>⚙</button>
+                        <button className="rh-tb-btn" aria-label="刷新" onClick={() => reload(source)}>⟳</button>
+                        <button className="rh-tb-btn" aria-label="关闭" onClick={onClose}>✕</button>
+                    </span>
                 </div>
 
-                <div className="flex items-center gap-2 overflow-x-auto pb-0.5 -mx-1 px-1">
-                    {KIND_FILTERS.map(({ key, label }) => (
-                        <button
-                            key={key}
-                            className="ui-chip shrink-0"
-                            data-active={filter === key ? "1" : undefined}
-                            style={filter === key ? { background: "var(--c-icon-active, var(--c-text))", color: "var(--c-card, #fff)" } : undefined}
-                            onClick={() => setFilter(key)}
-                        >
-                            {label}
-                        </button>
-                    ))}
+                {/* 工具条（返回/地址） */}
+                <div className="rh-toolbar">
+                    <button className="rh-btn" onClick={handleBack}>← 返回</button>
+                    <span className="rh-address">
+                        地址：C:\资源集市{activeFolder ? `\\${activeFolder}` : ""}{activeEntry ? `\\${activeEntry.name}` : ""}
+                    </span>
                 </div>
 
-                {index?.notice && loadState === "ready" && (
-                    <div className="ui-group-card py-2">
-                        <span className="menu-desc !mt-0 whitespace-pre-wrap">{index.notice}</span>
-                    </div>
-                )}
+                {/* 内容区 */}
+                <div className="rh-body">
+                    {loadState === "loading" && <div className="rh-center-hint">正在读取目录，请稍候...</div>}
 
-                {loadState === "loading" && (
-                    <div className="ui-empty-compact mt-6"><span className="menu-desc">目录加载中...</span></div>
-                )}
-
-                {loadState === "error" && (
-                    <div className="ui-empty-compact mt-6 flex flex-col items-center gap-2">
-                        <Store size={28} className="text-[var(--c-icon)] opacity-60" />
-                        <span className="menu-desc text-center">
+                    {loadState === "error" && (
+                        <div className="rh-center-hint">
+                            <div className="ts-24 mb-2">🚧</div>
                             资源仓库暂时无法访问（{loadError}）。
-                            <br />可能是仓库尚未就绪或网络问题，可点右上角刷新重试。
-                        </span>
-                    </div>
-                )}
+                            <br />可能是网络问题或仓库尚未就绪，可点右上角 ⟳ 重试。
+                        </div>
+                    )}
 
-                {loadState === "ready" && visibleItems.length === 0 && (
-                    <div className="ui-empty-compact mt-6">
-                        <span className="menu-desc">{query.trim() ? "没有匹配的资源" : "该分类暂时没有资源"}</span>
-                    </div>
-                )}
+                    {/* 首页：文件夹（一行两个） */}
+                    {loadState === "ready" && !activeFolder && (
+                        index && index.folders.length > 0 ? (
+                            <div className="rh-folder-grid">
+                                {index.folders.map(folder => (
+                                    <button key={folder.name} className="rh-folder" onDoubleClick={() => setActiveFolder(folder.name)} onClick={() => setActiveFolder(folder.name)}>
+                                        <span className="rh-folder-icon">📁</span>
+                                        <span className="rh-folder-name">{folder.name}</span>
+                                        <span className="rh-folder-count">{folder.count} 个对象</span>
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="rh-center-hint">仓库里还没有资源文件夹</div>
+                        )
+                    )}
 
-                {loadState === "ready" && visibleItems.map(renderItemCard)}
+                    {/* 文件夹页：论坛式列表 */}
+                    {loadState === "ready" && activeFolder && !activeEntry && (
+                        folderEntries.length > 0 ? (
+                            <div className="rh-entry-list">
+                                {folderEntries.map(entry => (
+                                    <button key={entry.path} className="rh-entry" onClick={() => setActiveEntry(entry)}>
+                                        {entry.images.length > 0 ? (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img className="rh-entry-thumb" src={resolveResourceHubAssetUrl(source, entry.images[0])} alt="" loading="lazy" />
+                                        ) : (
+                                            <span className="rh-entry-thumb rh-entry-thumb-blank">📄</span>
+                                        )}
+                                        <span className="rh-entry-main">
+                                            <span className="rh-entry-title">{entry.name}</span>
+                                            {entry.description && <span className="rh-entry-desc">{entry.description}</span>}
+                                            <span className="rh-entry-meta">
+                                                {[formatEntryDate(entry.updatedAt), `${entry.files.length} 个文件`].filter(Boolean).join(" · ")}
+                                            </span>
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="rh-center-hint">这个文件夹还是空的</div>
+                        )
+                    )}
+
+                    {/* 资源详情页 */}
+                    {loadState === "ready" && activeEntry && (
+                        <div className="rh-detail">
+                            {activeEntry.images.length > 0 && (
+                                <div className="rh-detail-images">
+                                    {activeEntry.images.map(img => (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img key={img} src={resolveResourceHubAssetUrl(source, img)} alt="" loading="lazy" />
+                                    ))}
+                                </div>
+                            )}
+                            {activeEntry.description && <div className="rh-detail-desc">{activeEntry.description}</div>}
+                            <div className="rh-detail-files-title">文件列表</div>
+                            {activeEntry.files.length > 0 ? activeEntry.files.map(file => (
+                                <div key={file} className="rh-file-row">
+                                    <span className="rh-file-name">📎 {file.split("/").pop()}</span>
+                                    <span className="rh-file-actions">
+                                        <button className="rh-btn" disabled={busyFile === file} onClick={() => handleDownload(file)}>下载</button>
+                                        <button className="rh-btn rh-btn-primary" disabled={busyFile === file} onClick={() => setImportFile(file)}>
+                                            {busyFile === file ? "处理中..." : "导入"}
+                                        </button>
+                                    </span>
+                                </div>
+                            )) : (
+                                <div className="rh-center-hint">该资源没有可下载的文件</div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* 状态栏 */}
+                <div className="rh-statusbar">
+                    <span>
+                        {loadState === "ready"
+                            ? activeFolder
+                                ? `${folderEntries.length} 个对象`
+                                : `${index?.folders.length ?? 0} 个文件夹`
+                            : "..."}
+                    </span>
+                    <span>资源仓库：{source.owner}/{source.repo}</span>
+                </div>
             </div>
 
+            {/* 施工提示（正式开张后移除） */}
             {showConstructionNotice && (
-                <ConfirmDialog
-                    title="施工中"
-                    message="此app正在施工，请先去别的地方逛逛吧～"
-                    icon={Store}
-                    variant="action"
-                    cancelLabel="仍要看看"
-                    confirmLabel="返回桌面"
-                    onCancel={() => setShowConstructionNotice(false)}
-                    onConfirm={onClose}
-                />
+                <div className="rh-dialog-overlay">
+                    <div className="rh-dialog">
+                        <div className="rh-titlebar"><span className="rh-titlebar-text">系统提示</span></div>
+                        <div className="rh-dialog-body">
+                            <span className="rh-dialog-icon">🚧</span>
+                            此app正在施工，请先去别的地方逛逛吧～
+                        </div>
+                        <div className="rh-dialog-footer">
+                            <button className="rh-btn" onClick={() => setShowConstructionNotice(false)}>仍要看看</button>
+                            <button className="rh-btn rh-btn-primary" onClick={onClose}>返回桌面</button>
+                        </div>
+                    </div>
+                </div>
             )}
 
-            {showSourceEditor && (
-                <ContentDialog
-                    title="资源仓库"
-                    confirmLabel="保存"
-                    onConfirm={handleSourceSave}
-                    onCancel={() => setShowSourceEditor(false)}
-                >
-                    <div className="flex flex-col gap-3 text-left w-full">
-                        <div className="flex flex-col gap-1">
-                            <label className="menu-desc ml-1">GitHub 用户/组织</label>
-                            <Input value={sourceDraft.owner} onChange={e => setSourceDraft(prev => ({ ...prev, owner: e.target.value }))} />
+            {/* 导入目的地选择 */}
+            {importFile && (
+                <div className="rh-dialog-overlay" onClick={() => setImportFile(null)}>
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar">
+                            <span className="rh-titlebar-text">导入到...</span>
+                            <span className="rh-titlebar-controls">
+                                <button className="rh-tb-btn" onClick={() => setImportFile(null)}>✕</button>
+                            </span>
                         </div>
-                        <div className="flex flex-col gap-1">
-                            <label className="menu-desc ml-1">仓库名</label>
-                            <Input value={sourceDraft.repo} onChange={e => setSourceDraft(prev => ({ ...prev, repo: e.target.value }))} />
+                        <div className="rh-dialog-body rh-dest-list">
+                            {IMPORT_DESTINATIONS.map(dest => (
+                                <button key={dest.key} className="rh-dest" onClick={() => handlePickDestination(dest.key)}>
+                                    <span className="rh-dest-label">{dest.label}</span>
+                                    <span className="rh-dest-hint">{dest.hint}</span>
+                                </button>
+                            ))}
                         </div>
-                        <div className="flex flex-col gap-1">
-                            <label className="menu-desc ml-1">分支</label>
-                            <Input value={sourceDraft.branch} placeholder="main" onChange={e => setSourceDraft(prev => ({ ...prev, branch: e.target.value }))} />
-                        </div>
-                        <span className="menu-desc ml-1">资源经 jsDelivr CDN 拉取，公开仓库无需登录。除非要换资源源，一般不用改。</span>
                     </div>
-                </ContentDialog>
+                </div>
             )}
-        </PageShell>
+
+            {/* 聊天室 CSS：选择角色 */}
+            {pickCharacterFor && (
+                <div className="rh-dialog-overlay" onClick={() => setPickCharacterFor(null)}>
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar">
+                            <span className="rh-titlebar-text">应用到哪个角色的聊天室？</span>
+                            <span className="rh-titlebar-controls">
+                                <button className="rh-tb-btn" onClick={() => setPickCharacterFor(null)}>✕</button>
+                            </span>
+                        </div>
+                        <div className="rh-dialog-body rh-dest-list">
+                            {chatContacts.length > 0 ? chatContacts.map(contact => (
+                                <button key={contact.contactId} className="rh-dest" onClick={() => void runImport(pickCharacterFor, "chat_session_css", contact.contactId)}>
+                                    <span className="rh-dest-label">{contact.name}</span>
+                                </button>
+                            )) : (
+                                <div className="rh-center-hint">还没有聊天联系人，先去聊天里添加角色吧</div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 资源仓库设置 */}
+            {showSourceEditor && (
+                <div className="rh-dialog-overlay" onClick={() => setShowSourceEditor(false)}>
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar"><span className="rh-titlebar-text">资源仓库</span></div>
+                        <div className="rh-dialog-body rh-form">
+                            <label>GitHub 用户/组织
+                                <input className="rh-input" value={sourceDraft.owner} onChange={e => setSourceDraft(prev => ({ ...prev, owner: e.target.value }))} />
+                            </label>
+                            <label>仓库名
+                                <input className="rh-input" value={sourceDraft.repo} onChange={e => setSourceDraft(prev => ({ ...prev, repo: e.target.value }))} />
+                            </label>
+                            <label>分支
+                                <input className="rh-input" value={sourceDraft.branch} placeholder="main" onChange={e => setSourceDraft(prev => ({ ...prev, branch: e.target.value }))} />
+                            </label>
+                            <div className="rh-form-hint">资源经 jsDelivr CDN 读取，公开仓库无需登录。除非换资源源，一般不用改。</div>
+                        </div>
+                        <div className="rh-dialog-footer">
+                            <button className="rh-btn" onClick={() => setShowSourceEditor(false)}>取消</button>
+                            <button className="rh-btn rh-btn-primary" onClick={() => {
+                                const next: ResourceHubSource = {
+                                    owner: sourceDraft.owner.trim(),
+                                    repo: sourceDraft.repo.trim(),
+                                    branch: sourceDraft.branch.trim() || "main",
+                                };
+                                if (!next.owner || !next.repo) { onNotice?.("仓库 owner 和名称不能为空"); return; }
+                                saveResourceHubSource(next);
+                                setSource(next);
+                                setActiveFolder(null);
+                                setActiveEntry(null);
+                                setShowSourceEditor(false);
+                            }}>保存</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <style>{`
+                .rh-root {
+                    position: absolute;
+                    inset: 0;
+                    background: #008080;
+                    padding: calc(var(--status-bar-top, 12px) + 34px) 10px 16px;
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                }
+                .rh-root, .rh-root button, .rh-root input {
+                    font-family: "Microsoft YaHei", "PingFang SC", Tahoma, "MS Sans Serif", sans-serif;
+                }
+                .rh-window {
+                    flex: 1;
+                    min-height: 0;
+                    display: flex;
+                    flex-direction: column;
+                    background: #c0c0c0;
+                    border: 2px solid;
+                    border-color: #ffffff #404040 #404040 #ffffff;
+                    box-shadow: 1px 1px 0 #000;
+                }
+                .rh-titlebar {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 3px 4px 3px 6px;
+                    background: linear-gradient(90deg, #000080, #1084d0);
+                    color: #fff;
+                    font-size: calc(13px * var(--app-text-scale, 1));
+                    font-weight: 700;
+                    user-select: none;
+                    flex-shrink: 0;
+                }
+                .rh-titlebar-text {
+                    flex: 1;
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                .rh-titlebar-controls { display: flex; gap: 3px; }
+                .rh-tb-btn {
+                    width: 22px;
+                    height: 20px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: #c0c0c0;
+                    color: #000;
+                    font-size: 12px;
+                    border: 2px solid;
+                    border-color: #ffffff #404040 #404040 #ffffff;
+                    cursor: pointer;
+                    padding: 0;
+                }
+                .rh-tb-btn:active { border-color: #404040 #ffffff #ffffff #404040; }
+                .rh-toolbar {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 5px 6px;
+                    border-bottom: 1px solid #808080;
+                    box-shadow: 0 1px 0 #fff;
+                    flex-shrink: 0;
+                }
+                .rh-address {
+                    flex: 1;
+                    min-width: 0;
+                    background: #fff;
+                    border: 2px solid;
+                    border-color: #404040 #ffffff #ffffff #404040;
+                    padding: 3px 6px;
+                    font-size: calc(11px * var(--app-text-scale, 1));
+                    color: #000;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                .rh-btn {
+                    background: #c0c0c0;
+                    color: #000;
+                    font-size: calc(12px * var(--app-text-scale, 1));
+                    padding: 4px 12px;
+                    border: 2px solid;
+                    border-color: #ffffff #404040 #404040 #ffffff;
+                    cursor: pointer;
+                    white-space: nowrap;
+                }
+                .rh-btn:active { border-color: #404040 #ffffff #ffffff #404040; }
+                .rh-btn:disabled { color: #808080; text-shadow: 1px 1px 0 #fff; cursor: default; }
+                .rh-btn-primary { font-weight: 700; outline: 1px solid #000; }
+                .rh-body {
+                    flex: 1;
+                    min-height: 0;
+                    overflow-y: auto;
+                    background: #fff;
+                    border: 2px solid;
+                    border-color: #404040 #ffffff #ffffff #404040;
+                    margin: 6px;
+                    color: #000;
+                }
+                .rh-center-hint {
+                    padding: 42px 20px;
+                    text-align: center;
+                    color: #404040;
+                    font-size: calc(12px * var(--app-text-scale, 1));
+                    line-height: 1.8;
+                }
+                /* 首页文件夹网格：一行两个 */
+                .rh-folder-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 4px;
+                    padding: 10px;
+                }
+                .rh-folder {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 2px;
+                    padding: 14px 6px 10px;
+                    background: none;
+                    border: 1px dotted transparent;
+                    cursor: pointer;
+                }
+                .rh-folder:active { border-color: #000080; background: #e4ecf7; }
+                .rh-folder-icon { font-size: 40px; line-height: 1; }
+                .rh-folder-name {
+                    font-size: calc(13px * var(--app-text-scale, 1));
+                    color: #000;
+                    word-break: break-all;
+                }
+                .rh-folder-count { font-size: calc(10px * var(--app-text-scale, 1)); color: #808080; }
+                /* 论坛式条目列表 */
+                .rh-entry-list { display: flex; flex-direction: column; }
+                .rh-entry {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 10px;
+                    padding: 10px;
+                    background: none;
+                    border: none;
+                    border-bottom: 1px solid #d4d0c8;
+                    cursor: pointer;
+                    text-align: left;
+                }
+                .rh-entry:active { background: #e4ecf7; }
+                .rh-entry-thumb {
+                    width: 52px;
+                    height: 52px;
+                    flex-shrink: 0;
+                    object-fit: cover;
+                    border: 1px solid #808080;
+                    background: #f4f4f4;
+                }
+                .rh-entry-thumb-blank {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 24px;
+                }
+                .rh-entry-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+                .rh-entry-title {
+                    font-size: calc(13px * var(--app-text-scale, 1));
+                    color: #000080;
+                    font-weight: 700;
+                    text-decoration: underline;
+                    word-break: break-all;
+                }
+                .rh-entry-desc {
+                    font-size: calc(11px * var(--app-text-scale, 1));
+                    color: #404040;
+                    line-height: 1.5;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                    white-space: pre-line;
+                }
+                .rh-entry-meta { font-size: calc(10px * var(--app-text-scale, 1)); color: #808080; }
+                /* 详情 */
+                .rh-detail { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+                .rh-detail-images { display: flex; flex-direction: column; gap: 8px; }
+                .rh-detail-images img { max-width: 100%; border: 1px solid #808080; }
+                .rh-detail-desc {
+                    font-size: calc(12px * var(--app-text-scale, 1));
+                    line-height: 1.8;
+                    white-space: pre-wrap;
+                    color: #000;
+                    background: #ffffe1;
+                    border: 1px solid #808080;
+                    padding: 8px 10px;
+                }
+                .rh-detail-files-title {
+                    font-size: calc(12px * var(--app-text-scale, 1));
+                    font-weight: 700;
+                    border-bottom: 1px solid #808080;
+                    padding-bottom: 3px;
+                }
+                .rh-file-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    justify-content: space-between;
+                    padding: 4px 0;
+                }
+                .rh-file-name {
+                    flex: 1;
+                    min-width: 0;
+                    font-size: calc(12px * var(--app-text-scale, 1));
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                .rh-file-actions { display: flex; gap: 6px; flex-shrink: 0; }
+                .rh-statusbar {
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 8px;
+                    padding: 3px 8px;
+                    font-size: calc(10px * var(--app-text-scale, 1));
+                    color: #000;
+                    border-top: 1px solid #fff;
+                    box-shadow: 0 -1px 0 #808080;
+                    flex-shrink: 0;
+                }
+                .rh-statusbar span {
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                /* 对话框 */
+                .rh-dialog-overlay {
+                    position: absolute;
+                    inset: 0;
+                    background: rgba(0, 0, 0, 0.3);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 60;
+                    padding: 20px;
+                }
+                .rh-dialog {
+                    width: min(340px, 92%);
+                    max-height: 76vh;
+                    display: flex;
+                    flex-direction: column;
+                    background: #c0c0c0;
+                    border: 2px solid;
+                    border-color: #ffffff #404040 #404040 #ffffff;
+                    box-shadow: 2px 2px 0 #000;
+                }
+                .rh-dialog-body {
+                    padding: 14px 12px;
+                    font-size: calc(13px * var(--app-text-scale, 1));
+                    color: #000;
+                    overflow-y: auto;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }
+                .rh-dialog-icon { font-size: 30px; }
+                .rh-dialog-footer {
+                    display: flex;
+                    justify-content: center;
+                    gap: 10px;
+                    padding: 0 12px 12px;
+                }
+                .rh-dest-list { flex-direction: column; align-items: stretch; gap: 3px; }
+                .rh-dest {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: flex-start;
+                    gap: 1px;
+                    padding: 7px 10px;
+                    background: #fff;
+                    border: 1px solid #808080;
+                    cursor: pointer;
+                    text-align: left;
+                }
+                .rh-dest:active { background: #000080; }
+                .rh-dest:active .rh-dest-label, .rh-dest:active .rh-dest-hint { color: #fff; }
+                .rh-dest-label { font-size: calc(13px * var(--app-text-scale, 1)); color: #000; font-weight: 700; }
+                .rh-dest-hint { font-size: calc(10px * var(--app-text-scale, 1)); color: #808080; }
+                .rh-form { flex-direction: column; align-items: stretch; gap: 8px; }
+                .rh-form label {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 3px;
+                    font-size: calc(11px * var(--app-text-scale, 1));
+                    color: #000;
+                }
+                .rh-input {
+                    background: #fff;
+                    border: 2px solid;
+                    border-color: #404040 #ffffff #ffffff #404040;
+                    padding: 4px 6px;
+                    font-size: calc(13px * var(--app-text-scale, 1));
+                    color: #000;
+                    outline: none;
+                }
+                .rh-form-hint { font-size: calc(10px * var(--app-text-scale, 1)); color: #606060; line-height: 1.6; }
+            `}</style>
+        </div>
     );
 }
