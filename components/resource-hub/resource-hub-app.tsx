@@ -471,8 +471,18 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 {activeEntry.images.map(img => {
                                     const url = resolveResourceHubAssetUrl(source, img);
                                     return (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img key={img} src={url} alt="" loading="lazy" style={{ cursor: "pointer" }} onClick={() => setPreviewImage(url)} />
+                                        // 点击层放在外层 div 而非 img 本身：iOS WebKit 对非交互元素
+                                        // 的点击合成不可靠，聊天页同款结构在 iOS 上验证可用
+                                        <div
+                                            key={img}
+                                            className="rh-detail2-imgwrap"
+                                            role="button"
+                                            style={{ cursor: "pointer" }}
+                                            onClick={e => { e.stopPropagation(); setPreviewImage(url); }}
+                                        >
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={url} alt="" loading="lazy" />
+                                        </div>
                                     );
                                 })}
                             </div>
@@ -978,6 +988,11 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     flex-direction: column;
                     gap: 10px;
                 }
+                .rh-detail2-imgwrap {
+                    display: flex;
+                    justify-content: center;
+                    -webkit-tap-highlight-color: rgba(0, 0, 128, 0.15);
+                }
                 .rh-detail2-main img {
                     max-width: min(220px, 62%);
                     max-height: 240px;
@@ -985,6 +1000,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     height: auto;
                     align-self: center;
                     border: 1px solid #808080;
+                    pointer-events: none;
                 }
                 /* 发帖式排版：标题字号更大更粗，下带分隔线 */
                 .rh-detail2-title {
