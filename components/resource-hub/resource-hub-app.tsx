@@ -45,7 +45,7 @@ import {
 } from "@/lib/resource-hub-identity";
 import { mergeMyUploads } from "@/lib/resource-hub-upload";
 import { DefaultPixelAvatar } from "@/components/resource-hub/pixel-avatar";
-import { DestPixelIcon, FileTypePixelIcon, fileExtension } from "@/components/resource-hub/pixel-icons";
+import { DestPixelIcon, FileTypePixelIcon, GearPixelIcon, fileExtension } from "@/components/resource-hub/pixel-icons";
 import { deleteShareEntry } from "@/lib/resource-hub-review";
 import { MediaPreviewOverlay } from "@/components/chat/media-preview-overlay";
 import { fetchFlowerCounts, hasSentFlowerToday, sendFlower, type FlowerCounts } from "@/lib/resource-hub-flowers";
@@ -502,7 +502,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     <span className="rh-titlebar-icon">🗂️</span>
                     <span className="rh-titlebar-text"><RichText text={title} mode="sticker" /> - 资源集市</span>
                     <span className="rh-titlebar-controls">
-                        <button className="rh-tb-btn" aria-label="资源仓库设置" onClick={() => { setSourceDraft(source); setShowSourceEditor(true); }}>⚙</button>
+                        <button className="rh-tb-btn" aria-label="资源仓库设置" onClick={() => { setSourceDraft(source); setShowSourceEditor(true); }}><GearPixelIcon size={15} /></button>
                         <button className="rh-tb-btn" aria-label="刷新" disabled={loadState === "loading"} onClick={() => reload(source, { purge: true })}>
                             {loadState === "loading" ? <PixelHourglass size={13} /> : "⟳"}
                         </button>
