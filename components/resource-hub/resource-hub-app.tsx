@@ -65,6 +65,20 @@ function formatFileSize(bytes: number): string {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/**
+ * 再次点选择器时追加到已选清单，而不是把之前选的顶掉——用户没叉掉就不该丢。
+ * 同名文件会原地替换成新选的那份：上传后按文件名落库，留两份同名的必然互相覆盖。
+ */
+function appendPickedFiles(current: File[], incoming: File[]): File[] {
+    const next = [...current];
+    for (const file of incoming) {
+        const at = next.findIndex(f => f.name === file.name);
+        if (at >= 0) next[at] = file;
+        else next.push(file);
+    }
+    return next;
+}
+
 function formatEntryDate(iso: string | null): string {
     if (!iso) return "";
     const d = new Date(iso);
@@ -1011,8 +1025,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 </div>
                             </div>
                             <label className="rh-file-picker">
-                                <span className="rh-btn">添加/替换文件</span>
-                                <input type="file" multiple hidden onChange={e => { setEditAddFiles(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
+                                <span className="rh-btn">{editAddFiles.length > 0 ? "继续添加文件" : "添加/替换文件"}</span>
+                                <input type="file" multiple hidden onChange={e => { const picked = Array.from(e.target.files ?? []); setEditAddFiles(current => appendPickedFiles(current, picked)); e.target.value = ""; }} />
                             </label>
                             {renderPickedFiles(editAddFiles, index => setEditAddFiles(current => current.filter((_, i) => i !== index)))}
                             <div className="rh-form-hint">同名文件会被覆盖；保存后立即生效，索引刷新后所有人可见。</div>
@@ -1091,13 +1105,13 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 />
                             </div>
                             <label className="rh-file-picker">
-                                <span className="rh-btn">选择资源文件</span>
-                                <input type="file" multiple hidden onChange={e => { setUploadFiles(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
+                                <span className="rh-btn">{uploadFiles.length > 0 ? "继续添加文件" : "选择资源文件"}</span>
+                                <input type="file" multiple hidden onChange={e => { const picked = Array.from(e.target.files ?? []); setUploadFiles(current => appendPickedFiles(current, picked)); e.target.value = ""; }} />
                             </label>
                             {renderPickedFiles(uploadFiles, index => setUploadFiles(current => current.filter((_, i) => i !== index)))}
                             <label className="rh-file-picker">
-                                <span className="rh-btn">选择配图（可选）</span>
-                                <input type="file" accept="image/*" multiple hidden onChange={e => { setUploadImages(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
+                                <span className="rh-btn">{uploadImages.length > 0 ? "继续添加配图" : "选择配图（可选）"}</span>
+                                <input type="file" accept="image/*" multiple hidden onChange={e => { const picked = Array.from(e.target.files ?? []); setUploadImages(current => appendPickedFiles(current, picked)); e.target.value = ""; }} />
                             </label>
                             {renderPickedFiles(uploadImages, index => setUploadImages(current => current.filter((_, i) => i !== index)))}
                             <div className="rh-form-hint">
