@@ -286,6 +286,30 @@ export function GearPixelIcon({ size = 15 }: { size?: number }) {
     return renderGrid(GEAR_ICON, size);
 }
 
+// 标题栏的"刷新"。⟳ 在 iOS 的字体里字形本身就画得很小，同样自己画。
+const REFRESH_ICON: PixelGrid = [
+    "................",
+    ".........kkkkkk.",
+    "..........kkkk..",
+    "...........kk...",
+    "...kk.....kkk...",
+    "..kkk......kkk..",
+    "..kk........kk..",
+    "..kk........kk..",
+    "..kk........kk..",
+    "..kk........kk..",
+    "..kkk......kkk..",
+    "...kkk....kkk...",
+    "....kkkkkkkk....",
+    ".....kkkkkk.....",
+    "................",
+    "................",
+];
+
+export function RefreshPixelIcon({ size = 15 }: { size?: number }) {
+    return renderGrid(REFRESH_ICON, size);
+}
+
 // ── 按扩展名生成的文件图标（详情页文件条用）──
 // 统一的"折角文档"底版，"a" 为类型强调色（内容线条区）。
 
