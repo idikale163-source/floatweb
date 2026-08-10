@@ -59,6 +59,12 @@ import { PixelHourglass } from "@/components/pixel-hourglass";
 
 type LoadState = "loading" | "ready" | "error";
 
+function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function formatEntryDate(iso: string | null): string {
     if (!iso) return "";
     const d = new Date(iso);
@@ -477,6 +483,23 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             </span>
         );
     };
+
+    /** 已选文件清单：图标 + 文件名，可单个移除（比只报个数量有用得多） */
+    const renderPickedFiles = (files: File[], onRemove: (index: number) => void) => (
+        files.length > 0 ? (
+            <div className="rh-picked-list">
+                {files.map((file, index) => (
+                    <div key={`${file.name}-${index}`} className="rh-picked">
+                        <FileTypePixelIcon filename={file.name} size={20} />
+                        <span className="rh-picked-name">{file.name}</span>
+                        <span className="rh-picked-size">{formatFileSize(file.size)}</span>
+                        <button type="button" className="rh-picked-x" aria-label={`移除 ${file.name}`}
+                            onClick={e => { e.preventDefault(); onRemove(index); }}>✕</button>
+                    </div>
+                ))}
+            </div>
+        ) : null
+    );
 
     const renderEntryRow = (entry: ShareIndexEntry, showFolder = false, flowers?: number | "loading") => (
         <button key={entry.path} className="rh-entry" onClick={() => { setActiveEntry(entry); setSelectedFile(entry.files[0] ?? null); }}>
@@ -1004,9 +1027,10 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 </div>
                             </div>
                             <label className="rh-file-picker">
-                                <span className="rh-btn">添加/替换文件{editAddFiles.length > 0 ? `（已选 ${editAddFiles.length} 个）` : ""}</span>
+                                <span className="rh-btn">添加/替换文件</span>
                                 <input type="file" multiple hidden onChange={e => { setEditAddFiles(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
                             </label>
+                            {renderPickedFiles(editAddFiles, index => setEditAddFiles(current => current.filter((_, i) => i !== index)))}
                             <div className="rh-form-hint">同名文件会被覆盖；保存后立即生效，索引刷新后所有人可见。</div>
                         </div>
                         <div className="rh-dialog-footer">
@@ -1083,13 +1107,15 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 />
                             </div>
                             <label className="rh-file-picker">
-                                <span className="rh-btn">选择资源文件{uploadFiles.length > 0 ? `（已选 ${uploadFiles.length} 个）` : ""}</span>
+                                <span className="rh-btn">选择资源文件</span>
                                 <input type="file" multiple hidden onChange={e => { setUploadFiles(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
                             </label>
+                            {renderPickedFiles(uploadFiles, index => setUploadFiles(current => current.filter((_, i) => i !== index)))}
                             <label className="rh-file-picker">
-                                <span className="rh-btn">选择配图（可选）{uploadImages.length > 0 ? `（已选 ${uploadImages.length} 张）` : ""}</span>
+                                <span className="rh-btn">选择配图（可选）</span>
                                 <input type="file" accept="image/*" multiple hidden onChange={e => { setUploadImages(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
                             </label>
+                            {renderPickedFiles(uploadImages, index => setUploadImages(current => current.filter((_, i) => i !== index)))}
                             <div className="rh-form-hint">
                                 {uploadCfg.githubToken
                                     ? "将使用你的 GitHub Token 提交（有仓库权限则直接上架，否则生成待审核投稿）。"
@@ -1529,6 +1555,44 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     font-size: calc(10px * var(--app-text-scale, 1));
                     word-break: break-all;
                     resize: none;
+                }
+                /* 已选文件清单（上传/编辑弹窗共用） */
+                .rh-picked-list { display: flex; flex-direction: column; gap: 3px; }
+                .rh-picked {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 4px 6px;
+                    background: #fff;
+                    border: 1px solid #808080;
+                }
+                .rh-picked-name {
+                    flex: 1;
+                    min-width: 0;
+                    font-size: calc(11px * var(--app-text-scale, 1));
+                    color: #000;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                .rh-picked-size {
+                    font-size: calc(10px * var(--app-text-scale, 1));
+                    color: #808080;
+                    flex-shrink: 0;
+                }
+                .rh-picked-x {
+                    flex-shrink: 0;
+                    width: 18px;
+                    height: 18px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 0;
+                    font-size: calc(11px * var(--app-text-scale, 1));
+                    color: #a01818;
+                    background: none;
+                    border: none;
+                    cursor: pointer;
                 }
                 /* 编辑弹窗的文件清单 */
                 .rh-edit-files { display: flex; flex-direction: column; gap: 3px; }
