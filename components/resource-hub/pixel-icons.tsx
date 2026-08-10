@@ -261,55 +261,6 @@ export function DestPixelIcon({ dest, size = 34 }: { dest: ImportDestination; si
     return renderGrid(DEST_ICONS[dest], size);
 }
 
-// 标题栏的"设置"齿轮。用 ⚙ 字符的话，iOS 会当彩色 emoji 画，
-// 和这套复古单色界面完全不搭，所以自己画一个。
-const GEAR_ICON: PixelGrid = [
-    "................",
-    ".......kk.......",
-    ".......kk.......",
-    "...kkkkkkkkkk...",
-    "...kkkkkkkkkk...",
-    "...kkkk..kkkk...",
-    "...kkk....kkk...",
-    ".kkkk......kkkk.",
-    ".kkkk......kkkk.",
-    "...kkk....kkk...",
-    "...kkkk..kkkk...",
-    "...kkkkkkkkkk...",
-    "...kkkkkkkkkk...",
-    ".......kk.......",
-    ".......kk.......",
-    "................",
-];
-
-export function GearPixelIcon({ size = 15 }: { size?: number }) {
-    return renderGrid(GEAR_ICON, size);
-}
-
-// 标题栏的"刷新"。⟳ 在 iOS 的字体里字形本身就画得很小，同样自己画。
-const REFRESH_ICON: PixelGrid = [
-    "................",
-    ".........kkkkkk.",
-    "..........kkkk..",
-    "...........kk...",
-    "...kk.....kkk...",
-    "..kkk......kkk..",
-    "..kk........kk..",
-    "..kk........kk..",
-    "..kk........kk..",
-    "..kk........kk..",
-    "..kkk......kkk..",
-    "...kkk....kkk...",
-    "....kkkkkkkk....",
-    ".....kkkkkk.....",
-    "................",
-    "................",
-];
-
-export function RefreshPixelIcon({ size = 15 }: { size?: number }) {
-    return renderGrid(REFRESH_ICON, size);
-}
-
 // ── 按扩展名生成的文件图标（详情页文件条用）──
 // 统一的"折角文档"底版，"a" 为类型强调色（内容线条区）。
 
