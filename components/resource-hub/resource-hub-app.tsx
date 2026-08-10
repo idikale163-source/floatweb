@@ -35,6 +35,7 @@ import {
 } from "@/lib/resource-hub-upload";
 import { DestPixelIcon, FileTypePixelIcon, fileExtension } from "@/components/resource-hub/pixel-icons";
 import { deleteShareEntry } from "@/lib/resource-hub-review";
+import { MediaPreviewOverlay } from "@/components/chat/media-preview-overlay";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -57,6 +58,10 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [searchQuery, setSearchQuery] = useState("");
     const [confirmDeleteEntry, setConfirmDeleteEntry] = useState<ShareIndexEntry | null>(null);
     const [deleting, setDeleting] = useState(false);
+    // 浏览集市 / 我的货摊
+    const [viewMode, setViewMode] = useState<"market" | "mine">("market");
+    // 图片全屏预览（点开可保存）
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [busyFile, setBusyFile] = useState<string | null>(null);
     // 导入流程：选文件 → 选目的地 →（聊天室CSS再选角色）
     const [importFile, setImportFile] = useState<string | null>(null);
@@ -111,6 +116,20 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 .join(" ").toLowerCase().includes(q))
             .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "") || a.name.localeCompare(b.name, "zh"));
     }, [index, searchQuery]);
+
+    // 我的货摊：本机上传记录与目录比对——在目录里的可点进详情，不在的显示待审/未上架
+    const myStall = useMemo(() => {
+        const records = loadMyUploads();
+        const published: ShareIndexEntry[] = [];
+        const pending: { name: string; uploadedAt: string }[] = [];
+        for (const record of records) {
+            const entry = index?.entries.find(e => e.path === record.path);
+            if (entry) published.push(entry);
+            else pending.push({ name: record.name, uploadedAt: record.uploadedAt });
+        }
+        return { published, pending };
+        // index 变化或切到货摊时重算
+    }, [index, viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const chatContacts = useMemo(() => {
         if (pickCharacterFor === null) return [];
@@ -256,10 +275,20 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 <div className="rh-toolbar">
                     <button className="rh-btn" onClick={handleBack}>← 返回</button>
                     <span className="rh-address">
-                        地址：C:\资源集市{activeFolder ? `\\${activeFolder}` : ""}{activeEntry ? `\\${activeEntry.name}` : ""}
+                        地址：C:\资源集市{viewMode === "mine" ? "\\我的货摊" : ""}{activeFolder ? `\\${activeFolder}` : ""}{activeEntry ? `\\${activeEntry.name}` : ""}
                     </span>
                     <button className="rh-btn" onClick={() => { setUploadFolder(activeFolder || ""); setShowUpload(true); }}>上传</button>
                 </div>
+
+                {/* 浏览集市 / 我的货摊 切换 */}
+                {!activeEntry && (
+                    <div className="rh-tabs">
+                        <button className="rh-tab" data-active={viewMode === "market" ? "1" : undefined}
+                            onClick={() => setViewMode("market")}>浏览集市</button>
+                        <button className="rh-tab" data-active={viewMode === "mine" ? "1" : undefined}
+                            onClick={() => { setViewMode("mine"); setActiveFolder(null); setSearchQuery(""); }}>我的货摊</button>
+                    </div>
+                )}
 
                 {/* 内容区 */}
                 <div className={`rh-body${activeEntry ? " rh-body-detail" : ""}`}>
@@ -273,8 +302,28 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         </div>
                     )}
 
+                    {/* 我的货摊 */}
+                    {loadState === "ready" && viewMode === "mine" && !activeEntry && (
+                        (myStall.published.length > 0 || myStall.pending.length > 0) ? (
+                            <div className="rh-entry-list">
+                                {myStall.published.map(entry => renderEntryRow(entry, true))}
+                                {myStall.pending.map(item => (
+                                    <div key={item.name + item.uploadedAt} className="rh-entry rh-entry-pending">
+                                        <span className="rh-entry-thumb rh-entry-thumb-blank">⏳</span>
+                                        <span className="rh-entry-main">
+                                            <span className="rh-entry-title">{item.name}</span>
+                                            <span className="rh-entry-meta">待管理员审核，或索引尚未更新</span>
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="rh-center-hint">你还没有上传过资源，点右上角「上传」摆个摊吧</div>
+                        )
+                    )}
+
                     {/* 搜索框（首页与文件夹页显示） */}
-                    {loadState === "ready" && !activeEntry && (
+                    {loadState === "ready" && viewMode === "market" && !activeEntry && (
                         <div className="rh-search-row">
                             <input
                                 className="rh-input rh-search-input"
@@ -289,7 +338,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     )}
 
                     {/* 搜索结果（有关键词时替代当前列表） */}
-                    {loadState === "ready" && !activeEntry && searchResults && (
+                    {loadState === "ready" && viewMode === "market" && !activeEntry && searchResults && (
                         searchResults.length > 0 ? (
                             <div className="rh-entry-list">
                                 {searchResults.map(entry => renderEntryRow(entry, true))}
@@ -300,7 +349,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     )}
 
                     {/* 首页：文件夹（一行两个） */}
-                    {loadState === "ready" && !activeFolder && !searchResults && (
+                    {loadState === "ready" && viewMode === "market" && !activeFolder && !searchResults && (
                         index && index.folders.length > 0 ? (
                             <div className="rh-folder-grid">
                                 {index.folders.map(folder => (
@@ -317,7 +366,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     )}
 
                     {/* 文件夹页：论坛式列表 */}
-                    {loadState === "ready" && activeFolder && !activeEntry && !searchResults && (
+                    {loadState === "ready" && viewMode === "market" && activeFolder && !activeEntry && !searchResults && (
                         folderEntries.length > 0 ? (
                             <div className="rh-entry-list">
                                 {folderEntries.map(entry => renderEntryRow(entry))}
@@ -331,13 +380,18 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     {loadState === "ready" && activeEntry && (
                         <div className="rh-detail2">
                             <div className="rh-detail2-main">
-                                {activeEntry.images.map(img => (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img key={img} src={resolveResourceHubAssetUrl(source, img)} alt="" loading="lazy" />
-                                ))}
+                                {/* 发帖式排版：标题 → 正文 → 图片 */}
+                                <div className="rh-detail2-title">{activeEntry.name}</div>
                                 {activeEntry.description
                                     ? <div className="rh-detail2-desc">{activeEntry.description}</div>
-                                    : activeEntry.images.length === 0 && <div className="rh-detail2-desc rh-detail2-desc-empty">（该资源没有说明文字）</div>}
+                                    : <div className="rh-detail2-desc rh-detail2-desc-empty">（该资源没有说明文字）</div>}
+                                {activeEntry.images.map(img => {
+                                    const url = resolveResourceHubAssetUrl(source, img);
+                                    return (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img key={img} src={url} alt="" loading="lazy" style={{ cursor: "pointer" }} onClick={() => setPreviewImage(url)} />
+                                    );
+                                })}
                             </div>
 
                             {activeEntry.files.length > 0 ? (
@@ -419,6 +473,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 <button className="rh-tb-btn" onClick={() => setImportFile(null)}>✕</button>
                             </span>
                         </div>
+                        {/* 文件全名（文件条里显示不全，这里完整展示） */}
+                        <div className="rh-import-filename">{importFile.split("/").pop() || importFile}</div>
                         <div className="rh-dialog-body rh-dest-grid">
                             {IMPORT_DESTINATIONS.map(dest => (
                                 <button key={dest.key} className="rh-dest-tile" title={dest.hint} onClick={() => handlePickDestination(dest.key)}>
@@ -568,12 +624,21 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 </div>
             )}
 
+            {/* 图片全屏预览（与聊天/动态页一致，含保存按钮） */}
+            {previewImage && (
+                <MediaPreviewOverlay
+                    imageUrl={previewImage}
+                    saveFilename={(previewImage.split("/").pop() || "图片").split("?")[0]}
+                    onClose={() => setPreviewImage(null)}
+                />
+            )}
+
             <style>{`
                 .rh-root {
                     position: absolute;
                     inset: 0;
                     background: #008080;
-                    padding: calc(var(--status-bar-top, 12px) + 34px) 10px 16px;
+                    padding: calc(var(--status-bar-top, 12px) + 48px) 10px 16px;
                     display: flex;
                     flex-direction: column;
                     overflow: hidden;
@@ -612,14 +677,14 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 }
                 .rh-titlebar-controls { display: flex; gap: 3px; }
                 .rh-tb-btn {
-                    width: 22px;
-                    height: 20px;
+                    width: 28px;
+                    height: 24px;
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
                     background: #c0c0c0;
                     color: #000;
-                    font-size: 12px;
+                    font-size: 15px;
                     border: 2px solid;
                     border-color: #ffffff #404040 #404040 #ffffff;
                     cursor: pointer;
@@ -661,6 +726,29 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 .rh-btn:active { border-color: #404040 #ffffff #ffffff #404040; }
                 .rh-btn:disabled { color: #808080; text-shadow: 1px 1px 0 #fff; cursor: default; }
                 .rh-btn-primary { font-weight: 700; outline: 1px solid #000; }
+                /* 浏览集市 / 我的货摊 切换（仿 Win98 标签页按钮） */
+                .rh-tabs {
+                    display: flex;
+                    gap: 4px;
+                    padding: 5px 6px 0;
+                    flex-shrink: 0;
+                }
+                .rh-tab {
+                    flex: 1;
+                    padding: 5px 0;
+                    background: #b0b0b0;
+                    color: #404040;
+                    font-size: calc(12px * var(--app-text-scale, 1));
+                    border: 2px solid;
+                    border-color: #ffffff #404040 #404040 #ffffff;
+                    cursor: pointer;
+                }
+                .rh-tab[data-active] {
+                    background: #fff;
+                    color: #000080;
+                    font-weight: 700;
+                    border-color: #404040 #ffffff #ffffff #404040;
+                }
                 .rh-body {
                     flex: 1;
                     min-height: 0;
@@ -717,6 +805,9 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     text-align: left;
                 }
                 .rh-entry:active { background: #e4ecf7; }
+                .rh-entry-pending { cursor: default; opacity: 0.72; }
+                .rh-entry-pending:active { background: none; }
+                .rh-entry-pending .rh-entry-title { color: #404040; text-decoration: none; }
                 .rh-entry-thumb {
                     width: 52px;
                     height: 52px;
@@ -774,6 +865,16 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     height: auto;
                     align-self: center;
                     border: 1px solid #808080;
+                }
+                /* 发帖式排版：标题字号更大更粗，下带分隔线 */
+                .rh-detail2-title {
+                    font-size: calc(16px * var(--app-text-scale, 1));
+                    font-weight: 700;
+                    color: #000;
+                    line-height: 1.4;
+                    word-break: break-all;
+                    padding-bottom: 8px;
+                    border-bottom: 1px solid #d4d0c8;
                 }
                 .rh-detail2-desc {
                     font-size: calc(12px * var(--app-text-scale, 1));
@@ -840,7 +941,13 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     gap: 6px;
                     padding: 8px 10px 4px;
                 }
-                .rh-search-input { flex: 1; min-width: 0; }
+                /* 搜索框在白底上：右/下边也要有可见描边，不然和背景融为一体 */
+                .rh-input.rh-search-input {
+                    flex: 1;
+                    min-width: 0;
+                    border-color: #404040 #808080 #808080 #404040;
+                    background: #fffff4;
+                }
                 .rh-statusbar {
                     display: flex;
                     justify-content: space-between;
@@ -893,6 +1000,15 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     justify-content: center;
                     gap: 10px;
                     padding: 0 12px 12px;
+                }
+                /* 导入弹窗：文件全名（不截断，允许换行） */
+                .rh-import-filename {
+                    padding: 8px 12px 0;
+                    font-size: calc(12px * var(--app-text-scale, 1));
+                    font-weight: 700;
+                    color: #000;
+                    word-break: break-all;
+                    line-height: 1.5;
                 }
                 .rh-dest-list { flex-direction: column; align-items: stretch; gap: 3px; }
                 /* 目的地图标网格（仿桌面图标：图标 + 名字，一行三个） */
