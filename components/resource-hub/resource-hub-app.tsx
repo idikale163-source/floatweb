@@ -672,7 +672,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     max-height: 240px;
                     width: auto;
                     height: auto;
-                    align-self: flex-start;
+                    align-self: center;
                     border: 1px solid #808080;
                 }
                 .rh-detail2-desc {
