@@ -667,7 +667,14 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     flex-direction: column;
                     gap: 10px;
                 }
-                .rh-detail2-main img { max-width: 100%; border: 1px solid #808080; }
+                .rh-detail2-main img {
+                    max-width: min(220px, 62%);
+                    max-height: 240px;
+                    width: auto;
+                    height: auto;
+                    align-self: flex-start;
+                    border: 1px solid #808080;
+                }
                 .rh-detail2-desc {
                     font-size: calc(12px * var(--app-text-scale, 1));
                     line-height: 1.8;
