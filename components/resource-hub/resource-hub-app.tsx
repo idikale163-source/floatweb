@@ -317,11 +317,11 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 <button className="rh-tb-btn" onClick={() => setImportFile(null)}>✕</button>
                             </span>
                         </div>
-                        <div className="rh-dialog-body rh-dest-list">
+                        <div className="rh-dialog-body rh-dest-grid">
                             {IMPORT_DESTINATIONS.map(dest => (
-                                <button key={dest.key} className="rh-dest" onClick={() => handlePickDestination(dest.key)}>
-                                    <span className="rh-dest-label">{dest.label}</span>
-                                    <span className="rh-dest-hint">{dest.hint}</span>
+                                <button key={dest.key} className="rh-dest-tile" title={dest.hint} onClick={() => handlePickDestination(dest.key)}>
+                                    <span className="rh-dest-tile-icon">{dest.icon}</span>
+                                    <span className="rh-dest-tile-label">{dest.label}</span>
                                 </button>
                             ))}
                         </div>
@@ -718,6 +718,36 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     padding: 0 12px 12px;
                 }
                 .rh-dest-list { flex-direction: column; align-items: stretch; gap: 3px; }
+                /* 目的地图标网格（仿桌面图标：图标 + 名字，一行三个） */
+                .rh-dest-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr 1fr;
+                    gap: 6px;
+                    align-items: stretch;
+                }
+                .rh-dest-tile {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 5px;
+                    padding: 12px 4px 9px;
+                    background: none;
+                    border: 1px dotted transparent;
+                    cursor: pointer;
+                }
+                .rh-dest-tile:active { border-color: #000080; background: #e4ecf7; }
+                .rh-dest-tile-icon {
+                    font-size: 30px;
+                    line-height: 1;
+                    filter: saturate(0.85);
+                }
+                .rh-dest-tile-label {
+                    font-size: calc(11px * var(--app-text-scale, 1));
+                    color: #000;
+                    text-align: center;
+                    line-height: 1.3;
+                    word-break: break-all;
+                }
                 .rh-dest {
                     display: flex;
                     flex-direction: column;

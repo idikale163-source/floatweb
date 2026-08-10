@@ -61,16 +61,16 @@ export type ImportDestination =
     | "theater"
     | "plugin";
 
-export const IMPORT_DESTINATIONS: Array<{ key: ImportDestination; label: string; hint: string }> = [
-    { key: "preset", label: "预设", hint: "预设管理页导出的 JSON" },
-    { key: "regex", label: "正则", hint: "正则管理页导出的 JSON" },
-    { key: "worldbook", label: "世界书", hint: "世界书管理页导出的 JSON" },
-    { key: "character", label: "角色卡", hint: "角色卡 JSON 或 PNG" },
-    { key: "chat_session_css", label: "聊天室自定义CSS", hint: "需选择应用到哪个角色" },
-    { key: "chat_app_css", label: "聊天主页自定义CSS", hint: "应用到聊天主页" },
-    { key: "global_css", label: "全局自定义CSS", hint: "应用到外观页全局样式" },
-    { key: "custom_app", label: "应用", hint: "应用市场 zip 安装包或单 HTML" },
-    { key: "game", label: "游戏", hint: "游戏草稿箱导出的 JSON" },
-    { key: "theater", label: "黑市剧场", hint: "剧场草稿箱导出的 JSON" },
-    { key: "plugin", label: "插件", hint: "聊天插件 JS 源码文件" },
+export const IMPORT_DESTINATIONS: Array<{ key: ImportDestination; label: string; hint: string; icon: string }> = [
+    { key: "preset", label: "预设", hint: "预设管理页导出的 JSON", icon: "🎛️" },
+    { key: "regex", label: "正则", hint: "正则管理页导出的 JSON", icon: "✂️" },
+    { key: "worldbook", label: "世界书", hint: "世界书管理页导出的 JSON", icon: "📖" },
+    { key: "character", label: "角色卡", hint: "角色卡 JSON 或 PNG", icon: "🎴" },
+    { key: "chat_session_css", label: "聊天室CSS", hint: "需选择应用到哪个角色", icon: "💬" },
+    { key: "chat_app_css", label: "聊天主页CSS", hint: "应用到聊天主页", icon: "📱" },
+    { key: "global_css", label: "全局CSS", hint: "应用到外观页全局样式", icon: "🎨" },
+    { key: "custom_app", label: "应用", hint: "应用市场 zip 安装包或单 HTML", icon: "📦" },
+    { key: "game", label: "游戏", hint: "游戏草稿箱导出的 JSON", icon: "🕹️" },
+    { key: "theater", label: "黑市剧场", hint: "剧场草稿箱导出的 JSON", icon: "🎭" },
+    { key: "plugin", label: "插件", hint: "聊天插件 JS 源码文件", icon: "🧩" },
 ];
