@@ -53,21 +53,48 @@ function encodePath(path: string): string {
     return path.replace(/^\/+/, "").split("/").map(encodeURIComponent).join("/");
 }
 
+// 已解析的最新 commit：@main 的 CDN 缓存可能滞后数小时，@commit 则永远精确。
+// 每次拉目录时先问 GitHub 拿 main 的最新 commit 号，之后所有文件都按 commit 定位。
+let _resolvedRef: { key: string; sha: string } | null = null;
+
+function sourceKey(source: ResourceHubSource): string {
+    return `${source.owner}/${source.repo}@${source.branch}`;
+}
+
+function effectiveRef(source: ResourceHubSource): string {
+    return _resolvedRef?.key === sourceKey(source) ? _resolvedRef.sha : source.branch;
+}
+
+async function resolveLatestSha(source: ResourceHubSource): Promise<string | null> {
+    try {
+        const res = await fetchWithTimeout(
+            `https://api.github.com/repos/${source.owner}/${source.repo}/commits/${encodeURIComponent(source.branch)}`,
+            { headers: { Accept: "application/vnd.github.sha" } },
+        );
+        if (res.ok) {
+            const sha = (await res.text()).trim();
+            if (/^[0-9a-f]{40}$/i.test(sha)) return sha;
+        }
+    } catch { /* 拿不到就退回分支名 */ }
+    return null;
+}
+
 function buildMirrorUrls(source: ResourceHubSource, path: string): string[] {
-    const { owner, repo, branch } = source;
+    const { owner, repo } = source;
+    const ref = effectiveRef(source);
     const clean = encodePath(path);
     return [
-        `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${branch}/${clean}`,
-        `https://fastly.jsdelivr.net/gh/${owner}/${repo}@${branch}/${clean}`,
-        `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${clean}`,
+        `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${ref}/${clean}`,
+        `https://fastly.jsdelivr.net/gh/${owner}/${repo}@${ref}/${clean}`,
+        `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${clean}`,
     ];
 }
 
-async function fetchWithTimeout(url: string): Promise<Response> {
+async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-        return await fetch(url, { signal: controller.signal, cache: "no-cache" });
+        return await fetch(url, { ...init, signal: controller.signal, cache: "no-cache" });
     } finally {
         clearTimeout(timer);
     }
@@ -230,6 +257,9 @@ export function purgeShareIndexCache(source: ResourceHubSource): void {
 }
 
 export async function fetchShareIndex(source: ResourceHubSource): Promise<ShareIndex> {
+    // 先解析最新 commit，命中后本次会话的所有文件都按 commit 定位（免疫 CDN 缓存滞后）
+    const sha = await resolveLatestSha(source);
+    _resolvedRef = sha ? { key: sourceKey(source), sha } : null;
     try {
         const text = await fetchResourceHubText(source, "_index.json");
         return stripHiddenFolders(normalizeIndex(JSON.parse(text)));
