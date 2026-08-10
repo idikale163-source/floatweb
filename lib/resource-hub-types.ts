@@ -23,6 +23,8 @@ export type ShareIndexEntry = {
     images: string[];
     /** 说明摘要（来自 说明.txt / README.md） */
     description: string;
+    /** 投稿人（来自 .author 文件，可为空） */
+    author?: string;
     /** 最近更新时间（ISO），索引生成时来自 git log */
     updatedAt: string | null;
 };

@@ -190,6 +190,10 @@ export async function uploadViaToken(token: string, source: ResourceHubSource, p
     }
     // 删除凭证哈希写进资源文件夹，凭证本体只留在本机
     toWrite.push({ name: ".owner", contentBase64: btoa(await sha256Hex(ownerKey)) });
+    // 投稿人写进 .author，索引带上后详情页展示
+    if (payload.author.trim()) {
+        toWrite.push({ name: ".author", contentBase64: btoa(unescape(encodeURIComponent(payload.author.trim()))) });
+    }
 
     // 有写权限（仓库主/协作者）→ 直接提交默认分支，立即上架
     const repoInfo = await gh<{ permissions?: { push?: boolean } }>(token, "GET", `/repos/${owner}/${repo}`);

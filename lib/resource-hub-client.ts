@@ -155,6 +155,7 @@ function normalizeIndex(raw: unknown): ShareIndex {
             files: Array.isArray(item.files) ? item.files.filter((v): v is string => typeof v === "string") : [],
             images: Array.isArray(item.images) ? item.images.filter((v): v is string => typeof v === "string") : [],
             description: typeof item.description === "string" ? item.description : "",
+            author: typeof item.author === "string" ? item.author : "",
             updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : null,
         });
     }

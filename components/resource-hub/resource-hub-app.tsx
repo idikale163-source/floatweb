@@ -75,9 +75,11 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [showConstructionNotice, setShowConstructionNotice] = useState(true);
     const [showSourceEditor, setShowSourceEditor] = useState(false);
     const [sourceDraft, setSourceDraft] = useState<ResourceHubSource>(source);
-    // 上传
+    // 上传（分类下拉：CUSTOM_FOLDER 表示自定义新分类，配合手动输入框）
+    const CUSTOM_FOLDER = "__custom__";
     const [showUpload, setShowUpload] = useState(false);
     const [uploadFolder, setUploadFolder] = useState("");
+    const [uploadFolderCustom, setUploadFolderCustom] = useState("");
     const [uploadName, setUploadName] = useState("");
     const [uploadAuthor, setUploadAuthor] = useState("");
     const [uploadDesc, setUploadDesc] = useState("");
@@ -85,14 +87,18 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [uploadImages, setUploadImages] = useState<File[]>([]);
     const [uploading, setUploading] = useState(false);
     const [uploadCfg, setUploadCfg] = useState<ResourceHubUploadConfig>(() => loadUploadConfig());
-    // 排版编辑器：贴纸选择器（标题/正文两处）、颜色面板、实时预览
+    // 排版编辑器：贴纸选择器（标题/正文两处）、颜色面板；预览在有标记时自动显示
     const [stickerPickerFor, setStickerPickerFor] = useState<"title" | "desc" | null>(null);
     const [showColorPicker, setShowColorPicker] = useState(false);
-    const [showDescPreview, setShowDescPreview] = useState(false);
     const uploadNameRef = useRef<HTMLInputElement | null>(null);
     const uploadDescRef = useRef<HTMLTextAreaElement | null>(null);
 
     // 在光标处插入标记 / 用标记包住选中文字，随后恢复焦点
+    const showToast = useCallback((msg: string) => {
+        setToast(msg);
+        window.setTimeout(() => setToast(current => (current === msg ? null : current)), 2600);
+    }, []);
+
     const applyMarkup = useCallback((
         ref: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null>,
         setter: (value: string) => void,
@@ -111,6 +117,19 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             el.setSelectionRange(pos, pos);
         });
     }, []);
+
+    // 颜色/字号/加粗都是"选中文字再操作"：没选中就提示，不产生空标记
+    const wrapDescTag = useCallback((tag: string) => {
+        const el = uploadDescRef.current;
+        if (!el || (el.selectionStart ?? 0) === (el.selectionEnd ?? 0)) {
+            showToast("先选中要排版的文字，再点按钮");
+            return;
+        }
+        applyMarkup(uploadDescRef, setUploadDesc, `[${tag}]`, `[/${tag}]`);
+    }, [applyMarkup, showToast]);
+
+    // 工具栏按钮按下时不抢走输入框焦点，选区才能保住（iOS 上尤其关键）
+    const keepSelection = useCallback((e: React.PointerEvent) => e.preventDefault(), []);
 
     const reload = useCallback((activeSource: ResourceHubSource, options?: { purge?: boolean }) => {
         setLoadState("loading");
@@ -179,11 +198,6 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             name: contact.nickname || characters.find(c => c.id === contact.characterId)?.name || "未知角色",
         }));
     }, [pickCharacterFor]);
-
-    const showToast = useCallback((msg: string) => {
-        setToast(msg);
-        window.setTimeout(() => setToast(current => (current === msg ? null : current)), 2600);
-    }, []);
 
     // 手动送花（详情页按钮）。自动送花复用同一函数。
     const handleSendFlower = useCallback(async (entryPath: string, silent = false) => {
@@ -261,7 +275,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     }, [onNotice]);
 
     const handleUploadSubmit = useCallback(async () => {
-        const folder = uploadFolder.trim();
+        const folder = (uploadFolder === CUSTOM_FOLDER ? uploadFolderCustom : uploadFolder).trim();
         const name = uploadName.trim();
         if (!folder || !name) { onNotice?.("请填写分类和资源名称"); return; }
         if (uploadFiles.length === 0) { onNotice?.("请选择至少一个资源文件"); return; }
@@ -275,7 +289,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 files,
             });
             setShowUpload(false);
-            setUploadName(""); setUploadDesc(""); setUploadFiles([]); setUploadImages([]);
+            setUploadName(""); setUploadDesc(""); setUploadFiles([]); setUploadImages([]); setUploadFolderCustom("");
             onNotice?.(result.merged
                 ? `「${name}」已上架（CDN 缓存刷新后可见）`
                 : `「${name}」已提交，等待管理员审核上架`);
@@ -284,13 +298,13 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         } finally {
             setUploading(false);
         }
-    }, [onNotice, source, uploadAuthor, uploadDesc, uploadFiles, uploadFolder, uploadImages, uploadName]);
+    }, [onNotice, source, uploadAuthor, uploadDesc, uploadFiles, uploadFolder, uploadFolderCustom, uploadImages, uploadName]);
 
     // 贴纸/颜色选择面板（上传弹窗的排版工具栏用）
     const stickerPanel = (
         <div className="rh-sticker-panel">
             {STICKER_NAMES.map(name => (
-                <button key={name} type="button" className="rh-sticker-btn" title={name} onClick={() => {
+                <button key={name} type="button" className="rh-sticker-btn" title={name} onPointerDown={keepSelection} onClick={() => {
                     if (stickerPickerFor === "title") applyMarkup(uploadNameRef, setUploadName, `[${name}]`);
                     else applyMarkup(uploadDescRef, setUploadDesc, `[${name}]`);
                     setStickerPickerFor(null);
@@ -303,11 +317,17 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const colorPanel = (
         <div className="rh-color-panel">
             {Object.entries(RICH_COLORS).map(([name, hex]) => (
-                <button key={name} type="button" className="rh-color-chip" style={{ background: hex }} title={name}
-                    onClick={() => { applyMarkup(uploadDescRef, setUploadDesc, `[${name}]`, `[/${name}]`); setShowColorPicker(false); }} />
+                <button key={name} type="button" className="rh-color-chip" style={{ background: hex }} title={name} onPointerDown={keepSelection}
+                    onClick={() => { wrapDescTag(name); setShowColorPicker(false); }} />
             ))}
         </div>
     );
+
+    // 详情页署名行：投稿人（填了才有）+ 更新日期
+    const detailByline = activeEntry
+        ? [activeEntry.author?.trim() ? `投稿人：${activeEntry.author.trim()}` : "", formatEntryDate(activeEntry.updatedAt)]
+            .filter(Boolean).join("　·　")
+        : "";
 
     const title = activeEntry ? activeEntry.name : activeFolder ? activeFolder : "资源集市";
     const handleBack = activeEntry
@@ -464,7 +484,11 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         <div className="rh-detail2">
                             <div className="rh-detail2-main">
                                 {/* 发帖式排版：标题 → 正文 → 图片（标记语法经 RichText 安全渲染） */}
-                                <div className="rh-detail2-title"><RichText text={activeEntry.name} mode="sticker" /></div>
+                                <div className="rh-detail2-title" data-solo={detailByline ? undefined : "1"}>
+                                    <RichText text={activeEntry.name} mode="sticker" />
+                                </div>
+                                {/* 投稿人（上传时填了才显示）+ 更新日期 */}
+                                {detailByline && <div className="rh-detail2-byline">{detailByline}</div>}
                                 {activeEntry.description
                                     ? <div className="rh-detail2-desc"><RichText text={activeEntry.description} mode="full" /></div>
                                     : <div className="rh-detail2-desc rh-detail2-desc-empty">（该资源没有说明文字）</div>}
@@ -641,12 +665,18 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                             </span>
                         </div>
                         <div className="rh-dialog-body rh-form">
-                            <label>分类（已有分类名或新分类名）
-                                <input className="rh-input" list="rh-folder-options" value={uploadFolder} placeholder="例如：角色卡" onChange={e => setUploadFolder(e.target.value)} />
-                                <datalist id="rh-folder-options">
-                                    {(index?.folders ?? []).map(f => <option key={f.name} value={f.name} />)}
-                                </datalist>
+                            <label>分类
+                                <select className="rh-input" value={uploadFolder} onChange={e => setUploadFolder(e.target.value)}>
+                                    <option value="">请选择分类...</option>
+                                    {(index?.folders ?? []).map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
+                                    <option value={CUSTOM_FOLDER}>＋ 自定义新分类</option>
+                                </select>
                             </label>
+                            {uploadFolder === CUSTOM_FOLDER && (
+                                <label>新分类名
+                                    <input className="rh-input" value={uploadFolderCustom} placeholder="例如：表情包" onChange={e => setUploadFolderCustom(e.target.value)} />
+                                </label>
+                            )}
                             <div className="rh-form-field">
                                 <span>资源名称（可加像素贴纸）</span>
                                 <div className="rh-input-row">
@@ -660,25 +690,27 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 <input className="rh-input" value={uploadAuthor} onChange={e => setUploadAuthor(e.target.value)} />
                             </label>
                             <div className="rh-form-field">
-                                <span>说明文字（可选，会显示在列表里，支持贴纸与排版）</span>
+                                <span>说明文字（可选，会显示在列表里。选中文字后点按钮排版）</span>
                                 <div className="rh-fmt-bar">
-                                    <button type="button" className="rh-fmt-btn" data-active={stickerPickerFor === "desc" ? "1" : undefined}
+                                    <button type="button" className="rh-fmt-btn" data-active={stickerPickerFor === "desc" ? "1" : undefined} onPointerDown={keepSelection}
                                         onClick={() => { setStickerPickerFor(current => current === "desc" ? null : "desc"); setShowColorPicker(false); }}>贴纸</button>
-                                    <button type="button" className="rh-fmt-btn" data-active={showColorPicker ? "1" : undefined}
+                                    <button type="button" className="rh-fmt-btn" data-active={showColorPicker ? "1" : undefined} onPointerDown={keepSelection}
                                         onClick={() => { setShowColorPicker(v => !v); setStickerPickerFor(null); }}>颜色</button>
-                                    <button type="button" className="rh-fmt-btn" onClick={() => applyMarkup(uploadDescRef, setUploadDesc, "[大]", "[/大]")}>大</button>
-                                    <button type="button" className="rh-fmt-btn" onClick={() => applyMarkup(uploadDescRef, setUploadDesc, "[小]", "[/小]")}>小</button>
-                                    <button type="button" className="rh-fmt-btn rh-fmt-bold" onClick={() => applyMarkup(uploadDescRef, setUploadDesc, "[粗]", "[/粗]")}>粗</button>
-                                    <button type="button" className="rh-fmt-btn" data-active={showDescPreview ? "1" : undefined}
-                                        onClick={() => setShowDescPreview(v => !v)}>预览</button>
+                                    <button type="button" className="rh-fmt-btn" onPointerDown={keepSelection} onClick={() => wrapDescTag("大")}>大</button>
+                                    <button type="button" className="rh-fmt-btn" onPointerDown={keepSelection} onClick={() => wrapDescTag("小")}>小</button>
+                                    <button type="button" className="rh-fmt-btn rh-fmt-bold" onPointerDown={keepSelection} onClick={() => wrapDescTag("粗")}>粗</button>
                                 </div>
                                 {stickerPickerFor === "desc" && stickerPanel}
                                 {showColorPicker && colorPanel}
                                 <textarea ref={uploadDescRef} className="rh-input" rows={3} value={uploadDesc} onChange={e => setUploadDesc(e.target.value)} />
-                                {showDescPreview && (
+                                {/* 用了标记才出现的实时预览，纯文字用户不被打扰 */}
+                                {(uploadName + uploadDesc).includes("[") && (
                                     <div className="rh-desc-preview">
-                                        <div className="rh-preview-title"><RichText text={uploadName || "（标题预览）"} mode="sticker" /></div>
-                                        <RichText text={uploadDesc || "（正文预览）"} mode="full" />
+                                        <div className="rh-preview-label">效果预览</div>
+                                        {uploadName.includes("[") && (
+                                            <div className="rh-preview-title"><RichText text={uploadName} mode="sticker" /></div>
+                                        )}
+                                        {uploadDesc && <RichText text={uploadDesc} mode="full" />}
                                     </div>
                                 )}
                             </div>
@@ -1009,6 +1041,17 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     color: #000;
                     line-height: 1.4;
                     word-break: break-all;
+                }
+                /* 标题下的署名行（投稿人 · 日期），兼当标题与正文的分隔 */
+                .rh-detail2-byline {
+                    margin-top: -6px;
+                    padding-bottom: 8px;
+                    border-bottom: 1px solid #d4d0c8;
+                    font-size: calc(11px * var(--app-text-scale, 1));
+                    color: #606060;
+                }
+                /* 没有署名行时，分隔线回到标题下面 */
+                .rh-detail2-title[data-solo] {
                     padding-bottom: 8px;
                     border-bottom: 1px solid #d4d0c8;
                 }
@@ -1265,6 +1308,11 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     white-space: pre-wrap;
                     color: #000;
                 }
+                .rh-preview-label {
+                    font-size: calc(10px * var(--app-text-scale, 1));
+                    color: #808080;
+                    margin-bottom: 5px;
+                }
                 .rh-preview-title {
                     font-weight: 700;
                     font-size: calc(14px * var(--app-text-scale, 1));
@@ -1280,6 +1328,18 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     font-size: calc(13px * var(--app-text-scale, 1));
                     color: #000;
                     outline: none;
+                }
+                /* 分类下拉：Win98 风格，去掉系统原生外观 */
+                select.rh-input {
+                    appearance: none;
+                    -webkit-appearance: none;
+                    background-color: #fff;
+                    background-image: linear-gradient(45deg, transparent 50%, #000 50%), linear-gradient(135deg, #000 50%, transparent 50%);
+                    background-position: calc(100% - 13px) center, calc(100% - 8px) center;
+                    background-size: 5px 5px, 5px 5px;
+                    background-repeat: no-repeat;
+                    padding-right: 26px;
+                    border-radius: 0;
                 }
                 .rh-form-hint { font-size: calc(10px * var(--app-text-scale, 1)); color: #606060; line-height: 1.6; }
                 .rh-file-picker { cursor: pointer; }
