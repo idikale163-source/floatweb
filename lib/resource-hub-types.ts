@@ -51,6 +51,6 @@ export type ResourceHubSource = {
 
 export const RESOURCE_HUB_DEFAULT_SOURCE: ResourceHubSource = {
     owner: "xiaolongbao0709",
-    repo: "ai-phone-resource-hub",
+    repo: "share",
     branch: "main",
 };
