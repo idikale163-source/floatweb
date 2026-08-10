@@ -30,6 +30,7 @@ import {
     uploadResource,
     type ResourceHubUploadConfig,
 } from "@/lib/resource-hub-upload";
+import { DestPixelIcon } from "@/components/resource-hub/pixel-icons";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -320,7 +321,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         <div className="rh-dialog-body rh-dest-grid">
                             {IMPORT_DESTINATIONS.map(dest => (
                                 <button key={dest.key} className="rh-dest-tile" title={dest.hint} onClick={() => handlePickDestination(dest.key)}>
-                                    <span className="rh-dest-tile-icon">{dest.icon}</span>
+                                    <DestPixelIcon dest={dest.key} />
                                     <span className="rh-dest-tile-label">{dest.label}</span>
                                 </button>
                             ))}
@@ -736,11 +737,6 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     cursor: pointer;
                 }
                 .rh-dest-tile:active { border-color: #000080; background: #e4ecf7; }
-                .rh-dest-tile-icon {
-                    font-size: 30px;
-                    line-height: 1;
-                    filter: saturate(0.85);
-                }
                 .rh-dest-tile-label {
                     font-size: calc(11px * var(--app-text-scale, 1));
                     color: #000;
