@@ -31,6 +31,7 @@ import {
     type ResourceHubUploadConfig,
 } from "@/lib/resource-hub-upload";
 import { DestPixelIcon, FileTypePixelIcon, fileExtension } from "@/components/resource-hub/pixel-icons";
+import { deleteShareEntry } from "@/lib/resource-hub-review";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -50,6 +51,9 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [activeFolder, setActiveFolder] = useState<string | null>(null);
     const [activeEntry, setActiveEntry] = useState<ShareIndexEntry | null>(null);
     const [selectedFile, setSelectedFile] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [confirmDeleteEntry, setConfirmDeleteEntry] = useState<ShareIndexEntry | null>(null);
+    const [deleting, setDeleting] = useState(false);
     const [busyFile, setBusyFile] = useState<string | null>(null);
     // 导入流程：选文件 → 选目的地 →（聊天室CSS再选角色）
     const [importFile, setImportFile] = useState<string | null>(null);
@@ -87,6 +91,16 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             .filter(e => e.folder === activeFolder)
             .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "") || a.name.localeCompare(b.name, "zh"));
     }, [index, activeFolder]);
+
+    // 关键词搜索：跨全部分类，匹配名称/说明/分类/文件名
+    const searchResults = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q || !index) return null;
+        return index.entries
+            .filter(e => [e.name, e.description, e.folder, ...e.files, ...e.images]
+                .join(" ").toLowerCase().includes(q))
+            .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "") || a.name.localeCompare(b.name, "zh"));
+    }, [index, searchQuery]);
 
     const chatContacts = useMemo(() => {
         if (pickCharacterFor === null) return [];
@@ -137,6 +151,26 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         void runImport(importFile, destination);
     }, [importFile, onNotice, runImport]);
 
+    const handleDeleteEntry = useCallback(async (entry: ShareIndexEntry) => {
+        setDeleting(true);
+        try {
+            await deleteShareEntry(entry.path);
+            setConfirmDeleteEntry(null);
+            setActiveEntry(null);
+            // 乐观更新本地目录，CDN 缓存刷新前列表就正确
+            setIndex(current => current ? {
+                ...current,
+                entries: current.entries.filter(e => e.path !== entry.path),
+                folders: current.folders.map(f => f.name === entry.folder ? { ...f, count: Math.max(0, f.count - 1) } : f),
+            } : current);
+            onNotice?.(`「${entry.name}」已下架`);
+        } catch (err) {
+            onNotice?.(`删除失败：${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setDeleting(false);
+        }
+    }, [onNotice]);
+
     const handleUploadSubmit = useCallback(async () => {
         const folder = uploadFolder.trim();
         const name = uploadName.trim();
@@ -169,6 +203,24 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         : activeFolder
             ? () => setActiveFolder(null)
             : onClose;
+
+    const renderEntryRow = (entry: ShareIndexEntry, showFolder = false) => (
+        <button key={entry.path} className="rh-entry" onClick={() => { setActiveEntry(entry); setSelectedFile(entry.files[0] ?? null); }}>
+            {entry.images.length > 0 ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="rh-entry-thumb" src={resolveResourceHubAssetUrl(source, entry.images[0])} alt="" loading="lazy" />
+            ) : (
+                <span className="rh-entry-thumb rh-entry-thumb-blank">📄</span>
+            )}
+            <span className="rh-entry-main">
+                <span className="rh-entry-title">{entry.name}</span>
+                {entry.description && <span className="rh-entry-desc">{entry.description}</span>}
+                <span className="rh-entry-meta">
+                    {[showFolder ? entry.folder : "", formatEntryDate(entry.updatedAt), `${entry.files.length} 个文件`].filter(Boolean).join(" · ")}
+                </span>
+            </span>
+        </button>
+    );
 
     return (
         <div className="rh-root page-shell">
@@ -205,8 +257,34 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         </div>
                     )}
 
+                    {/* 搜索框（首页与文件夹页显示） */}
+                    {loadState === "ready" && !activeEntry && (
+                        <div className="rh-search-row">
+                            <input
+                                className="rh-input rh-search-input"
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                placeholder="搜索资源名称、说明、文件名..."
+                            />
+                            {searchQuery.trim() && (
+                                <button className="rh-btn" onClick={() => setSearchQuery("")}>清除</button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* 搜索结果（有关键词时替代当前列表） */}
+                    {loadState === "ready" && !activeEntry && searchResults && (
+                        searchResults.length > 0 ? (
+                            <div className="rh-entry-list">
+                                {searchResults.map(entry => renderEntryRow(entry, true))}
+                            </div>
+                        ) : (
+                            <div className="rh-center-hint">没有匹配「{searchQuery.trim()}」的资源</div>
+                        )
+                    )}
+
                     {/* 首页：文件夹（一行两个） */}
-                    {loadState === "ready" && !activeFolder && (
+                    {loadState === "ready" && !activeFolder && !searchResults && (
                         index && index.folders.length > 0 ? (
                             <div className="rh-folder-grid">
                                 {index.folders.map(folder => (
@@ -223,26 +301,10 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     )}
 
                     {/* 文件夹页：论坛式列表 */}
-                    {loadState === "ready" && activeFolder && !activeEntry && (
+                    {loadState === "ready" && activeFolder && !activeEntry && !searchResults && (
                         folderEntries.length > 0 ? (
                             <div className="rh-entry-list">
-                                {folderEntries.map(entry => (
-                                    <button key={entry.path} className="rh-entry" onClick={() => { setActiveEntry(entry); setSelectedFile(entry.files[0] ?? null); }}>
-                                        {entry.images.length > 0 ? (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <img className="rh-entry-thumb" src={resolveResourceHubAssetUrl(source, entry.images[0])} alt="" loading="lazy" />
-                                        ) : (
-                                            <span className="rh-entry-thumb rh-entry-thumb-blank">📄</span>
-                                        )}
-                                        <span className="rh-entry-main">
-                                            <span className="rh-entry-title">{entry.name}</span>
-                                            {entry.description && <span className="rh-entry-desc">{entry.description}</span>}
-                                            <span className="rh-entry-meta">
-                                                {[formatEntryDate(entry.updatedAt), `${entry.files.length} 个文件`].filter(Boolean).join(" · ")}
-                                            </span>
-                                        </span>
-                                    </button>
-                                ))}
+                                {folderEntries.map(entry => renderEntryRow(entry))}
                             </div>
                         ) : (
                             <div className="rh-center-hint">这个文件夹还是空的</div>
@@ -289,6 +351,9 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                         <button className="rh-btn rh-btn-primary rh-action-half" disabled={!selectedFile || busyFile === selectedFile} onClick={() => selectedFile && setImportFile(selectedFile)}>
                                             {busyFile === selectedFile ? "处理中..." : "导入"}
                                         </button>
+                                        {uploadCfg.githubToken.trim() && (
+                                            <button className="rh-btn rh-action-del" onClick={() => setConfirmDeleteEntry(activeEntry)}>删除</button>
+                                        )}
                                     </div>
                                 </>
                             ) : (
@@ -368,6 +433,25 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                             )) : (
                                 <div className="rh-center-hint">还没有聊天联系人，先去聊天里添加角色吧</div>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 删除确认（管理员） */}
+            {confirmDeleteEntry && (
+                <div className="rh-dialog-overlay" onClick={deleting ? undefined : () => setConfirmDeleteEntry(null)}>
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar"><span className="rh-titlebar-text">下架资源</span></div>
+                        <div className="rh-dialog-body">
+                            <span className="rh-dialog-icon">🗑️</span>
+                            确认删除「{confirmDeleteEntry.name}」？将从资源仓库移除其全部文件，此操作对所有用户生效。
+                        </div>
+                        <div className="rh-dialog-footer">
+                            <button className="rh-btn" disabled={deleting} onClick={() => setConfirmDeleteEntry(null)}>取消</button>
+                            <button className="rh-btn rh-action-del" disabled={deleting} onClick={() => void handleDeleteEntry(confirmDeleteEntry)}>
+                                {deleting ? "删除中..." : "确认删除"}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -734,6 +818,13 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     border-top: 1px solid #fff;
                 }
                 .rh-action-half { flex: 1; padding: 8px 0; }
+                .rh-action-del { color: #a01818; font-weight: 700; padding: 8px 10px; }
+                .rh-search-row {
+                    display: flex;
+                    gap: 6px;
+                    padding: 8px 10px 4px;
+                }
+                .rh-search-input { flex: 1; min-width: 0; }
                 .rh-statusbar {
                     display: flex;
                     justify-content: space-between;

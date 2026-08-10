@@ -142,6 +142,17 @@ function normalizeIndex(raw: unknown): ShareIndex {
 
 const IMAGE_RE = /\.(jpe?g|png|webp|gif)$/i;
 const DESC_NAME_RE = /^(说明\.txt|readme\.(md|txt))$/i;
+// 基建目录（上传服务/索引脚本等），不是资源，不进市场。
+// 索引脚本同样会跳过它们；这里再过滤一层，防御旧索引缓存。
+const HIDDEN_FOLDERS = new Set(["netlify", "scripts", "node_modules", ".github", ".git"]);
+
+function stripHiddenFolders(index: ShareIndex): ShareIndex {
+    return {
+        ...index,
+        folders: index.folders.filter(f => !HIDDEN_FOLDERS.has(f.name)),
+        entries: index.entries.filter(e => !HIDDEN_FOLDERS.has(e.folder)),
+    };
+}
 
 /** 兜底：_index.json 不可用时，用 jsDelivr data API 的文件树现场构建索引（无时间与说明）。 */
 async function buildIndexFromTree(source: ResourceHubSource): Promise<ShareIndex> {
@@ -209,10 +220,10 @@ async function buildIndexFromTree(source: ResourceHubSource): Promise<ShareIndex
 export async function fetchShareIndex(source: ResourceHubSource): Promise<ShareIndex> {
     try {
         const text = await fetchResourceHubText(source, "_index.json");
-        return normalizeIndex(JSON.parse(text));
+        return stripHiddenFolders(normalizeIndex(JSON.parse(text)));
     } catch {
         // 索引缺失/坏掉时退化为现场扫树（无时间排序与说明摘要）
-        return buildIndexFromTree(source);
+        return stripHiddenFolders(await buildIndexFromTree(source));
     }
 }
 

@@ -113,6 +113,37 @@ export async function approveShareSubmission(prNumber: number): Promise<void> {
     await gh(token, "PUT", `/repos/${owner}/${repo}/pulls/${prNumber}/merge`, { merge_method: "merge" });
 }
 
+/**
+ * 管理员删除已上架资源（下架）：递归删除该路径下的所有文件并直接提交默认分支。
+ * 需要有仓库写权限的 token；普通用户 token 会被 GitHub 403。
+ */
+export async function deleteShareEntry(entryPath: string): Promise<void> {
+    const { token, owner, repo } = getReviewAuth();
+    const encode = (p: string) => p.split("/").map(encodeURIComponent).join("/");
+
+    const removeFile = async (path: string, sha: string) => {
+        await gh(token, "DELETE", `/repos/${owner}/${repo}/contents/${encode(path)}`, {
+            message: `下架：${path}`,
+            sha,
+        });
+    };
+
+    const removePath = async (path: string): Promise<void> => {
+        const info = await gh<Array<{ path: string; sha: string; type: string }> | { path: string; sha: string; type: string }>(
+            token, "GET", `/repos/${owner}/${repo}/contents/${encode(path)}`);
+        if (Array.isArray(info)) {
+            for (const item of info) {
+                if (item.type === "dir") await removePath(item.path);
+                else await removeFile(item.path, item.sha);
+            }
+        } else {
+            await removeFile(info.path, info.sha);
+        }
+    };
+
+    await removePath(entryPath);
+}
+
 /** 拒绝（关闭 PR，可选留言让投稿人看到理由）。 */
 export async function rejectShareSubmission(prNumber: number, reason?: string): Promise<void> {
     const { token, owner, repo } = getReviewAuth();
