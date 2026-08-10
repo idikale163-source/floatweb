@@ -157,6 +157,7 @@ function normalizeIndex(raw: unknown): ShareIndex {
             description: typeof item.description === "string" ? item.description : "",
             author: typeof item.author === "string" ? item.author : "",
             avatar: typeof item.avatar === "string" ? item.avatar : "",
+            ownerHash: typeof item.ownerHash === "string" ? item.ownerHash.toLowerCase() : "",
             updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : null,
         });
     }

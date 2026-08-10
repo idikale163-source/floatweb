@@ -36,6 +36,14 @@ import {
     type ResourceHubUploadConfig,
 } from "@/lib/resource-hub-upload";
 import { avatarBase64, fileToAvatarDataUrl, loadHubProfile, saveHubProfile, type HubProfile } from "@/lib/resource-hub-profile";
+import {
+    ensureIdentityKey,
+    exportKeyBundle,
+    parseKeyBundle,
+    setIdentityKey,
+    sha256Hex,
+} from "@/lib/resource-hub-identity";
+import { mergeMyUploads } from "@/lib/resource-hub-upload";
 import { DefaultPixelAvatar } from "@/components/resource-hub/pixel-avatar";
 import { DestPixelIcon, FileTypePixelIcon, fileExtension } from "@/components/resource-hub/pixel-icons";
 import { deleteShareEntry } from "@/lib/resource-hub-review";
@@ -77,6 +85,12 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     // 摊主资料（昵称 + 头像，本机存；上传/编辑时头像一并发布）
     const [profile, setProfile] = useState<HubProfile>(() => loadHubProfile());
     const [editingNickname, setEditingNickname] = useState(false);
+    // 摊主钥匙与它的指纹：指纹用来在索引里认领"哪些资源是我发的"。
+    // 钥匙只在这个 effect 里取一次（要等存储加载完），渲染期一律读这份状态。
+    const [identityKey, setIdentityKeyState] = useState("");
+    const [identityHash, setIdentityHash] = useState("");
+    const [showKeyDialog, setShowKeyDialog] = useState(false);
+    const [keyImportText, setKeyImportText] = useState("");
     // 作者编辑已发布资源
     const [editEntry, setEditEntry] = useState<ShareIndexEntry | null>(null);
     const [editRecord, setEditRecord] = useState<MyUploadRecord | null>(null);
@@ -116,9 +130,19 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const uploadNameRef = useRef<RichEditorHandle | null>(null);
     const uploadDescRef = useRef<RichEditorHandle | null>(null);
 
-    /** 这条资源是不是本机发布的（有删除/编辑凭证） */
-    const myRecordFor = useCallback((path: string): MyUploadRecord | null =>
-        loadMyUploads().find(r => r.path === path) ?? null, []);
+    /**
+     * 这条资源是不是我发的：先看本机记录，再看索引里的钥匙指纹是否与本机钥匙吻合。
+     * 后者让换了设备、只导入了钥匙的人也能直接编辑/删除自己的旧发布。
+     */
+    const myRecordFor = useCallback((path: string): MyUploadRecord | null => {
+        const local = loadMyUploads().find(r => r.path === path);
+        if (local) return local;
+        const entry = index?.entries.find(e => e.path === path);
+        if (identityHash && identityKey && entry?.ownerHash && entry.ownerHash === identityHash) {
+            return { path, name: entry.name, ownerKey: identityKey, uploadedAt: entry.updatedAt || "" };
+        }
+        return null;
+    }, [identityHash, identityKey, index]);
 
     const showToast = useCallback((msg: string) => {
         setToast(msg);
@@ -132,6 +156,19 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
 
     // 工具栏按钮按下时不抢走编辑器焦点，选区才能保住（iOS 上尤其关键）
     const keepSelection = useCallback((e: React.PointerEvent) => e.preventDefault(), []);
+
+    // 本机钥匙取一次就够（钥匙不变）。必须等 kv 从 IndexedDB 加载完再判断，
+    // 否则冷启动瞬间会误判成"没有钥匙"而新生成一把，把原来的覆盖掉。
+    useEffect(() => {
+        let cancelled = false;
+        void ensureIdentityKey().then(async key => {
+            if (cancelled) return;
+            setIdentityKeyState(key);
+            const hash = await sha256Hex(key);
+            if (!cancelled) setIdentityHash(hash);
+        });
+        return () => { cancelled = true; };
+    }, []);
 
     // 编辑弹窗打开时把现有标题/正文灌进所见即所得编辑器（编辑器是非受控的）
     useEffect(() => {
@@ -190,14 +227,24 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         const records = loadMyUploads();
         const published: ShareIndexEntry[] = [];
         const pending: { name: string; uploadedAt: string }[] = [];
+        const claimed = new Set<string>();
         for (const record of records) {
             const entry = index?.entries.find(e => e.path === record.path);
-            if (entry) published.push(entry);
+            if (entry) { published.push(entry); claimed.add(entry.path); }
             else pending.push({ name: record.name, uploadedAt: record.uploadedAt });
+        }
+        // 换设备后本机没有记录，但索引里的钥匙指纹对得上，一样是我的摊位
+        if (identityHash) {
+            for (const entry of index?.entries ?? []) {
+                if (!claimed.has(entry.path) && entry.ownerHash && entry.ownerHash === identityHash) {
+                    published.push(entry);
+                    claimed.add(entry.path);
+                }
+            }
         }
         return { published, pending };
         // index 变化或切到货摊时重算
-    }, [index, viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [index, viewMode, identityHash]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const chatContacts = useMemo(() => {
         if (pickCharacterFor === null) return [];
@@ -529,6 +576,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                             <span>收到 <b>{flowerCounts
                                                 ? myStall.published.reduce((sum, e) => sum + (flowerCounts[e.path] ?? 0), 0)
                                                 : "…"}</b> 🌸</span>
+                                            <button className="rh-key-link" onClick={() => { setKeyImportText(""); setShowKeyDialog(true); }}>🔑 摊主钥匙</button>
                                         </div>
                                     </div>
                                 </div>
@@ -580,6 +628,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                             <span>已发布 <b>0</b></span>
                                             <span>待审核 <b>0</b></span>
                                             <span>收到 <b>0</b> 🌸</span>
+                                            <button className="rh-key-link" onClick={() => { setKeyImportText(""); setShowKeyDialog(true); }}>🔑 摊主钥匙</button>
                                         </div>
                                     </div>
                                 </div>
@@ -843,6 +892,64 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                             <button className="rh-btn rh-action-del" disabled={deleting} onClick={() => void handleDeleteEntry(confirmDeleteEntry)}>
                                 {deleting ? <><PixelHourglass size={13} /> 删除中…</> : "确认删除"}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 摊主钥匙：换设备时带走它，就能继续管理自己的发布 */}
+            {showKeyDialog && (
+                <div className="rh-dialog-overlay" onClick={() => setShowKeyDialog(false)}>
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar">
+                            <span className="rh-titlebar-text">摊主钥匙</span>
+                            <span className="rh-titlebar-controls">
+                                <button className="rh-tb-btn" onClick={() => setShowKeyDialog(false)}>✕</button>
+                            </span>
+                        </div>
+                        <div className="rh-dialog-body rh-form">
+                            <div className="rh-key-warning">
+                                🔑 这串码就是你对自己所有发布的所有权证明。<b>换手机/重装前请存好</b>，
+                                在新设备粘贴它，货摊和编辑权限就都回来了。<b>不要发给任何人</b>——
+                                拿到的人能改能删你的全部资源。
+                            </div>
+                            <div className="rh-form-field">
+                                <span>我的钥匙（长按可复制）</span>
+                                <textarea className="rh-input rh-key-text" readOnly rows={3} value={exportKeyBundle(identityKey)}
+                                    onFocus={e => e.currentTarget.select()} />
+                            </div>
+                            <button className="rh-btn" onClick={async () => {
+                                try {
+                                    await navigator.clipboard.writeText(exportKeyBundle(identityKey));
+                                    showToast("钥匙已复制，找个安全地方存好");
+                                } catch {
+                                    showToast("复制失败，请长按上面的文字手动复制");
+                                }
+                            }}>复制钥匙</button>
+                            <div className="rh-form-field">
+                                <span>在新设备上：粘贴钥匙并导入</span>
+                                <textarea className="rh-input rh-key-text" rows={3} value={keyImportText}
+                                    placeholder="粘贴从旧设备复制的钥匙…"
+                                    onChange={e => setKeyImportText(e.target.value)} />
+                            </div>
+                            <button className="rh-btn rh-btn-primary" disabled={!keyImportText.trim()} onClick={() => {
+                                try {
+                                    const parsed = parseKeyBundle(keyImportText);
+                                    setIdentityKey(parsed.identity);
+                                    setIdentityKeyState(parsed.identity);
+                                    if (parsed.legacy.length) mergeMyUploads(parsed.legacy);
+                                    void sha256Hex(parsed.identity).then(setIdentityHash);
+                                    setShowKeyDialog(false);
+                                    setKeyImportText("");
+                                    onNotice?.("钥匙已导入，你的发布正在认领回来");
+                                } catch (err) {
+                                    showToast(err instanceof Error ? err.message : "导入失败");
+                                }
+                            }}>导入钥匙</button>
+                            <div className="rh-form-hint">
+                                导入后本机原来的钥匙会被替换。如果两台设备都发过资源，
+                                请先在另一台导出、这里导入，两边的发布才会合并到一把钥匙下管理。
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1394,6 +1501,30 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     color: #404040;
                 }
                 .rh-profile-stats b { color: #000; font-size: calc(13px * var(--app-text-scale, 1)); }
+                /* 摊主钥匙 */
+                .rh-key-link {
+                    background: none;
+                    border: none;
+                    padding: 0;
+                    font-size: calc(11px * var(--app-text-scale, 1));
+                    color: #000080;
+                    text-decoration: underline;
+                    cursor: pointer;
+                }
+                .rh-key-warning {
+                    background: #ffffe1;
+                    border: 1px solid #808080;
+                    padding: 8px;
+                    font-size: calc(11px * var(--app-text-scale, 1));
+                    line-height: 1.7;
+                    color: #000;
+                }
+                .rh-key-text {
+                    font-family: Consolas, "Courier New", monospace;
+                    font-size: calc(10px * var(--app-text-scale, 1));
+                    word-break: break-all;
+                    resize: none;
+                }
                 /* 编辑弹窗的文件清单 */
                 .rh-edit-files { display: flex; flex-direction: column; gap: 3px; }
                 .rh-edit-file {

@@ -27,6 +27,8 @@ export type ShareIndexEntry = {
     author?: string;
     /** 投稿人头像的仓库路径（.avatar.png，可为空） */
     avatar?: string;
+    /** 发布者钥匙的 SHA-256 指纹（.owner 内容），用于换设备认领 */
+    ownerHash?: string;
     /** 最近更新时间（ISO），索引生成时来自 git log */
     updatedAt: string | null;
 };
