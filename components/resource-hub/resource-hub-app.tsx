@@ -118,7 +118,6 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     // 导入流程：选文件 → 选目的地 →（聊天室CSS再选角色）
     const [importFile, setImportFile] = useState<string | null>(null);
     const [pickCharacterFor, setPickCharacterFor] = useState<string | null>(null);
-    const [showConstructionNotice, setShowConstructionNotice] = useState(true);
     const [showSourceEditor, setShowSourceEditor] = useState(false);
     const [sourceDraft, setSourceDraft] = useState<ResourceHubSource>(source);
     // 上传（分类下拉：CUSTOM_FOLDER 表示自定义新分类，配合手动输入框）
@@ -833,23 +832,6 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     <span>资源仓库：{source.owner}/{source.repo}</span>
                 </div>
             </div>
-
-            {/* 施工提示（正式开张后移除） */}
-            {showConstructionNotice && (
-                <div className="rh-dialog-overlay">
-                    <div className="rh-dialog">
-                        <div className="rh-titlebar"><span className="rh-titlebar-text">系统提示</span></div>
-                        <div className="rh-dialog-body">
-                            <span className="rh-dialog-icon">🚧</span>
-                            此app正在施工，请先去别的地方逛逛吧～
-                        </div>
-                        <div className="rh-dialog-footer">
-                            <button className="rh-btn" onClick={() => setShowConstructionNotice(false)}>仍要看看</button>
-                            <button className="rh-btn rh-btn-primary" onClick={onClose}>返回桌面</button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* 导入目的地选择 */}
             {importFile && (
