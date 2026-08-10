@@ -4,7 +4,7 @@
 // 首页自动显示仓库根目录的文件夹（仿文件管理器），文件夹页为古早论坛式列表，
 // 资源可下载或导入（导入时选择目的地）。整体为复古 Windows 风格。
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadCharacters } from "@/lib/character-storage";
 import { loadChatContacts } from "@/lib/chat-storage";
 import {
@@ -36,6 +36,9 @@ import {
 import { DestPixelIcon, FileTypePixelIcon, fileExtension } from "@/components/resource-hub/pixel-icons";
 import { deleteShareEntry } from "@/lib/resource-hub-review";
 import { MediaPreviewOverlay } from "@/components/chat/media-preview-overlay";
+import { fetchFlowerCounts, hasSentFlowerToday, sendFlower, type FlowerCounts } from "@/lib/resource-hub-flowers";
+import { STICKER_NAMES, StickerPixelIcon } from "@/components/resource-hub/pixel-stickers";
+import { RICH_COLORS, RichText } from "@/components/resource-hub/rich-text";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -62,6 +65,9 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [viewMode, setViewMode] = useState<"market" | "mine">("market");
     // 图片全屏预览（点开可保存）
     const [previewImage, setPreviewImage] = useState<string | null>(null);
+    // 送花：各资源花数（我的货摊展示用）+ 非阻塞小提示
+    const [flowerCounts, setFlowerCounts] = useState<FlowerCounts | null>(null);
+    const [toast, setToast] = useState<string | null>(null);
     const [busyFile, setBusyFile] = useState<string | null>(null);
     // 导入流程：选文件 → 选目的地 →（聊天室CSS再选角色）
     const [importFile, setImportFile] = useState<string | null>(null);
@@ -79,6 +85,32 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [uploadImages, setUploadImages] = useState<File[]>([]);
     const [uploading, setUploading] = useState(false);
     const [uploadCfg, setUploadCfg] = useState<ResourceHubUploadConfig>(() => loadUploadConfig());
+    // 排版编辑器：贴纸选择器（标题/正文两处）、颜色面板、实时预览
+    const [stickerPickerFor, setStickerPickerFor] = useState<"title" | "desc" | null>(null);
+    const [showColorPicker, setShowColorPicker] = useState(false);
+    const [showDescPreview, setShowDescPreview] = useState(false);
+    const uploadNameRef = useRef<HTMLInputElement | null>(null);
+    const uploadDescRef = useRef<HTMLTextAreaElement | null>(null);
+
+    // 在光标处插入标记 / 用标记包住选中文字，随后恢复焦点
+    const applyMarkup = useCallback((
+        ref: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null>,
+        setter: (value: string) => void,
+        before: string,
+        after = "",
+    ) => {
+        const el = ref.current;
+        if (!el) return;
+        const start = el.selectionStart ?? el.value.length;
+        const end = el.selectionEnd ?? start;
+        const next = el.value.slice(0, start) + before + el.value.slice(start, end) + after + el.value.slice(end);
+        setter(next);
+        requestAnimationFrame(() => {
+            el.focus();
+            const pos = start + before.length + (end - start) + after.length;
+            el.setSelectionRange(pos, pos);
+        });
+    }, []);
 
     const reload = useCallback((activeSource: ResourceHubSource, options?: { purge?: boolean }) => {
         setLoadState("loading");
@@ -99,6 +131,14 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     }, []);
 
     useEffect(() => { reload(source); }, [reload, source]);
+
+    // 切到我的货摊时拉取花数（仅作者本人可见的统计）
+    useEffect(() => {
+        if (viewMode !== "mine") return;
+        let cancelled = false;
+        void fetchFlowerCounts(source).then(counts => { if (!cancelled) setFlowerCounts(counts); });
+        return () => { cancelled = true; };
+    }, [viewMode, source, index]);
 
     const folderEntries = useMemo(() => {
         if (!index || !activeFolder) return [];
@@ -140,16 +180,30 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         }));
     }, [pickCharacterFor]);
 
+    const showToast = useCallback((msg: string) => {
+        setToast(msg);
+        window.setTimeout(() => setToast(current => (current === msg ? null : current)), 2600);
+    }, []);
+
+    // 手动送花（详情页按钮）。自动送花复用同一函数。
+    const handleSendFlower = useCallback(async (entryPath: string, silent = false) => {
+        const sent = await sendFlower(loadUploadConfig().endpoint, entryPath);
+        if (sent) showToast("已送出一朵花 🌸");
+        else if (!silent) showToast("今天已经给它送过花啦");
+    }, [showToast]);
+
     const handleDownload = useCallback(async (path: string) => {
         setBusyFile(path);
         try {
             await downloadResourceHubFile(source, path);
+            // 下载成功默认送出一朵花（今天送过则静默跳过，失败不影响下载）
+            if (activeEntry) void handleSendFlower(activeEntry.path, true);
         } catch (err) {
             onNotice?.(`下载失败：${err instanceof Error ? err.message : String(err)}`);
         } finally {
             setBusyFile(null);
         }
-    }, [onNotice, source]);
+    }, [activeEntry, handleSendFlower, onNotice, source]);
 
     const runImport = useCallback(async (path: string, destination: ImportDestination, contactId?: string) => {
         setImportFile(null);
@@ -232,6 +286,29 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         }
     }, [onNotice, source, uploadAuthor, uploadDesc, uploadFiles, uploadFolder, uploadImages, uploadName]);
 
+    // 贴纸/颜色选择面板（上传弹窗的排版工具栏用）
+    const stickerPanel = (
+        <div className="rh-sticker-panel">
+            {STICKER_NAMES.map(name => (
+                <button key={name} type="button" className="rh-sticker-btn" title={name} onClick={() => {
+                    if (stickerPickerFor === "title") applyMarkup(uploadNameRef, setUploadName, `[${name}]`);
+                    else applyMarkup(uploadDescRef, setUploadDesc, `[${name}]`);
+                    setStickerPickerFor(null);
+                }}>
+                    <StickerPixelIcon name={name} size={24} />
+                </button>
+            ))}
+        </div>
+    );
+    const colorPanel = (
+        <div className="rh-color-panel">
+            {Object.entries(RICH_COLORS).map(([name, hex]) => (
+                <button key={name} type="button" className="rh-color-chip" style={{ background: hex }} title={name}
+                    onClick={() => { applyMarkup(uploadDescRef, setUploadDesc, `[${name}]`, `[/${name}]`); setShowColorPicker(false); }} />
+            ))}
+        </div>
+    );
+
     const title = activeEntry ? activeEntry.name : activeFolder ? activeFolder : "资源集市";
     const handleBack = activeEntry
         ? () => setActiveEntry(null)
@@ -239,7 +316,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             ? () => setActiveFolder(null)
             : onClose;
 
-    const renderEntryRow = (entry: ShareIndexEntry, showFolder = false) => (
+    const renderEntryRow = (entry: ShareIndexEntry, showFolder = false, flowers?: number) => (
         <button key={entry.path} className="rh-entry" onClick={() => { setActiveEntry(entry); setSelectedFile(entry.files[0] ?? null); }}>
             {entry.images.length > 0 ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -248,10 +325,11 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 <span className="rh-entry-thumb rh-entry-thumb-blank">📄</span>
             )}
             <span className="rh-entry-main">
-                <span className="rh-entry-title">{entry.name}</span>
-                {entry.description && <span className="rh-entry-desc">{entry.description}</span>}
+                <span className="rh-entry-title"><RichText text={entry.name} mode="sticker" /></span>
+                {entry.description && <span className="rh-entry-desc"><RichText text={entry.description} mode="inline" /></span>}
                 <span className="rh-entry-meta">
-                    {[showFolder ? entry.folder : "", formatEntryDate(entry.updatedAt), `${entry.files.length} 个文件`].filter(Boolean).join(" · ")}
+                    {[showFolder ? entry.folder : "", formatEntryDate(entry.updatedAt), `${entry.files.length} 个文件`,
+                        flowers !== undefined ? `🌸 ${flowers}` : ""].filter(Boolean).join(" · ")}
                 </span>
             </span>
         </button>
@@ -263,7 +341,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             <div className="rh-window">
                 <div className="rh-titlebar">
                     <span className="rh-titlebar-icon">🗂️</span>
-                    <span className="rh-titlebar-text">{title} - 资源集市</span>
+                    <span className="rh-titlebar-text"><RichText text={title} mode="sticker" /> - 资源集市</span>
                     <span className="rh-titlebar-controls">
                         <button className="rh-tb-btn" aria-label="资源仓库设置" onClick={() => { setSourceDraft(source); setShowSourceEditor(true); }}>⚙</button>
                         <button className="rh-tb-btn" aria-label="刷新" onClick={() => reload(source, { purge: true })}>⟳</button>
@@ -306,12 +384,17 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     {loadState === "ready" && viewMode === "mine" && !activeEntry && (
                         (myStall.published.length > 0 || myStall.pending.length > 0) ? (
                             <div className="rh-entry-list">
-                                {myStall.published.map(entry => renderEntryRow(entry, true))}
+                                {myStall.published.length > 0 && (
+                                    <div className="rh-stall-flowers">
+                                        🌸 共收到 {myStall.published.reduce((sum, e) => sum + (flowerCounts?.[e.path] ?? 0), 0)} 朵花
+                                    </div>
+                                )}
+                                {myStall.published.map(entry => renderEntryRow(entry, true, flowerCounts?.[entry.path] ?? 0))}
                                 {myStall.pending.map(item => (
                                     <div key={item.name + item.uploadedAt} className="rh-entry rh-entry-pending">
                                         <span className="rh-entry-thumb rh-entry-thumb-blank">⏳</span>
                                         <span className="rh-entry-main">
-                                            <span className="rh-entry-title">{item.name}</span>
+                                            <span className="rh-entry-title"><RichText text={item.name} mode="sticker" /></span>
                                             <span className="rh-entry-meta">待管理员审核，或索引尚未更新</span>
                                         </span>
                                     </div>
@@ -380,10 +463,10 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     {loadState === "ready" && activeEntry && (
                         <div className="rh-detail2">
                             <div className="rh-detail2-main">
-                                {/* 发帖式排版：标题 → 正文 → 图片 */}
-                                <div className="rh-detail2-title">{activeEntry.name}</div>
+                                {/* 发帖式排版：标题 → 正文 → 图片（标记语法经 RichText 安全渲染） */}
+                                <div className="rh-detail2-title"><RichText text={activeEntry.name} mode="sticker" /></div>
                                 {activeEntry.description
-                                    ? <div className="rh-detail2-desc">{activeEntry.description}</div>
+                                    ? <div className="rh-detail2-desc"><RichText text={activeEntry.description} mode="full" /></div>
                                     : <div className="rh-detail2-desc rh-detail2-desc-empty">（该资源没有说明文字）</div>}
                                 {activeEntry.images.map(img => {
                                     const url = resolveResourceHubAssetUrl(source, img);
@@ -415,6 +498,14 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                         })}
                                     </div>
                                     <div className="rh-detail2-actions">
+                                        <button
+                                            className="rh-btn rh-flower-btn"
+                                            disabled={hasSentFlowerToday(activeEntry.path)}
+                                            title="给作者送一朵花"
+                                            onClick={() => void handleSendFlower(activeEntry.path)}
+                                        >
+                                            {hasSentFlowerToday(activeEntry.path) ? "已送🌸" : "送花🌸"}
+                                        </button>
                                         <button className="rh-btn rh-action-half" disabled={!selectedFile || busyFile === selectedFile} onClick={() => selectedFile && handleDownload(selectedFile)}>
                                             下载
                                         </button>
@@ -546,15 +637,41 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                     {(index?.folders ?? []).map(f => <option key={f.name} value={f.name} />)}
                                 </datalist>
                             </label>
-                            <label>资源名称
-                                <input className="rh-input" value={uploadName} placeholder="例如：唐簪雪" onChange={e => setUploadName(e.target.value)} />
-                            </label>
+                            <div className="rh-form-field">
+                                <span>资源名称（可加像素贴纸）</span>
+                                <div className="rh-input-row">
+                                    <input ref={uploadNameRef} className="rh-input" value={uploadName} placeholder="例如：唐簪雪" onChange={e => setUploadName(e.target.value)} />
+                                    <button type="button" className="rh-fmt-btn" data-active={stickerPickerFor === "title" ? "1" : undefined}
+                                        onClick={() => { setStickerPickerFor(current => current === "title" ? null : "title"); setShowColorPicker(false); }}>贴纸</button>
+                                </div>
+                                {stickerPickerFor === "title" && stickerPanel}
+                            </div>
                             <label>投稿人（可选）
                                 <input className="rh-input" value={uploadAuthor} onChange={e => setUploadAuthor(e.target.value)} />
                             </label>
-                            <label>说明文字（可选，会显示在列表里）
-                                <textarea className="rh-input" rows={3} value={uploadDesc} onChange={e => setUploadDesc(e.target.value)} />
-                            </label>
+                            <div className="rh-form-field">
+                                <span>说明文字（可选，会显示在列表里，支持贴纸与排版）</span>
+                                <div className="rh-fmt-bar">
+                                    <button type="button" className="rh-fmt-btn" data-active={stickerPickerFor === "desc" ? "1" : undefined}
+                                        onClick={() => { setStickerPickerFor(current => current === "desc" ? null : "desc"); setShowColorPicker(false); }}>贴纸</button>
+                                    <button type="button" className="rh-fmt-btn" data-active={showColorPicker ? "1" : undefined}
+                                        onClick={() => { setShowColorPicker(v => !v); setStickerPickerFor(null); }}>颜色</button>
+                                    <button type="button" className="rh-fmt-btn" onClick={() => applyMarkup(uploadDescRef, setUploadDesc, "[大]", "[/大]")}>大</button>
+                                    <button type="button" className="rh-fmt-btn" onClick={() => applyMarkup(uploadDescRef, setUploadDesc, "[小]", "[/小]")}>小</button>
+                                    <button type="button" className="rh-fmt-btn rh-fmt-bold" onClick={() => applyMarkup(uploadDescRef, setUploadDesc, "[粗]", "[/粗]")}>粗</button>
+                                    <button type="button" className="rh-fmt-btn" data-active={showDescPreview ? "1" : undefined}
+                                        onClick={() => setShowDescPreview(v => !v)}>预览</button>
+                                </div>
+                                {stickerPickerFor === "desc" && stickerPanel}
+                                {showColorPicker && colorPanel}
+                                <textarea ref={uploadDescRef} className="rh-input" rows={3} value={uploadDesc} onChange={e => setUploadDesc(e.target.value)} />
+                                {showDescPreview && (
+                                    <div className="rh-desc-preview">
+                                        <div className="rh-preview-title"><RichText text={uploadName || "（标题预览）"} mode="sticker" /></div>
+                                        <RichText text={uploadDesc || "（正文预览）"} mode="full" />
+                                    </div>
+                                )}
+                            </div>
                             <label className="rh-file-picker">
                                 <span className="rh-btn">选择资源文件{uploadFiles.length > 0 ? `（已选 ${uploadFiles.length} 个）` : ""}</span>
                                 <input type="file" multiple hidden onChange={e => { setUploadFiles(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
@@ -623,6 +740,9 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     </div>
                 </div>
             )}
+
+            {/* 非阻塞小提示（送花等轻量反馈） */}
+            {toast && <div className="rh-toast">{toast}</div>}
 
             {/* 图片全屏预览（与聊天/动态页一致，含保存按钮） */}
             {previewImage && (
@@ -936,6 +1056,32 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 }
                 .rh-action-half { flex: 1; padding: 8px 0; }
                 .rh-action-del { color: #a01818; font-weight: 700; padding: 8px 10px; }
+                .rh-flower-btn { padding: 8px 8px; }
+                /* 我的货摊：花数汇总行 */
+                .rh-stall-flowers {
+                    padding: 8px 10px;
+                    font-size: calc(12px * var(--app-text-scale, 1));
+                    font-weight: 700;
+                    color: #a04060;
+                    background: #fff0f4;
+                    border-bottom: 1px solid #d4d0c8;
+                }
+                /* 非阻塞小提示 */
+                .rh-toast {
+                    position: absolute;
+                    left: 50%;
+                    bottom: 60px;
+                    transform: translateX(-50%);
+                    z-index: 70;
+                    background: #ffffe1;
+                    color: #000;
+                    font-size: calc(12px * var(--app-text-scale, 1));
+                    padding: 6px 16px;
+                    border: 1px solid #000;
+                    box-shadow: 2px 2px 0 #000;
+                    white-space: nowrap;
+                    pointer-events: none;
+                }
                 .rh-search-row {
                     display: flex;
                     gap: 6px;
@@ -1052,12 +1198,63 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 .rh-dest-label { font-size: calc(13px * var(--app-text-scale, 1)); color: #000; font-weight: 700; }
                 .rh-dest-hint { font-size: calc(10px * var(--app-text-scale, 1)); color: #808080; }
                 .rh-form { flex-direction: column; align-items: stretch; gap: 8px; }
-                .rh-form label {
+                .rh-form label, .rh-form-field {
                     display: flex;
                     flex-direction: column;
                     gap: 3px;
                     font-size: calc(11px * var(--app-text-scale, 1));
                     color: #000;
+                }
+                /* 排版工具栏（上传弹窗：贴纸/颜色/字号/加粗/预览） */
+                .rh-input-row { display: flex; gap: 4px; }
+                .rh-input-row .rh-input { flex: 1; min-width: 0; }
+                .rh-fmt-bar { display: flex; gap: 4px; flex-wrap: wrap; }
+                .rh-fmt-btn {
+                    background: #c0c0c0;
+                    color: #000;
+                    font-size: calc(11px * var(--app-text-scale, 1));
+                    padding: 2px 8px;
+                    border: 2px solid;
+                    border-color: #ffffff #404040 #404040 #ffffff;
+                    cursor: pointer;
+                }
+                .rh-fmt-btn:active, .rh-fmt-btn[data-active] { border-color: #404040 #ffffff #ffffff #404040; background: #d8d8d8; }
+                .rh-fmt-bold { font-weight: 700; }
+                .rh-sticker-panel {
+                    display: grid;
+                    grid-template-columns: repeat(8, 1fr);
+                    gap: 2px;
+                    padding: 4px;
+                    background: #fff;
+                    border: 1px solid #808080;
+                }
+                .rh-sticker-btn {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 3px;
+                    background: none;
+                    border: 1px dotted transparent;
+                    cursor: pointer;
+                }
+                .rh-sticker-btn:active { border-color: #000080; background: #e4ecf7; }
+                .rh-color-panel { display: flex; gap: 4px; padding: 4px; background: #fff; border: 1px solid #808080; }
+                .rh-color-chip { width: 20px; height: 20px; border: 1px solid #404040; cursor: pointer; padding: 0; }
+                .rh-desc-preview {
+                    background: #fff;
+                    border: 1px solid #808080;
+                    padding: 8px;
+                    font-size: calc(12px * var(--app-text-scale, 1));
+                    line-height: 1.7;
+                    white-space: pre-wrap;
+                    color: #000;
+                }
+                .rh-preview-title {
+                    font-weight: 700;
+                    font-size: calc(14px * var(--app-text-scale, 1));
+                    border-bottom: 1px solid #d4d0c8;
+                    padding-bottom: 4px;
+                    margin-bottom: 6px;
                 }
                 .rh-input {
                     background: #fff;
