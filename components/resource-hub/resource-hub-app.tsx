@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, RefreshCw, Search, Settings2, Store } from "lucide-react";
 import { PageShell } from "@/components/ui/page-shell";
-import { ContentDialog } from "@/components/ui/modal";
+import { ConfirmDialog, ContentDialog } from "@/components/ui/modal";
 import { Input } from "@/components/ui/form";
 import {
     fetchResourceHubIndex,
@@ -47,6 +47,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [installedMap, setInstalledMap] = useState(() => loadInstalledResourceMap());
     const [showSourceEditor, setShowSourceEditor] = useState(false);
     const [sourceDraft, setSourceDraft] = useState<ResourceHubSource>(source);
+    // 施工提示：每次进入弹一次，正式开张后移除
+    const [showConstructionNotice, setShowConstructionNotice] = useState(true);
 
     const reload = useCallback((activeSource: ResourceHubSource) => {
         setLoadState("loading");
@@ -212,6 +214,19 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
 
                 {loadState === "ready" && visibleItems.map(renderItemCard)}
             </div>
+
+            {showConstructionNotice && (
+                <ConfirmDialog
+                    title="施工中"
+                    message="此app正在施工，请先去别的地方逛逛吧～"
+                    icon={Store}
+                    variant="action"
+                    cancelLabel="仍要看看"
+                    confirmLabel="返回桌面"
+                    onCancel={() => setShowConstructionNotice(false)}
+                    onConfirm={onClose}
+                />
+            )}
 
             {showSourceEditor && (
                 <ContentDialog
