@@ -23,6 +23,13 @@ import {
     type ShareIndex,
     type ShareIndexEntry,
 } from "@/lib/resource-hub-types";
+import {
+    fileToUploadEntry,
+    loadUploadConfig,
+    saveUploadConfig,
+    uploadResource,
+    type ResourceHubUploadConfig,
+} from "@/lib/resource-hub-upload";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -48,6 +55,16 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [showConstructionNotice, setShowConstructionNotice] = useState(true);
     const [showSourceEditor, setShowSourceEditor] = useState(false);
     const [sourceDraft, setSourceDraft] = useState<ResourceHubSource>(source);
+    // 上传
+    const [showUpload, setShowUpload] = useState(false);
+    const [uploadFolder, setUploadFolder] = useState("");
+    const [uploadName, setUploadName] = useState("");
+    const [uploadAuthor, setUploadAuthor] = useState("");
+    const [uploadDesc, setUploadDesc] = useState("");
+    const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+    const [uploadImages, setUploadImages] = useState<File[]>([]);
+    const [uploading, setUploading] = useState(false);
+    const [uploadCfg, setUploadCfg] = useState<ResourceHubUploadConfig>(() => loadUploadConfig());
 
     const reload = useCallback((activeSource: ResourceHubSource) => {
         setLoadState("loading");
@@ -118,6 +135,32 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         void runImport(importFile, destination);
     }, [importFile, onNotice, runImport]);
 
+    const handleUploadSubmit = useCallback(async () => {
+        const folder = uploadFolder.trim();
+        const name = uploadName.trim();
+        if (!folder || !name) { onNotice?.("请填写分类和资源名称"); return; }
+        if (uploadFiles.length === 0) { onNotice?.("请选择至少一个资源文件"); return; }
+        setUploading(true);
+        try {
+            const files = await Promise.all([...uploadFiles, ...uploadImages].map(fileToUploadEntry));
+            const result = await uploadResource(source, {
+                folder, name,
+                author: uploadAuthor.trim(),
+                description: uploadDesc.trim(),
+                files,
+            });
+            setShowUpload(false);
+            setUploadName(""); setUploadDesc(""); setUploadFiles([]); setUploadImages([]);
+            onNotice?.(result.merged
+                ? `「${name}」已上架（CDN 缓存刷新后可见）`
+                : `「${name}」已提交，等待管理员审核上架`);
+        } catch (err) {
+            onNotice?.(`上传失败：${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setUploading(false);
+        }
+    }, [onNotice, source, uploadAuthor, uploadDesc, uploadFiles, uploadFolder, uploadImages, uploadName]);
+
     const title = activeEntry ? activeEntry.name : activeFolder ? activeFolder : "资源集市";
     const handleBack = activeEntry
         ? () => setActiveEntry(null)
@@ -145,6 +188,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     <span className="rh-address">
                         地址：C:\资源集市{activeFolder ? `\\${activeFolder}` : ""}{activeEntry ? `\\${activeEntry.name}` : ""}
                     </span>
+                    <button className="rh-btn" onClick={() => { setUploadFolder(activeFolder || ""); setShowUpload(true); }}>上传</button>
                 </div>
 
                 {/* 内容区 */}
@@ -308,6 +352,56 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 </div>
             )}
 
+            {/* 上传对话框 */}
+            {showUpload && (
+                <div className="rh-dialog-overlay" onClick={uploading ? undefined : () => setShowUpload(false)}>
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar">
+                            <span className="rh-titlebar-text">上传资源</span>
+                            <span className="rh-titlebar-controls">
+                                <button className="rh-tb-btn" disabled={uploading} onClick={() => setShowUpload(false)}>✕</button>
+                            </span>
+                        </div>
+                        <div className="rh-dialog-body rh-form">
+                            <label>分类（已有分类名或新分类名）
+                                <input className="rh-input" list="rh-folder-options" value={uploadFolder} placeholder="例如：角色卡" onChange={e => setUploadFolder(e.target.value)} />
+                                <datalist id="rh-folder-options">
+                                    {(index?.folders ?? []).map(f => <option key={f.name} value={f.name} />)}
+                                </datalist>
+                            </label>
+                            <label>资源名称
+                                <input className="rh-input" value={uploadName} placeholder="例如：唐簪雪" onChange={e => setUploadName(e.target.value)} />
+                            </label>
+                            <label>投稿人（可选）
+                                <input className="rh-input" value={uploadAuthor} onChange={e => setUploadAuthor(e.target.value)} />
+                            </label>
+                            <label>说明文字（可选，会显示在列表里）
+                                <textarea className="rh-input" rows={3} value={uploadDesc} onChange={e => setUploadDesc(e.target.value)} />
+                            </label>
+                            <label className="rh-file-picker">
+                                <span className="rh-btn">选择资源文件{uploadFiles.length > 0 ? `（已选 ${uploadFiles.length} 个）` : ""}</span>
+                                <input type="file" multiple hidden onChange={e => { setUploadFiles(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
+                            </label>
+                            <label className="rh-file-picker">
+                                <span className="rh-btn">选择配图（可选）{uploadImages.length > 0 ? `（已选 ${uploadImages.length} 张）` : ""}</span>
+                                <input type="file" accept="image/*" multiple hidden onChange={e => { setUploadImages(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
+                            </label>
+                            <div className="rh-form-hint">
+                                {uploadCfg.githubToken
+                                    ? "将使用你的 GitHub Token 提交（有仓库权限则直接上架，否则生成待审核投稿）。"
+                                    : "将匿名提交到审核队列，管理员通过后上架。单次总量 ≤5MB。"}
+                            </div>
+                        </div>
+                        <div className="rh-dialog-footer">
+                            <button className="rh-btn" disabled={uploading} onClick={() => setShowUpload(false)}>取消</button>
+                            <button className="rh-btn rh-btn-primary" disabled={uploading} onClick={() => void handleUploadSubmit()}>
+                                {uploading ? "提交中..." : "提交"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* 资源仓库设置 */}
             {showSourceEditor && (
                 <div className="rh-dialog-overlay" onClick={() => setShowSourceEditor(false)}>
@@ -324,6 +418,12 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 <input className="rh-input" value={sourceDraft.branch} placeholder="main" onChange={e => setSourceDraft(prev => ({ ...prev, branch: e.target.value }))} />
                             </label>
                             <div className="rh-form-hint">资源经 jsDelivr CDN 读取，公开仓库无需登录。除非换资源源，一般不用改。</div>
+                            <label>GitHub Token（可选，上传直传用）
+                                <input className="rh-input" type="password" value={uploadCfg.githubToken} placeholder="不填则上传走匿名审核队列" onChange={e => setUploadCfg(prev => ({ ...prev, githubToken: e.target.value }))} />
+                            </label>
+                            <label>上传服务地址
+                                <input className="rh-input" value={uploadCfg.endpoint} onChange={e => setUploadCfg(prev => ({ ...prev, endpoint: e.target.value }))} />
+                            </label>
                         </div>
                         <div className="rh-dialog-footer">
                             <button className="rh-btn" onClick={() => setShowSourceEditor(false)}>取消</button>
@@ -335,6 +435,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 };
                                 if (!next.owner || !next.repo) { onNotice?.("仓库 owner 和名称不能为空"); return; }
                                 saveResourceHubSource(next);
+                                saveUploadConfig(uploadCfg);
+                                setUploadCfg(loadUploadConfig());
                                 setSource(next);
                                 setActiveFolder(null);
                                 setActiveEntry(null);
@@ -649,6 +751,9 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     outline: none;
                 }
                 .rh-form-hint { font-size: calc(10px * var(--app-text-scale, 1)); color: #606060; line-height: 1.6; }
+                .rh-file-picker { cursor: pointer; }
+                .rh-file-picker .rh-btn { display: block; text-align: center; }
+                textarea.rh-input { resize: vertical; font-family: inherit; }
             `}</style>
         </div>
     );
