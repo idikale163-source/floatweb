@@ -11,7 +11,7 @@ import type { ResourceHubSource } from "./resource-hub-types";
 const UPLOAD_CFG_KEY = "ai_phone_resource_hub_upload_cfg_v1";
 registerKvMigration(UPLOAD_CFG_KEY);
 
-export const DEFAULT_UPLOAD_ENDPOINT = "https://aivp-share.netlify.app/.netlify/functions/upload";
+export const DEFAULT_UPLOAD_ENDPOINT = "https://floatshare.netlify.app/.netlify/functions/upload";
 
 export type ResourceHubUploadConfig = {
     /** 方案 A：用户自己的 GitHub token（可选） */
