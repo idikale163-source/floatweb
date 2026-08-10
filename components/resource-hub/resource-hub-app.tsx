@@ -13,6 +13,7 @@ import {
     fetchShareIndex,
     importResourceHubFile,
     loadResourceHubSource,
+    purgeShareIndexCache,
     resolveResourceHubAssetUrl,
     saveResourceHubSource,
 } from "@/lib/resource-hub-client";
@@ -25,7 +26,9 @@ import {
 } from "@/lib/resource-hub-types";
 import {
     fileToUploadEntry,
+    loadMyUploads,
     loadUploadConfig,
+    ownerDeleteViaService,
     saveUploadConfig,
     uploadResource,
     type ResourceHubUploadConfig,
@@ -72,15 +75,22 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [uploading, setUploading] = useState(false);
     const [uploadCfg, setUploadCfg] = useState<ResourceHubUploadConfig>(() => loadUploadConfig());
 
-    const reload = useCallback((activeSource: ResourceHubSource) => {
+    const reload = useCallback((activeSource: ResourceHubSource, options?: { purge?: boolean }) => {
         setLoadState("loading");
         setLoadError("");
-        fetchShareIndex(activeSource)
+        const run = () => fetchShareIndex(activeSource)
             .then(data => { setIndex(data); setLoadState("ready"); })
             .catch(err => {
                 setLoadError(err instanceof Error ? err.message : String(err));
                 setLoadState("error");
             });
+        if (options?.purge) {
+            // 手动刷新时先强刷 CDN，让新上架的资源尽快可见
+            purgeShareIndexCache(activeSource);
+            setTimeout(run, 1500);
+        } else {
+            void run();
+        }
     }, []);
 
     useEffect(() => { reload(source); }, [reload, source]);
@@ -154,7 +164,13 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const handleDeleteEntry = useCallback(async (entry: ShareIndexEntry) => {
         setDeleting(true);
         try {
-            await deleteShareEntry(entry.path);
+            // 本人上传的用删除凭证走上传服务；否则按管理员 Token 直删
+            const myRecord = loadMyUploads().find(r => r.path === entry.path);
+            if (myRecord) {
+                await ownerDeleteViaService(loadUploadConfig().endpoint, myRecord);
+            } else {
+                await deleteShareEntry(entry.path);
+            }
             setConfirmDeleteEntry(null);
             setActiveEntry(null);
             // 乐观更新本地目录，CDN 缓存刷新前列表就正确
@@ -231,7 +247,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     <span className="rh-titlebar-text">{title} - 资源集市</span>
                     <span className="rh-titlebar-controls">
                         <button className="rh-tb-btn" aria-label="资源仓库设置" onClick={() => { setSourceDraft(source); setShowSourceEditor(true); }}>⚙</button>
-                        <button className="rh-tb-btn" aria-label="刷新" onClick={() => reload(source)}>⟳</button>
+                        <button className="rh-tb-btn" aria-label="刷新" onClick={() => reload(source, { purge: true })}>⟳</button>
                         <button className="rh-tb-btn" aria-label="关闭" onClick={onClose}>✕</button>
                     </span>
                 </div>
@@ -351,7 +367,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                         <button className="rh-btn rh-btn-primary rh-action-half" disabled={!selectedFile || busyFile === selectedFile} onClick={() => selectedFile && setImportFile(selectedFile)}>
                                             {busyFile === selectedFile ? "处理中..." : "导入"}
                                         </button>
-                                        {uploadCfg.githubToken.trim() && (
+                                        {(uploadCfg.githubToken.trim() || loadMyUploads().some(r => r.path === activeEntry.path)) && (
                                             <button className="rh-btn rh-action-del" onClick={() => setConfirmDeleteEntry(activeEntry)}>删除</button>
                                         )}
                                     </div>

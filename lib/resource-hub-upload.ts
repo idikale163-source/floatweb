@@ -6,10 +6,13 @@
 //     由机器人 token 代开 PR。
 
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
+import { RESOURCE_ROOT } from "./resource-hub-client";
 import type { ResourceHubSource } from "./resource-hub-types";
 
 const UPLOAD_CFG_KEY = "ai_phone_resource_hub_upload_cfg_v1";
+const MY_UPLOADS_KEY = "ai_phone_resource_hub_my_uploads_v1";
 registerKvMigration(UPLOAD_CFG_KEY);
+registerKvMigration(MY_UPLOADS_KEY);
 
 export const DEFAULT_UPLOAD_ENDPOINT = "https://floatshare.netlify.app/.netlify/functions/upload";
 
@@ -58,6 +61,48 @@ export type UploadResult = {
     prUrl?: string;
 };
 
+// ── 我的上传记录（含自助删除凭证，只存在本机）──
+
+export type MyUploadRecord = {
+    /** 仓库内路径：资源/<分类>/<资源名> */
+    path: string;
+    name: string;
+    /** 自助删除凭证（哈希已随投稿写进仓库 .owner，凭证本体只在本机） */
+    ownerKey: string;
+    uploadedAt: string;
+};
+
+export function loadMyUploads(): MyUploadRecord[] {
+    try {
+        const raw = kvGet(MY_UPLOADS_KEY);
+        const parsed = raw ? JSON.parse(raw) as MyUploadRecord[] : [];
+        return Array.isArray(parsed) ? parsed.filter(r => r && typeof r.path === "string" && typeof r.ownerKey === "string") : [];
+    } catch { return []; }
+}
+
+function saveMyUploads(records: MyUploadRecord[]): void {
+    kvSet(MY_UPLOADS_KEY, JSON.stringify(records.slice(0, 200)));
+}
+
+function recordMyUpload(record: MyUploadRecord): void {
+    saveMyUploads([record, ...loadMyUploads().filter(r => r.path !== record.path)]);
+}
+
+export function removeMyUploadRecord(path: string): void {
+    saveMyUploads(loadMyUploads().filter(r => r.path !== path));
+}
+
+function generateOwnerKey(): string {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function sha256Hex(text: string): Promise<string> {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
+}
+
 export async function fileToUploadEntry(file: File): Promise<UploadPayloadFile> {
     const buffer = await file.arrayBuffer();
     let binary = "";
@@ -72,16 +117,38 @@ export async function fileToUploadEntry(file: File): Promise<UploadPayloadFile> 
 // ── 方案 B：上传服务 ──
 
 export async function uploadViaService(endpoint: string, payload: UploadPayload): Promise<UploadResult> {
+    const ownerKey = generateOwnerKey();
+    const ownerKeyHash = await sha256Hex(ownerKey);
     const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, ownerKeyHash }),
     });
     const data = await res.json().catch(() => ({})) as { ok?: boolean; error?: string; prUrl?: string };
     if (!res.ok || data.ok === false) {
         throw new Error(data.error || `上传服务返回 HTTP ${res.status}`);
     }
+    recordMyUpload({
+        path: `${RESOURCE_ROOT}/${payload.folder}/${payload.name}`,
+        name: payload.name,
+        ownerKey,
+        uploadedAt: new Date().toISOString(),
+    });
     return { merged: false, prUrl: data.prUrl };
+}
+
+/** 投稿者自助下架：把本机保存的删除凭证发给上传服务比对后删除。 */
+export async function ownerDeleteViaService(endpoint: string, record: MyUploadRecord): Promise<void> {
+    const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", path: record.path, ownerKey: record.ownerKey }),
+    });
+    const data = await res.json().catch(() => ({})) as { ok?: boolean; error?: string };
+    if (!res.ok || data.ok === false) {
+        throw new Error(data.error || `删除服务返回 HTTP ${res.status}`);
+    }
+    removeMyUploadRecord(record.path);
 }
 
 // ── 方案 A：GitHub Token 直传 ──
@@ -112,7 +179,8 @@ function encodeContentPath(dir: string, file: string): string {
 
 export async function uploadViaToken(token: string, source: ResourceHubSource, payload: UploadPayload): Promise<UploadResult> {
     const { owner, repo, branch } = source;
-    const dir = `${payload.folder}/${payload.name}`;
+    const dir = `${RESOURCE_ROOT}/${payload.folder}/${payload.name}`;
+    const ownerKey = generateOwnerKey();
     const toWrite: UploadPayloadFile[] = [...payload.files];
     if (payload.description.trim()) {
         toWrite.push({
@@ -120,6 +188,8 @@ export async function uploadViaToken(token: string, source: ResourceHubSource, p
             contentBase64: btoa(unescape(encodeURIComponent(payload.description.trim()))),
         });
     }
+    // 删除凭证哈希写进资源文件夹，凭证本体只留在本机
+    toWrite.push({ name: ".owner", contentBase64: btoa(await sha256Hex(ownerKey)) });
 
     // 有写权限（仓库主/协作者）→ 直接提交默认分支，立即上架
     const repoInfo = await gh<{ permissions?: { push?: boolean } }>(token, "GET", `/repos/${owner}/${repo}`);
@@ -131,6 +201,7 @@ export async function uploadViaToken(token: string, source: ResourceHubSource, p
                 branch,
             });
         }
+        recordMyUpload({ path: dir, name: payload.name, ownerKey, uploadedAt: new Date().toISOString() });
         return { merged: true };
     }
 
@@ -171,6 +242,7 @@ export async function uploadViaToken(token: string, source: ResourceHubSource, p
         base: branch,
         body: `来自资源集市 App 的投稿。\n\n- 分类：${payload.folder}\n- 名称：${payload.name}\n- 投稿人：${payload.author || me.login}${payload.description.trim() ? `\n\n${payload.description.trim()}` : ""}`,
     });
+    recordMyUpload({ path: dir, name: payload.name, ownerKey, uploadedAt: new Date().toISOString() });
     return { merged: false, prUrl: pr.html_url };
 }
 

@@ -3,7 +3,7 @@
 // 在应用内预览与通过/拒绝。前端直连 GitHub API，权限由 GitHub 服务端裁决——
 // token 没有仓库写权限时合并/关闭会被 403，界面伪造无意义。
 
-import { loadResourceHubSource } from "./resource-hub-client";
+import { loadResourceHubSource, purgeShareIndexCache } from "./resource-hub-client";
 import { loadUploadConfig } from "./resource-hub-upload";
 
 const GH_API = "https://api.github.com";
@@ -107,10 +107,13 @@ export async function fetchShareSubmissionFiles(prNumber: number): Promise<Share
     return result;
 }
 
-/** 通过并上架（合并 PR）。 */
+/** 通过并上架（合并 PR），并强刷索引的 CDN 缓存让新资源尽快可见。 */
 export async function approveShareSubmission(prNumber: number): Promise<void> {
     const { token, owner, repo } = getReviewAuth();
     await gh(token, "PUT", `/repos/${owner}/${repo}/pulls/${prNumber}/merge`, { merge_method: "merge" });
+    // 索引由资源仓库的 Actions 在合并后重建（约 1 分钟），这里先把 CDN 缓存清掉
+    setTimeout(() => purgeShareIndexCache(loadResourceHubSource()), 90_000);
+    purgeShareIndexCache(loadResourceHubSource());
 }
 
 /**
