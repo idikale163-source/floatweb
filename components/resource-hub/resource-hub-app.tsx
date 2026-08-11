@@ -22,6 +22,7 @@ import {
 } from "@/lib/resource-hub-client";
 import {
     IMPORT_DESTINATIONS,
+    stripAssetImageMark,
     type ImportDestination,
     type ResourceHubSource,
     type ShareIndex,
@@ -513,7 +514,12 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         if (uploadFiles.length === 0) { onNotice?.("请选择至少一个资源文件"); return; }
         setUploading(true);
         try {
-            const files = await Promise.all([...uploadFiles, ...uploadImages].map(fileToUploadEntry));
+            // 「选择资源文件」里的图片要标成资源本体（PNG 角色卡、表情包），
+            // 否则索引会按扩展名把它当配图，详情页里就只能看不能下载了。
+            const files = await Promise.all([
+                ...uploadFiles.map(file => fileToUploadEntry(file, { asset: true })),
+                ...uploadImages.map(file => fileToUploadEntry(file)),
+            ]);
             const result = await uploadResource(source, {
                 folder, name,
                 author: uploadAuthor.trim() || profile.nickname,
@@ -866,7 +872,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 <>
                                     <div className="rh-file-strip">
                                         {activeEntry.files.map(file => {
-                                            const base = file.split("/").pop() || file;
+                                            const base = stripAssetImageMark(file.split("/").pop() || file);
                                             const ext = fileExtension(base);
                                             return (
                                                 <button
@@ -940,7 +946,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                             </span>
                         </div>
                         {/* 文件全名（文件条里显示不全，这里完整展示） */}
-                        <div className="rh-import-filename">{importFile.split("/").pop() || importFile}</div>
+                        <div className="rh-import-filename">{stripAssetImageMark(importFile.split("/").pop() || importFile)}</div>
                         <div className="rh-dialog-body rh-dest-grid">
                             {IMPORT_DESTINATIONS.map(dest => (
                                 <button key={dest.key} className="rh-dest-tile" title={dest.hint}
@@ -1088,7 +1094,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 <span>现有文件（打叉即移除）</span>
                                 <div className="rh-edit-files">
                                     {[...editEntry.files, ...editEntry.images].map(file => {
-                                        const base = file.split("/").pop() || file;
+                                        const base = stripAssetImageMark(file.split("/").pop() || file);
                                         const removed = editRemoved.includes(file);
                                         return (
                                             <button key={file} className="rh-edit-file" data-removed={removed ? "1" : undefined}
@@ -1194,6 +1200,10 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 <input type="file" accept="image/*" multiple hidden onChange={e => { const picked = Array.from(e.target.files ?? []); setUploadImages(current => appendPickedFiles(current, picked)); e.target.value = ""; }} />
                             </label>
                             {renderPickedFiles(uploadImages, index => setUploadImages(current => current.filter((_, i) => i !== index)))}
+                            <div className="rh-form-hint">
+                                「资源文件」是别人要下载/导入的东西，「配图」只在详情页展示。
+                                PNG 角色卡、表情包这类图片本身就是资源，要放进「资源文件」。
+                            </div>
                             <div className="rh-form-hint">
                                 {uploadCfg.githubToken
                                     ? "将使用你的 GitHub Token 提交（有仓库权限则直接上架，否则生成待审核投稿）。"

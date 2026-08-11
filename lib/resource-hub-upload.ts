@@ -8,7 +8,7 @@
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import { ensureIdentityKey } from "./resource-hub-identity";
 import { RESOURCE_ROOT } from "./resource-hub-client";
-import type { ResourceHubSource } from "./resource-hub-types";
+import { markAssetImageName, type ResourceHubSource } from "./resource-hub-types";
 
 const UPLOAD_CFG_KEY = "ai_phone_resource_hub_upload_cfg_v1";
 const MY_UPLOADS_KEY = "ai_phone_resource_hub_my_uploads_v1";
@@ -126,7 +126,12 @@ async function sha256Hex(text: string): Promise<string> {
     return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
 }
 
-export async function fileToUploadEntry(file: File): Promise<UploadPayloadFile> {
+/**
+ * 选中的文件 → 上传条目。
+ * asset=true 表示投稿人是从「选择资源文件」进来的：如果它是图片，加上 .asset 标记，
+ * 索引才知道这张图是资源本体（PNG 角色卡、表情包），而不是配图。
+ */
+export async function fileToUploadEntry(file: File, options?: { asset?: boolean }): Promise<UploadPayloadFile> {
     const buffer = await file.arrayBuffer();
     let binary = "";
     const bytes = new Uint8Array(buffer);
@@ -134,7 +139,8 @@ export async function fileToUploadEntry(file: File): Promise<UploadPayloadFile> 
     for (let i = 0; i < bytes.length; i += chunk) {
         binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
     }
-    return { name: file.name, contentBase64: btoa(binary) };
+    const name = options?.asset ? markAssetImageName(file.name) : file.name;
+    return { name, contentBase64: btoa(binary) };
 }
 
 // ── 方案 B：上传服务 ──

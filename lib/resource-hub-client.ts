@@ -5,6 +5,8 @@
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import {
     RESOURCE_HUB_DEFAULT_SOURCE,
+    isPreviewImagePath,
+    stripAssetImageMark,
     type ImportDestination,
     type ResourceHubSource,
     type ShareIndex,
@@ -171,7 +173,6 @@ function normalizeIndex(raw: unknown): ShareIndex {
     };
 }
 
-const IMAGE_RE = /\.(jpe?g|png|webp|gif)$/i;
 const DESC_NAME_RE = /^(说明\.txt|readme\.(md|txt))$/i;
 // 基建目录（上传服务/索引脚本等），不是资源，不进市场。
 // 索引脚本同样会跳过它们；这里再过滤一层，防御旧索引缓存。
@@ -239,7 +240,8 @@ async function buildIndexFromTree(source: ResourceHubSource): Promise<ShareIndex
                 });
             }
             const entry = entryMap.get(key)!;
-            if (IMAGE_RE.test(base)) entry.images.push(p);
+            // 带 .asset 标记的图片是资源本体（PNG 角色卡等），要进可下载的 files
+            if (isPreviewImagePath(base)) entry.images.push(p);
             else if (!DESC_NAME_RE.test(base)) entry.files.push(p);
         }
     }
@@ -277,7 +279,7 @@ export async function fetchShareIndex(source: ResourceHubSource): Promise<ShareI
 
 export async function downloadResourceHubFile(source: ResourceHubSource, path: string): Promise<void> {
     const buffer = await fetchResourceHubBinary(source, path);
-    const filename = path.split("/").pop() || "resource";
+    const filename = stripAssetImageMark(path.split("/").pop() || "resource");
     const { downloadFile } = await import("./download-utils");
     await downloadFile(new Blob([buffer]), filename);
 }
@@ -287,7 +289,8 @@ export async function downloadResourceHubFile(source: ResourceHubSource, path: s
 const CHAT_APP_CSS_KEY = "chat-app-custom-css";
 
 function fileBaseName(path: string): string {
-    return (path.split("/").pop() || path).replace(/\.[^.]+$/, "");
+    const name = stripAssetImageMark(path.split("/").pop() || path);
+    return name.replace(/\.[^.]+$/, "");
 }
 
 /** 目的地对文件类型的基本校验；返回错误文案或 null。 */
