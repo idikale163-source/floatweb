@@ -5,6 +5,7 @@
 // 资源可下载或导入（导入时选择目的地）。整体为复古 Windows 风格。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { hydrateKvDb, kvGet, kvSet, registerKvMigration } from "@/lib/kv-db";
 import { loadCharacters } from "@/lib/character-storage";
 import { loadChatContacts } from "@/lib/chat-storage";
 import {
@@ -87,6 +88,10 @@ function formatEntryDate(iso: string | null): string {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** 开屏版权提示的「永不显示」记忆键（值为 "1" 即不再弹）。 */
+const NOTICE_DISMISSED_KEY = "ai_phone_resource_hub_notice_v1";
+registerKvMigration(NOTICE_DISMISSED_KEY);
+
 export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onNotice?: (msg: string) => void }) {
     const [source, setSource] = useState<ResourceHubSource>(() => loadResourceHubSource());
     const [index, setIndex] = useState<ShareIndex | null>(null);
@@ -147,6 +152,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [uploading, setUploading] = useState(false);
     // 提交前的公开性确认（资源会进公开仓库，先让人心里有数）
     const [confirmUpload, setConfirmUpload] = useState(false);
+    // 开屏版权提示（勾了「永不显示」就不再弹）
+    const [showNotice, setShowNotice] = useState(false);
     const [uploadCfg, setUploadCfg] = useState<ResourceHubUploadConfig>(() => loadUploadConfig());
     // 所见即所得编辑器：贴纸选择器（标题/正文两处）、颜色面板
     const [stickerPickerFor, setStickerPickerFor] = useState<"title" | "desc" | null>(null);
@@ -190,6 +197,16 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             setIdentityKeyState(key);
             const hash = await sha256Hex(key);
             if (!cancelled) setIdentityHash(hash);
+        });
+        return () => { cancelled = true; };
+    }, []);
+
+    // 开屏版权提示：必须等 kv 从 IndexedDB 加载完再判断，
+    // 否则冷启动瞬间读不到「永不显示」，每次进来都会弹一遍。
+    useEffect(() => {
+        let cancelled = false;
+        void hydrateKvDb().then(() => {
+            if (!cancelled && kvGet(NOTICE_DISMISSED_KEY) !== "1") setShowNotice(true);
         });
         return () => { cancelled = true; };
     }, []);
@@ -1149,6 +1166,28 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 setUploadAuthor(profile.nickname);
                                 setShowUpload(true);
                             }}>确认</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 开屏版权提示：进 app 先说清楚集市作品只能本机用，「永不显示」写进 kv 后不再弹 */}
+            {showNotice && (
+                <div className="rh-dialog-overlay">
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar"><span className="rh-titlebar-text">创作者权益提示</span></div>
+                        <div className="rh-dialog-body">
+                            <span className="rh-dialog-icon">📢</span>
+                            <span>
+                                为了保护创作者权益，从资源市场导入的作品，仅限于本地运行，<b>不能发布市场</b>。
+                            </span>
+                        </div>
+                        <div className="rh-dialog-footer">
+                            <button className="rh-btn" onClick={() => {
+                                kvSet(NOTICE_DISMISSED_KEY, "1");
+                                setShowNotice(false);
+                            }}>永不显示</button>
+                            <button className="rh-btn rh-btn-primary" onClick={() => setShowNotice(false)}>确认</button>
                         </div>
                     </div>
                 </div>
