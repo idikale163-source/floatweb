@@ -310,11 +310,18 @@ export function checkImportFileForDestination(destination: ImportDestination, pa
             return lower.endsWith(".zip") || lower.endsWith(".html") || lower.endsWith(".htm") ? null : "应用需要 zip 安装包或单 HTML 文件";
         case "plugin":
             return lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".txt") ? null : "插件需要 JS 源码文件";
+        case "theme":
+            // .ai-theme 就是个 zip，有人改名成 .zip 上传也照收
+            return lower.endsWith(".ai-theme") || lower.endsWith(".zip") ? null : "主题包需要 .ai-theme 文件";
     }
 }
 
 function dispatch(eventName: string): void {
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventName));
+}
+
+function dispatchWith(eventName: string, detail: unknown): void {
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventName, { detail }));
 }
 
 /** PNG 字节 → data URL（角色卡的画像就是这张图本身）。 */
@@ -515,6 +522,16 @@ export async function importResourceHubFile(
             });
             kvSet(key, JSON.stringify(drafts.slice(0, 80)));
             return `剧场草稿「${title}」已导入草稿箱，可在黑市工作室查看（集市来的作品不能上架）`;
+        }
+        case "theme": {
+            const buffer = await fetchResourceHubBinary(source, path);
+            const filename = path.split("/").pop() || "theme.ai-theme";
+            const { installThemePackageFile, THEME_PACKAGE_INSTALLED_EVENT } = await import("./theme-package");
+            // installThemePackageFile 自己就把资源/主题档案/组件/布局都落盘了，
+            // 但桌面上那些 React 状态还是旧的，得派事件让 shell 重新落地一次。
+            const result = await installThemePackageFile(new File([buffer], filename));
+            dispatchWith(THEME_PACKAGE_INSTALLED_EVENT, result);
+            return `主题包已应用：${result.summary.assetCount} 个资源，${result.summary.widgetCount} 个桌面组件`;
         }
         case "plugin": {
             const code = await fetchResourceHubText(source, path);

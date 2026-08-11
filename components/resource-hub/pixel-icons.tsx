@@ -234,6 +234,25 @@ const DEST_ICONS: Record<ImportDestination, PixelGrid> = {
         "................",
         "................",
     ],
+    // 调色板（主题包）
+    theme: [
+        "................",
+        "................",
+        "................",
+        "......kkkk......",
+        "....kkwwwwkk....",
+        "...kwrrwwyywk...",
+        "..kwwrrwwyywwk..",
+        "..kwbbwwwwwcck..",
+        "..kwbbwwwwwcck..",
+        "..kwwwwwwwwwwk..",
+        "..kwwwwwwkkwwk..",
+        "...kwwwwwkkwk...",
+        "....kkwwwwkk....",
+        "......kkkk......",
+        "................",
+        "................",
+    ],
 };
 
 function renderGrid(grid: PixelGrid, size: number, className?: string) {

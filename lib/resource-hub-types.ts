@@ -65,7 +65,8 @@ export type ImportDestination =
     | "custom_app"
     | "game"
     | "theater"
-    | "plugin";
+    | "plugin"
+    | "theme";
 
 export const IMPORT_DESTINATIONS: Array<{ key: ImportDestination; label: string; hint: string }> = [
     { key: "preset", label: "预设", hint: "预设管理页导出的 JSON" },
@@ -79,4 +80,5 @@ export const IMPORT_DESTINATIONS: Array<{ key: ImportDestination; label: string;
     { key: "game", label: "游戏", hint: "游戏草稿箱导出的 JSON" },
     { key: "theater", label: "黑市剧场", hint: "剧场草稿箱导出的 JSON" },
     { key: "plugin", label: "插件", hint: "聊天插件 JS 源码文件" },
+    { key: "theme", label: "主题包", hint: "外观页导出的 .ai-theme 主题包" },
 ];
