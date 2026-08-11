@@ -1246,7 +1246,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         <div className="rh-dialog-body">
                             <span className="rh-dialog-icon">📢</span>
                             <span>
-                                为了保护创作者权益，从资源市场导入的作品，仅限于本地运行，<b>不能发布市场</b>。
+                                为了保护创作者权益，从资源市场导入的他人作品，仅限于本地运行，<b>不能将他人的作品发布市场</b>。
                             </span>
                         </div>
                         <div className="rh-dialog-footer">
