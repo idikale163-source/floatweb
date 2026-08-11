@@ -156,6 +156,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [showNotice, setShowNotice] = useState(false);
     // 安装插件前的风险告知：待安装的插件文件路径
     const [confirmPlugin, setConfirmPlugin] = useState<string | null>(null);
+    // 应用主题包前的覆盖确认：待导入的主题包文件路径
+    const [confirmTheme, setConfirmTheme] = useState<string | null>(null);
     const [uploadCfg, setUploadCfg] = useState<ResourceHubUploadConfig>(() => loadUploadConfig());
     // 所见即所得编辑器：贴纸选择器（标题/正文两处）、颜色面板
     const [stickerPickerFor, setStickerPickerFor] = useState<"title" | "desc" | null>(null);
@@ -359,6 +361,12 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         // 插件与本应用同权限，装上即执行；集市来源必然是陌生人写的代码，先问一句
         if (destination === "plugin") {
             setConfirmPlugin(importFile);
+            setImportFile(null);
+            return;
+        }
+        // 主题包是整体覆盖当前外观（主题色/壁纸/图标/组件/桌面布局），不是叠加
+        if (destination === "theme") {
+            setConfirmTheme(importFile);
             setImportFile(null);
             return;
         }
@@ -1177,6 +1185,30 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 setUploadAuthor(profile.nickname);
                                 setShowUpload(true);
                             }}>确认</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 主题包覆盖确认：主题包是整体替换当前外观，不是叠加 */}
+            {confirmTheme && (
+                <div className="rh-dialog-overlay" onClick={importingTo ? undefined : () => setConfirmTheme(null)}>
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar"><span className="rh-titlebar-text">应用主题包</span></div>
+                        <div className="rh-dialog-body">
+                            <span className="rh-dialog-icon">🎨</span>
+                            <span>
+                                主题包会<b>整体覆盖你当前的外观</b>——主题色、壁纸、图标样式、桌面组件和图标位置都会换成这一套。
+                                想留住现在的样子，可以先去外观页导出一份自己的主题包。已安装的自定义 App 图标会自动排回桌面空位，不会丢。
+                            </span>
+                        </div>
+                        <div className="rh-dialog-footer">
+                            <button className="rh-btn" disabled={!!importingTo} onClick={() => setConfirmTheme(null)}>取消</button>
+                            <button className="rh-btn rh-btn-primary" disabled={!!importingTo} onClick={() => {
+                                const target = confirmTheme;
+                                setConfirmTheme(null);
+                                void runImport(target, "theme");
+                            }}>确认应用</button>
                         </div>
                     </div>
                 </div>
