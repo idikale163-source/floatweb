@@ -313,6 +313,34 @@ export function checkImportFileForDestination(destination: ImportDestination, pa
     }
 }
 
+function dispatch(eventName: string): void {
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(eventName));
+}
+
+/** PNG 字节 → data URL（角色卡的画像就是这张图本身）。 */
+function bytesToPngDataUrl(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+    return `data:image/png;base64,${btoa(binary)}`;
+}
+
+/**
+ * 解析器抛的是内部哨兵串（UNSUPPORTED_IMPORT_FORMAT / CHAR_BLOCKED_FIELDS），
+ * 各管理页都会翻译成人话，集市原本直接甩给用户看，会显示成
+ * 「导入失败：UNSUPPORTED_IMPORT_FORMAT」。
+ */
+function translateParseError<T>(run: () => T): T {
+    try {
+        return run();
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (message === "UNSUPPORTED_IMPORT_FORMAT") throw new Error("不支持该文件的格式，请确认它是本应用导出的");
+        if (message === "CHAR_BLOCKED_FIELDS") throw new Error("不支持包含开场白、场景或示例对话的角色卡");
+        throw err;
+    }
+}
+
 /**
  * 把资源文件导入到指定目的地。chat_session_css 必须传 contactId（选中的角色会话）。
  * 返回给用户看的结果说明。
@@ -323,34 +351,58 @@ export async function importResourceHubFile(
     destination: ImportDestination,
     options?: { contactId?: string },
 ): Promise<string> {
+    // 下面全是"读出来 → 加一条 → 整份写回"。kv 的 kvSet 是无条件覆盖、kvGet 在
+    // 水合前一律返回 null，抢在加载完成前写会把整份旧数据（角色库/主题/草稿/插件）
+    // 抹掉。settings 与 chat 两层自带增量兜底，kv 没有，所以这里统一先等齐。
+    const { hydrateKvDb } = await import("./kv-db");
+    const { hydrateChatStorage } = await import("./chat-storage");
+    const { ensureSettingsStorageHydrated } = await import("./settings-storage");
+    await Promise.all([hydrateKvDb(), hydrateChatStorage(), ensureSettingsStorageHydrated()]);
+
     const lower = path.toLowerCase();
     const displayName = fileBaseName(path);
     switch (destination) {
         case "preset": {
-            const preset = parsePresetFromJson(await fetchResourceHubText(source, path), displayName);
+            const presetText = await fetchResourceHubText(source, path);
+            const preset = translateParseError(() => parsePresetFromJson(presetText, displayName));
             if (!preset) throw new Error("预设解析失败，请确认文件是预设管理页导出的 JSON");
-            savePresets([...loadPresets(), preset]);
+            // 与各管理页一致：新导入的排在最前，别沉到长列表底部
+            savePresets([preset, ...loadPresets()]);
+            dispatch("settings-presets-updated");
             return `预设「${preset.name}」已导入`;
         }
         case "regex": {
-            const regex = parseRegexFromJson(await fetchResourceHubText(source, path), displayName);
+            const regexText = await fetchResourceHubText(source, path);
+            const regex = translateParseError(() => parseRegexFromJson(regexText, displayName));
             if (!regex) throw new Error("正则解析失败，请确认文件是正则管理页导出的 JSON");
-            saveRegexes([...loadRegexes(), regex]);
+            saveRegexes([regex, ...loadRegexes()]);  // saveRegexes 自带事件派发
             return `正则组「${regex.name}」已导入`;
         }
         case "worldbook": {
-            const book = parseWorldBookFromJson(await fetchResourceHubText(source, path));
+            const bookText = await fetchResourceHubText(source, path);
+            const book = translateParseError(() => parseWorldBookFromJson(bookText));
             if (!book) throw new Error("世界书解析失败，请确认文件是世界书管理页导出的 JSON");
-            saveWorldBooks([...loadWorldBooks(), book]);
+            saveWorldBooks([book, ...loadWorldBooks()]);
+            dispatch("settings-worldbooks-updated");
             return `世界书「${book.name}」已导入`;
         }
         case "character": {
-            const data = lower.endsWith(".png")
-                ? parseCharacterFromPng(await fetchResourceHubBinary(source, path))
-                : parseCharacterFromJson(await fetchResourceHubText(source, path));
+            let avatar = "";
+            let data;
+            if (lower.endsWith(".png")) {
+                const buffer = await fetchResourceHubBinary(source, path);
+                data = translateParseError(() => parseCharacterFromPng(buffer));
+                // PNG 角色卡的画就是这张图本身，导出时 avatar 被有意写成 "none"，
+                // 不把图片补回去，导进来的角色就是个空白头像。
+                avatar = bytesToPngDataUrl(buffer);
+            } else {
+                const charText = await fetchResourceHubText(source, path);
+                data = translateParseError(() => parseCharacterFromJson(charText));
+            }
             if (!data) throw new Error("角色卡解析失败");
-            const character = createCharacter(data);
-            saveCharacters([...loadCharacters(), character]);
+            if (!avatar && typeof data.avatar === "string" && data.avatar.trim()) avatar = data.avatar;
+            const character = createCharacter(avatar ? { ...data, avatar } : data);
+            saveCharacters([character, ...loadCharacters()]);
             return `角色「${character.name}」已加入角色库`;
         }
         case "chat_session_css": {
@@ -386,14 +438,38 @@ export async function importResourceHubFile(
             const { applyCustomAppRegistrationsAsync } = await import("./custom-app-registration");
             const app = lower.endsWith(".zip") ? await loadCustomAppPackage(file) : await loadSingleHtmlCustomApp(file);
             // 打来源标记：别人的作品，本机能玩，但不进本地测试、不能再发布到应用广场
-            const installed = await installCustomAppAsync({ ...app, resourceHubPath: path });
-            await applyCustomAppRegistrationsAsync(installed);
+            const tagged = { ...app, resourceHubPath: path };
+            // 重复导入（作者更新了资源）：包每次都会拿到新的随机运行时 id，直接装必然
+            // 撞名报错，而报错文案指向的「换包」入口对集市应用是关着的。这里比照小坊
+            // 的做法原地更新，保住 id 与安装时间，应用数据不丢。
+            const { loadInstalledCustomApps, saveInstalledCustomAppsAsync } = await import("./custom-app-storage");
+            const apps = loadInstalledCustomApps();
+            const existing = apps.find(a =>
+                a.resourceHubPath === path
+                || (a.resourceHubPath && a.name.trim().toLowerCase() === tagged.name.trim().toLowerCase()));
+            let installed;
+            if (existing) {
+                installed = { ...tagged, id: existing.id, installedAt: existing.installedAt };
+                await saveInstalledCustomAppsAsync([installed, ...apps.filter(a => a.id !== existing.id)]);
+            } else {
+                installed = await installCustomAppAsync(tagged);
+            }
+            // 注册（预设/正则等附带声明）失败不阻塞安装：应用已经装上了，
+            // 抛出去会显示成「导入失败」，还会顺带跳过下面的摆图标。
+            let registerWarning = "";
+            try {
+                await applyCustomAppRegistrationsAsync(installed);
+            } catch (err) {
+                registerWarning = `（附带内容注册失败：${err instanceof Error ? err.message : String(err)}）`;
+            }
             // 请桌面摆图标：应用广场走 onInstallToDesktop 回调，我们够不着它，
             // 改派同一套事件（小坊装应用也是这么做的）。漏了这步图标不会出现在桌面。
             if (typeof window !== "undefined") {
                 window.dispatchEvent(new CustomEvent(CUSTOM_APP_PLACE_DESKTOP_EVENT, { detail: { appId: installed.id } }));
             }
-            return `应用「${installed.name}」已安装，桌面可找到图标（集市来的作品仅供本机使用，不能再发布）`;
+            return existing
+                ? `应用「${installed.name}」已更新（原有数据保留）${registerWarning}`
+                : `应用「${installed.name}」已安装，桌面可找到图标（集市来的作品仅供本机使用，不能再发布）${registerWarning}`;
         }
         case "game": {
             const payload = JSON.parse(await fetchResourceHubText(source, path)) as { type?: string; title?: string; draft?: unknown };
@@ -443,11 +519,13 @@ export async function importResourceHubFile(
         case "plugin": {
             const code = await fetchResourceHubText(source, path);
             const { installChatPluginFromCode } = await import("./chat-plugin-loader");
+            // 装插件即执行代码（模块顶层在校验阶段就会跑），与插件管理页同样的告知不能省
             const result = await installChatPluginFromCode(code);
             if (!result.ok) throw new Error(result.error || "插件安装失败");
+            // persistChatPlugin 对新插件直接 enabled: true，装完就已经在跑了
             return result.upgraded
                 ? `插件「${result.name}」已升级（${result.fromVersion} → ${result.toVersion}）`
-                : `插件「${result.name}」已安装，可在聊天设置的插件管理里启用`;
+                : `插件「${result.name}」已安装并启用，可在聊天设置的插件管理里关闭`;
         }
     }
 }

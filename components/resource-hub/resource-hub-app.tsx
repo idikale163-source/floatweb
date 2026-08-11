@@ -154,6 +154,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [confirmUpload, setConfirmUpload] = useState(false);
     // 开屏版权提示（勾了「永不显示」就不再弹）
     const [showNotice, setShowNotice] = useState(false);
+    // 安装插件前的风险告知：待安装的插件文件路径
+    const [confirmPlugin, setConfirmPlugin] = useState<string | null>(null);
     const [uploadCfg, setUploadCfg] = useState<ResourceHubUploadConfig>(() => loadUploadConfig());
     // 所见即所得编辑器：贴纸选择器（标题/正文两处）、颜色面板
     const [stickerPickerFor, setStickerPickerFor] = useState<"title" | "desc" | null>(null);
@@ -290,8 +292,11 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const chatContacts = useMemo(() => {
         if (pickCharacterFor === null) return [];
         const characters = loadCharacters();
+        // ChatSession.contactId 存的是「角色 id」（全仓 createOrGetSession 都传角色 id，
+        // chat-storage 也用它反查角色名）。这里必须给 characterId，给 contact.id 会建出
+        // 一个谁都匹配不上的游离会话，CSS 写进去等于扔了。
         return loadChatContacts().map(contact => ({
-            contactId: contact.id,
+            contactId: contact.characterId,
             name: contact.nickname || characters.find(c => c.id === contact.characterId)?.name || "未知角色",
         }));
     }, [pickCharacterFor]);
@@ -348,6 +353,12 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         }
         if (destination === "chat_session_css") {
             setPickCharacterFor(importFile);
+            setImportFile(null);
+            return;
+        }
+        // 插件与本应用同权限，装上即执行；集市来源必然是陌生人写的代码，先问一句
+        if (destination === "plugin") {
+            setConfirmPlugin(importFile);
             setImportFile(null);
             return;
         }
@@ -1166,6 +1177,30 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 setUploadAuthor(profile.nickname);
                                 setShowUpload(true);
                             }}>确认</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 插件安装告知：插件与本应用同权限，装上即执行，必须先问一句 */}
+            {confirmPlugin && (
+                <div className="rh-dialog-overlay" onClick={importingTo ? undefined : () => setConfirmPlugin(null)}>
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar"><span className="rh-titlebar-text">安装插件</span></div>
+                        <div className="rh-dialog-body">
+                            <span className="rh-dialog-icon">⚠️</span>
+                            <span>
+                                插件将与应用本身拥有<b>相同的能力</b>（包括访问你的 API 配置与全部聊天数据），
+                                且安装后立即启用。这是其他用户上传的代码，请只安装你信任的来源。确认安装吗？
+                            </span>
+                        </div>
+                        <div className="rh-dialog-footer">
+                            <button className="rh-btn" disabled={!!importingTo} onClick={() => setConfirmPlugin(null)}>取消</button>
+                            <button className="rh-btn rh-btn-primary" disabled={!!importingTo} onClick={() => {
+                                const target = confirmPlugin;
+                                setConfirmPlugin(null);
+                                void runImport(target, "plugin");
+                            }}>确认安装</button>
                         </div>
                     </div>
                 </div>
