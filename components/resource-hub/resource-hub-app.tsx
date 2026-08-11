@@ -511,9 +511,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         const folder = (uploadFolder === CUSTOM_FOLDER ? uploadFolderCustom : uploadFolder).trim();
         const name = uploadName.trim();
         if (!folder || !name) { onNotice?.("请填写分类和资源名称"); return; }
-        // 资源文件不再是必须的：纯图文帖（只有说明和配图）也能发。
-        // 上传服务那头仍要求至少有一个文件，所以这里只放开"必须是资源文件"这一层。
-        if (uploadFiles.length + uploadImages.length === 0) { onNotice?.("请至少选择一个文件，资源文件或配图都行"); return; }
+        // 文件不再是必须的：资源文件、配图都可以没有，纯说明文字也能发帖。
+        // 只有分类和名称仍然必填（它们决定资源在仓库里的落点）。
         setUploading(true);
         try {
             // 「选择资源文件」里的图片要标成资源本体（PNG 角色卡、表情包），
