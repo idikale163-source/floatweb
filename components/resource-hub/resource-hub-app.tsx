@@ -13,6 +13,8 @@ import {
     downloadResourceHubFile,
     fetchShareIndex,
     importResourceHubFile,
+    fetchPresetEntry,
+    applyPresetEntry,
     loadResourceHubSource,
     purgeShareIndexCache,
     resolveResourceHubAssetUrl,
@@ -47,6 +49,9 @@ import {
 import { mergeMyUploads } from "@/lib/resource-hub-upload";
 import { DefaultPixelAvatar } from "@/components/resource-hub/pixel-avatar";
 import { DestPixelIcon, FileTypePixelIcon, fileExtension } from "@/components/resource-hub/pixel-icons";
+import { loadPresets } from "@/lib/settings-storage";
+import { displayOrderPrompts } from "@/lib/preset-entry-import";
+import type { Prompt, PresetConfig } from "@/lib/settings-types";
 // 标题栏图标用 lucide 矢量图：⚙/⟳ 这些字符在 iOS 上会被当彩色 emoji 画、
 // 或者字形本身偏小，各设备长相不一；矢量图标则处处一致且小尺寸清晰。
 import { RotateCw, Settings, X } from "lucide-react";
@@ -158,6 +163,13 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [confirmPlugin, setConfirmPlugin] = useState<string | null>(null);
     // 应用主题包前的覆盖确认：待导入的主题包文件路径
     const [confirmTheme, setConfirmTheme] = useState<string | null>(null);
+    // 「预设条目」四步流程：取到的条目 → 选新增/覆盖 → 选预设 → 选位置
+    const [entryImport, setEntryImport] = useState<{
+        prompt: Prompt;
+        mode: "insert" | "replace" | null;
+        preset: PresetConfig | null;
+    } | null>(null);
+    const [entryBusy, setEntryBusy] = useState(false);
     const [uploadCfg, setUploadCfg] = useState<ResourceHubUploadConfig>(() => loadUploadConfig());
     // 所见即所得编辑器：贴纸选择器（标题/正文两处）、颜色面板
     const [stickerPickerFor, setStickerPickerFor] = useState<"title" | "desc" | null>(null);
@@ -346,6 +358,21 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         }
     }, [onNotice, source]);
 
+    /** 第三步点下去：落盘并收尾。 */
+    const runEntryImport = useCallback(async (anchorIdentifier: string | null) => {
+        if (!entryImport?.mode || !entryImport.preset) return;
+        setEntryBusy(true);
+        try {
+            const message = await applyPresetEntry(entryImport.prompt, entryImport.preset.id, entryImport.mode, anchorIdentifier);
+            onNotice?.(message);
+            setEntryImport(null);
+        } catch (err) {
+            onNotice?.(`导入失败：${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setEntryBusy(false);
+        }
+    }, [entryImport, onNotice]);
+
     const handlePickDestination = useCallback((destination: ImportDestination) => {
         if (!importFile) return;
         const typeError = checkImportFileForDestination(destination, importFile);
@@ -368,6 +395,19 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         if (destination === "theme") {
             setConfirmTheme(importFile);
             setImportFile(null);
+            return;
+        }
+        // 预设条目：先把条目取下来（顺便校验是不是单条），再走选预设/选位置
+        if (destination === "preset_entry") {
+            const target = importFile;
+            setImportingTo(destination);
+            void fetchPresetEntry(source, target)
+                .then(prompt => {
+                    setEntryImport({ prompt, mode: null, preset: null });
+                    setImportFile(null);
+                })
+                .catch(err => onNotice?.(`导入失败：${err instanceof Error ? err.message : String(err)}`))
+                .finally(() => setImportingTo(null));
             return;
         }
         void runImport(importFile, destination);
@@ -1186,6 +1226,72 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 setShowUpload(true);
                             }}>确认</button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 预设条目：新增 or 覆盖 → 选预设 → 选位置 */}
+            {entryImport && (
+                <div className="rh-dialog-overlay" onClick={entryBusy ? undefined : () => setEntryImport(null)}>
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar">
+                            <span className="rh-titlebar-text">
+                                {!entryImport.mode ? "导入预设条目"
+                                    : !entryImport.preset ? "导入到哪个预设？"
+                                        : entryImport.mode === "insert" ? "插到哪一条后面？" : "覆盖哪一条？"}
+                            </span>
+                            <span className="rh-titlebar-controls">
+                                <button className="rh-tb-btn" disabled={entryBusy} onClick={() => setEntryImport(null)}>✕</button>
+                            </span>
+                        </div>
+                        <div className="rh-import-filename">条目：{entryImport.prompt.name || entryImport.prompt.identifier}</div>
+
+                        {/* 第一步：新增还是覆盖 */}
+                        {!entryImport.mode && (
+                            <div className="rh-dialog-body rh-dest-list">
+                                <button className="rh-dest" onClick={() => setEntryImport(v => v && { ...v, mode: "insert" })}>
+                                    <span className="rh-dest-label">新增 —— 插入到某一条之后</span>
+                                </button>
+                                <button className="rh-dest" onClick={() => setEntryImport(v => v && { ...v, mode: "replace" })}>
+                                    <span className="rh-dest-label">覆盖 —— 替换掉某一条</span>
+                                </button>
+                            </div>
+                        )}
+
+                        {/* 第二步：选预设 */}
+                        {entryImport.mode && !entryImport.preset && (
+                            <div className="rh-dialog-body rh-dest-list">
+                                {loadPresets().length > 0 ? loadPresets().map(preset => (
+                                    <button key={preset.id} className="rh-dest"
+                                        onClick={() => setEntryImport(v => v && { ...v, preset })}>
+                                        <span className="rh-dest-label">{preset.name}</span>
+                                        <span className="rh-dest-hint">{preset.prompts.length} 条</span>
+                                    </button>
+                                )) : <div className="rh-center-hint">还没有任何预设，先去设置里建一个吧</div>}
+                            </div>
+                        )}
+
+                        {/* 第三步：选位置。用显示顺序，与预设管理页看到的一致 */}
+                        {entryImport.mode && entryImport.preset && (
+                            <div className="rh-dialog-body rh-dest-list">
+                                {entryImport.mode === "insert" && (
+                                    <button className="rh-dest" disabled={entryBusy}
+                                        onClick={() => void runEntryImport(null)}>
+                                        <span className="rh-dest-label">▲ 放到最前面</span>
+                                    </button>
+                                )}
+                                {displayOrderPrompts(entryImport.preset).map(p => (
+                                    <button key={p.identifier} className="rh-dest" disabled={entryBusy}
+                                        onClick={() => void runEntryImport(p.identifier)}>
+                                        <span className="rh-dest-label">
+                                            {entryBusy && <><PixelHourglass size={13} /> </>}
+                                            {p.name || p.identifier}
+                                        </span>
+                                        <span className="rh-dest-hint">{p.marker ? "占位条目" : p.role}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

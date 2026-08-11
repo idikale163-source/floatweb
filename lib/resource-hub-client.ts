@@ -22,6 +22,7 @@ import { createOrGetSession, loadChatSessions, saveChatSessions } from "./chat-s
 import { readThemeProfile, writeThemeProfile } from "./theme-storage";
 import { loadGameDrafts, saveGameDrafts } from "./game-storage";
 import type { GameTemplateDraft } from "./game-types";
+import type { Prompt } from "./settings-types";
 
 const SOURCE_KEY = "ai_phone_resource_hub_source_v1";
 registerKvMigration(SOURCE_KEY);
@@ -310,10 +311,52 @@ export function checkImportFileForDestination(destination: ImportDestination, pa
             return lower.endsWith(".zip") || lower.endsWith(".html") || lower.endsWith(".htm") ? null : "应用需要 zip 安装包或单 HTML 文件";
         case "plugin":
             return lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".txt") ? null : "插件需要 JS 源码文件";
+        case "preset_entry":
+            return isJson ? null : "预设条目需要 JSON 文件";
         case "theme":
             // .ai-theme 就是个 zip，有人改名成 .zip 上传也照收
             return lower.endsWith(".ai-theme") || lower.endsWith(".zip") ? null : "主题包需要 .ai-theme 文件";
     }
+}
+
+/**
+ * 取一条预设条目（供集市的「预设条目」流程用）。
+ * 单独暴露是因为这条路要先让用户选预设和位置，不能一步到底。
+ */
+export async function fetchPresetEntry(source: ResourceHubSource, path: string): Promise<Prompt> {
+    const { ensureSettingsStorageHydrated } = await import("./settings-storage");
+    await ensureSettingsStorageHydrated();
+    const { parseSinglePromptEntry } = await import("./preset-entry-import");
+    const parsed = parseSinglePromptEntry(await fetchResourceHubText(source, path));
+    if (parsed.ok) return parsed.prompt;
+    if (parsed.reason === "multiple") {
+        throw new Error(`这个文件里有 ${parsed.count} 条条目，不是单条。整份预设请改用「预设」目的地导入。`);
+    }
+    throw new Error("解析失败，请确认这是预设条目左滑「导出」生成的 JSON");
+}
+
+/** 把取到的条目插入/覆盖进指定预设，落盘并返回给用户看的说明。 */
+export async function applyPresetEntry(
+    prompt: Prompt,
+    presetId: string,
+    mode: "insert" | "replace",
+    anchorIdentifier: string | null,
+): Promise<string> {
+    const { ensureSettingsStorageHydrated } = await import("./settings-storage");
+    await ensureSettingsStorageHydrated();
+    const { insertPromptAfter, replacePromptEntry } = await import("./preset-entry-import");
+    const presets = loadPresets();
+    const target = presets.find(p => p.id === presetId);
+    if (!target) throw new Error("目标预设不存在，可能已被删除");
+    const next = mode === "replace" && anchorIdentifier
+        ? replacePromptEntry(target, anchorIdentifier, prompt)
+        : insertPromptAfter(target, anchorIdentifier, prompt);
+    savePresets(presets.map(p => p.id === presetId ? next : p));
+    dispatch("settings-presets-updated");
+    const label = prompt.name || prompt.identifier;
+    return mode === "replace"
+        ? `已覆盖预设「${target.name}」里的一条条目为「${label}」`
+        : `条目「${label}」已插入预设「${target.name}」`;
 }
 
 function dispatch(eventName: string): void {
@@ -533,6 +576,10 @@ export async function importResourceHubFile(
             dispatchWith(THEME_PACKAGE_INSTALLED_EVENT, result);
             return `主题包已应用：${result.summary.assetCount} 个资源，${result.summary.widgetCount} 个桌面组件`;
         }
+        case "preset_entry":
+            // 这条目的地要先选预设和位置，走 fetchPresetEntry + applyPresetEntry 两步，
+            // 不经过这里。留个明确的兜底，免得以后有人直接调进来静默什么都不做。
+            throw new Error("预设条目需要先选择目标预设与位置");
         case "plugin": {
             const code = await fetchResourceHubText(source, path);
             const { installChatPluginFromCode } = await import("./chat-plugin-loader");

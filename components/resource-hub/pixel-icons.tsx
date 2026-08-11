@@ -253,6 +253,25 @@ const DEST_ICONS: Record<ImportDestination, PixelGrid> = {
         "................",
         "................",
     ],
+    // 列表卡片 + 加号徽标（单条预设条目）
+    preset_entry: [
+        "................",
+        "................",
+        "..kkkkkkkkkkkk..",
+        "..kwwwwwwwwwwk..",
+        "..kwddddddddwk..",
+        "..kwddddddddwk..",
+        "..kwwwwwwwwwwk..",
+        "..kwbbbbbbbbwk..",
+        "..kwbbbbbbbbwk..",
+        "..kwwwwwwkkkkk..",
+        "..kwdddddkkykk..",
+        "..kwdddddkyyyk..",
+        "..kkkkkkkkkykk..",
+        ".........kkkkk..",
+        "................",
+        "................",
+    ],
 };
 
 function renderGrid(grid: PixelGrid, size: number, className?: string) {
