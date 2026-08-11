@@ -35,8 +35,6 @@ import {
 import { WorldTabStrip, WorldCaseSheet, NewWorldSheet } from "@/components/character/world-tabs";
 import { RelationLinkDialog, RelationPairSheet } from "@/components/character/relation-dialogs";
 import { loadMomentsConfig, saveMomentsConfig } from "@/lib/moments-storage";
-import { purgeCharacterChatData } from "@/lib/chat-storage";
-import { clearRequestsForCharacter, dispatchFriendRequestUpdated } from "@/lib/friend-request-storage";
 import type { CanvasBgItem } from "@/lib/character-types";
 import { PageShell } from "@/components/ui/page-shell";
 import { ConfirmDialog } from "@/components/ui/modal";
@@ -1293,11 +1291,6 @@ function CharListView({
               <button className="char-punched-hole-btn danger" disabled={!deleteConfirmReady} onClick={() => {
                 if (!deleteConfirmReady) return;
                 if (deleteConfirm.type === 'char') {
-                  // 删角色卡是真删：私聊会话、消息、联系人、待处理的好友申请一并清掉。
-                  // （删好友只是藏起来，加回好友能恢复；这里不可恢复）
-                  purgeCharacterChatData(deleteConfirm.id);
-                  clearRequestsForCharacter(deleteConfirm.id);
-                  dispatchFriendRequestUpdated();
                   onUpdateChars(characters.filter(c => c.id !== deleteConfirm.id));
                   onNotice?.("已销毁调查档案");
                 } else {

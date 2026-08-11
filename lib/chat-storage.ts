@@ -1000,23 +1000,6 @@ export function removeChatContact(characterId: string) {
     markContactRemoved(characterId);
 }
 
-/**
- * 删角色卡时的彻底清理：私聊会话连同消息一并抹掉，不可恢复。
- * 与"删好友"相反——删好友只藏起来，这里是真删。
- * 返回被删掉的会话数。群聊里该角色的历史发言不在清理范围内。
- */
-export function purgeCharacterChatData(characterId: string): number {
-    if (!characterId) return 0;
-    const targets = loadChatSessions().filter(s => !s.isGroup && s.contactId === characterId);
-    for (const session of targets) deleteChatSession(session.id);
-    const contacts = loadChatContacts();
-    if (contacts.some(c => c.characterId === characterId)) {
-        saveChatContacts(contacts.filter(c => c.characterId !== characterId));
-    }
-    unmarkContactRemoved(characterId); // 角色都没了，墓碑没有留着的意义
-    return targets.length;
-}
-
 // ── CRUD for Sessions ─────────────────────────
 export function loadChatSessions(): ChatSession[] {
     const normalized = normalizeChatSessions(_sessionsCache);
