@@ -314,8 +314,10 @@ export function checkImportFileForDestination(destination: ImportDestination, pa
         case "preset_entry":
             return isJson ? null : "预设条目需要 JSON 文件";
         case "theme":
-            // .ai-theme 就是个 zip，有人改名成 .zip 上传也照收
-            return lower.endsWith(".ai-theme") || lower.endsWith(".zip") ? null : "主题包需要 .ai-theme 文件";
+            // 现在导出的就是 .zip；.ai-theme 是旧版后缀，留作兼容。
+            // 真正的校验在 installThemePackageFile 里按包内 manifest.json 做，
+            // 这里只是个便宜的前置过滤。
+            return lower.endsWith(".zip") || lower.endsWith(".ai-theme") ? null : "主题包需要 zip 文件（旧版 .ai-theme 也可以）";
     }
 }
 
@@ -568,7 +570,7 @@ export async function importResourceHubFile(
         }
         case "theme": {
             const buffer = await fetchResourceHubBinary(source, path);
-            const filename = path.split("/").pop() || "theme.ai-theme";
+            const filename = path.split("/").pop() || "theme.zip";
             const { installThemePackageFile, THEME_PACKAGE_INSTALLED_EVENT } = await import("./theme-package");
             // installThemePackageFile 自己就把资源/主题档案/组件/布局都落盘了，
             // 但桌面上那些 React 状态还是旧的，得派事件让 shell 重新落地一次。
