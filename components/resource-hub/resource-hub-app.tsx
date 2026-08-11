@@ -93,8 +93,12 @@ function formatEntryDate(iso: string | null): string {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-/** 开屏版权提示的「永不显示」记忆键（值为 "1" 即不再弹）。 */
-const NOTICE_DISMISSED_KEY = "ai_phone_resource_hub_notice_v1";
+/**
+ * 开屏须知的「永不显示」记忆键（值为 "1" 即不再弹）。
+ * 须知内容有实质改动时要升版本号：旧键的「永不显示」不该压住新内容，
+ * 否则老用户永远看不到新增的隐私告知。
+ */
+const NOTICE_DISMISSED_KEY = "ai_phone_resource_hub_notice_v2";
 registerKvMigration(NOTICE_DISMISSED_KEY);
 
 export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onNotice?: (msg: string) => void }) {
@@ -1348,12 +1352,18 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             {showNotice && (
                 <div className="rh-dialog-overlay">
                     <div className="rh-dialog" onClick={e => e.stopPropagation()}>
-                        <div className="rh-titlebar"><span className="rh-titlebar-text">创作者权益提示</span></div>
-                        <div className="rh-dialog-body">
-                            <span className="rh-dialog-icon">📢</span>
-                            <span>
-                                为了保护创作者权益，从资源市场导入的他人作品，仅限于本地运行，<b>不能将他人的作品发布市场</b>。
-                            </span>
+                        <div className="rh-titlebar"><span className="rh-titlebar-text">资源市场 APP 须知</span></div>
+                        <div className="rh-dialog-body rh-notice-body">
+                            <p>
+                                <span className="rh-notice-no">1.</span>
+                                上传内容将会发布于公开仓库，你设置的头像、昵称、正文内容、资源文件<b>所有人可见</b>，
+                                请确保你知晓以上内容，<b>保护个人隐私</b>，并发布<b>网络允许的安全内容</b>。
+                            </p>
+                            <p>
+                                <span className="rh-notice-no">2.</span>
+                                为了保护创作者权益，从资源市场导入的他人作品，仅限于本地运行，
+                                <b>不能将他人的作品发布市场</b>。
+                            </p>
                         </div>
                         <div className="rh-dialog-footer">
                             <button className="rh-btn" onClick={() => {
@@ -1995,6 +2005,9 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     gap: 10px;
                 }
                 .rh-dialog-icon { font-size: 30px; }
+                .rh-notice-body { flex-direction: column; align-items: stretch; gap: 10px; line-height: 1.6; }
+                .rh-notice-body p { margin: 0; }
+                .rh-notice-no { font-weight: 700; margin-right: 2px; }
                 .rh-dialog-footer {
                     display: flex;
                     justify-content: center;
