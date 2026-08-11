@@ -382,12 +382,17 @@ export async function importResourceHubFile(
             const buffer = await fetchResourceHubBinary(source, path);
             const filename = path.split("/").pop() || "app.zip";
             const file = new File([buffer], filename);
-            const { loadCustomAppPackage, loadSingleHtmlCustomApp, installCustomAppAsync } = await import("./custom-app-storage");
+            const { loadCustomAppPackage, loadSingleHtmlCustomApp, installCustomAppAsync, CUSTOM_APP_PLACE_DESKTOP_EVENT } = await import("./custom-app-storage");
             const { applyCustomAppRegistrationsAsync } = await import("./custom-app-registration");
             const app = lower.endsWith(".zip") ? await loadCustomAppPackage(file) : await loadSingleHtmlCustomApp(file);
             // 打来源标记：别人的作品，本机能玩，但不进本地测试、不能再发布到应用广场
             const installed = await installCustomAppAsync({ ...app, resourceHubPath: path });
             await applyCustomAppRegistrationsAsync(installed);
+            // 请桌面摆图标：应用广场走 onInstallToDesktop 回调，我们够不着它，
+            // 改派同一套事件（小坊装应用也是这么做的）。漏了这步图标不会出现在桌面。
+            if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent(CUSTOM_APP_PLACE_DESKTOP_EVENT, { detail: { appId: installed.id } }));
+            }
             return `应用「${installed.name}」已安装，桌面可找到图标（集市来的作品仅供本机使用，不能再发布）`;
         }
         case "game": {
