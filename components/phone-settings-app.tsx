@@ -372,7 +372,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                             items={SETTINGS_MENU.filter(item => ["weixin", "toolbox"].includes(item.id)).map(makeCardItem)}
                         />
                         <div className="settings-realtime-section">
-                            <h3 className="settings-menu-section-title">Realtime</h3>
+                            <h3 className="settings-menu-section-title">Runtime</h3>
                             <div className="app-card card-featured settings-toggle-card">
                                 <span className="card-icon" style={realtimeIconStyle}>
                                     <Clock size={22} strokeWidth={1.75} />
