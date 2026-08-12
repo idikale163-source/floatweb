@@ -1184,10 +1184,6 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 <input type="file" accept="image/*" multiple hidden onChange={e => { const picked = Array.from(e.target.files ?? []); setEditAddImages(current => appendPickedFiles(current, picked)); e.target.value = ""; }} />
                             </label>
                             {renderPickedFiles(editAddImages, index => setEditAddImages(current => current.filter((_, i) => i !== index)))}
-                            <div className="rh-form-hint">
-                                「资源文件」是别人要下载/导入的东西，「配图」只在详情页展示。
-                                PNG 角色卡、表情包这类图片本身就是资源，要放进「资源文件」。
-                            </div>
                             <div className="rh-form-hint">同名文件会被覆盖；保存后立即生效，索引刷新后所有人可见。</div>
                         </div>
                         <div className="rh-dialog-footer">
