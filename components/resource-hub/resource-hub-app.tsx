@@ -218,6 +218,12 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         if (!editorRefFor(field).current?.applyTag(tag)) showToast("先选中要排版的文字，再点按钮");
     }, [editorRefFor, showToast]);
 
+    // 颜色和字号都只能「加」不能「减」：调色盘里没有黑、字号只有大和小，
+    // 套错了就退不回默认。这里统一给一个「清除」把选区还原成普通文字。
+    const clearFormat = useCallback((field: RichField) => {
+        if (!editorRefFor(field).current?.clearFormat()) showToast("先选中要还原的文字，再点清除");
+    }, [editorRefFor, showToast]);
+
     // 换弹窗时把面板收掉，免得残留的目标指向另一个弹窗里的编辑器
     const closeRichPickers = useCallback(() => {
         setStickerPickerFor(null);
@@ -597,6 +603,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             <button type="button" className="rh-fmt-btn" onPointerDown={keepSelection} onClick={() => wrapTag("大", field)}>大</button>
             <button type="button" className="rh-fmt-btn" onPointerDown={keepSelection} onClick={() => wrapTag("小", field)}>小</button>
             <button type="button" className="rh-fmt-btn rh-fmt-bold" onPointerDown={keepSelection} onClick={() => wrapTag("粗", field)}>粗</button>
+            <button type="button" className="rh-fmt-btn" onPointerDown={keepSelection} onClick={() => clearFormat(field)}>清除</button>
         </div>
     );
     const renderRichPanels = (field: RichField) => (
