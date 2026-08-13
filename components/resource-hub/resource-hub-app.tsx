@@ -924,6 +924,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                     可以<b className="rh-build-hot">让小坊将你的修改贡献到公开仓库哦～</b><br />
                                     float 会进行飞速审核，感谢您的付出～
                                 </p>
+                                <div className="rh-build-note">需要自部署版本（有自己的公开 fork）；官方站用户暂不支持</div>
                             </div>
                             <div className="rh-build-wall-head">
                                 <span className="rh-build-wall-line" />
@@ -1901,6 +1902,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 .rh-build-intro p { margin: 0; font-size: 12.5px; line-height: 1.9; color: #333; }
                 .rh-build-intro p b { color: #000080; }
                 .rh-build-intro p b.rh-build-hot { color: #cc0000; }
+                .rh-build-note { font-size: 11px; color: #888; margin-top: 7px; }
                 .rh-build-wall-head { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
                 .rh-build-wall-line { flex: 1; height: 0; border-top: 1px solid #808080; box-shadow: 0 1px 0 #fff; }
                 .rh-build-wall-title { font-weight: 800; font-size: 13px; color: #000080; white-space: nowrap; }
