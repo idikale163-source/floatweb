@@ -1292,7 +1292,6 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 <div className="rh-form-hint">
                                     需要能<b>完整证明作品是你创作的</b>的材料：原始工程文件、创作过程截图、
                                     带时间的草稿等。证明不足会被拒绝。
-                                    材料会存入<b>私有保管库</b>，只有管理员能看到，不会公开。
                                 </div>
                             </div>
                             <div className="rh-form-field">
