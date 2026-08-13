@@ -1595,10 +1595,27 @@ html[data-zoom-fallback] .phone-shell-wrap {
   transform: scale(0.92);
   transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-/* 面板里的图标盒尺寸固定，不吃桌面 --slot-size 收缩 */
+/* 面板里的图标盒尺寸固定，不吃桌面 --slot-size 收缩。
+   另外补一层"座位"底色：桌面上玻璃盒靠 backdrop 模糊壁纸显形、扁平盒
+   底色 token 默认近乎全透明，进了面板身后是均匀的面板底，两种材质都
+   会隐形成"光杆图标"。座位用文字色低透明度调出，深浅主题都有对比。 */
 .folder-app .icon-glyph-box {
   width: 58px;
   height: 58px;
+  background:
+    linear-gradient(0deg, var(--c-desktop-icon-box, transparent), var(--c-desktop-icon-box, transparent)),
+    color-mix(in srgb, var(--c-home-text, #2f343b) 10%, transparent);
+}
+.phone-shell[data-icon-effect="glass"] .folder-app .icon-glyph-box {
+  background:
+    linear-gradient(135deg,
+      rgba(255, 255, 255, 0.17),
+      color-mix(in srgb, var(--c-desktop-icon-bg, #c7b8ff) 6%, transparent),
+      rgba(255, 255, 255, 0.07)),
+    linear-gradient(0deg,
+      color-mix(in srgb, var(--c-desktop-icon-box, #ffffff) 38%, transparent),
+      color-mix(in srgb, var(--c-desktop-icon-box, #ffffff) 38%, transparent)),
+    rgba(255, 255, 255, 0.28);
 }
 .folder-app .icon-label {
   color: var(--c-home-label, #2f343b);
