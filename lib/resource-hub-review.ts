@@ -214,6 +214,9 @@ export type ShareClaimInfo = {
     entryPath: string;
     ownerHash: string;
     nickname: string;
+    /** 证明材料在私有保管库里的编号与仓库（早期申请可能没有） */
+    claimId?: string;
+    vaultRepo?: string;
 };
 
 /** 从投稿列表里识别找回申请并解析元数据；不是找回申请返回 null */
@@ -223,7 +226,46 @@ export function parseShareClaim(submission: ShareSubmission): ShareClaimInfo | n
     const entryPath = submission.body.match(/^资源路径[:：]\s*(.+?)\s*$/m)?.[1];
     const ownerHash = submission.body.match(/^新钥匙指纹[:：]\s*([0-9a-f]{64})/m)?.[1];
     const nickname = submission.body.match(/^申请人[:：]\s*(.+)$/m)?.[1]?.trim() || "匿名";
-    return entryPath && ownerHash ? { entryPath, ownerHash, nickname } : null;
+    const claimId = submission.body.match(/^申请编号[:：]\s*(\S+)/m)?.[1];
+    const vaultRepo = submission.body.match(/^证明仓库[:：]\s*([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/m)?.[1];
+    return entryPath && ownerHash ? { entryPath, ownerHash, nickname, claimId, vaultRepo } : null;
+}
+
+/**
+ * 读取找回申请的证明材料：存在私有保管库里，只有管理员的 token 打得开。
+ * 早期申请（证明直接放在 PR 分支上）没有保管库信息，回落到读 PR 文件。
+ */
+export async function fetchClaimProofFiles(prNumber: number, claim: ShareClaimInfo): Promise<ShareSubmissionFile[]> {
+    if (!claim.claimId || !claim.vaultRepo) return fetchShareSubmissionFiles(prNumber);
+    const { token } = getReviewAuth();
+    const [vaultOwner, vaultRepo] = claim.vaultRepo.split("/");
+    const encode = (p: string) => p.split("/").map(encodeURIComponent).join("/");
+    const dir = `找回申请/${claim.claimId}`;
+    const listing = await gh<Array<{ path: string; name: string; size: number; type: string }>>(
+        token, "GET", `/repos/${vaultOwner}/${vaultRepo}/contents/${encode(dir)}`);
+    const result: ShareSubmissionFile[] = [];
+    for (const item of listing.filter(f => f.type === "file")) {
+        const entry: ShareSubmissionFile = { path: item.name, size: item.size };
+        try {
+            const blob = await gh<{ content?: string; encoding?: string }>(
+                token, "GET", `/repos/${vaultOwner}/${vaultRepo}/contents/${encode(item.path)}`);
+            if (blob.encoding === "base64" && blob.content) {
+                if (IMAGE_EXT_RE.test(item.name)) {
+                    const ext = item.name.split(".").pop()!.toLowerCase().replace("jpg", "jpeg");
+                    entry.imageDataUrl = `data:image/${ext};base64,${blob.content.replace(/\s/g, "")}`;
+                } else {
+                    const text = decodeBase64Utf8(blob.content);
+                    entry.textPreview = text.slice(0, TEXT_PREVIEW_MAX) + (text.length > TEXT_PREVIEW_MAX ? "\n…（已截断）" : "");
+                }
+            } else {
+                entry.note = `文件较大（${Math.round(item.size / 1024)}KB），请到保管库仓库查看`;
+            }
+        } catch {
+            entry.note = "内容预览失败";
+        }
+        result.push(entry);
+    }
+    return result;
 }
 
 /**

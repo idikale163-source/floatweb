@@ -17,6 +17,7 @@ import {
   canManageShareRepo,
   fetchAutoApprove,
   setAutoApprove,
+  fetchClaimProofFiles,
   fetchShareSubmissionFiles,
   listShareSubmissions,
   parseShareClaim,
@@ -182,7 +183,11 @@ export function ModerationCenter({ onNotice }: { onNotice?: (msg: string) => voi
     if (!shareFiles[item.number]) {
       setShareFiles(current => ({ ...current, [item.number]: "loading" }));
       try {
-        const files = await fetchShareSubmissionFiles(item.number);
+        // 找回申请的证明材料在私有保管库里，走专用读取；普通投稿读 PR 文件
+        const claim = parseShareClaim(item);
+        const files = claim
+          ? await fetchClaimProofFiles(item.number, claim)
+          : await fetchShareSubmissionFiles(item.number);
         setShareFiles(current => ({ ...current, [item.number]: files }));
       } catch (err) {
         notice(err instanceof Error ? err.message : "内容加载失败");
