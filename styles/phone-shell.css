@@ -1491,9 +1491,10 @@ html[data-zoom-fallback] .phone-shell-wrap {
 }
 
 .folder-panel {
-  width: min(236px, 80%);
+  width: min(224px, 80%);
   border-radius: 30px;
-  padding: 16px 4px 12px;
+  /* 四边留白交给 .folder-page：横向由 space-evenly 均分，纵向用对称 padding */
+  padding: 0;
   /* 扁平材质：图标底色罩在面板底色(--c-home-card，即扁平组件的卡面)上，
      两个颜色都跟装扮面板走；默认图标底色近乎透明时就是一张干净的组件卡 */
   background:
@@ -1566,10 +1567,12 @@ html[data-zoom-fallback] .phone-shell-wrap {
   flex: 0 0 100%;
   scroll-snap-align: center;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(2, minmax(88px, auto));
-  gap: 10px 4px;
-  padding: 8px 10px;
+  /* 列宽定死为图标宽，space-evenly 让左边距=列间距=右边距，四向留白统一 */
+  grid-template-columns: repeat(2, 58px);
+  grid-template-rows: repeat(2, minmax(84px, auto));
+  justify-content: space-evenly;
+  row-gap: 4px;
+  padding: 26px 0 18px;
   align-items: start;
 }
 
