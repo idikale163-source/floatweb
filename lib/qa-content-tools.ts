@@ -43,6 +43,7 @@ import {
     submitContribution,
     type ContribCompareResult,
 } from "./community-contrib";
+import { loadQaGithubConfig } from "./qa-github";
 import { loadUploadConfig } from "./resource-hub-upload";
 import { CUSTOM_APP_CREATOR_GUIDE_MD } from "./custom-app-creator-guide";
 import { fetchCustomAppMarketItems, fetchMyCustomAppMarketItems } from "./custom-app-market-client";
@@ -1559,6 +1560,18 @@ export function readStagedAppFile(pathArg: unknown, pageArg: unknown, startArg?:
 
 let _contribCompareCache: ContribCompareResult | null = null;
 
+/** 私有 fork 支持：工坊「连接仓库」连的恰好是这个 fork 时，读取带上她的 token。
+ *  公开 fork 依旧全程匿名（零密钥开箱即用）。 */
+function contribForkToken(forkRepo: string): string | undefined {
+    try {
+        const config = loadQaGithubConfig();
+        if (config?.token && `${config.owner}/${config.repo}`.toLowerCase() === forkRepo.toLowerCase()) {
+            return config.token;
+        }
+    } catch { /* 读不到配置就按匿名走 */ }
+    return undefined;
+}
+
 const contribCompareTool: QaContentTool = {
     name: "对比官方版本",
     nativeName: "compare_with_official",
@@ -1581,15 +1594,15 @@ const contribCompareTool: QaContentTool = {
     async run(args) {
         const provided = typeof args.fork === "string" ? normalizeForkRepo(args.fork) : null;
         if (typeof args.fork === "string" && String(args.fork).trim() && !provided) {
-            return "fork 地址格式不对，应是 owner/repo 或完整 GitHub 链接（且仓库需公开）。";
+            return "fork 地址格式不对，应是 owner/repo 或完整 GitHub 链接。";
         }
         const forkRepo = provided || loadContribFork();
         if (!forkRepo) {
-            return "还不知道用户的 fork 地址。请向用户询问其 GitHub fork 仓库地址（形如 owner/ai-virtual-phone），拿到后再次调用本动作并带上 fork 参数。若用户用的是官方站（没有自部署），请说明贡献代码需要自部署版本。";
+            return "还不知道用户的 fork 地址。请向用户询问其 GitHub fork 仓库地址（形如 owner/ai-virtual-phone），拿到后再次调用本动作并带上 fork 参数。若用户用的是官方站（没有自部署），请说明贡献代码需要自部署版本。fork 是私有仓库的话，需先在工坊「连接仓库」里连接它（token 能读该仓库即可）。";
         }
         if (provided) saveContribFork(provided);
         const branch = typeof args.branch === "string" ? args.branch.trim() : "";
-        const result = await compareForkWithUpstream(forkRepo, branch || undefined);
+        const result = await compareForkWithUpstream(forkRepo, branch || undefined, contribForkToken(forkRepo));
         _contribCompareCache = result;
         const allowed = result.files.filter(file => file.inAllowlist && file.status !== "removed");
         const skipped = result.files.filter(file => !file.inAllowlist || file.status === "removed");
@@ -1686,7 +1699,7 @@ const contribSubmitTool: QaContentTool = {
         for (const path of paths) {
             const known = _contribCompareCache.files.find(item => item.path === path && item.inAllowlist && item.status !== "removed");
             if (!known) return `「${path}」不在可贡献清单里（先「对比官方版本」确认）。`;
-            files.push({ path, content: await fetchForkFileText(_contribCompareCache.forkRepo, _contribCompareCache.forkBranch, path) });
+            files.push({ path, content: await fetchForkFileText(_contribCompareCache.forkRepo, _contribCompareCache.forkBranch, path, contribForkToken(_contribCompareCache.forkRepo)) });
         }
 
         if (args.confirm !== true) {
