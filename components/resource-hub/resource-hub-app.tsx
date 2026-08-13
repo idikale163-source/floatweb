@@ -797,6 +797,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                         <span className="rh-profile-avatar-hint">换头像</span>
                                     </label>
                                     <div className="rh-profile-main">
+                                        <div className="rh-profile-name-row">
                                         {editingNickname ? (
                                             <input
                                                 className="rh-input rh-profile-nickname-input"
@@ -813,16 +814,15 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                                 {profile.nickname || "点这里起个昵称"} <span className="rh-profile-edit-hint">✎</span>
                                             </button>
                                         )}
+                                            <button className="rh-key-link" onClick={() => { setClaimPath(""); setClaimFiles([]); setClaimNote(""); setShowClaim(true); }}>🧾 找回作品</button>
+                                        </div>
                                         <div className="rh-profile-stats">
                                             <span>已发布 <b>{myStall.published.length}</b></span>
                                             <span>待审核 <b>{myStall.pending.length}</b></span>
                                             <span>收到 <b>{flowerCounts
                                                 ? myStall.published.reduce((sum, e) => sum + (flowerCounts[e.path] ?? 0), 0)
                                                 : "…"}</b> 🌸</span>
-                                            <span className="rh-profile-links">
-                                                <button className="rh-key-link" onClick={() => { setClaimPath(""); setClaimFiles([]); setClaimNote(""); setShowClaim(true); }}>🧾 找回作品</button>
-                                                <button className="rh-key-link" onClick={() => { setKeyImportText(""); setShowKeyDialog(true); }}>🔑 摊主钥匙</button>
-                                            </span>
+                                            <button className="rh-key-link" onClick={() => { setKeyImportText(""); setShowKeyDialog(true); }}>🔑 摊主钥匙</button>
                                         </div>
                                     </div>
                                 </div>
@@ -854,6 +854,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                         <span className="rh-profile-avatar-hint">换头像</span>
                                     </label>
                                     <div className="rh-profile-main">
+                                        <div className="rh-profile-name-row">
                                         {editingNickname ? (
                                             <input
                                                 className="rh-input rh-profile-nickname-input"
@@ -870,14 +871,13 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                                 {profile.nickname || "点这里起个昵称"} <span className="rh-profile-edit-hint">✎</span>
                                             </button>
                                         )}
+                                            <button className="rh-key-link" onClick={() => { setClaimPath(""); setClaimFiles([]); setClaimNote(""); setShowClaim(true); }}>🧾 找回作品</button>
+                                        </div>
                                         <div className="rh-profile-stats">
                                             <span>已发布 <b>0</b></span>
                                             <span>待审核 <b>0</b></span>
                                             <span>收到 <b>0</b> 🌸</span>
-                                            <span className="rh-profile-links">
-                                                <button className="rh-key-link" onClick={() => { setClaimPath(""); setClaimFiles([]); setClaimNote(""); setShowClaim(true); }}>🧾 找回作品</button>
-                                                <button className="rh-key-link" onClick={() => { setKeyImportText(""); setShowKeyDialog(true); }}>🔑 摊主钥匙</button>
-                                            </span>
+                                            <button className="rh-key-link" onClick={() => { setKeyImportText(""); setShowKeyDialog(true); }}>🔑 摊主钥匙</button>
                                         </div>
                                     </div>
                                 </div>
@@ -2108,7 +2108,11 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     text-decoration: underline;
                     cursor: pointer;
                 }
-                .rh-profile-links { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+                .rh-profile-name-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+                .rh-profile-name-row .rh-key-link { margin-left: auto; flex: none; }
+                .rh-profile-name-row .rh-profile-nickname { min-width: 0; }
+                .rh-profile-name-row .rh-profile-nickname-input { flex: 1; min-width: 0; }
+                .rh-profile-stats .rh-key-link { margin-left: auto; }
                 .rh-claim-files { display: flex; flex-wrap: wrap; gap: 4px; }
                 .rh-claim-file {
                     background: #fff;
