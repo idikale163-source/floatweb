@@ -123,11 +123,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [buildWall, setBuildWall] = useState<MergedContribution[] | null>(null);
     const [buildWallState, setBuildWallState] = useState<"idle" | "loading" | "error">("idle");
     const [showBuildNotice, setShowBuildNotice] = useState(false);
-    const openBuildTab = useCallback(() => {
-        // 施工中：先只弹提示，不进入分区（测试完成后删掉这两行开闸）
-        setShowBuildNotice(true);
-        return;
-        // eslint-disable-next-line no-unreachable
+    const enterBuildTab = useCallback(() => {
+        setShowBuildNotice(false);
         setViewMode("build");
         setActiveFolder(null);
         setSearchQuery("");
@@ -137,6 +134,10 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             .then(list => { setBuildWall(list); setBuildWallState("idle"); })
             .catch(() => setBuildWallState("error"));
     }, [buildWall, buildWallState]);
+    const openBuildTab = useCallback(() => {
+        // 施工中：先弹提示（正式开闸时改成直接调 enterBuildTab）
+        setShowBuildNotice(true);
+    }, []);
     // 图片全屏预览（点开可保存）
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     // 送花：各资源花数（我的货摊展示用）+ 非阻塞小提示
@@ -1201,7 +1202,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                             <div style={{ fontSize: 13, lineHeight: 1.8 }}>共同建设施工中……<br />先去别的地方看看吧</div>
                         </div>
                         <div className="rh-dialog-footer">
-                            <button className="rh-btn rh-btn-primary" onClick={() => setShowBuildNotice(false)}>好</button>
+                            <button className="rh-btn" onClick={() => setShowBuildNotice(false)}>去别处看看</button>
+                            <button className="rh-btn rh-btn-primary" onClick={enterBuildTab}>看看现状</button>
                         </div>
                     </div>
                 </div>
