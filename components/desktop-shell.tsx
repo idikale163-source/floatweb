@@ -748,14 +748,18 @@ function getShellZoom(): number {
   return Number.isFinite(z) && z > 0 ? z : 1;
 }
 
-/** Convert pointer screen position to a grid cell (0-based)。
- *  cellX/cellY 是判定点在格内的像素偏移（含缝隙区），cellW/cellH 是格子内容尺寸
- *  （本分支为视觉像素，已含 zoom），用于“悬浮图标中心压进目标图标盒”的命中测试。 */
-function pointerToGridCell(
-  px: number,
-  py: number,
-  gridEl: HTMLElement
-): { row: number; col: number; cellX: number; cellY: number; cellW: number; cellH: number } | null {
+/** 网格几何：格子原点/步距/内容尺寸（视觉像素，已含 zoom）。指针→格子
+ *  换算和图标矩形碰撞检测共用同一份，保证两套判定不会各说各话。 */
+type GridGeometry = {
+  originX: number;
+  originY: number;
+  colStep: number;
+  rowStep: number;
+  colWidth: number;
+  rowHeight: number;
+};
+
+function getGridGeometry(gridEl: HTMLElement): GridGeometry {
   const rect = gridEl.getBoundingClientRect();
   const computed = getComputedStyle(gridEl);
   const zoom = getShellZoom();
@@ -769,16 +773,22 @@ function pointerToGridCell(
   const contentWidth = colWidths.length * colWidth + (colWidths.length - 1) * colGap;
   const originX = rect.left + (rect.width - contentWidth) / 2;
   const originY = rect.top + (parseFloat(computed.paddingTop) || 0) * zoom;
-  const colStep = colWidth + colGap;
   const totalRowGap = (GRID_ROWS - 1) * rowGap;
   const rowHeight = (rect.height - padY - totalRowGap) / GRID_ROWS;
-  const rowStep = rowHeight + rowGap;
-  const col = Math.floor((px - originX) / colStep);
-  const row = Math.floor((py - originY) / rowStep);
+  return { originX, originY, colStep: colWidth + colGap, rowStep: rowHeight + rowGap, colWidth, rowHeight };
+}
+
+/** Convert pointer screen position to a grid cell (0-based) */
+function pointerToGridCell(
+  px: number,
+  py: number,
+  gridEl: HTMLElement
+): { row: number; col: number } | null {
+  const geom = getGridGeometry(gridEl);
+  const col = Math.floor((px - geom.originX) / geom.colStep);
+  const row = Math.floor((py - geom.originY) / geom.rowStep);
   if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) return null;
-  const cellX = px - originX - col * colStep;
-  const cellY = py - originY - row * rowStep;
-  return { row, col, cellX, cellY, cellW: colWidth, cellH: rowHeight };
+  return { row, col };
 }
 
 function sanitizeWidgetsForLayout(_layout: DesktopLayout, widgets: WidgetInstance[]): WidgetInstance[] {
@@ -1309,9 +1319,14 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
     // 从打开的文件夹里拖出来时：记来源文件夹（取消时把成员放回去）
     sourceFolderId: string | null;
     initialFolders: DesktopFolderMap;
-    // 悬停在别的图标中心：计时够了才把它点亮成合并目标（防误触）
-    mergeKey: string;
+    // ── 碰撞裁决（iOS 手感）──
+    // 悬浮图标矩形和目标图标矩形从分开变为相交的那一刻裁决一次：
+    // 任一边重叠过半 = 合并，否则 = 换位；相交期间不改判，分开后重置。
+    contactId: DesktopIconId | null;
+    contactIntent: "merge" | "swap" | null;
+    // 合并目标接触约 0.2s 后亮圈并"武装"；未武装时松手只弹回，防路过误进组
     mergeTimer: ReturnType<typeof setTimeout> | null;
+    mergeArmed: boolean;
     mergeTargetIconId: DesktopIconId | null;
     mergeTargetPage: DesktopPageKey | null;
   } | null>(null);
@@ -2549,8 +2564,10 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       initialDock: dockRef.current,
       sourceFolderId: null,
       initialFolders: foldersRef.current,
-      mergeKey: "",
+      contactId: null,
+      contactIntent: null,
       mergeTimer: null,
+      mergeArmed: false,
       mergeTargetIconId: null,
       mergeTargetPage: null,
     };
@@ -2649,13 +2666,20 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     setDock(drag.initialDock);
   }
 
-  /** 取消“悬停成组”意图：停表 + 熄灭高亮 */
+  /** 取消“成组”意图：停表 + 熄灭高亮 + 解除武装 */
   function clearMergeIntent(drag: NonNullable<typeof editDragRef.current>) {
     if (drag.mergeTimer) { clearTimeout(drag.mergeTimer); drag.mergeTimer = null; }
     if (drag.mergeTargetIconId) setMergeTargetId(null);
-    drag.mergeKey = "";
+    drag.mergeArmed = false;
     drag.mergeTargetIconId = null;
     drag.mergeTargetPage = null;
+  }
+
+  /** 接触结束（矩形完全分开/离开网格/进 dock）：重置裁决，下次相交重新算 */
+  function clearContact(drag: NonNullable<typeof editDragRef.current>) {
+    drag.contactId = null;
+    drag.contactIntent = null;
+    clearMergeIntent(drag);
   }
 
   function updateDropTargetFromPointer(x: number, y: number) {
@@ -2664,7 +2688,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
 
     // ── Dock drop zone (icons only; widgets can't live in the dock) ──
     if (drag.itemType === "icon" && pointerOverDock(x, y)) {
-      clearMergeIntent(drag);
+      clearContact(drag);
       const fromDock = drag.sourcePage === DOCK_PAGE_KEY;
       const baseLen = drag.initialDock.filter((id) => id !== drag.itemId).length;
       // Dock full and the icon comes from a page → not allowed. Behave as no-target.
@@ -2693,71 +2717,87 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     const gridEl = gridRefs.current[pageKey];
     if (!gridEl) return;
 
-    // 图标拖拽的判定点用"悬浮图标盒中心"（手指坐标减抓握偏移再加半盒）：
-    // 无论捏着图标哪个角拖，判定的都是眼睛看到的那个悬浮图标压在哪里。
-    // 组件仍用手指坐标（有自己的 grabCell 换算）。
-    let probeX = x;
-    let probeY = y;
-    if (drag.itemType === "icon") {
-      const dragBoxW = Math.min(58 * getShellZoom(), drag.ghostW);
-      probeX = x - drag.offsetX + drag.ghostW / 2;
-      probeY = y - drag.offsetY + dragBoxW / 2;
-    }
-    const cell = pointerToGridCell(probeX, probeY, gridEl);
-    if (!cell) {
-      clearMergeIntent(drag);
-      if (drag.targetPage !== null) resetDragPreview(drag);
-      drag.targetPage = null;
-      drag.lastTargetKey = "";
-      setDropTarget(null);
-      return;
-    }
-
     const pageNum = getDesktopPageNumber(pageKey) || 1;
     const ws = widgetsRef.current;
 
     if (drag.itemType === "icon") {
-      // ── 悬停成组（iOS 同款判定）──
-      // 判定点是"悬浮图标盒的中心"而不是手指：等大图标下"中心点落进目标
-      // 图标盒" ⟺ "两条轴的边长重叠都过半"。直着推进去纵向重叠 100%、横向
-      // 一过半就命中；切着角进去两轴都不到半，走换位。文件夹 tile 本身不参
-      // 与合并（不嵌套）。occupant 从拖起时的原始布局读：目标被换位预览
-      // 滑走过也不影响命中，认定合并后 resetDragPreview 会把它拉回原位。
-      if (!isFolderIconId(drag.itemId)) {
-        const occupant = (drag.initialLayout[pageKey] ?? []).find(
-          (ic) => ic.id !== drag.itemId && ic.row === cell.row + 1 && ic.col === cell.col + 1
-        );
-        // 目标图标盒：宽 min(58, 格宽) 水平居中，贴格子顶部近似方形
-        const boxW = Math.min(58 * getShellZoom(), cell.cellW);
-        const boxLeft = (cell.cellW - boxW) / 2;
-        const inTargetBox = cell.cellX >= boxLeft && cell.cellX <= boxLeft + boxW
-          && cell.cellY >= 0 && cell.cellY <= boxW;
-        if (occupant && inTargetBox) {
-          const mKey = `${pageKey}:${occupant.id}`;
-          if (drag.mergeKey !== mKey) {
-            clearMergeIntent(drag);
-            drag.mergeKey = mKey;
-            // 目标立即生效（在中心区松手就算成组，快拖快放也能命中）；
-            // 计时只控制高亮出现的时机，防止路过时闪烁。
-            drag.mergeTargetIconId = occupant.id;
-            drag.mergeTargetPage = pageKey;
-            // 悬停期间冻结让位预览，图标各归各位，高亮才不会指着一个正在滑走的目标
-            resetDragPreview(drag);
-            drag.targetPage = null;
-            drag.lastTargetKey = `merge:${mKey}`;
-            setDropTarget(null);
-            drag.mergeTimer = setTimeout(() => {
-              const live = editDragRef.current;
-              if (live !== drag || !drag.active) return;
-              drag.mergeTimer = null;
-              setMergeTargetId(occupant.id);
-              try { navigator.vibrate?.(10); } catch { /* 不支持就算了 */ }
-            }, 180);
-          }
+      // ── 矩形碰撞裁决（iOS 手感）──
+      // 悬浮图标矩形 vs 目标图标矩形（位置取拖起时的原始布局）。两矩形从
+      // 分开变为相交的那一刻裁决一次：任一边重叠过半 = 合并（目标原地不动，
+      // ~0.2s 后亮圈武装，松手成组）；两边都不过半 = 换位（目标让位，照旧）。
+      // 相交期间不改判——边对边推进去永远是合并，切着角进去永远是换位；
+      // 想改判把图标拉开重新进即可。文件夹 tile 只换位不合并（不嵌套）。
+      const geom = getGridGeometry(gridEl);
+      const dragBoxW = Math.min(58 * getShellZoom(), drag.ghostW);
+      const dragLeft = x - drag.offsetX + (drag.ghostW - dragBoxW) / 2;
+      const dragTop = y - drag.offsetY;
+      const targetBoxW = Math.min(58 * getShellZoom(), geom.colWidth);
+      let best: { id: DesktopIconId; row: number; col: number; ox: number; oy: number; area: number } | null = null;
+      for (const ic of drag.initialLayout[pageKey] ?? []) {
+        if (ic.id === drag.itemId) continue;
+        const tLeft = geom.originX + (ic.col - 1) * geom.colStep + (geom.colWidth - targetBoxW) / 2;
+        const tTop = geom.originY + (ic.row - 1) * geom.rowStep;
+        const ox = Math.min(dragLeft + dragBoxW, tLeft + targetBoxW) - Math.max(dragLeft, tLeft);
+        const oy = Math.min(dragTop + dragBoxW, tTop + targetBoxW) - Math.max(dragTop, tTop);
+        if (ox <= 0 || oy <= 0) continue;
+        const area = ox * oy;
+        if (!best || area > best.area) best = { id: ic.id, row: ic.row, col: ic.col, ox, oy, area };
+      }
+
+      if (best && best.id === drag.contactId) {
+        // 同一次接触持续中：维持裁决。合并=冻结中无事可做；换位=目标已锁定。
+        return;
+      }
+      if (best) {
+        // 新接触：只在此刻裁决一次
+        clearMergeIntent(drag);
+        drag.contactId = best.id;
+        const halfEdge = Math.min(dragBoxW, targetBoxW) / 2;
+        const merge = !isFolderIconId(drag.itemId) && (best.ox > halfEdge || best.oy > halfEdge);
+        drag.contactIntent = merge ? "merge" : "swap";
+        if (merge) {
+          const targetId = best.id;
+          drag.mergeTargetIconId = targetId;
+          drag.mergeTargetPage = pageKey;
+          // 冻结让位预览：合并目标原地不动
+          resetDragPreview(drag);
+          drag.targetPage = null;
+          drag.lastTargetKey = `merge:${pageKey}:${targetId}`;
+          setDropTarget(null);
+          drag.mergeTimer = setTimeout(() => {
+            const live = editDragRef.current;
+            if (live !== drag || !drag.active || drag.mergeTargetIconId !== targetId) return;
+            drag.mergeTimer = null;
+            drag.mergeArmed = true;
+            setMergeTargetId(targetId);
+            try { navigator.vibrate?.(10); } catch { /* 不支持就算了 */ }
+          }, 180);
           return;
         }
+        // 换位：目标锁定为对方的格子
+        const key = `${pageKey}:${best.row - 1}:${best.col - 1}`;
+        if (key === drag.lastTargetKey) return;
+        drag.lastTargetKey = key;
+        drag.targetPage = pageKey;
+        drag.targetRow = best.row;
+        drag.targetCol = best.col;
+        setDropTarget({ page: pageKey, row: best.row, col: best.col });
+        simulateDragReflow(drag, pageKey, best.row, best.col);
+        return;
       }
-      clearMergeIntent(drag);
+
+      // ── 无接触：空格/缝隙落点，用悬浮图标盒中心所在格 ──
+      if (drag.contactId) clearContact(drag);
+      const probeX = x - drag.offsetX + drag.ghostW / 2;
+      const probeY = y - drag.offsetY + dragBoxW / 2;
+      const cell = pointerToGridCell(probeX, probeY, gridEl);
+      if (!cell) {
+        if (drag.targetPage !== null) resetDragPreview(drag);
+        drag.targetPage = null;
+        drag.lastTargetKey = "";
+        setDropTarget(null);
+        return;
+      }
       const key = `${pageKey}:${cell.row}:${cell.col}`;
       if (key === drag.lastTargetKey) return;
       drag.lastTargetKey = key;
@@ -2767,6 +2807,14 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       setDropTarget({ page: pageKey, row: cell.row + 1, col: cell.col + 1 });
       simulateDragReflow(drag, pageKey, cell.row + 1, cell.col + 1);
     } else {
+      const cell = pointerToGridCell(x, y, gridEl);
+      if (!cell) {
+        if (drag.targetPage !== null) resetDragPreview(drag);
+        drag.targetPage = null;
+        drag.lastTargetKey = "";
+        setDropTarget(null);
+        return;
+      }
       const w = ws.find((ww) => ww.id === drag.itemId);
       if (!w) return;
       const [wRows, wCols] = WIDGET_SIZE_CELLS[w.size];
@@ -3070,8 +3118,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     if (!drag) return;
 
     // Read target from ref (NOT React state — avoids stale closure)
+    // 成组必须已"武装"（圈亮了才算数）：快速滑过图标时松手只弹回，不误进组
     const isMergeDrop = Boolean(drag.active && drag.itemType === "icon"
-      && drag.mergeTargetIconId && drag.mergeTargetPage);
+      && drag.mergeArmed && drag.mergeTargetIconId && drag.mergeTargetPage);
     const hasTarget = drag.active && (drag.targetPage || isMergeDrop);
     if (isMergeDrop && commitMergeDrop(drag)) {
       // 已合并入组 — 状态在 commitMergeDrop 里整体写好
