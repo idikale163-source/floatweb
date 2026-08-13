@@ -876,8 +876,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 <div className="rh-build-stickers">🛠️ ✨ 📱 ✨ 🧸</div>
                                 <div className="rh-build-title">一起改进小手机吧～</div>
                                 <p>
-                                    贡献公开仓库功能已接入<b>工坊</b>，
-                                    可以让小坊将你的修改贡献到公开仓库哦～<br />
+                                    贡献公开仓库功能已接入<b>工坊</b>，<br />
+                                    可以<b className="rh-build-hot">让小坊将你的修改贡献到公开仓库哦～</b><br />
                                     float 会进行飞速审核，感谢您的付出～
                                 </p>
                             </div>
@@ -1747,6 +1747,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 .rh-build-title { font-weight: 800; font-size: 16px; color: #000080; margin-bottom: 7px; }
                 .rh-build-intro p { margin: 0; font-size: 12.5px; line-height: 1.9; color: #333; }
                 .rh-build-intro p b { color: #000080; }
+                .rh-build-intro p b.rh-build-hot { color: #cc0000; }
                 .rh-build-wall-head { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
                 .rh-build-wall-line { flex: 1; height: 0; border-top: 1px solid #808080; box-shadow: 0 1px 0 #fff; }
                 .rh-build-wall-title { font-weight: 800; font-size: 13px; color: #000080; white-space: nowrap; }
