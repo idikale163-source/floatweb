@@ -2707,9 +2707,11 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     if (drag.itemType === "icon") {
       // ── 悬停成组：APP 图标停在别的图标中心一小会 → 高亮为合并目标 ──
       // 文件夹 tile 本身不参与合并（不嵌套），只走普通换位。
-      // occupant 从当前预览布局读（让位动画后的真实视觉位置）。
+      // occupant 必须从拖起时的原始布局读：手指进格子总是先擦过边缘，
+      // 边缘已触发换位预览把目标滑走了，读预览布局中心就永远找不到人。
+      // 认定合并意图后 resetDragPreview 会让所有图标归位，高亮与视觉一致。
       if (!isFolderIconId(drag.itemId)) {
-        const occupant = (layoutRef.current[pageKey] ?? []).find(
+        const occupant = (drag.initialLayout[pageKey] ?? []).find(
           (ic) => ic.id !== drag.itemId && ic.row === cell.row + 1 && ic.col === cell.col + 1
         );
         const inCenter = cell.fx >= 0.2 && cell.fx <= 0.8 && cell.fy >= 0.2 && cell.fy <= 0.8;
@@ -2718,6 +2720,10 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
           if (drag.mergeKey !== mKey) {
             clearMergeIntent(drag);
             drag.mergeKey = mKey;
+            // 目标立即生效（在中心区松手就算成组，快拖快放也能命中）；
+            // 计时只控制高亮出现的时机，防止路过时闪烁。
+            drag.mergeTargetIconId = occupant.id;
+            drag.mergeTargetPage = pageKey;
             // 悬停期间冻结让位预览，图标各归各位，高亮才不会指着一个正在滑走的目标
             resetDragPreview(drag);
             drag.targetPage = null;
@@ -2727,11 +2733,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
               const live = editDragRef.current;
               if (live !== drag || !drag.active) return;
               drag.mergeTimer = null;
-              drag.mergeTargetIconId = occupant.id;
-              drag.mergeTargetPage = pageKey;
               setMergeTargetId(occupant.id);
               try { navigator.vibrate?.(10); } catch { /* 不支持就算了 */ }
-            }, 220);
+            }, 180);
           }
           return;
         }
