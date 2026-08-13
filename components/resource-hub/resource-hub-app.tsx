@@ -873,22 +873,20 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     {viewMode === "build" && !activeEntry && (
                         <div className="rh-build">
                             <div className="rh-build-intro">
-                                <div className="rh-build-title">🏗️ 一起把小手机做得更好</div>
+                                <div className="rh-build-stickers">🛠️ ✨ 📱 ✨ 🧸</div>
+                                <div className="rh-build-title">一起改进小手机吧～</div>
                                 <p>
-                                    自部署的用户改进了自己的小手机后，可以把改动贡献给官方版本——
-                                    不用懂 Git，去<b>工坊</b>对小坊说一句就行。官方审核采纳后，
-                                    你的名字会出现在下面的贡献墙上。
+                                    贡献公开仓库功能已接入<b>工坊</b>，
+                                    可以让小坊将你的修改贡献到公开仓库哦～<br />
+                                    float 会进行飞速审核，感谢您的付出～
                                 </p>
-                                <button className="rh-btn rh-btn-primary" onClick={() => {
-                                    const opener = "我想把我改的东西贡献给官方，帮我对比一下我的部署和官方版本的差异。";
-                                    void navigator.clipboard?.writeText(opener).then(
-                                        () => showToast("开场白已复制，去工坊贴给小坊吧"),
-                                        () => showToast(`去工坊对小坊说：${opener}`),
-                                    );
-                                }}>我要贡献 → 复制开场白</button>
-                                <div className="rh-form-hint">需要自部署版本（有自己的 fork）。官方站用户可先去 GitHub 一键 fork。</div>
                             </div>
-                            <div className="rh-build-wall-title">贡献墙 · 已采纳的社区改进</div>
+                            <div className="rh-build-wall-head">
+                                <span className="rh-build-wall-line" />
+                                <span className="rh-build-wall-title">🏅 贡 献 墙 🏅</span>
+                                <span className="rh-build-wall-line" />
+                            </div>
+                            <div className="rh-build-wall-sub">每一条被采纳的改进，都会刻在这里</div>
                             {buildWallState === "loading" && <div className="rh-center-hint">正在读取贡献墙...</div>}
                             {buildWallState === "error" && (
                                 <div className="rh-center-hint">贡献墙暂时读取失败（GitHub 接口限流），稍后再来看看</div>
@@ -900,10 +898,13 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 <div className="rh-build-wall">
                                     {buildWall.map(item => (
                                         <div key={item.number} className="rh-build-card">
-                                            <div className="rh-build-card-title">{item.title}</div>
-                                            <div className="rh-build-card-meta">
-                                                <span>🎉 {item.contributor}</span>
-                                                <span>{item.mergedAt ? new Date(item.mergedAt).toLocaleDateString("zh-CN") : ""} 采纳</span>
+                                            <div className="rh-build-card-medal">🎖️</div>
+                                            <div className="rh-build-card-main">
+                                                <div className="rh-build-card-title">{item.title}</div>
+                                                <div className="rh-build-card-meta">
+                                                    <span className="rh-build-card-name">{item.contributor}</span>
+                                                    <span className="rh-build-card-date">{item.mergedAt ? new Date(item.mergedAt).toLocaleDateString("zh-CN") : ""} 采纳</span>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -1740,15 +1741,35 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 }
                 .rh-folder:active { border-color: #000080; background: #e4ecf7; }
                 .rh-folder-icon { font-size: 40px; line-height: 1; }
-                .rh-build { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px; }
-                .rh-build-intro { border: 1px solid #9aa5b1; background: #f4f7fb; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-                .rh-build-intro p { margin: 0; font-size: 12px; line-height: 1.7; }
-                .rh-build-title { font-weight: 700; font-size: 13px; }
-                .rh-build-wall-title { font-weight: 700; font-size: 12px; color: #333; }
-                .rh-build-wall { display: flex; flex-direction: column; gap: 6px; }
-                .rh-build-card { border: 1px solid #b8bfc9; background: #fff; padding: 8px 10px; }
-                .rh-build-card-title { font-size: 12px; font-weight: 600; line-height: 1.5; }
-                .rh-build-card-meta { display: flex; justify-content: space-between; font-size: 11px; color: #667; margin-top: 4px; }
+                .rh-build { display: flex; flex-direction: column; gap: 14px; padding: 6px 2px; }
+                .rh-build-intro {
+                    border: 1px solid #aab6c8;
+                    background: linear-gradient(180deg, #f7faff 0%, #eef3fb 100%);
+                    padding: 16px 14px 14px;
+                    text-align: center;
+                }
+                .rh-build-stickers { font-size: 18px; letter-spacing: 6px; margin-bottom: 6px; }
+                .rh-build-title { font-weight: 800; font-size: 16px; color: #000080; margin-bottom: 8px; }
+                .rh-build-intro p { margin: 0; font-size: 12.5px; line-height: 1.9; color: #3c4658; }
+                .rh-build-intro p b { color: #000080; }
+                .rh-build-wall-head { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+                .rh-build-wall-line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, #c9a34e, transparent); }
+                .rh-build-wall-title { font-weight: 800; font-size: 14px; color: #7a5c14; white-space: nowrap; }
+                .rh-build-wall-sub { text-align: center; font-size: 11px; color: #9a8a5e; margin-top: -8px; }
+                .rh-build-wall { display: flex; flex-direction: column; gap: 8px; }
+                .rh-build-card {
+                    display: flex; align-items: center; gap: 10px;
+                    border: 1px solid #ddc98d;
+                    background: linear-gradient(180deg, #fffdf4 0%, #fdf6e0 100%);
+                    padding: 10px 12px;
+                    box-shadow: inset 0 0 0 1px #fffef9;
+                }
+                .rh-build-card-medal { font-size: 22px; line-height: 1; flex: none; }
+                .rh-build-card-main { flex: 1; min-width: 0; }
+                .rh-build-card-title { font-size: 12.5px; font-weight: 700; line-height: 1.5; color: #33302a; }
+                .rh-build-card-meta { display: flex; justify-content: space-between; align-items: baseline; font-size: 11px; margin-top: 4px; }
+                .rh-build-card-name { font-weight: 700; color: #8a6d1f; }
+                .rh-build-card-date { color: #a89f8a; }
                 .rh-folder-name {
                     font-size: calc(13px * var(--app-text-scale, 1));
                     color: #000;
