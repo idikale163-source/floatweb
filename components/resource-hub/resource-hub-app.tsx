@@ -152,6 +152,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [keyBackupTouched, setKeyBackupTouched] = useState(false);
     // 找回作品：丢了钥匙的作者选择资源 + 上传证明材料，开申请等管理员人工审核
     const [showClaim, setShowClaim] = useState(false);
+    const [claimFolder, setClaimFolder] = useState("");
     const [claimPath, setClaimPath] = useState("");
     const [claimFiles, setClaimFiles] = useState<File[]>([]);
     const [claimNote, setClaimNote] = useState("");
@@ -814,7 +815,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                                 {profile.nickname || "点这里起个昵称"} <span className="rh-profile-edit-hint">✎</span>
                                             </button>
                                         )}
-                                            <button className="rh-key-link" onClick={() => { setClaimPath(""); setClaimFiles([]); setClaimNote(""); setShowClaim(true); }}>🧾 找回作品</button>
+                                            <button className="rh-key-link" onClick={() => { setClaimFolder(""); setClaimPath(""); setClaimFiles([]); setClaimNote(""); setShowClaim(true); }}>🧾 找回作品</button>
                                         </div>
                                         <div className="rh-profile-stats">
                                             <span>已发布 <b>{myStall.published.length}</b></span>
@@ -871,7 +872,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                                 {profile.nickname || "点这里起个昵称"} <span className="rh-profile-edit-hint">✎</span>
                                             </button>
                                         )}
-                                            <button className="rh-key-link" onClick={() => { setClaimPath(""); setClaimFiles([]); setClaimNote(""); setShowClaim(true); }}>🧾 找回作品</button>
+                                            <button className="rh-key-link" onClick={() => { setClaimFolder(""); setClaimPath(""); setClaimFiles([]); setClaimNote(""); setShowClaim(true); }}>🧾 找回作品</button>
                                         </div>
                                         <div className="rh-profile-stats">
                                             <span>已发布 <b>0</b></span>
@@ -1251,12 +1252,20 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                             </div>
                             <div className="rh-form-field">
                                 <span>要找回的作品</span>
-                                <select className="rh-input" value={claimPath} onChange={e => setClaimPath(e.target.value)}>
-                                    <option value="">请选择…</option>
+                                <select className="rh-input" value={claimFolder}
+                                    onChange={e => { setClaimFolder(e.target.value); setClaimPath(""); }}>
+                                    <option value="">先选文件夹…</option>
+                                    {(index?.folders ?? []).map(folder => (
+                                        <option key={folder.name} value={folder.name}>{folder.name}</option>
+                                    ))}
+                                </select>
+                                <select className="rh-input" value={claimPath} disabled={!claimFolder}
+                                    onChange={e => setClaimPath(e.target.value)}>
+                                    <option value="">{claimFolder ? "再选作品…" : "（先选上面的文件夹）"}</option>
                                     {(index?.entries ?? [])
-                                        .filter(entry => !myRecordFor(entry.path))
+                                        .filter(entry => entry.folder === claimFolder && !myRecordFor(entry.path))
                                         .map(entry => (
-                                            <option key={entry.path} value={entry.path}>{entry.folder} / {entry.name}</option>
+                                            <option key={entry.path} value={entry.path}>{entry.name}</option>
                                         ))}
                                 </select>
                             </div>
