@@ -458,13 +458,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     }, [importFile, onNotice, runImport]);
 
     const openEdit = useCallback((entry: ShareIndexEntry) => {
-        // 本人凭本机记录/摊主钥匙；管理员凭 token 直传，可编辑任何资源
-        // （含丢失凭证的历史发布——token 通道不校验 ownerKey）
-        const record = myRecordFor(entry.path)
-            ?? (uploadCfg.githubToken.trim()
-                ? { path: entry.path, name: entry.name, ownerKey: "", uploadedAt: entry.updatedAt || "" }
-                : null);
-        if (!record) { showToast("只有发布者本人（或管理员）可以编辑"); return; }
+        const record = myRecordFor(entry.path);
+        if (!record) { showToast("只有发布者本人可以编辑"); return; }
         closeRichPickers();
         setEditRecord(record);
         setEditEntry(entry);
@@ -474,7 +469,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         setEditAddFiles([]);
         setEditAddImages([]);
         setEditRemoved([]);
-    }, [closeRichPickers, myRecordFor, profile.nickname, showToast, uploadCfg.githubToken]);
+    }, [closeRichPickers, myRecordFor, profile.nickname, showToast]);
 
     const handleSaveEdit = useCallback(async () => {
         if (!editEntry || !editRecord) return;
@@ -492,8 +487,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 title,
                 author: editAuthor.trim(),
                 description: editDesc.trim(),
-                // 管理员代改他人资源时不能把作者头像换成自己的
-                avatarBase64: myRecordFor(editEntry.path) ? avatarBase64(profile.avatarDataUrl) || undefined : undefined,
+                avatarBase64: avatarBase64(profile.avatarDataUrl) || undefined,
                 addFiles,
                 removeFiles: editRemoved,
             });
@@ -520,7 +514,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         } finally {
             setSavingEdit(false);
         }
-    }, [editAddFiles, editAddImages, editAuthor, editDesc, editEntry, editRecord, editRemoved, editTitle, myRecordFor, onNotice, profile.avatarDataUrl, showToast, source]);
+    }, [editAddFiles, editAddImages, editAuthor, editDesc, editEntry, editRecord, editRemoved, editTitle, onNotice, profile.avatarDataUrl, showToast, source]);
 
     const handlePickAvatar = useCallback(async (file: File) => {
         try {
@@ -957,7 +951,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                         </div>
                                         <div className="rh-detail2-time">{formatEntryDate(activeEntry.updatedAt)}</div>
                                     </div>
-                                    {(myRecordFor(activeEntry.path) || uploadCfg.githubToken.trim() !== "") && (
+                                    {myRecordFor(activeEntry.path) && (
                                         <div className="rh-detail2-head-actions">
                                             <button className="rh-icon-btn" aria-label="编辑" title="编辑"
                                                 onClick={() => openEdit(activeEntry)}>✎</button>
