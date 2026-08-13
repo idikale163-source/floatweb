@@ -1399,3 +1399,220 @@ html[data-zoom-fallback] .phone-shell-wrap {
   transform: scale(var(--shell-zoom, 1)) translate3d(0, calc(-1 * var(--mobile-keyboard-lift, 0px) / var(--shell-zoom, 1)), 0);
   transform-origin: top left;
 }
+
+/* ── 桌面文件夹 ──────────────────────────────────────── */
+/* tile 底板复用 .icon-glyph-box：扁平/毛玻璃、底色、阴影全部跟随
+   个性化装扮里的图标材质设定，文件夹永远和图标一个质感。 */
+
+/* 迷你格铺在玻璃打光层(z1)之上、描边(z3)之下 */
+.folder-mini-grid {
+  position: absolute;
+  inset: 14%;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 9%;
+  pointer-events: none;
+}
+
+.folder-mini {
+  position: relative;
+  border-radius: 26%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--c-desktop-icon-box, #ffffff) 46%, transparent);
+}
+
+.phone-shell[data-icon-effect="flat"] .folder-mini {
+  background: color-mix(in srgb, var(--c-desktop-icon, #2f343b) 12%, transparent);
+}
+
+.folder-mini-glyph {
+  width: 62%;
+  height: 62%;
+  color: var(--c-desktop-icon, #2f343b);
+}
+
+/* 拖拽悬停：即将合并成组的目标高亮（松手入组） */
+.icon-item.merge-target .icon-glyph-box {
+  transform: scale(1.16);
+  box-shadow:
+    0 0 0 2.5px color-mix(in srgb, var(--c-desktop-icon, #ffffff) 65%, transparent),
+    0 6px 22px rgba(0, 0, 0, 0.25);
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.18s ease;
+}
+.edit-mode .icon-item.merge-target {
+  animation: none; /* 高亮时停一下抖动，目标更醒目 */
+}
+
+/* ── 文件夹展开面板 ── */
+.folder-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 700; /* 盖过 dock(300)/page-controls(400)，低于 drag-ghost(9999) */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  background: rgba(15, 18, 26, 0.28);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  animation: folder-overlay-in 0.2s ease;
+}
+
+@keyframes folder-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.folder-name-input {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: transparent;
+  text-align: center;
+  width: 70%;
+  color: var(--c-home-label, #ffffff);
+  font-size: calc(17px * var(--app-text-scale, 1));
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.25);
+  outline: none;
+  border-radius: 10px;
+  padding: 4px 8px;
+}
+.folder-name-input:focus {
+  background: color-mix(in srgb, var(--c-desktop-icon-box, #ffffff) 26%, transparent);
+  text-shadow: none;
+}
+
+.folder-panel {
+  width: min(304px, 86%);
+  border-radius: 30px;
+  padding: 16px 4px 12px;
+  /* 扁平材质：图标底色罩在面板底色(--c-home-card，即扁平组件的卡面)上，
+     两个颜色都跟装扮面板走；默认图标底色近乎透明时就是一张干净的组件卡 */
+  background:
+    linear-gradient(0deg, var(--c-desktop-icon-box, transparent), var(--c-desktop-icon-box, transparent)),
+    var(--c-home-card, #ffffff);
+  animation: folder-panel-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 扁平面板是实底卡片，成员标题用组件卡的文字色（桌面标题色可能是白字） */
+.phone-shell[data-icon-effect="flat"] .folder-app .icon-label {
+  color: var(--c-home-text, #2f343b);
+}
+
+@keyframes folder-panel-in {
+  from { opacity: 0; transform: scale(0.72); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* 毛玻璃材质：配方与 icon-glyph-box 的 glass 效果同源（渐变打光 + 透出底色 + 高光描边） */
+.phone-shell[data-icon-effect="glass"] .folder-panel {
+  background:
+    linear-gradient(135deg,
+      rgba(255, 255, 255, 0.17),
+      color-mix(in srgb, var(--c-desktop-icon-bg, #c7b8ff) 6%, transparent),
+      rgba(255, 255, 255, 0.07)),
+    color-mix(in srgb, var(--c-desktop-icon-box, #ffffff) 30%, transparent);
+  backdrop-filter: blur(26px) saturate(140%);
+  -webkit-backdrop-filter: blur(26px) saturate(140%);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.28),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.05),
+    0 18px 48px rgba(0, 0, 0, 0.22);
+}
+
+.phone-shell[data-icon-effect="glass"] .folder-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  pointer-events: none;
+  z-index: 3;
+  background:
+    linear-gradient(135deg,
+      rgba(255, 255, 255, 0.48),
+      rgba(255, 255, 255, 0.14) 40%,
+      rgba(255, 255, 255, 0.12) 62%,
+      rgba(255, 255, 255, 0.18));
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.folder-pages {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.folder-pages::-webkit-scrollbar {
+  display: none;
+}
+
+.folder-page {
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, minmax(84px, auto));
+  gap: 6px 2px;
+  padding: 6px 8px;
+  align-items: start;
+}
+
+.folder-app {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  touch-action: pan-x;
+}
+.folder-app:active .icon-glyph-box {
+  transform: scale(0.92);
+  transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* 面板里的图标盒尺寸固定，不吃桌面 --slot-size 收缩 */
+.folder-app .icon-glyph-box {
+  width: 58px;
+  height: 58px;
+}
+.folder-app .icon-label {
+  color: var(--c-home-label, #2f343b);
+}
+
+.folder-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 0 4px;
+}
+.folder-dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--c-home-label, #ffffff) 32%, transparent);
+}
+.folder-dots .dot.active {
+  background: color-mix(in srgb, var(--c-home-label, #ffffff) 85%, transparent);
+}
