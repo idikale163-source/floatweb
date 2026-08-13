@@ -48,7 +48,7 @@ import {
     setIdentityKey,
     sha256Hex,
 } from "@/lib/resource-hub-identity";
-import { mergeMyUploads } from "@/lib/resource-hub-upload";
+import { mergeMyUploads, submitOwnershipClaim } from "@/lib/resource-hub-upload";
 import { DefaultPixelAvatar } from "@/components/resource-hub/pixel-avatar";
 import { DestPixelIcon, FileTypePixelIcon, fileExtension } from "@/components/resource-hub/pixel-icons";
 import { loadPresets } from "@/lib/settings-storage";
@@ -150,6 +150,12 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     // 发布成功后的强制钥匙备份弹窗（存过文件/复制过才能点「我已保存好」）
     const [showKeyBackup, setShowKeyBackup] = useState(false);
     const [keyBackupTouched, setKeyBackupTouched] = useState(false);
+    // 找回作品：丢了钥匙的作者选择资源 + 上传证明材料，开申请等管理员人工审核
+    const [showClaim, setShowClaim] = useState(false);
+    const [claimPath, setClaimPath] = useState("");
+    const [claimFiles, setClaimFiles] = useState<File[]>([]);
+    const [claimNote, setClaimNote] = useState("");
+    const [claimSubmitting, setClaimSubmitting] = useState(false);
     const [keyImportText, setKeyImportText] = useState("");
     // 作者编辑已发布资源
     const [editEntry, setEditEntry] = useState<ShareIndexEntry | null>(null);
@@ -559,6 +565,33 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
         }
     }, [onNotice]);
 
+    const handleSubmitClaim = useCallback(async () => {
+        const entry = index?.entries.find(e => e.path === claimPath);
+        if (!entry) { showToast("请选择要找回的作品"); return; }
+        if (claimFiles.length === 0) { showToast("请上传证明文件"); return; }
+        if (!identityHash) { showToast("摊主钥匙尚未就绪，稍等两秒再试"); return; }
+        setClaimSubmitting(true);
+        try {
+            const files = await Promise.all(claimFiles.map(file => fileToUploadEntry(file)));
+            await submitOwnershipClaim({
+                endpoint: uploadCfg.endpoint,
+                path: entry.path,
+                name: entry.name,
+                ownerHash: identityHash,
+                nickname: profile.nickname || "匿名",
+                note: claimNote.trim(),
+                files,
+            });
+            setShowClaim(false);
+            setClaimPath(""); setClaimFiles([]); setClaimNote("");
+            onNotice?.("找回申请已提交。管理员核实证明后，作品所有权会自动绑定到这台设备的钥匙上");
+        } catch (err) {
+            onNotice?.(`提交失败：${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setClaimSubmitting(false);
+        }
+    }, [claimFiles, claimNote, claimPath, identityHash, index, onNotice, profile.nickname, showToast, uploadCfg.endpoint]);
+
     const handleUploadSubmit = useCallback(async () => {
         const folder = (uploadFolder === CUSTOM_FOLDER ? uploadFolderCustom : uploadFolder).trim();
         const name = uploadName.trim();
@@ -786,7 +819,10 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                             <span>收到 <b>{flowerCounts
                                                 ? myStall.published.reduce((sum, e) => sum + (flowerCounts[e.path] ?? 0), 0)
                                                 : "…"}</b> 🌸</span>
-                                            <button className="rh-key-link" onClick={() => { setKeyImportText(""); setShowKeyDialog(true); }}>🔑 摊主钥匙</button>
+                                            <span className="rh-profile-links">
+                                                <button className="rh-key-link" onClick={() => { setClaimPath(""); setClaimFiles([]); setClaimNote(""); setShowClaim(true); }}>🧾 找回作品</button>
+                                                <button className="rh-key-link" onClick={() => { setKeyImportText(""); setShowKeyDialog(true); }}>🔑 摊主钥匙</button>
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -838,7 +874,10 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                             <span>已发布 <b>0</b></span>
                                             <span>待审核 <b>0</b></span>
                                             <span>收到 <b>0</b> 🌸</span>
-                                            <button className="rh-key-link" onClick={() => { setKeyImportText(""); setShowKeyDialog(true); }}>🔑 摊主钥匙</button>
+                                            <span className="rh-profile-links">
+                                                <button className="rh-key-link" onClick={() => { setClaimPath(""); setClaimFiles([]); setClaimNote(""); setShowClaim(true); }}>🧾 找回作品</button>
+                                                <button className="rh-key-link" onClick={() => { setKeyImportText(""); setShowKeyDialog(true); }}>🔑 摊主钥匙</button>
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -1190,6 +1229,75 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 导入后本机原来的钥匙会被替换。如果两台设备都发过资源，
                                 请先在另一台导出、这里导入，两边的发布才会合并到一把钥匙下管理。
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 找回作品：选资源 + 传证明，开申请给管理员人工审核 */}
+            {showClaim && (
+                <div className="rh-dialog-overlay" onClick={claimSubmitting ? undefined : () => setShowClaim(false)}>
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar">
+                            <span className="rh-titlebar-text">找回作品</span>
+                            <span className="rh-titlebar-controls">
+                                <button className="rh-tb-btn" disabled={claimSubmitting} onClick={() => setShowClaim(false)}>✕</button>
+                            </span>
+                        </div>
+                        <div className="rh-dialog-body rh-form">
+                            <div className="rh-form-hint">
+                                换设备或丢失摊主钥匙后，可以在这里申请找回自己发布的作品。
+                                管理员核实证明材料后，作品所有权会绑定到你现在这台设备的钥匙上。
+                            </div>
+                            <div className="rh-form-field">
+                                <span>要找回的作品</span>
+                                <select className="rh-input" value={claimPath} onChange={e => setClaimPath(e.target.value)}>
+                                    <option value="">请选择…</option>
+                                    {(index?.entries ?? [])
+                                        .filter(entry => !myRecordFor(entry.path))
+                                        .map(entry => (
+                                            <option key={entry.path} value={entry.path}>{entry.folder} / {entry.name}</option>
+                                        ))}
+                                </select>
+                            </div>
+                            <div className="rh-form-field">
+                                <span>证明文件（必传，最多 6 个，共 ≤4MB）</span>
+                                <label className="rh-btn rh-file-pick-btn">
+                                    选择证明文件…
+                                    <input type="file" multiple hidden onChange={e => {
+                                        const picked = Array.from(e.target.files ?? []);
+                                        setClaimFiles(current => [...current, ...picked].slice(0, 6));
+                                        e.target.value = "";
+                                    }} />
+                                </label>
+                                {claimFiles.length > 0 && (
+                                    <div className="rh-claim-files">
+                                        {claimFiles.map((file, i) => (
+                                            <button key={`${file.name}-${i}`} className="rh-claim-file" title="点击移除"
+                                                onClick={() => setClaimFiles(current => current.filter((_, idx) => idx !== i))}>
+                                                {file.name} ✕
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="rh-form-hint">
+                                    需要能<b>完整证明作品是你创作的</b>的材料：原始工程文件、创作过程截图、
+                                    带时间的草稿等。证明不足会被拒绝。
+                                </div>
+                            </div>
+                            <div className="rh-form-field">
+                                <span>备注（选填）</span>
+                                <textarea className="rh-input" rows={2} maxLength={500} value={claimNote}
+                                    placeholder="例如：换手机丢了钥匙，原昵称是……"
+                                    onChange={e => setClaimNote(e.target.value)} />
+                            </div>
+                        </div>
+                        <div className="rh-dialog-footer">
+                            <button className="rh-btn" disabled={claimSubmitting} onClick={() => setShowClaim(false)}>取消</button>
+                            <button className="rh-btn rh-btn-primary" disabled={claimSubmitting || !claimPath || claimFiles.length === 0}
+                                onClick={() => void handleSubmitClaim()}>
+                                {claimSubmitting ? <><PixelHourglass size={13} /> 提交中</> : "提交申请"}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -2000,6 +2108,20 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     text-decoration: underline;
                     cursor: pointer;
                 }
+                .rh-profile-links { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+                .rh-claim-files { display: flex; flex-wrap: wrap; gap: 4px; }
+                .rh-claim-file {
+                    background: #fff;
+                    border: 1px solid #b8bfc9;
+                    padding: 3px 8px;
+                    font-size: 11px;
+                    cursor: pointer;
+                    max-width: 100%;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                .rh-file-pick-btn { align-self: flex-start; }
                 .rh-key-danger {
                     color: #cc0000;
                     font-weight: 800;

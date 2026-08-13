@@ -205,3 +205,49 @@ export async function rejectShareSubmission(prNumber: number, reason?: string): 
     }
     await gh(token, "PATCH", `/repos/${owner}/${repo}/pulls/${prNumber}`, { state: "closed" });
 }
+
+// ── 找回作品申请（特殊 PR：分支上只有证明材料，审核=改写 .owner，绝不合并）──
+
+export const SHARE_CLAIM_TITLE_PREFIX = "【找回申请】";
+
+export type ShareClaimInfo = {
+    entryPath: string;
+    ownerHash: string;
+    nickname: string;
+};
+
+/** 从投稿列表里识别找回申请并解析元数据；不是找回申请返回 null */
+export function parseShareClaim(submission: ShareSubmission): ShareClaimInfo | null {
+    if (!submission.title.startsWith(SHARE_CLAIM_TITLE_PREFIX)) return null;
+    const entryPath = submission.body.match(/^资源路径[:：]\s*(\S+)/m)?.[1];
+    const ownerHash = submission.body.match(/^新钥匙指纹[:：]\s*([0-9a-f]{64})/m)?.[1];
+    const nickname = submission.body.match(/^申请人[:：]\s*(.+)$/m)?.[1]?.trim() || "匿名";
+    return entryPath && ownerHash ? { entryPath, ownerHash, nickname } : null;
+}
+
+/**
+ * 通过找回：用管理员 token 把该资源的 .owner 改写成申请人的钥匙指纹，
+ * 然后关闭申请 PR（证明材料永不进入 main）。索引重建后申请人设备自动认领回资源。
+ */
+export async function approveShareClaim(prNumber: number, claim: ShareClaimInfo): Promise<void> {
+    const { token, owner, repo } = getReviewAuth();
+    const encode = (p: string) => p.split("/").map(encodeURIComponent).join("/");
+    const ownerFile = `${claim.entryPath}/.owner`;
+    let sha: string | undefined;
+    try {
+        const info = await gh<{ sha?: string }>(token, "GET", `/repos/${owner}/${repo}/contents/${encode(ownerFile)}`);
+        sha = info.sha;
+    } catch { /* 老资源可能没有 .owner，直接新建 */ }
+    await gh(token, "PUT", `/repos/${owner}/${repo}/contents/${encode(ownerFile)}`, {
+        message: `找回作品：${claim.entryPath} 所有权重绑（申请 #${prNumber}）`,
+        content: btoa(claim.ownerHash),
+        ...(sha ? { sha } : {}),
+    });
+    await gh(token, "POST", `/repos/${owner}/${repo}/issues/${prNumber}/comments`, {
+        body: "✅ 找回申请已通过，作品所有权已绑定到申请人的摊主钥匙。索引重建后（约 1 分钟）在原设备打开资源集市即可恢复管理权限。",
+    });
+    await gh(token, "PATCH", `/repos/${owner}/${repo}/pulls/${prNumber}`, { state: "closed" });
+    // 索引由 Actions 在 .owner 提交后重建，先清一次 CDN 缓存，稍后再清一次兜底
+    setTimeout(() => purgeShareIndexCache(loadResourceHubSource()), 90_000);
+    purgeShareIndexCache(loadResourceHubSource());
+}
