@@ -23,6 +23,7 @@ import {
     createQaPullRequest,
     deleteQaBranch,
     mergeQaPullRequest,
+    syncQaForkWithUpstream,
     updateQaIssue,
     type QaCommitFile,
 } from "./qa-github-write";
@@ -879,6 +880,48 @@ const githubPullMergeTool: QaTool = {
     },
 };
 
+const githubSyncUpstreamTool: QaTool = {
+    name: "同步官方更新",
+    nativeName: "sync_fork_with_upstream",
+    parameters: {
+        type: "object",
+        properties: {
+            branch: { type: "string", description: "要同步的分支，缺省用连接仓库的默认分支" },
+        },
+    },
+    description:
+        "把官方（上游）仓库的最新提交合并进当前连接的 fork（等同 GitHub 网页的 Sync fork）。"
+        + "无冲突时一键完成，用户自己的改动原样保留；与官方改动冲突时 GitHub 会拒绝、fork 原样不动，此时按返回的指引处理。"
+        + "仅当连接的仓库是官方项目的 fork 时有效。",
+    schemaLines: [
+        "  参数：",
+        "    · branch (可选) — 要同步的分支，缺省用默认分支",
+        '  调用：[执行动作:同步官方更新({})]',
+    ],
+    async run(args, context) {
+        const gate = requireWritableConfig();
+        if ("error" in gate) return gate.error;
+        const branch = typeof args.branch === "string" && args.branch.trim()
+            ? args.branch.trim()
+            : (gate.config.branch || "main");
+        const result = await syncQaForkWithUpstream(gate.config, branch, context?.signal);
+        if (result.ok) {
+            const how = result.mergeType === "fast-forward" ? "快进" : result.mergeType === "merge" ? "合并提交" : (result.mergeType || "已是最新");
+            return `✓ 已同步官方更新到 ${branch}（${how}${result.baseBranch ? `，上游 ${result.baseBranch}` : ""}）。用户自己的改动原样保留；部署平台会自动重新构建。`;
+        }
+        if (result.conflict) {
+            return [
+                `同步被 GitHub 拒绝：${branch} 上的改动与官方新改动存在冲突，fork 保持原样、没有被改动。`,
+                "推荐的处理顺序：",
+                "1. 先把用户的有效改动贡献给官方——「对比官方版本」→「提交共同建设贡献」（拼合路径不受冲突影响）；",
+                "2. 官方采纳合并后，改动进入主线，用户的 fork 可直接重置为官方版本（在 GitHub 网页 Sync fork 里选 discard commits），冲突自然消失；",
+                "3. 若改动只想自用不贡献，需要在本地手工解决冲突，超出小坊的能力范围，如实告知用户。",
+            ].join("\n");
+        }
+        return `同步失败：${result.message}。常见原因：连接的仓库不是官方项目的 fork、分支名不存在、或 token 权限不足。`;
+    },
+};
+
 const githubIssueUpdateTool: QaTool = {
     name: "更新Issue",
     nativeName: "update_issue",
@@ -1335,7 +1378,7 @@ const UNIFIED_BASE_TOOLS: QaTool[] = [
     feedbackTool,
 ];
 const UNIFIED_GITHUB_READ_TOOLS: QaTool[] = [githubSearchTool, repoQueryTool];
-const UNIFIED_GITHUB_WRITE_TOOLS: QaTool[] = [branchOpsTool, githubPullCreateTool, githubPullMergeTool, githubIssueUpdateTool];
+const UNIFIED_GITHUB_WRITE_TOOLS: QaTool[] = [branchOpsTool, githubPullCreateTool, githubPullMergeTool, githubIssueUpdateTool, githubSyncUpstreamTool];
 
 /** 当前可用工具集：统一 CRUD + 辅助 + （已连接仓库）查询 + （有 PAT）写入。 */
 export function getQaTools(): QaTool[] {
