@@ -1566,6 +1566,7 @@ const contribCompareTool: QaContentTool = {
         type: "object",
         properties: {
             fork: { type: "string", description: "可选：用户 fork 的仓库（owner/repo 或完整 GitHub 地址）。首次告知后会记住，之后可不填" },
+            branch: { type: "string", description: "可选：fork 上改动所在的分支，缺省用 fork 的默认分支" },
         },
     },
     description:
@@ -1574,6 +1575,7 @@ const contribCompareTool: QaContentTool = {
     schemaLines: [
         "  参数：",
         "    · fork (可选) — 用户 fork 的仓库地址（首次提供后记住）",
+        "    · branch (可选) — 改动所在分支，缺省用 fork 默认分支",
         '  调用：[执行动作:对比官方版本({"fork":"某人/ai-virtual-phone"})] 或 [执行动作:对比官方版本({})]',
     ],
     async run(args) {
@@ -1586,7 +1588,8 @@ const contribCompareTool: QaContentTool = {
             return "还不知道用户的 fork 地址。请向用户询问其 GitHub fork 仓库地址（形如 owner/ai-virtual-phone），拿到后再次调用本动作并带上 fork 参数。若用户用的是官方站（没有自部署），请说明贡献代码需要自部署版本。";
         }
         if (provided) saveContribFork(provided);
-        const result = await compareForkWithUpstream(forkRepo);
+        const branch = typeof args.branch === "string" ? args.branch.trim() : "";
+        const result = await compareForkWithUpstream(forkRepo, branch || undefined);
         _contribCompareCache = result;
         const allowed = result.files.filter(file => file.inAllowlist && file.status !== "removed");
         const skipped = result.files.filter(file => !file.inAllowlist || file.status === "removed");

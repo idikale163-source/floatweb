@@ -63,10 +63,11 @@ async function ghPublic(path: string): Promise<Record<string, unknown>> {
     return await res.json() as Record<string, unknown>;
 }
 
-/** fork 与官方 main 的差异（GitHub compare API，按合并基准算，天然处理 fork 落后的情况） */
-export async function compareForkWithUpstream(forkRepo: string): Promise<ContribCompareResult> {
+/** fork 与官方 main 的差异（GitHub compare API，按合并基准算，天然处理 fork 落后的情况）。
+ *  branch 缺省用 fork 的默认分支；改动在别的分支上时可指定。 */
+export async function compareForkWithUpstream(forkRepo: string, branch?: string): Promise<ContribCompareResult> {
     const forkInfo = await ghPublic(`/repos/${forkRepo}`);
-    const forkBranch = String(forkInfo.default_branch || "main");
+    const forkBranch = String(branch || "").trim() || String(forkInfo.default_branch || "main");
     const forkOwner = forkRepo.split("/")[0];
     const compare = await ghPublic(
         `/repos/${UPSTREAM_REPO}/compare/main...${encodeURIComponent(forkOwner)}:${encodeURIComponent(forkBranch)}`,
