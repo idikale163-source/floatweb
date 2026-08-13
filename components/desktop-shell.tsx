@@ -748,12 +748,14 @@ function getShellZoom(): number {
   return Number.isFinite(z) && z > 0 ? z : 1;
 }
 
-/** Convert pointer screen position to a grid cell (0-based)。fx/fy 是指针在格内的相对位置（0~1），用于判断“图标中心悬停=合并成组”。 */
+/** Convert pointer screen position to a grid cell (0-based)。
+ *  cellX/cellY 是判定点在格内的像素偏移（含缝隙区），cellW/cellH 是格子内容尺寸
+ *  （本分支为视觉像素，已含 zoom），用于“悬浮图标中心压进目标图标盒”的命中测试。 */
 function pointerToGridCell(
   px: number,
   py: number,
   gridEl: HTMLElement
-): { row: number; col: number; fx: number; fy: number } | null {
+): { row: number; col: number; cellX: number; cellY: number; cellW: number; cellH: number } | null {
   const rect = gridEl.getBoundingClientRect();
   const computed = getComputedStyle(gridEl);
   const zoom = getShellZoom();
@@ -774,9 +776,9 @@ function pointerToGridCell(
   const col = Math.floor((px - originX) / colStep);
   const row = Math.floor((py - originY) / rowStep);
   if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) return null;
-  const fx = Math.min(1, Math.max(0, (px - originX - col * colStep) / colWidth));
-  const fy = Math.min(1, Math.max(0, (py - originY - row * rowStep) / rowHeight));
-  return { row, col, fx, fy };
+  const cellX = px - originX - col * colStep;
+  const cellY = py - originY - row * rowStep;
+  return { row, col, cellX, cellY, cellW: colWidth, cellH: rowHeight };
 }
 
 function sanitizeWidgetsForLayout(_layout: DesktopLayout, widgets: WidgetInstance[]): WidgetInstance[] {
@@ -2691,7 +2693,17 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     const gridEl = gridRefs.current[pageKey];
     if (!gridEl) return;
 
-    const cell = pointerToGridCell(x, y, gridEl);
+    // 图标拖拽的判定点用"悬浮图标盒中心"（手指坐标减抓握偏移再加半盒）：
+    // 无论捏着图标哪个角拖，判定的都是眼睛看到的那个悬浮图标压在哪里。
+    // 组件仍用手指坐标（有自己的 grabCell 换算）。
+    let probeX = x;
+    let probeY = y;
+    if (drag.itemType === "icon") {
+      const dragBoxW = Math.min(58 * getShellZoom(), drag.ghostW);
+      probeX = x - drag.offsetX + drag.ghostW / 2;
+      probeY = y - drag.offsetY + dragBoxW / 2;
+    }
+    const cell = pointerToGridCell(probeX, probeY, gridEl);
     if (!cell) {
       clearMergeIntent(drag);
       if (drag.targetPage !== null) resetDragPreview(drag);
@@ -2705,17 +2717,22 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     const ws = widgetsRef.current;
 
     if (drag.itemType === "icon") {
-      // ── 悬停成组：APP 图标停在别的图标中心一小会 → 高亮为合并目标 ──
-      // 文件夹 tile 本身不参与合并（不嵌套），只走普通换位。
-      // occupant 必须从拖起时的原始布局读：手指进格子总是先擦过边缘，
-      // 边缘已触发换位预览把目标滑走了，读预览布局中心就永远找不到人。
-      // 认定合并意图后 resetDragPreview 会让所有图标归位，高亮与视觉一致。
+      // ── 悬停成组（iOS 同款判定）──
+      // 判定点是"悬浮图标盒的中心"而不是手指：等大图标下"中心点落进目标
+      // 图标盒" ⟺ "两条轴的边长重叠都过半"。直着推进去纵向重叠 100%、横向
+      // 一过半就命中；切着角进去两轴都不到半，走换位。文件夹 tile 本身不参
+      // 与合并（不嵌套）。occupant 从拖起时的原始布局读：目标被换位预览
+      // 滑走过也不影响命中，认定合并后 resetDragPreview 会把它拉回原位。
       if (!isFolderIconId(drag.itemId)) {
         const occupant = (drag.initialLayout[pageKey] ?? []).find(
           (ic) => ic.id !== drag.itemId && ic.row === cell.row + 1 && ic.col === cell.col + 1
         );
-        const inCenter = cell.fx >= 0.2 && cell.fx <= 0.8 && cell.fy >= 0.2 && cell.fy <= 0.8;
-        if (occupant && inCenter) {
+        // 目标图标盒：宽 min(58, 格宽) 水平居中，贴格子顶部近似方形
+        const boxW = Math.min(58 * getShellZoom(), cell.cellW);
+        const boxLeft = (cell.cellW - boxW) / 2;
+        const inTargetBox = cell.cellX >= boxLeft && cell.cellX <= boxLeft + boxW
+          && cell.cellY >= 0 && cell.cellY <= boxW;
+        if (occupant && inTargetBox) {
           const mKey = `${pageKey}:${occupant.id}`;
           if (drag.mergeKey !== mKey) {
             clearMergeIntent(drag);
