@@ -219,7 +219,8 @@ export type ShareClaimInfo = {
 /** 从投稿列表里识别找回申请并解析元数据；不是找回申请返回 null */
 export function parseShareClaim(submission: ShareSubmission): ShareClaimInfo | null {
     if (!submission.title.startsWith(SHARE_CLAIM_TITLE_PREFIX)) return null;
-    const entryPath = submission.body.match(/^资源路径[:：]\s*(\S+)/m)?.[1];
+    // 资源标题里常有空格，必须取整行（\S+ 会在第一个空格截断，曾写错过路径）
+    const entryPath = submission.body.match(/^资源路径[:：]\s*(.+?)\s*$/m)?.[1];
     const ownerHash = submission.body.match(/^新钥匙指纹[:：]\s*([0-9a-f]{64})/m)?.[1];
     const nickname = submission.body.match(/^申请人[:：]\s*(.+)$/m)?.[1]?.trim() || "匿名";
     return entryPath && ownerHash ? { entryPath, ownerHash, nickname } : null;
@@ -243,9 +244,12 @@ export async function approveShareClaim(prNumber: number, claim: ShareClaimInfo)
         content: btoa(claim.ownerHash),
         ...(sha ? { sha } : {}),
     });
-    await gh(token, "POST", `/repos/${owner}/${repo}/issues/${prNumber}/comments`, {
-        body: "✅ 找回申请已通过，作品所有权已绑定到申请人的摊主钥匙。索引重建后（约 1 分钟）在原设备打开资源集市即可恢复管理权限。",
-    });
+    // 留言只是善意通知，token 缺 Issues 权限时不能拖垮整个通过流程
+    try {
+        await gh(token, "POST", `/repos/${owner}/${repo}/issues/${prNumber}/comments`, {
+            body: "✅ 找回申请已通过，作品所有权已绑定到申请人的摊主钥匙。索引重建后（约 1 分钟）在原设备打开资源集市即可恢复管理权限。",
+        });
+    } catch { /* 尽力而为 */ }
     await gh(token, "PATCH", `/repos/${owner}/${repo}/pulls/${prNumber}`, { state: "closed" });
     // 索引由 Actions 在 .owner 提交后重建，先清一次 CDN 缓存，稍后再清一次兜底
     setTimeout(() => purgeShareIndexCache(loadResourceHubSource()), 90_000);
