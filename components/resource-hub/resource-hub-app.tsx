@@ -122,7 +122,12 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     // 共同建设：贡献墙（只展示已被官方采纳=已合并的社区 PR）
     const [buildWall, setBuildWall] = useState<MergedContribution[] | null>(null);
     const [buildWallState, setBuildWallState] = useState<"idle" | "loading" | "error">("idle");
+    const [showBuildNotice, setShowBuildNotice] = useState(false);
     const openBuildTab = useCallback(() => {
+        // 施工中：先只弹提示，不进入分区（测试完成后删掉这两行开闸）
+        setShowBuildNotice(true);
+        return;
+        // eslint-disable-next-line no-unreachable
         setViewMode("build");
         setActiveFolder(null);
         setSearchQuery("");
@@ -1176,6 +1181,27 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 导入后本机原来的钥匙会被替换。如果两台设备都发过资源，
                                 请先在另一台导出、这里导入，两边的发布才会合并到一把钥匙下管理。
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 共同建设施工中提示 */}
+            {showBuildNotice && (
+                <div className="rh-dialog-overlay" onClick={() => setShowBuildNotice(false)}>
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar">
+                            <span className="rh-titlebar-text">共同建设</span>
+                            <span className="rh-titlebar-controls">
+                                <button className="rh-tb-btn" onClick={() => setShowBuildNotice(false)}>✕</button>
+                            </span>
+                        </div>
+                        <div className="rh-dialog-body" style={{ textAlign: "center", padding: "24px 16px" }}>
+                            <div style={{ fontSize: 32, marginBottom: 8 }}>🚧</div>
+                            <div style={{ fontSize: 13, lineHeight: 1.8 }}>共同建设施工中……<br />先去别的地方看看吧</div>
+                        </div>
+                        <div className="rh-dialog-footer">
+                            <button className="rh-btn rh-btn-primary" onClick={() => setShowBuildNotice(false)}>好</button>
                         </div>
                     </div>
                 </div>
