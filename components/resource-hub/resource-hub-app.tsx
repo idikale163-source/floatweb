@@ -40,6 +40,7 @@ import {
     type ResourceHubUploadConfig,
 } from "@/lib/resource-hub-upload";
 import { avatarBase64, fileToAvatarDataUrl, loadHubProfile, saveHubProfile, type HubProfile } from "@/lib/resource-hub-profile";
+import { fetchMergedContributions, type MergedContribution } from "@/lib/community-contrib";
 import {
     ensureIdentityKey,
     exportKeyBundle,
@@ -117,7 +118,20 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [confirmDeleteEntry, setConfirmDeleteEntry] = useState<ShareIndexEntry | null>(null);
     const [deleting, setDeleting] = useState(false);
     // 浏览集市 / 我的货摊
-    const [viewMode, setViewMode] = useState<"market" | "mine">("market");
+    const [viewMode, setViewMode] = useState<"market" | "mine" | "build">("market");
+    // 共同建设：贡献墙（只展示已被官方采纳=已合并的社区 PR）
+    const [buildWall, setBuildWall] = useState<MergedContribution[] | null>(null);
+    const [buildWallState, setBuildWallState] = useState<"idle" | "loading" | "error">("idle");
+    const openBuildTab = useCallback(() => {
+        setViewMode("build");
+        setActiveFolder(null);
+        setSearchQuery("");
+        if (buildWall || buildWallState === "loading") return;
+        setBuildWallState("loading");
+        fetchMergedContributions()
+            .then(list => { setBuildWall(list); setBuildWallState("idle"); })
+            .catch(() => setBuildWallState("error"));
+    }, [buildWall, buildWallState]);
     // 图片全屏预览（点开可保存）
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     // 送花：各资源花数（我的货摊展示用）+ 非阻塞小提示
@@ -698,7 +712,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 <div className="rh-toolbar">
                     <button className="rh-btn" onClick={handleBack}>← 返回</button>
                     <span className="rh-address">
-                        地址：C:\资源集市{viewMode === "mine" ? "\\我的货摊" : ""}{activeFolder ? `\\${activeFolder}` : ""}{activeEntry ? `\\${activeEntry.name}` : ""}
+                        地址：C:\资源集市{viewMode === "mine" ? "\\我的货摊" : viewMode === "build" ? "\\共同建设" : ""}{activeFolder ? `\\${activeFolder}` : ""}{activeEntry ? `\\${activeEntry.name}` : ""}
                     </span>
                     <button className="rh-btn" onClick={() => setConfirmUpload(true)}>上传</button>
                 </div>
@@ -710,6 +724,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                             onClick={() => setViewMode("market")}>浏览集市</button>
                         <button className="rh-tab" data-active={viewMode === "mine" ? "1" : undefined}
                             onClick={() => { setViewMode("mine"); setActiveFolder(null); setSearchQuery(""); }}>我的货摊</button>
+                        <button className="rh-tab" data-active={viewMode === "build" ? "1" : undefined}
+                            onClick={openBuildTab}>共同建设</button>
                     </div>
                 )}
 
@@ -845,6 +861,49 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         ) : (
                             <div className="rh-center-hint">没有匹配「{searchQuery.trim()}」的资源</div>
                         )
+                    )}
+
+                    {/* 共同建设：说明 + 贡献墙（只列已采纳） */}
+                    {viewMode === "build" && !activeEntry && (
+                        <div className="rh-build">
+                            <div className="rh-build-intro">
+                                <div className="rh-build-title">🏗️ 一起把小手机做得更好</div>
+                                <p>
+                                    自部署的用户改进了自己的小手机后，可以把改动贡献给官方版本——
+                                    不用懂 Git，去<b>工坊</b>对小坊说一句就行。官方审核采纳后，
+                                    你的名字会出现在下面的贡献墙上。
+                                </p>
+                                <button className="rh-btn rh-btn-primary" onClick={() => {
+                                    const opener = "我想把我改的东西贡献给官方，帮我对比一下我的部署和官方版本的差异。";
+                                    void navigator.clipboard?.writeText(opener).then(
+                                        () => showToast("开场白已复制，去工坊贴给小坊吧"),
+                                        () => showToast(`去工坊对小坊说：${opener}`),
+                                    );
+                                }}>我要贡献 → 复制开场白</button>
+                                <div className="rh-form-hint">需要自部署版本（有自己的 fork）。官方站用户可先去 GitHub 一键 fork。</div>
+                            </div>
+                            <div className="rh-build-wall-title">贡献墙 · 已采纳的社区改进</div>
+                            {buildWallState === "loading" && <div className="rh-center-hint">正在读取贡献墙...</div>}
+                            {buildWallState === "error" && (
+                                <div className="rh-center-hint">贡献墙暂时读取失败（GitHub 接口限流），稍后再来看看</div>
+                            )}
+                            {buildWall && buildWall.length === 0 && (
+                                <div className="rh-center-hint">虚位以待——第一个被采纳的改进会出现在这里</div>
+                            )}
+                            {buildWall && buildWall.length > 0 && (
+                                <div className="rh-build-wall">
+                                    {buildWall.map(item => (
+                                        <div key={item.number} className="rh-build-card">
+                                            <div className="rh-build-card-title">{item.title}</div>
+                                            <div className="rh-build-card-meta">
+                                                <span>🎉 {item.contributor}</span>
+                                                <span>{item.mergedAt ? new Date(item.mergedAt).toLocaleDateString("zh-CN") : ""} 采纳</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     )}
 
                     {/* 首页：文件夹（一行两个） */}
@@ -1653,6 +1712,15 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 }
                 .rh-folder:active { border-color: #000080; background: #e4ecf7; }
                 .rh-folder-icon { font-size: 40px; line-height: 1; }
+                .rh-build { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px; }
+                .rh-build-intro { border: 1px solid #9aa5b1; background: #f4f7fb; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+                .rh-build-intro p { margin: 0; font-size: 12px; line-height: 1.7; }
+                .rh-build-title { font-weight: 700; font-size: 13px; }
+                .rh-build-wall-title { font-weight: 700; font-size: 12px; color: #333; }
+                .rh-build-wall { display: flex; flex-direction: column; gap: 6px; }
+                .rh-build-card { border: 1px solid #b8bfc9; background: #fff; padding: 8px 10px; }
+                .rh-build-card-title { font-size: 12px; font-weight: 600; line-height: 1.5; }
+                .rh-build-card-meta { display: flex; justify-content: space-between; font-size: 11px; color: #667; margin-top: 4px; }
                 .rh-folder-name {
                     font-size: calc(13px * var(--app-text-scale, 1));
                     color: #000;
