@@ -873,13 +873,16 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     {viewMode === "build" && !activeEntry && (
                         <div className="rh-build">
                             <div className="rh-build-intro">
-                                <div className="rh-build-stickers">🛠️ ✨ 📱 ✨ 🧸</div>
-                                <div className="rh-build-title">一起改进小手机吧～</div>
-                                <p>
-                                    贡献公开仓库功能已接入<b>工坊</b>，
-                                    可以让小坊将你的修改贡献到公开仓库哦～<br />
-                                    float 会进行飞速审核，感谢您的付出～
-                                </p>
+                                <div className="rh-build-intro-bar">🏗️ 共同建设.exe</div>
+                                <div className="rh-build-intro-body">
+                                    <div className="rh-build-stickers">🛠️ ✨ 📱 ✨ 🧸</div>
+                                    <div className="rh-build-title">一起改进小手机吧～</div>
+                                    <p>
+                                        贡献公开仓库功能已接入<b>工坊</b>，
+                                        可以让小坊将你的修改贡献到公开仓库哦～<br />
+                                        float 会进行飞速审核，感谢您的付出～
+                                    </p>
+                                </div>
                             </div>
                             <div className="rh-build-wall-head">
                                 <span className="rh-build-wall-line" />
@@ -1741,35 +1744,42 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                 }
                 .rh-folder:active { border-color: #000080; background: #e4ecf7; }
                 .rh-folder-icon { font-size: 40px; line-height: 1; }
-                .rh-build { display: flex; flex-direction: column; gap: 14px; padding: 6px 2px; }
+                .rh-build { display: flex; flex-direction: column; gap: 12px; padding: 6px 2px; }
                 .rh-build-intro {
-                    border: 1px solid #aab6c8;
-                    background: linear-gradient(180deg, #f7faff 0%, #eef3fb 100%);
-                    padding: 16px 14px 14px;
-                    text-align: center;
+                    border: 2px solid;
+                    border-color: #ffffff #404040 #404040 #ffffff;
+                    background: #c0c0c0;
                 }
+                .rh-build-intro-bar {
+                    background: linear-gradient(90deg, #000080, #1084d0);
+                    color: #fff;
+                    font-size: 12px;
+                    font-weight: 700;
+                    padding: 3px 8px;
+                }
+                .rh-build-intro-body { padding: 12px 10px 14px; text-align: center; }
                 .rh-build-stickers { font-size: 18px; letter-spacing: 6px; margin-bottom: 6px; }
-                .rh-build-title { font-weight: 800; font-size: 16px; color: #000080; margin-bottom: 8px; }
-                .rh-build-intro p { margin: 0; font-size: 12.5px; line-height: 1.9; color: #3c4658; }
+                .rh-build-title { font-weight: 800; font-size: 15px; color: #000080; margin-bottom: 6px; }
+                .rh-build-intro p { margin: 0; font-size: 12.5px; line-height: 1.9; color: #222; }
                 .rh-build-intro p b { color: #000080; }
-                .rh-build-wall-head { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
-                .rh-build-wall-line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, #c9a34e, transparent); }
-                .rh-build-wall-title { font-weight: 800; font-size: 14px; color: #7a5c14; white-space: nowrap; }
-                .rh-build-wall-sub { text-align: center; font-size: 11px; color: #9a8a5e; margin-top: -8px; }
+                .rh-build-wall-head { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+                .rh-build-wall-line { flex: 1; height: 0; border-top: 1px solid #808080; box-shadow: 0 1px 0 #fff; }
+                .rh-build-wall-title { font-weight: 800; font-size: 13px; color: #000080; white-space: nowrap; }
+                .rh-build-wall-sub { text-align: center; font-size: 11px; color: #666; margin-top: -6px; }
                 .rh-build-wall { display: flex; flex-direction: column; gap: 8px; }
                 .rh-build-card {
                     display: flex; align-items: center; gap: 10px;
-                    border: 1px solid #ddc98d;
-                    background: linear-gradient(180deg, #fffdf4 0%, #fdf6e0 100%);
-                    padding: 10px 12px;
-                    box-shadow: inset 0 0 0 1px #fffef9;
+                    border: 2px solid;
+                    border-color: #ffffff #404040 #404040 #ffffff;
+                    background: #c0c0c0;
+                    padding: 9px 10px;
                 }
                 .rh-build-card-medal { font-size: 22px; line-height: 1; flex: none; }
                 .rh-build-card-main { flex: 1; min-width: 0; }
-                .rh-build-card-title { font-size: 12.5px; font-weight: 700; line-height: 1.5; color: #33302a; }
+                .rh-build-card-title { font-size: 12.5px; font-weight: 700; line-height: 1.5; color: #000; }
                 .rh-build-card-meta { display: flex; justify-content: space-between; align-items: baseline; font-size: 11px; margin-top: 4px; }
-                .rh-build-card-name { font-weight: 700; color: #8a6d1f; }
-                .rh-build-card-date { color: #a89f8a; }
+                .rh-build-card-name { font-weight: 700; color: #000080; }
+                .rh-build-card-date { color: #555; }
                 .rh-folder-name {
                     font-size: calc(13px * var(--app-text-scale, 1));
                     color: #000;
