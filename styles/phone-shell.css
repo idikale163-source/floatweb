@@ -1404,15 +1404,15 @@ html[data-zoom-fallback] .phone-shell-wrap {
 /* tile 底板复用 .icon-glyph-box：扁平/毛玻璃、底色、阴影全部跟随
    个性化装扮里的图标材质设定，文件夹永远和图标一个质感。 */
 
-/* 迷你格铺在玻璃打光层(z1)之上、描边(z3)之下 */
+/* 迷你格铺在玻璃打光层(z1)之上、描边(z3)之下；2×2 最多 4 个，够大够认 */
 .folder-mini-grid {
   position: absolute;
-  inset: 14%;
+  inset: 15%;
   z-index: 2;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-  gap: 9%;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 10%;
   pointer-events: none;
 }
 
@@ -1491,7 +1491,7 @@ html[data-zoom-fallback] .phone-shell-wrap {
 }
 
 .folder-panel {
-  width: min(304px, 86%);
+  width: min(236px, 80%);
   border-radius: 30px;
   padding: 16px 4px 12px;
   /* 扁平材质：图标底色罩在面板底色(--c-home-card，即扁平组件的卡面)上，
@@ -1566,10 +1566,10 @@ html[data-zoom-fallback] .phone-shell-wrap {
   flex: 0 0 100%;
   scroll-snap-align: center;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, minmax(84px, auto));
-  gap: 6px 2px;
-  padding: 6px 8px;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, minmax(88px, auto));
+  gap: 10px 4px;
+  padding: 8px 10px;
   align-items: start;
 }
 

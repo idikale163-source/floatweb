@@ -4440,7 +4440,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                                   >
                                     <span className="icon-glyph-box folder-glyph-box" aria-hidden>
                                       <span className="folder-mini-grid">
-                                        {folder.icons.slice(0, 9).map(memberId => renderFolderMini(memberId))}
+                                        {folder.icons.slice(0, 4).map(memberId => renderFolderMini(memberId))}
                                       </span>
                                       {folderBadge > 0 ? (
                                         <span className="desktop-icon-badge" aria-label={`${folderBadge} 条未读`}>
@@ -4765,8 +4765,8 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
               {!activeApp && openFolderId && folders[openFolderId] && (() => {
                 const folder = folders[openFolderId];
                 const memberPages: DesktopIconId[][] = [];
-                for (let i = 0; i < folder.icons.length; i += 9) {
-                  memberPages.push(folder.icons.slice(i, i + 9));
+                for (let i = 0; i < folder.icons.length; i += 4) {
+                  memberPages.push(folder.icons.slice(i, i + 4));
                 }
                 if (memberPages.length === 0) memberPages.push([]);
                 const boundedFolderPage = Math.min(folderPageIndex, memberPages.length - 1);
