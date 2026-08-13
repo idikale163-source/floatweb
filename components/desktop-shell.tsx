@@ -2752,8 +2752,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
         // 新接触：只在此刻裁决一次
         clearMergeIntent(drag);
         drag.contactId = best.id;
-        const halfEdge = Math.min(dragBoxW, targetBoxW) / 2;
-        const merge = !isFolderIconId(drag.itemId) && (best.ox > halfEdge || best.oy > halfEdge);
+        // 合并阈值：接触瞬间任一边重叠超过边长的 60%（50% 手感偏灵，容易误判成组）
+        const mergeEdge = Math.min(dragBoxW, targetBoxW) * 0.6;
+        const merge = !isFolderIconId(drag.itemId) && (best.ox > mergeEdge || best.oy > mergeEdge);
         drag.contactIntent = merge ? "merge" : "swap";
         if (merge) {
           const targetId = best.id;
