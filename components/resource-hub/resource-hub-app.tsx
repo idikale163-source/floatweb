@@ -105,6 +105,8 @@ function formatEntryDate(iso: string | null): string {
  */
 const NOTICE_DISMISSED_KEY = "ai_phone_resource_hub_notice_v2";
 registerKvMigration(NOTICE_DISMISSED_KEY);
+/** 摊主钥匙强制备份：确认保存过一次后不再打扰 */
+const KEY_BACKUP_DONE_KEY = "ai_phone_resource_hub_key_backup_v1";
 
 export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onNotice?: (msg: string) => void }) {
     const [source, setSource] = useState<ResourceHubSource>(() => loadResourceHubSource());
@@ -145,6 +147,9 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     const [identityKey, setIdentityKeyState] = useState("");
     const [identityHash, setIdentityHash] = useState("");
     const [showKeyDialog, setShowKeyDialog] = useState(false);
+    // 发布成功后的强制钥匙备份弹窗（存过文件/复制过才能点「我已保存好」）
+    const [showKeyBackup, setShowKeyBackup] = useState(false);
+    const [keyBackupTouched, setKeyBackupTouched] = useState(false);
     const [keyImportText, setKeyImportText] = useState("");
     // 作者编辑已发布资源
     const [editEntry, setEditEntry] = useState<ShareIndexEntry | null>(null);
@@ -583,6 +588,11 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             onNotice?.(result.merged
                 ? `「${name}」已上架（CDN 缓存刷新后可见）`
                 : `「${name}」已提交，等待管理员审核上架`);
+            // 没确认备份过摊主钥匙的，发布完强制提醒一次（直到确认为止）
+            if (kvGet(KEY_BACKUP_DONE_KEY) !== "1") {
+                setKeyBackupTouched(false);
+                setShowKeyBackup(true);
+            }
         } catch (err) {
             onNotice?.(`上传失败：${err instanceof Error ? err.message : String(err)}`);
         } finally {
@@ -1180,6 +1190,57 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 导入后本机原来的钥匙会被替换。如果两台设备都发过资源，
                                 请先在另一台导出、这里导入，两边的发布才会合并到一把钥匙下管理。
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 发布成功后的强制钥匙备份（不可跳过：必须保存或复制后才能关闭） */}
+            {showKeyBackup && (
+                <div className="rh-dialog-overlay">
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar"><span className="rh-titlebar-text">请备份你的摊主钥匙</span></div>
+                        <div className="rh-dialog-body rh-form">
+                            <div className="rh-key-danger">⚠️ 钥匙丢失将无法找回作品所有权</div>
+                            <div className="rh-form-hint">
+                                这串码是你对自己所有发布的唯一所有权证明，换设备、清理浏览器数据后全靠它找回。
+                                请立刻保存到文件或备忘录（只需这一次）。不要发给任何人。
+                            </div>
+                            <textarea className="rh-input rh-key-text" readOnly rows={3} value={exportKeyBundle(identityKey)}
+                                onFocus={e => e.currentTarget.select()} />
+                            <div className="rh-key-backup-actions">
+                                <button className="rh-btn" onClick={() => {
+                                    try {
+                                        const blob = new Blob([exportKeyBundle(identityKey)], { type: "text/plain;charset=utf-8" });
+                                        const url = URL.createObjectURL(blob);
+                                        const anchor = document.createElement("a");
+                                        anchor.href = url;
+                                        anchor.download = "小手机摊主钥匙.txt";
+                                        anchor.click();
+                                        setTimeout(() => URL.revokeObjectURL(url), 4000);
+                                        setKeyBackupTouched(true);
+                                        showToast("已开始保存，请确认文件存好了");
+                                    } catch {
+                                        showToast("保存失败，请用「复制钥匙」");
+                                    }
+                                }}>保存为文件</button>
+                                <button className="rh-btn" onClick={async () => {
+                                    try {
+                                        await navigator.clipboard.writeText(exportKeyBundle(identityKey));
+                                        setKeyBackupTouched(true);
+                                        showToast("已复制，请立刻粘贴到备忘录保存");
+                                    } catch {
+                                        showToast("复制失败，请长按上面的文字手动复制");
+                                    }
+                                }}>复制钥匙</button>
+                            </div>
+                        </div>
+                        <div className="rh-dialog-footer">
+                            <button className="rh-btn rh-btn-primary" disabled={!keyBackupTouched}
+                                title={keyBackupTouched ? undefined : "先保存或复制钥匙"}
+                                onClick={() => { kvSet(KEY_BACKUP_DONE_KEY, "1"); setShowKeyBackup(false); }}>
+                                我已保存好
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1939,6 +2000,14 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                     text-decoration: underline;
                     cursor: pointer;
                 }
+                .rh-key-danger {
+                    color: #cc0000;
+                    font-weight: 800;
+                    font-size: 14px;
+                    text-align: center;
+                }
+                .rh-key-backup-actions { display: flex; gap: 8px; }
+                .rh-key-backup-actions .rh-btn { flex: 1; }
                 .rh-key-warning {
                     background: #ffffe1;
                     border: 1px solid #808080;
