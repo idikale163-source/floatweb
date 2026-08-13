@@ -1491,9 +1491,11 @@ html[data-zoom-fallback] .phone-shell-wrap {
 }
 
 .folder-panel {
-  width: min(224px, 80%);
+  /* 四边等距的账（以图标"盒"边缘计，标签算在留白里，和 iOS 一致）：
+     侧距 = (212 - 2×58) / 3 = 32；上距 = padding-top 32；
+     下距 = 行内标签区 26 + padding-bottom 6 = 32。改尺寸要一起改。 */
+  width: min(212px, 78%);
   border-radius: 30px;
-  /* 四边留白交给 .folder-page：横向由 space-evenly 均分，纵向用对称 padding */
   padding: 0;
   /* 扁平材质：图标底色罩在面板底色(--c-home-card，即扁平组件的卡面)上，
      两个颜色都跟装扮面板走；默认图标底色近乎透明时就是一张干净的组件卡 */
@@ -1572,7 +1574,7 @@ html[data-zoom-fallback] .phone-shell-wrap {
   grid-template-rows: repeat(2, minmax(84px, auto));
   justify-content: space-evenly;
   row-gap: 4px;
-  padding: 26px 0 18px;
+  padding: 32px 0 6px;
   align-items: start;
 }
 
@@ -1621,11 +1623,16 @@ html[data-zoom-fallback] .phone-shell-wrap {
   color: var(--c-home-label, #2f343b);
 }
 
+/* 圆点浮在下边距里，不撑高面板——有没有第二页四向留白都一致 */
 .folder-dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
   display: flex;
   justify-content: center;
   gap: 6px;
-  padding: 8px 0 4px;
+  pointer-events: none;
 }
 .folder-dots .dot {
   width: 6px;
