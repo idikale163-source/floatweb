@@ -1596,6 +1596,7 @@ const contribCompareTool: QaContentTool = {
         const lines: string[] = [];
         lines.push(`fork：${forkRepo}（分支 ${result.forkBranch}）领先官方 ${result.aheadBy} 个提交、落后 ${result.behindBy} 个提交。`);
         if (result.behindBy > 50) lines.push("⚠️ fork 落后官方较多：整文件提交可能带入对官方新改动的回退，提交前请只挑与用户目标相关的改动，必要时基于官方当前版本重新拼合。");
+        if (result.behindBy > 0) lines.push("提示：GitHub 对比接口有几分钟缓存——如果刚执行过「同步官方更新」且已成功，这里的落后数可能是旧值，稍等几分钟再对比一次即可，不影响正常贡献流程。");
         lines.push(`可贡献的改动文件（${allowed.length} 个）：`);
         for (const file of allowed) lines.push(`  · ${file.path}（${file.status}，+${file.additions}/-${file.deletions}）`);
         if (allowed.length === 0) lines.push("  （没有落在贡献白名单内的改动）");
