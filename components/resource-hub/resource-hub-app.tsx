@@ -122,9 +122,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     // 共同建设：贡献墙（只展示已被官方采纳=已合并的社区 PR）
     const [buildWall, setBuildWall] = useState<MergedContribution[] | null>(null);
     const [buildWallState, setBuildWallState] = useState<"idle" | "loading" | "error">("idle");
-    const [showBuildNotice, setShowBuildNotice] = useState(false);
     const enterBuildTab = useCallback(() => {
-        setShowBuildNotice(false);
         setViewMode("build");
         setActiveFolder(null);
         setSearchQuery("");
@@ -134,10 +132,6 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             .then(list => { setBuildWall(list); setBuildWallState("idle"); })
             .catch(() => setBuildWallState("error"));
     }, [buildWall, buildWallState]);
-    const openBuildTab = useCallback(() => {
-        // 施工中：先弹提示（正式开闸时改成直接调 enterBuildTab）
-        setShowBuildNotice(true);
-    }, []);
     // 图片全屏预览（点开可保存）
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     // 送花：各资源花数（我的货摊展示用）+ 非阻塞小提示
@@ -731,7 +725,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         <button className="rh-tab" data-active={viewMode === "mine" ? "1" : undefined}
                             onClick={() => { setViewMode("mine"); setActiveFolder(null); setSearchQuery(""); }}>我的货摊</button>
                         <button className="rh-tab" data-active={viewMode === "build" ? "1" : undefined}
-                            onClick={openBuildTab}>共同建设</button>
+                            onClick={enterBuildTab}>共同建设</button>
                     </div>
                 )}
 
@@ -1183,28 +1177,6 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 导入后本机原来的钥匙会被替换。如果两台设备都发过资源，
                                 请先在另一台导出、这里导入，两边的发布才会合并到一把钥匙下管理。
                             </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* 共同建设施工中提示 */}
-            {showBuildNotice && (
-                <div className="rh-dialog-overlay" onClick={() => setShowBuildNotice(false)}>
-                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
-                        <div className="rh-titlebar">
-                            <span className="rh-titlebar-text">共同建设</span>
-                            <span className="rh-titlebar-controls">
-                                <button className="rh-tb-btn" onClick={() => setShowBuildNotice(false)}>✕</button>
-                            </span>
-                        </div>
-                        <div className="rh-dialog-body" style={{ textAlign: "center", padding: "24px 16px" }}>
-                            <div style={{ fontSize: 32, marginBottom: 8 }}>🚧</div>
-                            <div style={{ fontSize: 13, lineHeight: 1.8 }}>共同建设施工中……<br />先去别的地方看看吧</div>
-                        </div>
-                        <div className="rh-dialog-footer">
-                            <button className="rh-btn" onClick={() => setShowBuildNotice(false)}>去别处看看</button>
-                            <button className="rh-btn rh-btn-primary" onClick={enterBuildTab}>看看现状</button>
                         </div>
                     </div>
                 </div>
