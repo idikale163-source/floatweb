@@ -986,7 +986,6 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                             </div>
 
                             {activeEntry.files.length > 0 ? (
-                                <>
                                     <div className="rh-file-strip">
                                         {activeEntry.files.map(file => {
                                             const base = stripAssetImageMark(file.split("/").pop() || file);
@@ -1005,17 +1004,23 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                             );
                                         })}
                                     </div>
-                                    <div className="rh-detail2-actions">
-                                        <button
-                                            className="rh-btn rh-flower-btn"
-                                            disabled={sendingFlower || hasSentFlowerToday(activeEntry.path)}
-                                            title="给作者送一朵花"
-                                            onClick={() => void handleSendFlower(activeEntry.path)}
-                                        >
-                                            {sendingFlower
-                                                ? <><PixelHourglass size={13} /> 送出中</>
-                                                : hasSentFlowerToday(activeEntry.path) ? "已送🌸" : "送花🌸"}
-                                        </button>
+                            ) : (
+                                <div className="rh-center-hint">该资源没有可下载的文件</div>
+                            )}
+                            {/* 操作行不依赖文件：纯文字/纯配图的帖子也要能送花、能被管理员下架 */}
+                            <div className="rh-detail2-actions">
+                                <button
+                                    className="rh-btn rh-flower-btn"
+                                    disabled={sendingFlower || hasSentFlowerToday(activeEntry.path)}
+                                    title="给作者送一朵花"
+                                    onClick={() => void handleSendFlower(activeEntry.path)}
+                                >
+                                    {sendingFlower
+                                        ? <><PixelHourglass size={13} /> 送出中</>
+                                        : hasSentFlowerToday(activeEntry.path) ? "已送🌸" : "送花🌸"}
+                                </button>
+                                {activeEntry.files.length > 0 && (
+                                    <>
                                         <button className="rh-btn rh-action-half" disabled={!selectedFile || busyFile === selectedFile} onClick={() => selectedFile && handleDownload(selectedFile)}>
                                             {busyFile === selectedFile && !importingTo
                                                 ? <><PixelHourglass size={13} /> 下载中</>
@@ -1026,15 +1031,13 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                                 ? <><PixelHourglass size={13} /> 导入中</>
                                                 : "导入"}
                                         </button>
-                                        {/* 作者的编辑/删除已移到顶部作者行；这里只留管理员下架入口 */}
-                                        {uploadCfg.githubToken.trim() && !myRecordFor(activeEntry.path) && (
-                                            <button className="rh-btn rh-action-del" onClick={() => setConfirmDeleteEntry(activeEntry)}>下架</button>
-                                        )}
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="rh-center-hint">该资源没有可下载的文件</div>
-                            )}
+                                    </>
+                                )}
+                                {/* 作者的编辑/删除已移到顶部作者行；这里只留管理员下架入口 */}
+                                {uploadCfg.githubToken.trim() && !myRecordFor(activeEntry.path) && (
+                                    <button className="rh-btn rh-action-del" onClick={() => setConfirmDeleteEntry(activeEntry)}>下架</button>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>
