@@ -826,7 +826,8 @@ const githubPullCreateTool: QaTool = {
         required: ["title", "head"],
     },
     description:
-        "从某个分支向目标分支发起 Pull Request。典型流程：新建分支 → 提交修改到该分支 → 创建PR → 用户审阅或让你合并。",
+        "从某个分支向目标分支发起 Pull Request（仅限当前已连接的这个仓库内部）。典型流程：新建分支 → 提交修改到该分支 → 创建PR → 用户审阅或让你合并。"
+        + "注意：用户想「把改动贡献给官方/上游仓库」时不要用本动作——那要走「对比官方版本 → 提交共同建设贡献」流程。",
     schemaLines: [
         "  参数：",
         "    · title (必填) — PR 标题",
@@ -1326,6 +1327,10 @@ const UNIFIED_BASE_TOOLS: QaTool[] = [
     contentToolByNative("read_creation_guide"),
     faqTool,
     contentToolByNative("export_local_content"),
+    // 共同建设：贡献改动给官方仓库（读侧公共接口，提交走集市中转，与「连接仓库」无关）
+    contentToolByNative("compare_with_official"),
+    contentToolByNative("read_contrib_diff"),
+    contentToolByNative("submit_contribution"),
     diagnoseTool,
     feedbackTool,
 ];
