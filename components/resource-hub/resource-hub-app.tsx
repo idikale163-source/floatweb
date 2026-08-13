@@ -1260,10 +1260,6 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                             </label>
                             {renderPickedFiles(uploadImages, index => setUploadImages(current => current.filter((_, i) => i !== index)))}
                             <div className="rh-form-hint">
-                                「资源文件」是别人要下载/导入的东西，「配图」只在详情页展示。
-                                PNG 角色卡、表情包这类图片本身就是资源，要放进「资源文件」。
-                            </div>
-                            <div className="rh-form-hint">
                                 {uploadCfg.githubToken
                                     ? "将使用你的 GitHub Token 提交（有仓库权限则直接上架，否则生成待审核投稿）。"
                                     : "将匿名提交到审核队列，管理员通过后上架。单次总量 ≤5MB。"}
