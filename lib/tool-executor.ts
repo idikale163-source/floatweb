@@ -2001,7 +2001,31 @@ async function executeAgentComputerTool(call: ToolCall, context?: ToolExecutionC
                 mediaAttachments: [{ type, url, title: baseName }],
             };
         }
-        return failed("op 需为 write / read / list / send 之一");
+        if (op === "exec") {
+            const command = String(args.command ?? "").trim();
+            if (!command) return failed("缺少 command");
+            try {
+                const data = await agentComputerRequest<{ exitCode: number; stdout: string; stderr: string }>(
+                    "exec", workspace, { command });
+                const parts = [`$ ${command}`, `退出码：${data.exitCode}`];
+                if (data.stdout) parts.push(`stdout：\n${data.stdout}`);
+                if (data.stderr) parts.push(`stderr：\n${data.stderr}`);
+                if (!data.stdout && !data.stderr) parts.push("（无输出）");
+                return {
+                    name: call.name, success: true,
+                    data: parts.join("\n"),
+                    continueConversation: true, persistToHistory: false,
+                    userNotice: `💻 在自己的电脑上运行了一条命令`,
+                };
+            } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                if (/shell 不可用|execution backend/i.test(message)) {
+                    return failed("这台电脑是基础模式（没有 shell），改用 write / read / list 完成吧");
+                }
+                throw err;
+            }
+        }
+        return failed("op 需为 write / read / list / send / exec 之一");
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return failed(`角色电脑操作失败：${message}`);

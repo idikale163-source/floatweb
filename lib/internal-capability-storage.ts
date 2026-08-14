@@ -578,9 +578,10 @@ const CALENDAR_MANAGEMENT_SUBTOOLS: InternalToolDefinition[] = [
 const AGENT_COMPUTER_PARAMETER_SCHEMA = JSON.stringify({
     type: "object",
     properties: {
-        op: { type: "string", enum: ["write", "read", "list", "send"], description: "操作：write 写文件 / read 读文件 / list 列目录 / send 把文件发给用户" },
+        op: { type: "string", enum: ["write", "read", "list", "send", "exec"], description: "操作：write 写文件 / read 读文件 / list 列目录 / send 把文件发给用户 / exec 执行 shell 命令" },
         path: { type: "string", description: "自己电脑里的文件或目录路径，如 /日记/八月.txt" },
         content: { type: "string", description: "写入的完整内容（op=write 必填）" },
+        command: { type: "string", description: "要执行的 shell 命令（op=exec 必填）" },
     },
     required: ["op"],
 });
@@ -589,7 +590,8 @@ const AGENT_COMPUTER_USAGE_GUIDE = [
     "这是你自己的电脑（云端、持久，只属于你这个角色）。你可以：",
     "· op=write：把想留存的东西写成文件（日记、写给对方的东西、随手记）。路径自己规划，如 /日记/2026-08-14.txt；",
     "· op=read / op=list：翻自己以前存的文件；",
-    "· op=send：把电脑里的一个文件发给对方（会以文件消息出现在聊天里）。",
+    "· op=send：把电脑里的一个文件发给对方（会以文件消息出现在聊天里）；",
+    "· op=exec：在终端里执行 shell 命令（ls/cat/grep/sed 等，curl 可只读访问公开网页）。删除类命令（rm）会真的删掉文件且无法恢复，动手前想清楚。",
     "写什么、何时写由你自己决定，像真人使用电脑一样自然；不必每次聊天都用。",
 ].join("\n");
 
@@ -1209,7 +1211,7 @@ const BUILTIN_INTERNAL_CAPABILITIES: InternalCapabilityConfig[] = [
     {
         id: AGENT_COMPUTER_CAPABILITY_ID,
         name: "角色电脑",
-        description: "你拥有一台自己的云端小电脑（持久硬盘）：可以自己写文件记录生活、翻看旧文件，也能把电脑里的文件发给{{user}}。",
+        description: "你拥有一台自己的云端小电脑（持久硬盘 + 终端）：可以自己写文件记录生活、翻看旧文件，把电脑里的文件发给{{user}}，也能在终端里执行 shell 命令。",
         enabled: false,
         mode: "auto",
         createdAt: 0,
