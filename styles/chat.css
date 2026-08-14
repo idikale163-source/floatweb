@@ -2025,10 +2025,11 @@
 .chat-music-share-card,
 .chat-media-file-wrap,
 .chat-media-file-card {
-  --c-music-surface: rgba(255, 255, 255, 0.06);
-  --c-music-surface-solid: rgba(255, 255, 255, 0.12);
-  --c-music-text: #2d3b36;
-  --c-music-accent: #7c9a92;
+  /* 值 = 2026-07-09 首发版 tokens.css 的"龙井绿"浅色板（8/9 播放器改月光暗色板前的原样） */
+  --c-music-surface: rgba(255, 255, 255, 0.3);
+  --c-music-surface-solid: rgba(255, 255, 255, 0.55);
+  --c-music-text: #2b3d31;
+  --c-music-accent: #5b7b64;
 }
 
 .chat-music-share-card {
