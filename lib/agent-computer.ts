@@ -10,9 +10,10 @@ const CONFIG_KEY = "ai_phone_agent_computer_cfg_v1";
 export const AGENT_COMPUTER_DEPLOY_URL =
     "https://deploy.workers.cloudflare.com/?url=https://github.com/xiaolongbao0709/agent-computer";
 
-/** 容器版一键部署（container 分支：真 Linux，需 Workers 付费计划；配置已开好，零改动） */
+/** 容器版一键部署（独立仓库：真 Linux，需 Workers 付费计划；配置已开好，零改动。
+ *  独立成仓库而非分支——部署向导对 /tree/ 形式的 URL 时灵时不灵，根路径最稳） */
 export const AGENT_COMPUTER_CONTAINER_DEPLOY_URL =
-    "https://deploy.workers.cloudflare.com/?url=https://github.com/xiaolongbao0709/agent-computer/tree/container";
+    "https://deploy.workers.cloudflare.com/?url=https://github.com/xiaolongbao0709/agent-computer-container";
 
 export type AgentComputerMode = "container" | "shell" | "fs-only";
 
