@@ -84,7 +84,9 @@ async function runSend(args: Record<string, unknown>): Promise<string> {
     const path = text(args.path);
     if (!path) return "缺少 path。";
     const name = path.split("/").pop() || path;
-    const parent = path.slice(0, path.lastIndexOf("/")) || "/";
+    // lastIndexOf 无斜杠时返回 -1，slice(0,-1) 会把末位字符切掉——必须先判界
+    const slashIndex = path.lastIndexOf("/");
+    const parent = slashIndex <= 0 ? "/" : path.slice(0, slashIndex);
     const data = await agentComputerRequest<{ entries: Array<{ name: string; dir: boolean }> }>(
         "list", WORKSHOP_WORKSPACE, { path: parent });
     const hit = data.entries.find(entry => entry.name === name && !entry.dir);
