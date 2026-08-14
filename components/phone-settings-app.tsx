@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, createContext, type CSSProperties, type ReactNode } from "react";
-import { Activity, Check, ChevronRight, Clock, Database, FileText, Fingerprint, Globe, HardDrive, Image, Info, KeyRound, Layers, Link2, Loader2, LogOut, MessageSquare, Mic, SlidersHorizontal, UserCircle, Wrench, X } from "lucide-react";
+import { Activity, Check, ChevronRight, Clock, Database, FileText, Fingerprint, Globe, HardDrive, Image, Info, KeyRound, Laptop, Layers, Link2, Loader2, LogOut, MessageSquare, Mic, SlidersHorizontal, UserCircle, Wrench, X } from "lucide-react";
 import { ConfirmDialog } from "./ui/modal";
 import { useAccount } from "@/lib/account-context";
 import { changeAccountPassword } from "@/lib/account-client";
@@ -18,6 +18,7 @@ import { BindingManager } from "./settings/binding-manager";
 import { WeixinSettings } from "./settings/weixin-settings";
 import { ToolboxSettings } from "./settings/toolbox-settings";
 import { ModerationCenter } from "./settings/moderation-center";
+import { AgentComputerSettings } from "./settings/agent-computer-settings";
 import { fetchIsAdmin } from "@/lib/moderation-client";
 import { isSelfHostedModeEnabled } from "@/lib/self-hosting";
 import { PageShell } from "./ui/page-shell";
@@ -51,6 +52,7 @@ type SubPage =
     | "identity"
     | "weixin"
     | "toolbox"
+    | "agentComputer"
     | "moderation"
     | "about";
 
@@ -65,6 +67,7 @@ const SETTINGS_MENU = [
     { id: "binding", icon: Link2, label: "配置绑定", desc: "管理全局默认、角色与应用的配置绑定关系", iconColor: BINDING_ACCENTS.identity },
     { id: "weixin", icon: MessageSquare, label: "微信接入", desc: "iLink Bot", iconColor: CONTENT_APP_ACCENTS.chat },
     { id: "toolbox", icon: Wrench, label: "聊天工具箱", desc: "外部工具调用", iconColor: BINDING_ACCENTS.voice },
+    { id: "agentComputer", icon: Laptop, label: "角色电脑", desc: "云端小电脑（自部署）", iconColor: BINDING_ACCENTS.memory },
     { id: "identity", icon: UserCircle, label: "用户身份", desc: "个人信息", iconColor: BINDING_ACCENTS.identity },
     { id: "about", icon: Info, label: "关于与声明", desc: "版本与协议", iconColor: BINDING_ACCENTS.memory },
 ] as const;
@@ -106,6 +109,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
     const [promptViewerEnabled, setPromptViewerEnabled] = useState(false);
     const [quickActionEnabled, setQuickActionEnabled] = useState(false);
     const [keepAlive, setKeepAlive] = useState(false);
+    // 角色电脑：施工中弹窗（返回 / 仍要看看）
+    const [showAgentComputerGate, setShowAgentComputerGate] = useState(false);
     const pageBodyRef = useRef<HTMLDivElement | null>(null);
 
     // ── 账号：显示当前登录 / 修改密码 / 退出登录 ──
@@ -204,7 +209,11 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
         label: item.label,
         desc: item.desc,
         iconColor: item.iconColor,
-        onClick: () => setCurrentPage(item.id as SubPage),
+        onClick: () => {
+            // 施工中：角色电脑先弹提示，可选择仍要看看
+            if (item.id === "agentComputer") { setShowAgentComputerGate(true); return; }
+            setCurrentPage(item.id as SubPage);
+        },
     });
 
     const handleTimeAwareChange = useCallback((next: boolean) => {
@@ -275,6 +284,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                 return <WeixinSettings onOpenDataManagement={() => setCurrentPage("data")} />;
             case "toolbox":
                 return <ToolboxSettings />;
+            case "agentComputer":
+                return <AgentComputerSettings onNotice={onNotice} />;
             case "moderation":
                 return <ModerationCenter onNotice={onNotice} />;
             case "identity":
@@ -514,6 +525,18 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                     </div>
                                 </div>
                             </div>
+                        )}
+
+                        {showAgentComputerGate && (
+                            <ConfirmDialog
+                                title="角色电脑施工中"
+                                message="这个功能还在施工中，可能随时有变动。先去别的地方看看吧～"
+                                icon={Laptop}
+                                confirmLabel="仍要看看"
+                                cancelLabel="返回"
+                                onConfirm={() => { setShowAgentComputerGate(false); setCurrentPage("agentComputer"); }}
+                                onCancel={() => setShowAgentComputerGate(false)}
+                            />
                         )}
 
                         {confirmLogout && (
