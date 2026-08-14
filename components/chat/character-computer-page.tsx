@@ -2,15 +2,17 @@
 
 // 「TA 的电脑」：翻看某个角色云端电脑（角色电脑 Worker 的 char:<id> 工作区）里的文件。
 // 只读视角 + 下载；写入永远由角色自己完成，保持"这是 TA 的电脑"的感觉。
+// 排版对齐聊天信息页：menu-group 卡片 + chat-info-icon 彩色圆片 + 默认 menu-label 字号。
 
-import { useCallback, useEffect, useState } from "react";
-import { Download, FileText, Folder, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { ChevronRight, FileText, Folder, Image as ImageIcon, Loader2 } from "lucide-react";
 import { PageShell } from "@/components/ui/page-shell";
 import { agentComputerRequest, characterWorkspace } from "@/lib/agent-computer";
 
 type Entry = { name: string; dir: boolean };
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|avif)$/i;
+const TEXT_EXT = /\.(txt|md|markdown|json|js|ts|tsx|css|html|htm|csv|log|xml|yml|yaml|ini|conf)$/i;
 
 function joinPath(base: string, name: string): string {
     return base === "/" ? `/${name}` : `${base}/${name}`;
@@ -29,6 +31,8 @@ function mimeFor(name: string): string {
     };
     return map[ext] || "application/octet-stream";
 }
+
+const iconStyle = (color: string): CSSProperties => ({ "--icon-color": color } as CSSProperties);
 
 export function CharacterComputerPage({ characterId, characterName, onClose }: {
     characterId: string;
@@ -61,8 +65,30 @@ export function CharacterComputerPage({ characterId, characterName, onClose }: {
 
     useEffect(() => { void load("/"); }, [load]);
 
+    const downloadFile = useCallback(async (name: string, fromPath: string) => {
+        const filePath = joinPath(fromPath, name);
+        setBusyFile(name);
+        setError("");
+        try {
+            const data = await agentComputerRequest<{ base64: string }>("read_base64", workspace, { path: filePath });
+            const bytes = Uint8Array.from(atob(data.base64), c => c.charCodeAt(0));
+            const url = URL.createObjectURL(new Blob([bytes], { type: mimeFor(name) }));
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = name;
+            anchor.click();
+            setTimeout(() => URL.revokeObjectURL(url), 4000);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
+        } finally {
+            setBusyFile("");
+        }
+    }, [workspace]);
+
     const openFile = async (name: string) => {
         const filePath = joinPath(path, name);
+        // 非图非文本的二进制文件没有预览意义，直接保存
+        if (!IMAGE_EXT.test(name) && !TEXT_EXT.test(name)) { void downloadFile(name, path); return; }
         setBusyFile(name);
         setError("");
         try {
@@ -80,72 +106,60 @@ export function CharacterComputerPage({ characterId, characterName, onClose }: {
         }
     };
 
-    const downloadFile = async (name: string) => {
-        const filePath = joinPath(path, name);
-        setBusyFile(name);
-        setError("");
-        try {
-            const data = await agentComputerRequest<{ base64: string }>("read_base64", workspace, { path: filePath });
-            const bytes = Uint8Array.from(atob(data.base64), c => c.charCodeAt(0));
-            const url = URL.createObjectURL(new Blob([bytes], { type: mimeFor(name) }));
-            const anchor = document.createElement("a");
-            anchor.href = url;
-            anchor.download = name;
-            anchor.click();
-            setTimeout(() => URL.revokeObjectURL(url), 4000);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
-        } finally {
-            setBusyFile("");
-        }
-    };
+    const atRoot = path === "/";
+    const title = atRoot ? `${characterName}的电脑` : (path.split("/").pop() || characterName);
 
     return (
         <div style={{ position: "absolute", inset: 0, zIndex: 9999, background: "var(--c-page-body-bg, #ffffff)" }}>
-            <PageShell title={`${characterName}的电脑`} onBack={onClose}>
-                <div className="px-4 pt-2 pb-8 flex flex-col gap-2">
-                    <div className="text-xs text-[var(--c-text-muted)] px-1 break-all">{path}</div>
-
-                    {error && <div className="text-xs text-[var(--c-danger)] px-1">{error}</div>}
-                    {loading && !entries && (
-                        <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin" /></div>
+            <PageShell title={title} onBack={() => { if (atRoot) onClose(); else void load(parentOf(path)); }}>
+                <div className="page-menu chat-info-menu" style={{ paddingTop: 12 }}>
+                    {error && (
+                        <div className="menu-group">
+                            <div className="menu-item"><span className="menu-desc" style={{ color: "var(--c-danger)" }}>{error}</span></div>
+                        </div>
                     )}
 
-                    <div className="menu-group">
-                        {path !== "/" && (
-                            <button className="menu-item" onClick={() => void load(parentOf(path))}>
-                                <Folder size={18} className="shrink-0 text-[var(--c-text-muted)]" />
-                                <div className="menu-label-group"><span className="menu-label">.. 返回上级</span></div>
-                            </button>
-                        )}
-                        {entries?.map(entry => (
-                            <div key={entry.name} className="menu-item" style={{ cursor: "pointer" }}
-                                role="button" tabIndex={0}
-                                onClick={() => entry.dir ? void load(joinPath(path, entry.name)) : void openFile(entry.name)}>
-                                {entry.dir
-                                    ? <Folder size={18} className="shrink-0 text-[#e8b339]" />
-                                    : <FileText size={18} className="shrink-0 text-[var(--c-text-muted)]" />}
-                                <div className="menu-label-group" style={{ minWidth: 0 }}>
-                                    <span className="menu-label" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.name}</span>
-                                </div>
-                                <div className="menu-right">
-                                    {busyFile === entry.name
-                                        ? <Loader2 size={15} className="animate-spin" />
-                                        : !entry.dir && (
-                                            <button className="p-1" aria-label="保存"
-                                                onClick={event => { event.stopPropagation(); void downloadFile(entry.name); }}>
-                                                <Download size={15} className="text-[var(--c-text-muted)]" />
-                                            </button>
-                                        )}
-                                </div>
+                    {loading && !entries && (
+                        <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}>
+                            <Loader2 size={20} className="animate-spin" />
+                        </div>
+                    )}
+
+                    {entries && entries.length > 0 && (
+                        <div className="menu-group">
+                            {entries.map(entry => (
+                                <button key={entry.name} className="menu-item"
+                                    onClick={() => entry.dir ? void load(joinPath(path, entry.name)) : void openFile(entry.name)}>
+                                    <span className="chat-info-icon" style={iconStyle(entry.dir ? "#e8b339" : IMAGE_EXT.test(entry.name) ? "#7c9a92" : "#5b7b64")}>
+                                        {entry.dir
+                                            ? <Folder size={22} strokeWidth={1.75} />
+                                            : IMAGE_EXT.test(entry.name)
+                                                ? <ImageIcon size={22} strokeWidth={1.75} />
+                                                : <FileText size={22} strokeWidth={1.75} />}
+                                    </span>
+                                    <div className="menu-label-group" style={{ minWidth: 0 }}>
+                                        <span className="menu-label" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.name}</span>
+                                        {!entry.dir && <span className="menu-desc">点击查看，可保存</span>}
+                                    </div>
+                                    <div className="menu-right">
+                                        {busyFile === entry.name
+                                            ? <Loader2 size={16} className="animate-spin" />
+                                            : <ChevronRight size={16} />}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {entries && entries.length === 0 && !error && (
+                        <div style={{ padding: "64px 24px", textAlign: "center" }}>
+                            <div style={{ fontSize: 34, marginBottom: 10 }}>💻</div>
+                            <div className="menu-label">{atRoot ? "TA 还没有在电脑上存过东西" : "这个文件夹是空的"}</div>
+                            <div className="menu-desc" style={{ marginTop: 6 }}>
+                                {atRoot ? "等 TA 在聊天里用过自己的电脑，再来看看吧" : ""}
                             </div>
-                        ))}
-                        {entries && entries.length === 0 && path === "/" && !error && (
-                            <div className="py-8 text-center text-xs text-[var(--c-text-muted)]">
-                                TA 还没有在电脑上存过东西
-                            </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </div>
             </PageShell>
 
@@ -161,14 +175,14 @@ export function CharacterComputerPage({ characterId, characterName, onClose }: {
                                 ? /* eslint-disable-next-line @next/next/no-img-element */
                                   <img src={preview.content} alt={preview.name} style={{ maxWidth: "100%", borderRadius: 8 }} />
                                 : (
-                                    <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit", fontSize: 13, lineHeight: 1.7, margin: 0 }}>
-                                        {preview.content}{preview.truncated ? "\n…（文件较长，完整内容请下载查看）" : ""}
+                                    <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit", fontSize: 14, lineHeight: 1.8, margin: 0 }}>
+                                        {preview.content}{preview.truncated ? "\n…（文件较长，完整内容请保存后查看）" : ""}
                                     </pre>
                                 )}
                         </div>
                         <div className="modal-footer" data-ui="modal-footer">
                             <button className="ui-btn" onClick={() => setPreview(null)}>关闭</button>
-                            <button className="ui-btn ui-btn-primary" onClick={() => { void downloadFile(preview.name); }}>保存</button>
+                            <button className="ui-btn ui-btn-primary" onClick={() => { void downloadFile(preview.name, path); }}>保存</button>
                         </div>
                     </div>
                 </div>
