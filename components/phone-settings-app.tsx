@@ -252,6 +252,17 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
         onClick: () => setCurrentPage("imageGeneration"),
     };
 
+    const agentComputerItem = SETTINGS_MENU.find(i => i.id === "agentComputer")!;
+    const agentComputerFeaturedItem: FeaturedCardItem = {
+        id: agentComputerItem.id,
+        icon: agentComputerItem.icon,
+        label: agentComputerItem.label,
+        desc: agentComputerItem.desc,
+        iconColor: agentComputerItem.iconColor,
+        // 施工中：先弹提示，可选择仍要看看
+        onClick: () => setShowAgentComputerGate(true),
+    };
+
     const bindingItem = SETTINGS_MENU.find(i => i.id === "binding")!;
     const bindingFeaturedItem: FeaturedCardItem = {
         id: bindingItem.id,
@@ -377,11 +388,16 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                 <FeaturedCard item={imageGenerationFeaturedItem} />
                             </div>
                         </div>
-                        <CardGrid
-                            label="Connections"
-                            labelClassName="settings-menu-section-title"
-                            items={SETTINGS_MENU.filter(item => ["weixin", "toolbox", "agentComputer"].includes(item.id)).map(makeCardItem)}
-                        />
+                        <div>
+                            <CardGrid
+                                label="Connections"
+                                labelClassName="settings-menu-section-title"
+                                items={SETTINGS_MENU.filter(item => ["weixin", "toolbox"].includes(item.id)).map(makeCardItem)}
+                            />
+                            <div className="mt-[10px]">
+                                <FeaturedCard item={agentComputerFeaturedItem} />
+                            </div>
+                        </div>
                         <div className="settings-realtime-section">
                             <h3 className="settings-menu-section-title">Runtime</h3>
                             <div className="app-card card-featured settings-toggle-card">
