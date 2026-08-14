@@ -380,7 +380,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                         <CardGrid
                             label="Connections"
                             labelClassName="settings-menu-section-title"
-                            items={SETTINGS_MENU.filter(item => ["weixin", "toolbox"].includes(item.id)).map(makeCardItem)}
+                            items={SETTINGS_MENU.filter(item => ["weixin", "toolbox", "agentComputer"].includes(item.id)).map(makeCardItem)}
                         />
                         <div className="settings-realtime-section">
                             <h3 className="settings-menu-section-title">Runtime</h3>
