@@ -570,7 +570,10 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                 )}
 
                 {currentPage !== "main" && (
-                    <div className="block min-h-full p-4 pb-8 box-border">
+                    // shrink-0：page-body 是 flex 容器，包裹层默认可压缩——内容超一屏时会被压到
+                    // 恰好一屏高、卡片从中溢出，底部 padding 落不到内容末尾，最后一张卡贴死滚动边界
+                    //（iOS 底部工具栏/安全区一盖就"没放下又滚不动"）。padding 同步加大留出安全余量。
+                    <div className="block min-h-full shrink-0 p-4 box-border" style={{ paddingBottom: "calc(88px + env(safe-area-inset-bottom, 0px))" }}>
                         {renderSubPage()}
                     </div>
                 )}
