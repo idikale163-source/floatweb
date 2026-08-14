@@ -34,7 +34,7 @@ import {
     formatQaFeedbackMarkdown,
     type QaFeedbackTicket,
 } from "./qa-feedback";
-import { QA_COMPUTER_TOOLS } from "./qa-computer-tools";
+import { QA_COMPUTER_TOOLS, QA_COMPUTER_ALIAS_TOOLS } from "./qa-computer-tools";
 import { isAgentComputerConfigured } from "./agent-computer";
 import {
     QA_CONTENT_TOOLS,
@@ -1399,6 +1399,7 @@ export const QA_TOOLS: QaTool[] = [...new Set([
     ...UNIFIED_GITHUB_READ_TOOLS,
     ...UNIFIED_GITHUB_WRITE_TOOLS,
     ...QA_COMPUTER_TOOLS,
+    ...QA_COMPUTER_ALIAS_TOOLS,
     diagnoseLegacyAliasTool,
     ...BASE_TOOLS,
     ...GITHUB_TOOLS,

@@ -2,6 +2,9 @@
 // 只在设置里连接了角色电脑后才注入（getQaTools 里按 isAgentComputerConfigured 判断），
 // 未配置时这些工具对模型完全不可见。
 // 小坊固定使用 workshop 工作区，与各角色的电脑相互隔离。
+//
+// 暴露给模型的只有两个工具（电脑文件 + 电脑执行命令），控制提示词体积；
+// 早期的四个单操作工具保留为隐藏别名（可执行、不进提示词），旧调用不报错。
 
 import {
     WORKSHOP_WORKSPACE,
@@ -22,86 +25,76 @@ function text(value: unknown, max = 4000): string {
     return typeof value === "string" ? value.slice(0, max).trim() : "";
 }
 
-const computerListTool: QaComputerTool = {
-    name: "电脑列目录",
-    nativeName: "computer_list_dir",
-    description:
-        "列出工作机（云端电脑）某个目录下的文件和子目录。工作机的硬盘是持久的，之前存的文件重启后还在。",
-    schemaLines: [
-        "  参数：",
-        "    · path (可选) — 目录路径，默认根目录 /",
-        '  调用：[执行动作:电脑列目录({"path":"/"})]',
-    ],
-    parameters: {
-        type: "object",
-        properties: {
-            path: { type: "string", description: "目录路径，默认 /" },
-        },
-    },
-    async run(args) {
-        const path = text(args.path) || "/";
-        const data = await agentComputerRequest<{ entries: Array<{ name: string; dir: boolean }> }>(
-            "list", WORKSHOP_WORKSPACE, { path });
-        if (!data.entries.length) return `${path} 是空目录。`;
-        return `${path} 下共 ${data.entries.length} 项：\n` + data.entries
-            .map(entry => `  ${entry.dir ? "📁" : "📄"} ${entry.name}`)
-            .join("\n");
-    },
-};
+// ── 四种文件操作的实现（统一工具与隐藏别名共用）──
 
-const computerReadTool: QaComputerTool = {
-    name: "电脑读文件",
-    nativeName: "computer_read_file",
-    description: "读取工作机上一个文本文件的内容。",
-    schemaLines: [
-        "  参数：",
-        "    · path (必填) — 文件路径，如 /scripts/test.js",
-        "    · maxChars (可选) — 最多读取的字符数",
-        '  调用：[执行动作:电脑读文件({"path":"/notes.md"})]',
-    ],
-    parameters: {
-        type: "object",
-        properties: {
-            path: { type: "string", description: "文件路径" },
-            maxChars: { type: "number", description: "最多读取字符数" },
-        },
-        required: ["path"],
-    },
-    async run(args) {
-        const path = text(args.path);
-        if (!path) return "缺少 path。";
-        const maxChars = typeof args.maxChars === "number" ? args.maxChars : undefined;
-        const data = await agentComputerRequest<{ content: string; truncated: boolean }>(
-            "read", WORKSHOP_WORKSPACE, { path, ...(maxChars ? { maxChars } : {}) });
-        return `${path} 的内容：\n${data.content}${data.truncated ? "\n…（文件较长已截断，可用 maxChars 调整）" : ""}`;
-    },
-};
+async function runList(args: Record<string, unknown>): Promise<string> {
+    const path = text(args.path) || "/";
+    const data = await agentComputerRequest<{ entries: Array<{ name: string; dir: boolean }> }>(
+        "list", WORKSHOP_WORKSPACE, { path });
+    if (!data.entries.length) return `${path} 是空目录。`;
+    return `${path} 下共 ${data.entries.length} 项：\n` + data.entries
+        .map(entry => `  ${entry.dir ? "📁" : "📄"} ${entry.name}`)
+        .join("\n");
+}
 
-const computerWriteTool: QaComputerTool = {
-    name: "电脑写文件",
-    nativeName: "computer_write_file",
+async function runRead(args: Record<string, unknown>): Promise<string> {
+    const path = text(args.path);
+    if (!path) return "缺少 path。";
+    const maxChars = typeof args.maxChars === "number" ? args.maxChars : undefined;
+    const data = await agentComputerRequest<{ content: string; truncated: boolean }>(
+        "read", WORKSHOP_WORKSPACE, { path, ...(maxChars ? { maxChars } : {}) });
+    return `${path} 的内容：\n${data.content}${data.truncated ? "\n…（文件较长已截断，可用 maxChars 调整）" : ""}`;
+}
+
+async function runWrite(args: Record<string, unknown>): Promise<string> {
+    const path = text(args.path);
+    if (!path) return "缺少 path。";
+    const content = typeof args.content === "string" ? args.content : "";
+    await agentComputerRequest("write", WORKSHOP_WORKSPACE, { path, content });
+    return `✓ 已写入 ${path}（${content.length} 字符）。`;
+}
+
+async function runDelete(args: Record<string, unknown>): Promise<string> {
+    const path = text(args.path);
+    if (!path) return "缺少 path。";
+    await agentComputerRequest("delete", WORKSHOP_WORKSPACE, { path });
+    return `✓ 已删除 ${path}。`;
+}
+
+// ── 暴露给模型的统一工具 ──
+
+const computerFilesTool: QaComputerTool = {
+    name: "电脑文件",
+    nativeName: "computer_files",
     description:
-        "把内容写入工作机上的文件（整文件覆盖写入，父目录自动创建）。适合保存脚本、中间结果、要交付的文件。",
+        "操作工作机（云端电脑）上的文件：op=list 列目录 / read 读文件 / write 写文件（整文件覆盖，父目录自动创建）/ delete 删除（递归，删了找不回）。"
+        + "硬盘是持久的，适合保存脚本、中间结果、要交付的文件。",
     schemaLines: [
         "  参数：",
-        "    · path (必填) — 文件路径",
-        "    · content (必填) — 完整文件内容",
-        '  调用：[执行动作:电脑写文件({"path":"/scripts/clean.js","content":"…"})]',
+        "    · op (必填) — list / read / write / delete",
+        "    · path — 文件或目录路径（list 缺省为 /）",
+        "    · content — 写入的完整内容（op=write 必填）",
+        "    · maxChars (可选) — 读取上限（op=read）",
+        '  调用：[执行动作:电脑文件({"op":"write","path":"/notes.md","content":"…"})]',
     ],
     parameters: {
         type: "object",
         properties: {
-            path: { type: "string", description: "文件路径" },
-            content: { type: "string", description: "完整文件内容" },
+            op: { type: "string", enum: ["list", "read", "write", "delete"], description: "操作类型" },
+            path: { type: "string", description: "文件或目录路径" },
+            content: { type: "string", description: "写入内容（op=write 必填）" },
+            maxChars: { type: "number", description: "读取上限（op=read）" },
         },
-        required: ["path", "content"],
+        required: ["op"],
     },
     async run(args) {
-        const path = text(args.path);
-        if (!path) return "缺少 path。";
-        const content = typeof args.content === "string" ? args.content : "";
-        await agentComputerRequest("write", WORKSHOP_WORKSPACE, { path, content });
-        return `✓ 已写入 ${path}（${content.length} 字符）。`;
+        switch (text(args.op, 20)) {
+            case "list": return runList(args);
+            case "read": return runRead(args);
+            case "write": return runWrite(args);
+            case "delete": return runDelete(args);
+            default: return "op 需为 list / read / write / delete 之一。";
+        }
     },
 };
 
@@ -110,7 +103,7 @@ const computerExecTool: QaComputerTool = {
     nativeName: "computer_exec",
     description:
         "在工作机上执行 shell 命令（ls/cat/grep/sed 等常用命令）。用于验证脚本、处理文本、检查文件。"
-        + "注意：基础模式的电脑没有 shell（会返回明确提示），此时改用读写文件工具完成任务。",
+        + "注意：基础模式的电脑没有 shell（会返回明确提示），此时改用「电脑文件」完成任务。",
     schemaLines: [
         "  参数：",
         "    · command (必填) — 要执行的命令",
@@ -137,41 +130,31 @@ const computerExecTool: QaComputerTool = {
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             if (/shell 不可用|execution backend/i.test(message)) {
-                return "这台工作机是基础模式（没有 shell），无法执行命令。请改用「电脑读文件/电脑写文件/电脑列目录」完成任务，需要计算或转换时在对话里自行完成后写回文件。";
+                return "这台工作机是基础模式（没有 shell），无法执行命令。请改用「电脑文件」完成任务，需要计算或转换时在对话里自行完成后写回文件。";
             }
             throw err;
         }
     },
 };
 
-const computerDeleteTool: QaComputerTool = {
-    name: "电脑删除文件",
-    nativeName: "computer_delete",
-    description: "删除工作机上的文件或目录（递归）。删前先用列目录确认路径，删掉就找不回来了。",
-    schemaLines: [
-        "  参数：",
-        "    · path (必填) — 要删除的文件或目录",
-        '  调用：[执行动作:电脑删除文件({"path":"/tmp-work"})]',
-    ],
-    parameters: {
-        type: "object",
-        properties: {
-            path: { type: "string", description: "要删除的路径" },
-        },
-        required: ["path"],
-    },
-    async run(args) {
-        const path = text(args.path);
-        if (!path) return "缺少 path。";
-        await agentComputerRequest("delete", WORKSHOP_WORKSPACE, { path });
-        return `✓ 已删除 ${path}。`;
-    },
-};
+export const QA_COMPUTER_TOOLS = [computerFilesTool, computerExecTool];
 
-export const QA_COMPUTER_TOOLS = [
-    computerListTool,
-    computerReadTool,
-    computerWriteTool,
-    computerExecTool,
-    computerDeleteTool,
+// ── 隐藏别名（可执行、不进提示词）：兼容早期的四个单操作工具名 ──
+
+function alias(name: string, nativeName: string, run: (args: Record<string, unknown>) => Promise<string>): QaComputerTool {
+    return {
+        name,
+        nativeName,
+        description: `（隐藏别名）等价于 电脑文件 的对应操作`,
+        schemaLines: [],
+        parameters: { type: "object", properties: { path: { type: "string" }, content: { type: "string" }, maxChars: { type: "number" } } },
+        run,
+    };
+}
+
+export const QA_COMPUTER_ALIAS_TOOLS = [
+    alias("电脑列目录", "computer_list_dir", runList),
+    alias("电脑读文件", "computer_read_file", runRead),
+    alias("电脑写文件", "computer_write_file", runWrite),
+    alias("电脑删除文件", "computer_delete", runDelete),
 ];
