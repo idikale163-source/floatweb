@@ -1,5 +1,5 @@
 // 「角色电脑」客户端：连接用户自部署的 agent-computer Worker
-//（模板在独立仓库 xiaolongbao0709/agent-computer-，基于 @cloudflare/computer）。
+//（模板在独立仓库 xiaolongbao0709/agent-computer，基于 @cloudflare/computer）。
 // 可插拔模块：未配置时相关功能一律不出现，主站零依赖。
 
 import { kvGet, kvSet } from "./kv-db";
@@ -8,7 +8,7 @@ const CONFIG_KEY = "ai_phone_agent_computer_cfg_v1";
 
 /** 一键部署跳转地址（模板为独立小仓库，部署向导不支持子目录） */
 export const AGENT_COMPUTER_DEPLOY_URL =
-    "https://deploy.workers.cloudflare.com/?url=https://github.com/xiaolongbao0709/agent-computer-";
+    "https://deploy.workers.cloudflare.com/?url=https://github.com/xiaolongbao0709/agent-computer";
 
 export type AgentComputerConfig = {
     /** Worker 地址，如 https://ai-phone-agent-computer.xxx.workers.dev */
