@@ -21,6 +21,25 @@ type QaComputerTool = {
     run: (args: Record<string, unknown>) => Promise<string>;
 };
 
+// ── 文件卡标记：op=send 的结果里携带，工坊 UI 解析后渲染可保存的文件卡 ──
+// 标记随工具结果持久化，刷新后卡片仍在；内容按需从工作机拉取，不占存储。
+
+export type QaFileCardInfo = { workspace: string; path: string; name: string };
+
+const QA_FILE_MARKER_RE = /\n?\[\[qa-file:(\{.*?\})\]\]/;
+
+export function parseQaFileMarker(result: string): { text: string; file: QaFileCardInfo | null } {
+    const match = result.match(QA_FILE_MARKER_RE);
+    if (!match) return { text: result, file: null };
+    try {
+        const parsed = JSON.parse(match[1]) as QaFileCardInfo;
+        if (parsed && typeof parsed.workspace === "string" && typeof parsed.path === "string" && typeof parsed.name === "string") {
+            return { text: result.replace(QA_FILE_MARKER_RE, ""), file: parsed };
+        }
+    } catch { /* 落回原文 */ }
+    return { text: result, file: null };
+}
+
 function text(value: unknown, max = 4000): string {
     return typeof value === "string" ? value.slice(0, max).trim() : "";
 }
@@ -61,17 +80,30 @@ async function runDelete(args: Record<string, unknown>): Promise<string> {
     return `✓ 已删除 ${path}。`;
 }
 
+async function runSend(args: Record<string, unknown>): Promise<string> {
+    const path = text(args.path);
+    if (!path) return "缺少 path。";
+    const name = path.split("/").pop() || path;
+    const parent = path.slice(0, path.lastIndexOf("/")) || "/";
+    const data = await agentComputerRequest<{ entries: Array<{ name: string; dir: boolean }> }>(
+        "list", WORKSHOP_WORKSPACE, { path: parent });
+    const hit = data.entries.find(entry => entry.name === name && !entry.dir);
+    if (!hit) return `${path} 不存在或不是文件（先用 op=list 确认路径）。`;
+    const marker = `\n[[qa-file:${JSON.stringify({ workspace: WORKSHOP_WORKSPACE, path, name })}]]`;
+    return `✓ 已把 ${name} 递给用户：对话里出现了文件卡，用户可预览和保存。${marker}`;
+}
+
 // ── 暴露给模型的统一工具 ──
 
 const computerFilesTool: QaComputerTool = {
     name: "电脑文件",
     nativeName: "computer_files",
     description:
-        "操作工作机（云端电脑）上的文件：op=list 列目录 / read 读文件 / write 写文件（整文件覆盖，父目录自动创建）/ delete 删除（递归，删了找不回）。"
+        "操作工作机（云端电脑）上的文件：op=list 列目录 / read 读文件 / write 写文件（整文件覆盖，父目录自动创建）/ delete 删除（递归，删了找不回）/ send 把文件递给用户（对话中出现可预览保存的文件卡，交付成果用它）。"
         + "硬盘是持久的，适合保存脚本、中间结果、要交付的文件。",
     schemaLines: [
         "  参数：",
-        "    · op (必填) — list / read / write / delete",
+        "    · op (必填) — list / read / write / delete / send",
         "    · path — 文件或目录路径（list 缺省为 /）",
         "    · content — 写入的完整内容（op=write 必填）",
         "    · maxChars (可选) — 读取上限（op=read）",
@@ -80,7 +112,7 @@ const computerFilesTool: QaComputerTool = {
     parameters: {
         type: "object",
         properties: {
-            op: { type: "string", enum: ["list", "read", "write", "delete"], description: "操作类型" },
+            op: { type: "string", enum: ["list", "read", "write", "delete", "send"], description: "操作类型" },
             path: { type: "string", description: "文件或目录路径" },
             content: { type: "string", description: "写入内容（op=write 必填）" },
             maxChars: { type: "number", description: "读取上限（op=read）" },
@@ -93,7 +125,8 @@ const computerFilesTool: QaComputerTool = {
             case "read": return runRead(args);
             case "write": return runWrite(args);
             case "delete": return runDelete(args);
-            default: return "op 需为 list / read / write / delete 之一。";
+            case "send": return runSend(args);
+            default: return "op 需为 list / read / write / delete / send 之一。";
         }
     },
 };
