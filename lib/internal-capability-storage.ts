@@ -1319,7 +1319,9 @@ export function getInternalCapabilityToolDefinition(capability: InternalCapabili
     if (capability.id === AGENT_COMPUTER_CAPABILITY_ID) {
         return {
             name: capability.name,
-            description: capability.description,
+            // 界面描述里的"需在设置里连接"是给用户看的；角色看到本工具时必然已连接，
+            // 给模型一份沉浸友好的描述
+            description: "你自己的云端小电脑（持久硬盘）：写文件记录生活、翻看旧文件，或把文件发给{{user}}。",
             parameterSchema: AGENT_COMPUTER_PARAMETER_SCHEMA,
             usageGuide: AGENT_COMPUTER_USAGE_GUIDE,
         };
