@@ -2101,7 +2101,7 @@
   border-radius: 16px;
   overflow: hidden;
   background: var(--c-music-surface, rgba(255,255,255,0.06));
-  border: none;
+  border: 1px solid var(--c-music-surface-solid, rgba(255,255,255,0.12));
   backdrop-filter: blur(16px);
 }
 
