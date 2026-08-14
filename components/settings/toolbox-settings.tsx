@@ -809,13 +809,14 @@ export function ToolboxSettings() {
                     <span className="menu-label">工具轮数上限</span>
                     <span className="menu-desc !mt-0 !whitespace-normal">单条消息最多进行几轮工具调用（每轮一次模型请求，轮内条数不限）。连续干活的任务（如角色电脑跑命令）可调高</span>
                 </div>
-                <Select
-                    value={String(maxToolRounds)}
-                    onChange={e => handleMaxToolRoundsChange(Number(e.target.value))}
-                    className="shrink-0 w-[88px]"
-                >
-                    {[3, 5, 8, 12, 20].map(n => <option key={n} value={n}>{n === 5 ? "5（默认）" : n}</option>)}
-                </Select>
+                <div className="shrink-0 w-[112px]">
+                    <Select
+                        value={String(maxToolRounds)}
+                        onChange={e => handleMaxToolRoundsChange(Number(e.target.value))}
+                    >
+                        {[3, 5, 8, 12, 20].map(n => <option key={n} value={n}>{n === 5 ? "5（默认）" : n}</option>)}
+                    </Select>
+                </div>
             </div>
             {/* REST Tools */}
             <div className="flex justify-between items-center gap-3">
