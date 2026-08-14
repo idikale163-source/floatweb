@@ -25,6 +25,8 @@ export function AgentComputerSettings({ onNotice }: { onNotice?: (msg: string) =
     const [config, setConfig] = useState(() => loadAgentComputerConfig());
     const [testing, setTesting] = useState(false);
     const [status, setStatus] = useState<AgentComputerStatus | null>(null);
+    // 部署按钮的目标：开 = 容器版（container 分支，配置已内置），关 = 普通版
+    const [containerDeploy, setContainerDeploy] = useState(false);
     // 电脑归谁用的两个开关：小坊存在连接配置里，角色走内置能力（与旧工具箱开关同一份数据）
     const [connected, setConnected] = useState(() => {
         const saved = loadAgentComputerConfig();
@@ -98,25 +100,24 @@ export function AgentComputerSettings({ onNotice }: { onNotice?: (msg: string) =
                     </div>
                 </div>
                 <div className="flex flex-col gap-3 mt-4">
+                    <div className="flex items-center gap-3">
+                        <div className="flex-1 flex flex-col gap-1 min-w-0">
+                            <span className="menu-label">容器版（真 Linux）</span>
+                            <span className="menu-desc !mt-0">可装软件、全功能联网；需 Cloudflare 付费计划（$5/月起）</span>
+                        </div>
+                        <Toggle checked={containerDeploy} onChange={setContainerDeploy} />
+                    </div>
                     <button
                         type="button"
                         className="ui-btn ui-btn-primary w-full justify-center"
-                        onClick={() => window.open(AGENT_COMPUTER_DEPLOY_URL, "_blank", "noopener")}
+                        onClick={() => window.open(containerDeploy ? AGENT_COMPUTER_CONTAINER_DEPLOY_URL : AGENT_COMPUTER_DEPLOY_URL, "_blank", "noopener")}
                     >
-                        <Rocket size={16} /> 一键部署到 Cloudflare
+                        <Rocket size={16} /> {containerDeploy ? "一键部署（容器版）到 Cloudflare" : "一键部署到 Cloudflare"}
                     </button>
                     <span className="menu-desc !mt-0 text-center">
-                        部署时需要自定一段「AGENT_TOKEN」连接密钥；完成后把 Worker 地址和密钥填到下面。
-                    </span>
-                    <button
-                        type="button"
-                        className="ui-btn w-full justify-center"
-                        onClick={() => window.open(AGENT_COMPUTER_CONTAINER_DEPLOY_URL, "_blank", "noopener")}
-                    >
-                        容器版部署（真 Linux · 需 $5/月 付费计划）
-                    </button>
-                    <span className="menu-desc !mt-0 text-center">
-                        容器版 = 真正的 Linux（可装软件、全功能联网），部署流程相同、无需改任何配置。
+                        {containerDeploy
+                            ? "容器版配置已内置，流程与普通部署相同、无需改任何文件；部署时同样需要自定「AGENT_TOKEN」密钥。"
+                            : "部署时需要自定一段「AGENT_TOKEN」连接密钥；完成后把 Worker 地址和密钥填到下面。"}
                     </span>
                     <button
                         type="button"
