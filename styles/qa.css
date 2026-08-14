@@ -1559,3 +1559,15 @@
 }
 .qa-file-card-btn:active { opacity: 0.7; }
 .qa-file-card-error { width: 100%; font-size: 11px; color: var(--c-danger, #d33); }
+
+.qa-file-card-ready {
+  width: 100%;
+  border: 0;
+  border-radius: 9px;
+  padding: 8px;
+  background: rgba(91, 123, 100, 0.14);
+  color: #3d5c48;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}

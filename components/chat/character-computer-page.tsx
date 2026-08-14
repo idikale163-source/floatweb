@@ -46,6 +46,8 @@ export function CharacterComputerPage({ characterId, characterName, onClose }: {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [busyFile, setBusyFile] = useState("");
+    // 大文件拉取耗时可能超过 iOS 分享卡的用户激活窗口：失败时攥住 blob 待二次点击
+    const [readySave, setReadySave] = useState<{ blob: Blob; name: string } | null>(null);
     const [preview, setPreview] = useState<{ name: string; kind: "text" | "image"; content: string; truncated?: boolean } | null>(null);
 
     const load = useCallback(async (target: string) => {
@@ -70,17 +72,31 @@ export function CharacterComputerPage({ characterId, characterName, onClose }: {
         const filePath = joinPath(fromPath, name);
         setBusyFile(name);
         setError("");
+        let blob: Blob | null = null;
         try {
             const data = await agentComputerRequest<{ base64: string }>("read_base64", workspace, { path: filePath });
             const bytes = Uint8Array.from(atob(data.base64), c => c.charCodeAt(0));
+            blob = new Blob([bytes], { type: mimeFor(name) });
             // iOS 走系统分享卡、其余平台走常规下载，统一交给家里的下载工具
-            await saveFileToDevice(new Blob([bytes], { type: mimeFor(name) }), name);
+            await saveFileToDevice(blob, name);
+            setReadySave(null);
         } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
+            if (blob) setReadySave({ blob, name });
+            else setError(err instanceof Error ? err.message : String(err));
         } finally {
             setBusyFile("");
         }
     }, [workspace]);
+
+    const saveReadyFile = async () => {
+        if (!readySave) return;
+        try {
+            await saveFileToDevice(readySave.blob, readySave.name);
+            setReadySave(null);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
+        }
+    };
 
     const openFile = async (name: string) => {
         const filePath = joinPath(path, name);
@@ -110,6 +126,13 @@ export function CharacterComputerPage({ characterId, characterName, onClose }: {
         <div style={{ position: "absolute", inset: 0, zIndex: 9999, background: "var(--c-page-body-bg, #ffffff)" }}>
             <PageShell title={title} onBack={() => { if (atRoot) onClose(); else void load(parentOf(path)); }}>
                 <div className="page-menu chat-info-menu" style={{ paddingTop: 12 }}>
+                    {readySave && (
+                        <div className="menu-group">
+                            <button className="menu-item" onClick={() => void saveReadyFile()}>
+                                <span className="menu-label" style={{ color: "var(--c-primary, #2563eb)" }}>《{readySave.name}》已就绪 · 点此保存</span>
+                            </button>
+                        </div>
+                    )}
                     {error && (
                         <div className="menu-group">
                             <div className="menu-item"><span className="menu-desc" style={{ color: "var(--c-danger)" }}>{error}</span></div>

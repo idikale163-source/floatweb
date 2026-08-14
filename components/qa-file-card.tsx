@@ -24,21 +24,41 @@ function mimeFor(name: string): string {
 export function QaFileCard({ file }: { file: QaFileCardInfo }) {
     const [busy, setBusy] = useState<"" | "view" | "save">("");
     const [error, setError] = useState("");
+    // 大文件拉取耗时可能超过 iOS 分享卡的用户激活窗口：失败时攥住 blob，
+    // 让用户再点一次（新激活）直接弹分享——与数据导出的两段式同一思路
+    const [ready, setReady] = useState<{ blob: Blob; name: string } | null>(null);
     const [preview, setPreview] = useState<{ kind: "text" | "image"; content: string; truncated?: boolean } | null>(null);
     const previewable = IMAGE_EXT.test(file.name) || TEXT_EXT.test(file.name);
 
     const save = async () => {
         setBusy("save");
         setError("");
+        let blob: Blob | null = null;
         try {
             const data = await agentComputerRequest<{ base64: string }>("read_base64", file.workspace, { path: file.path });
             const bytes = Uint8Array.from(atob(data.base64), c => c.charCodeAt(0));
+            blob = new Blob([bytes], { type: mimeFor(file.name) });
             // iOS 走系统分享卡、其余平台走常规下载，统一交给家里的下载工具
-            await downloadFile(new Blob([bytes], { type: mimeFor(file.name) }), file.name);
+            await downloadFile(blob, file.name);
+            setReady(null);
         } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
+            if (blob) {
+                setReady({ blob, name: file.name });
+            } else {
+                setError(err instanceof Error ? err.message : String(err));
+            }
         } finally {
             setBusy("");
+        }
+    };
+
+    const saveReady = async () => {
+        if (!ready) return;
+        try {
+            await downloadFile(ready.blob, ready.name);
+            setReady(null);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
         }
     };
 
@@ -77,6 +97,11 @@ export function QaFileCard({ file }: { file: QaFileCardInfo }) {
                     {busy === "save" ? <Loader2 size={15} className="qa-spin" /> : <Download size={15} />}
                 </button>
             </div>
+            {ready && (
+                <button type="button" className="qa-file-card-ready" onClick={() => void saveReady()}>
+                    文件已就绪 · 点此保存
+                </button>
+            )}
             {error && <div className="qa-file-card-error">{error}</div>}
 
             {preview && (
