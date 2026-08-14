@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Laptop, Loader2, Rocket } from "lucide-react";
 import { Input, Toggle } from "@/components/ui/form";
 import {
+    AGENT_COMPUTER_CONTAINER_DEPLOY_URL,
     AGENT_COMPUTER_DEPLOY_URL,
     loadAgentComputerConfig,
     saveAgentComputerConfig,
@@ -106,6 +107,16 @@ export function AgentComputerSettings({ onNotice }: { onNotice?: (msg: string) =
                     </button>
                     <span className="menu-desc !mt-0 text-center">
                         部署时需要自定一段「AGENT_TOKEN」连接密钥；完成后把 Worker 地址和密钥填到下面。
+                    </span>
+                    <button
+                        type="button"
+                        className="ui-btn w-full justify-center"
+                        onClick={() => window.open(AGENT_COMPUTER_CONTAINER_DEPLOY_URL, "_blank", "noopener")}
+                    >
+                        容器版部署（真 Linux · 需 $5/月 付费计划）
+                    </button>
+                    <span className="menu-desc !mt-0 text-center">
+                        容器版 = 真正的 Linux（可装软件、全功能联网），部署流程相同、无需改任何配置。
                     </span>
                     <button
                         type="button"

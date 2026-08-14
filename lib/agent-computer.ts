@@ -10,6 +10,10 @@ const CONFIG_KEY = "ai_phone_agent_computer_cfg_v1";
 export const AGENT_COMPUTER_DEPLOY_URL =
     "https://deploy.workers.cloudflare.com/?url=https://github.com/xiaolongbao0709/agent-computer";
 
+/** 容器版一键部署（container 分支：真 Linux，需 Workers 付费计划；配置已开好，零改动） */
+export const AGENT_COMPUTER_CONTAINER_DEPLOY_URL =
+    "https://deploy.workers.cloudflare.com/?url=https://github.com/xiaolongbao0709/agent-computer/tree/container";
+
 export type AgentComputerMode = "container" | "shell" | "fs-only";
 
 export type AgentComputerConfig = {
