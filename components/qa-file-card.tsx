@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { Download, Eye, FileText, Loader2 } from "lucide-react";
 import { agentComputerRequest } from "@/lib/agent-computer";
+import { downloadFile } from "@/lib/download-utils";
 import type { QaFileCardInfo } from "@/lib/qa-computer-tools";
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|avif)$/i;
@@ -32,12 +33,8 @@ export function QaFileCard({ file }: { file: QaFileCardInfo }) {
         try {
             const data = await agentComputerRequest<{ base64: string }>("read_base64", file.workspace, { path: file.path });
             const bytes = Uint8Array.from(atob(data.base64), c => c.charCodeAt(0));
-            const url = URL.createObjectURL(new Blob([bytes], { type: mimeFor(file.name) }));
-            const anchor = document.createElement("a");
-            anchor.href = url;
-            anchor.download = file.name;
-            anchor.click();
-            setTimeout(() => URL.revokeObjectURL(url), 4000);
+            // iOS 走系统分享卡、其余平台走常规下载，统一交给家里的下载工具
+            await downloadFile(new Blob([bytes], { type: mimeFor(file.name) }), file.name);
         } catch (err) {
             setError(err instanceof Error ? err.message : String(err));
         } finally {
