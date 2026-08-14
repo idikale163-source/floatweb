@@ -1209,7 +1209,7 @@ const BUILTIN_INTERNAL_CAPABILITIES: InternalCapabilityConfig[] = [
     {
         id: AGENT_COMPUTER_CAPABILITY_ID,
         name: "角色电脑",
-        description: "角色拥有一台自己的云端小电脑（持久硬盘）：可以自己写文件记录生活、翻看旧文件，也能把电脑里的文件发给{{user}}。需要在 设置→角色电脑 里完成连接后才会生效。",
+        description: "你拥有一台自己的云端小电脑（持久硬盘）：可以自己写文件记录生活、翻看旧文件，也能把电脑里的文件发给{{user}}。",
         enabled: false,
         mode: "auto",
         createdAt: 0,
@@ -1319,9 +1319,7 @@ export function getInternalCapabilityToolDefinition(capability: InternalCapabili
     if (capability.id === AGENT_COMPUTER_CAPABILITY_ID) {
         return {
             name: capability.name,
-            // 界面描述里的"需在设置里连接"是给用户看的；角色看到本工具时必然已连接，
-            // 给模型一份沉浸友好的描述
-            description: "你自己的云端小电脑（持久硬盘）：写文件记录生活、翻看旧文件，或把文件发给{{user}}。",
+            description: capability.description,
             parameterSchema: AGENT_COMPUTER_PARAMETER_SCHEMA,
             usageGuide: AGENT_COMPUTER_USAGE_GUIDE,
         };
