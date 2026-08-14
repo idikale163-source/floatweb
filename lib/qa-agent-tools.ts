@@ -35,7 +35,7 @@ import {
     type QaFeedbackTicket,
 } from "./qa-feedback";
 import { QA_COMPUTER_TOOLS, QA_COMPUTER_ALIAS_TOOLS } from "./qa-computer-tools";
-import { isAgentComputerConfigured } from "./agent-computer";
+import { isWorkshopComputerEnabled } from "./agent-computer";
 import {
     QA_CONTENT_TOOLS,
     workbenchWriteLocal,
@@ -1388,7 +1388,7 @@ export function getQaTools(): QaTool[] {
     const tools = [...UNIFIED_BASE_TOOLS];
     if (config) tools.push(...UNIFIED_GITHUB_READ_TOOLS);
     if (config?.token) tools.push(...UNIFIED_GITHUB_WRITE_TOOLS);
-    if (isAgentComputerConfigured()) tools.push(...QA_COMPUTER_TOOLS);
+    if (isWorkshopComputerEnabled()) tools.push(...QA_COMPUTER_TOOLS);
     return tools;
 }
 

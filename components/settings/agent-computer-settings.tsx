@@ -5,7 +5,7 @@
 
 import { useState } from "react";
 import { Laptop, Loader2, Rocket } from "lucide-react";
-import { Input } from "@/components/ui/form";
+import { Input, Toggle } from "@/components/ui/form";
 import {
     AGENT_COMPUTER_DEPLOY_URL,
     loadAgentComputerConfig,
@@ -13,14 +13,45 @@ import {
     testAgentComputer,
     type AgentComputerStatus,
 } from "@/lib/agent-computer";
+import {
+    AGENT_COMPUTER_CAPABILITY_ID,
+    getInternalCapability,
+    loadInternalCapabilities,
+    saveInternalCapabilities,
+} from "@/lib/internal-capability-storage";
 
 export function AgentComputerSettings({ onNotice }: { onNotice?: (msg: string) => void }) {
     const [config, setConfig] = useState(() => loadAgentComputerConfig());
     const [testing, setTesting] = useState(false);
     const [status, setStatus] = useState<AgentComputerStatus | null>(null);
+    // 电脑归谁用的两个开关：小坊存在连接配置里，角色走内置能力（与旧工具箱开关同一份数据）
+    const [connected, setConnected] = useState(() => {
+        const saved = loadAgentComputerConfig();
+        return Boolean(saved.endpoint && saved.token);
+    });
+    const [workshopOn, setWorkshopOn] = useState(() => loadAgentComputerConfig().workshopEnabled !== false);
+    const [characterOn, setCharacterOn] = useState(() => {
+        const capability = getInternalCapability(AGENT_COMPUTER_CAPABILITY_ID);
+        return Boolean(capability && capability.enabled && capability.mode !== "off");
+    });
+
+    const handleWorkshopToggle = (value: boolean) => {
+        const saved = loadAgentComputerConfig();
+        saveAgentComputerConfig({ ...saved, workshopEnabled: value });
+        setWorkshopOn(value);
+    };
+
+    const handleCharacterToggle = (value: boolean) => {
+        const items = loadInternalCapabilities().map(item =>
+            item.id === AGENT_COMPUTER_CAPABILITY_ID
+                ? { ...item, enabled: value, mode: (value ? "auto" : "off") as typeof item.mode, updatedAt: Date.now() }
+                : item);
+        saveInternalCapabilities(items);
+        setCharacterOn(value);
+    };
 
     const handleTest = async () => {
-        const draft = { endpoint: config.endpoint.trim().replace(/\/+$/, ""), token: config.token.trim() };
+        const draft = { ...config, endpoint: config.endpoint.trim().replace(/\/+$/, ""), token: config.token.trim() };
         if (!draft.endpoint || !draft.token) {
             onNotice?.("请先填写 Worker 地址和连接密钥");
             return;
@@ -33,6 +64,7 @@ export function AgentComputerSettings({ onNotice }: { onNotice?: (msg: string) =
             if (result.ok) {
                 saveAgentComputerConfig(draft);
                 setConfig(draft);
+                setConnected(true);
                 onNotice?.(result.mode === "shell" ? "已连接：完整模式（硬盘 + shell）" : "已连接：基础模式（硬盘）");
             }
         } finally {
@@ -41,9 +73,10 @@ export function AgentComputerSettings({ onNotice }: { onNotice?: (msg: string) =
     };
 
     const handleDisconnect = () => {
-        saveAgentComputerConfig({ endpoint: "", token: "" });
-        setConfig({ endpoint: "", token: "" });
+        saveAgentComputerConfig({ endpoint: "", token: "", workshopEnabled: workshopOn });
+        setConfig({ endpoint: "", token: "", workshopEnabled: workshopOn });
         setStatus(null);
+        setConnected(false);
         onNotice?.("已断开角色电脑（云端数据仍在你的 Cloudflare 账号里）");
     };
 
@@ -117,6 +150,26 @@ export function AgentComputerSettings({ onNotice }: { onNotice?: (msg: string) =
                     )}
                 </div>
             </div>
+
+            {connected && (
+                <div className="ui-group-card !items-stretch">
+                    <span className="menu-label font-medium">谁在用这台电脑</span>
+                    <div className="flex items-center gap-3 mt-3">
+                        <div className="flex-1 flex flex-col gap-1 min-w-0">
+                            <span className="menu-label">角色</span>
+                            <span className="menu-desc !mt-0">每个角色一台独立电脑：写日记、翻旧文件、发文件、跑命令</span>
+                        </div>
+                        <Toggle checked={characterOn} onChange={handleCharacterToggle} />
+                    </div>
+                    <div className="flex items-center gap-3 mt-3">
+                        <div className="flex-1 flex flex-col gap-1 min-w-0">
+                            <span className="menu-label">小坊（工坊）</span>
+                            <span className="menu-desc !mt-0">给小坊一台工作机：读写文件、执行命令，产出文件交付给你</span>
+                        </div>
+                        <Toggle checked={workshopOn} onChange={handleWorkshopToggle} />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

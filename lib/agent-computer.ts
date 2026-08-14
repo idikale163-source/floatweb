@@ -15,6 +15,8 @@ export type AgentComputerConfig = {
     endpoint: string;
     /** 部署时自定的 AGENT_TOKEN */
     token: string;
+    /** 小坊（工坊）是否使用这台电脑；缺省视为开 */
+    workshopEnabled?: boolean;
 };
 
 export function loadAgentComputerConfig(): AgentComputerConfig {
@@ -25,22 +27,30 @@ export function loadAgentComputerConfig(): AgentComputerConfig {
             return {
                 endpoint: typeof parsed.endpoint === "string" ? parsed.endpoint : "",
                 token: typeof parsed.token === "string" ? parsed.token : "",
+                workshopEnabled: parsed.workshopEnabled !== false,
             };
         }
     } catch { /* fall through */ }
-    return { endpoint: "", token: "" };
+    return { endpoint: "", token: "", workshopEnabled: true };
 }
 
 export function saveAgentComputerConfig(config: AgentComputerConfig): void {
     kvSet(CONFIG_KEY, JSON.stringify({
         endpoint: config.endpoint.trim().replace(/\/+$/, ""),
         token: config.token.trim(),
+        workshopEnabled: config.workshopEnabled !== false,
     }));
 }
 
 export function isAgentComputerConfigured(): boolean {
     const config = loadAgentComputerConfig();
     return Boolean(config.endpoint && config.token);
+}
+
+/** 小坊是否可用这台电脑（已连接且开关打开） */
+export function isWorkshopComputerEnabled(): boolean {
+    const config = loadAgentComputerConfig();
+    return Boolean(config.endpoint && config.token) && config.workshopEnabled !== false;
 }
 
 /** workspace 命名约定：角色一人一机，工坊单独一台 */

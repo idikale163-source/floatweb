@@ -1,5 +1,5 @@
 // 工坊的「电脑」工具：小坊的云端工作机（用户自部署的 agent-computer Worker）。
-// 只在设置里连接了角色电脑后才注入（getQaTools 里按 isAgentComputerConfigured 判断），
+// 只在设置里连接了角色电脑、且「小坊使用」开关打开时才注入（getQaTools 里按 isWorkshopComputerEnabled 判断），
 // 未配置时这些工具对模型完全不可见。
 // 小坊固定使用 workshop 工作区，与各角色的电脑相互隔离。
 //
