@@ -107,6 +107,13 @@ export function AgentComputerSettings({ onNotice }: { onNotice?: (msg: string) =
                     <span className="menu-desc !mt-0 text-center">
                         部署时需要自定一段「AGENT_TOKEN」连接密钥；完成后把 Worker 地址和密钥填到下面。
                     </span>
+                    <button
+                        type="button"
+                        className="menu-desc !mt-0 text-center underline bg-transparent border-none cursor-pointer"
+                        onClick={() => window.open("https://github.com/xiaolongbao0709/agent-computer#部署按钮失败--想删掉重新部署", "_blank", "noopener")}
+                    >
+                        一键部署失败？这里有另一条路
+                    </button>
                 </div>
             </div>
 
