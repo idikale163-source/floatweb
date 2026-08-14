@@ -137,7 +137,8 @@ const computerExecTool: QaComputerTool = {
     name: "电脑执行命令",
     nativeName: "computer_exec",
     description:
-        "在工作机上执行 shell 命令（ls/cat/grep/sed 等常用命令）。用于验证脚本、处理文本、检查文件。"
+        "在工作机上执行 shell 命令。内嵌 POSIX 工具集：ls/cat/grep/sed/awk/find/sort/wc/xargs、jq/sqlite3/yq、tar/gzip、curl（只读 GET/HEAD）等，"
+        + "支持管道/重定向/循环/函数。不是完整 Linux：没有 ps/top 等系统命令，装不了软件包（npm/pip 不可用），跑不了任意二进制。"
         + "注意：基础模式的电脑没有 shell（会返回明确提示），此时改用「电脑文件」完成任务。",
     schemaLines: [
         "  参数：",
