@@ -1767,6 +1767,14 @@ async function handleAddCharacterRelation(args: Record<string, unknown>): Promis
     const to = await resolveCharacterIdByName(toName);
     if (!to) return { name: "添加关系", success: false, error: `找不到角色：${toName}。用「读取角色」确认名称。` };
     if (from.id === to.id) return { name: "添加关系", success: false, error: "不能给角色自己建立关系" };
+    // 存储层对非成员会静默拒绝——先查成员资格，别报假成功
+    const { loadCharacterWorldGroups } = await import("./character-world-storage");
+    const group = loadCharacterWorldGroups().find((g) => g.id === world.id);
+    const memberSet = new Set(group?.memberIds ?? []);
+    const missing = [from, to].filter((c) => !memberSet.has(c.id)).map((c) => c.name);
+    if (missing.length > 0) {
+        return { name: "添加关系", success: false, error: `${missing.join("、")}不在世界「${world.name}」里。先用「移动角色到世界」把角色移进去。` };
+    }
     addCharacterWorldRelation(world.id, from.id, to.id, label);
     return { name: "添加关系", success: true, data: `已添加关系：${from.name} 是 ${to.name} 的${label}（世界：${world.name}）` };
 }
