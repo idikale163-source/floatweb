@@ -5757,39 +5757,42 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                     {msg.role === "user" && <div className="w-[40px] shrink-0" />}
                                 </div>
                             )}
-                            {/* Thought chain card (sticky note / journal style) */}
-                            {hasFoldedPanel && expandedMonologueId === msg.id && msg.statusRegionMode === "custom" && statusRegionCfg.renderHtml.trim() && (
-                                /* 自定义状态栏：便利贴容器不画，折叠区交给用户渲染代码（数值面板独立保留） */
-                                <div style={{ marginLeft: 52, marginTop: -8, maxWidth: "calc(100% - 64px)" }}>
-                                    {cardStateValues && cardStateValues.length > 0 && (
+                            {/* 状态栏：一律裸渲染，不套便利贴外框（自定义模式下交给用户的渲染代码，
+                                否则 [状态栏] 原文直接走 markdown/内联 HTML，让 AI 直出的卡片自己当外框）。
+                                状态值跟内心独白走（留在便利贴里）；这轮没有内心独白时便利贴不出现，
+                                数值裸放在状态栏上方。 */}
+                            {hasFoldedPanel && expandedMonologueId === msg.id
+                                && (renderMsg.statusPanel || (!renderMsg.innerMonologue && cardStateValues && cardStateValues.length > 0)) && (
+                                <div className="chat-status-bare">
+                                    {!renderMsg.innerMonologue && cardStateValues && cardStateValues.length > 0 && (
                                         <StateValuesPanel stateValues={cardStateValues} />
                                     )}
-                                    <CustomStatusFrame html={statusRegionCfg.renderHtml} raw={renderMsg.statusPanel || ""} />
+                                    {renderMsg.statusPanel && (
+                                        msg.statusRegionMode === "custom" && statusRegionCfg.renderHtml.trim() ? (
+                                            <CustomStatusFrame html={statusRegionCfg.renderHtml} raw={renderMsg.statusPanel} />
+                                        ) : (
+                                            <BilingualTextBlock text={msg.displayProjected ? renderMsg.statusPanel : renderDisplayText(renderMsg.statusPanel, 6, false)} mode="markdown" defaultExpanded={session.collapseBilingualTranslation !== false ? false : true} />
+                                        )
+                                    )}
                                 </div>
                             )}
-                            {hasFoldedPanel && expandedMonologueId === msg.id && !(msg.statusRegionMode === "custom" && statusRegionCfg.renderHtml.trim()) && (
+                            {/* Inner monologue card (sticky note / journal style) */}
+                            {hasFoldedPanel && expandedMonologueId === msg.id && renderMsg.innerMonologue && (
                                 <div className="chat-thought-card">
                                     {/* Decorative washi tape */}
                                     <div className="chat-thought-tape-left" />
                                     <div className="chat-thought-tape-right" />
                                     {/* Title */}
                                     <div className="chat-thought-title">
-                                        💭 {renderMsg.innerMonologue ? "内心独白" : "状态栏"}
+                                        💭 内心独白
                                     </div>
                                     {/* State values panel */}
                                     {cardStateValues && cardStateValues.length > 0 && (
                                         <StateValuesPanel stateValues={cardStateValues} />
                                     )}
-                                    {renderMsg.statusPanel && (
-                                        <div className="chat-thought-body">
-                                            <BilingualTextBlock text={msg.displayProjected ? renderMsg.statusPanel : renderDisplayText(renderMsg.statusPanel, 6, false)} mode="markdown" defaultExpanded={session.collapseBilingualTranslation !== false ? false : true} />
-                                        </div>
-                                    )}
-                                    {renderMsg.innerMonologue && (
-                                        <div className="chat-thought-body">
-                                            <BilingualTextBlock text={msg.displayProjected ? renderMsg.innerMonologue : renderDisplayText(renderMsg.innerMonologue, 6, false)} mode="markdown" defaultExpanded={session.collapseBilingualTranslation !== false ? false : true} />
-                                        </div>
-                                    )}
+                                    <div className="chat-thought-body">
+                                        <BilingualTextBlock text={msg.displayProjected ? renderMsg.innerMonologue : renderDisplayText(renderMsg.innerMonologue, 6, false)} mode="markdown" defaultExpanded={session.collapseBilingualTranslation !== false ? false : true} />
+                                    </div>
                                     {/* Signature */}
                                     <div className="chat-thought-sig">
                                         — {session.isGroup ? (msg.senderName || "群成员") : (character?.name || "TA")}
