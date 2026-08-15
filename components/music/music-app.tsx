@@ -809,7 +809,6 @@ function MineTab({ player, formatTime, onPlayNetease, onPlayAll, activePlaylist,
     const createdPlaylists = playlists.filter(pl => !pl.subscribed && pl !== likePlaylist);
     const collectedPlaylists = playlists.filter(pl => pl.subscribed);
     const recentList = recentSongs.length > 0 ? recentSongs : weekRecords.map(r => r.song);
-    const heroCover = likePlaylist?.coverUrl || playlists[0]?.coverUrl || "";
 
     const startHeartMode = async () => {
         if (!likePlaylist || heartBusy) return;
@@ -857,14 +856,13 @@ function MineTab({ player, formatTime, onPlayNetease, onPlayAll, activePlaylist,
     const statItems: Array<{ label: string; value: string }> = [];
     if (typeof userDetail?.follows === "number") statItems.push({ label: "关注", value: String(userDetail.follows) });
     if (typeof userDetail?.followeds === "number") statItems.push({ label: "粉丝", value: String(userDetail.followeds) });
-    if (userDetail?.level) statItems.push({ label: "等级", value: "Lv." + userDetail.level });
-    if (userDetail?.listenSongs) statItems.push({ label: "累计听歌", value: userDetail.listenSongs.toLocaleString() + " 首" });
+    if (userDetail?.level) statItems.push({ label: "", value: "Lv." + userDetail.level });
+    if (userDetail?.listenSongs) statItems.push({ label: "首", value: userDetail.listenSongs.toLocaleString() });
 
     return (
         <div className="music-discovery music-mine">
-            {/* 沉浸头部：喜欢列表封面打底，居中大头像 */}
+            {/* 头部：无独立背景，整页共用 App 背景 */}
             <div className="music-mine-hero">
-                {heroCover && <div className="music-mine-hero-bg" style={{ backgroundImage: "url(\"" + heroCover + "\")" }} />}
                 <div className="music-mine-hero-body">
                     <div className="music-mine-ava">
                         {userDetail?.avatarUrl ? <img src={userDetail.avatarUrl} alt="" /> : <span>{(userDetail?.nickname || "我").slice(0, 1)}</span>}
@@ -879,10 +877,22 @@ function MineTab({ player, formatTime, onPlayNetease, onPlayAll, activePlaylist,
                         </div>
                     )}
                     <div className="music-mine-chips">
-                        <button onClick={() => { setMineTab("music"); setMineSub("recent"); }}>最近</button>
-                        <button onClick={onGoLocal}>本地</button>
-                        <button onClick={() => { setMineTab("music"); setMineSub("created"); }}>歌单</button>
-                        <button onClick={onOpenSettings}>设置</button>
+                        <button onClick={() => { setMineTab("music"); setMineSub("recent"); }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+                            最近
+                        </button>
+                        <button onClick={onGoLocal}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v10" /><path d="m8 9 4 4 4-4" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
+                            本地
+                        </button>
+                        <button onClick={() => { setMineTab("music"); setMineSub("created"); }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h13" /><path d="M3 12h9" /><path d="M3 18h6" /><circle cx="17.5" cy="17" r="2.5" /><path d="M20 17V9l3-1" /></svg>
+                            歌单
+                        </button>
+                        <button onClick={onOpenSettings}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 21v-6" /><path d="M5 11V3" /><path d="M12 21v-9" /><path d="M12 8V3" /><path d="M19 21v-4" /><path d="M19 13V3" /><path d="M3 15h4" /><path d="M10 8h4" /><path d="M17 17h4" /></svg>
+                            设置
+                        </button>
                     </div>
                 </div>
             </div>

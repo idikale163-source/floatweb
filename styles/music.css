@@ -4584,29 +4584,14 @@
 /* ── Mine Tab（网易云式「我的」页） ── */
 
 .music-mine-hero {
-    position: relative;
-    border-radius: 20px;
-    overflow: hidden;
     flex-shrink: 0;
-    border: 1px solid var(--c-music-surface-solid);
-    background: linear-gradient(150deg, #1b2036, #141625 75%);
-}
-
-.music-mine-hero-bg {
-    position: absolute;
-    inset: -24px;
-    background-size: cover;
-    background-position: center;
-    filter: blur(26px) saturate(1.1) brightness(0.55);
-    opacity: 0.85;
 }
 
 .music-mine-hero-body {
-    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 22px 16px 16px;
+    padding: 14px 0 0;
     text-align: center;
 }
 
@@ -4634,13 +4619,13 @@
     margin-top: 10px;
     font-size: calc(16.2px*var(--app-text-scale,1));
     font-weight: 700;
-    color: #fff;
+    color: var(--c-music-text);
 }
 
 .music-mine-sig {
     margin-top: 4px;
     font-size: calc(10.8px*var(--app-text-scale,1));
-    color: rgba(255, 255, 255, 0.66);
+    color: color-mix(in srgb, var(--c-music-text) 62%, transparent);
     max-width: 86%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -4652,36 +4637,46 @@
 .music-mine-stats {
     margin-top: 10px;
     display: flex;
-    gap: 16px;
+    gap: 18px;
     font-size: calc(9.9px*var(--app-text-scale,1));
-    color: rgba(255, 255, 255, 0.6);
+    color: color-mix(in srgb, var(--c-music-text) 55%, transparent);
 }
 
 .music-mine-stats b {
-    color: #fff;
+    color: var(--c-music-text);
     font-size: calc(11.7px*var(--app-text-scale,1));
     margin-right: 3px;
 }
 
 .music-mine-chips {
-    margin-top: 14px;
+    margin-top: 16px;
     display: flex;
-    gap: 8px;
+    gap: 9px;
+    align-self: stretch;
 }
 
 .music-mine-chips button {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     border: none;
-    border-radius: 999px;
-    padding: 6px 14px;
-    font-size: calc(10.8px*var(--app-text-scale,1));
-    color: rgba(255, 255, 255, 0.85);
-    background: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(6px);
+    border-radius: 12px;
+    padding: 11px 0;
+    font-size: calc(11.7px*var(--app-text-scale,1));
+    color: var(--c-music-text);
+    background: var(--c-music-surface-solid);
+    backdrop-filter: blur(8px);
     cursor: pointer;
 }
 
+.music-mine-chips button svg {
+    opacity: 0.75;
+}
+
 .music-mine-chips button:active {
-    background: rgba(255, 255, 255, 0.22);
+    background: var(--c-music-glass-dim);
 }
 
 .music-mine-covers {
@@ -4729,18 +4724,18 @@
 
 .music-mine-tabs {
     display: flex;
-    gap: 18px;
+    justify-content: space-around;
     flex-shrink: 0;
-    padding: 2px 4px 0;
+    padding: 6px 24px 0;
 }
 
 .music-mine-tabs button {
     border: none;
     background: none;
-    padding: 4px 0 7px;
-    font-size: calc(13.5px*var(--app-text-scale,1));
-    font-weight: 600;
-    color: color-mix(in srgb, var(--c-music-text) 55%, transparent);
+    padding: 4px 0 8px;
+    font-size: calc(15.3px*var(--app-text-scale,1));
+    font-weight: 700;
+    color: color-mix(in srgb, var(--c-music-text) 45%, transparent);
     cursor: pointer;
     position: relative;
 }
@@ -4755,10 +4750,10 @@
     left: 50%;
     transform: translateX(-50%);
     bottom: 0;
-    width: 20px;
-    height: 3px;
+    width: 24px;
+    height: 3.5px;
     border-radius: 2px;
-    background: var(--c-music-accent);
+    background: #e74c50;
 }
 
 .music-mine-subtabs {
