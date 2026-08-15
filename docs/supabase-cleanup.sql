@@ -9,7 +9,35 @@
 --            Database Size 不会变小（Postgres 删行只是打标记）。
 -- ═══════════════════════════════════════════════════════════════════
 
+-- ═══════════════════════════════════════════════════════════════════
+-- ★ 头号嫌疑犯：cron.job_run_details（pg_cron 执行日志）
+--
+-- 2026-08 实测：数据库 444 MB 里有 369 MB（83%）是这张表——推送扫描
+-- 任务 10 秒一跑，每天写 8640 行执行记录，一个月堆了 23 万行。
+-- 它是纯日志，清空不影响任何业务，且 truncate 即时回收空间、无需 VACUUM。
+--
+-- 先看它有多大：
+--   select pg_size_pretty(pg_total_relation_size('cron.job_run_details'::regclass)),
+--          count(*) from cron.job_run_details;
+--
+-- 清空（几百 MB 一秒回收）：
+--   truncate table cron.job_run_details;
+--
+-- 装上自动清理，防止再堆（每天 03:20 UTC 删两天前的记录，只需执行一次）：
+--   select cron.schedule(
+--     'prune-cron-history', '20 3 * * *',
+--     'delete from cron.job_run_details where start_time < now() - interval ''2 days'''
+--   );
+-- 查看已有定时任务：select jobid, schedule, jobname from cron.job;
+-- ═══════════════════════════════════════════════════════════════════
+
 -- ── 第 1 步 · 体检：各表实际占用（含索引），从大到小 ──
+-- 提示：如果所有表加起来远小于 pg_database_size，说明大头在 public 之外，
+-- 用下面这句按 schema 汇总定位（cron / auth / storage / realtime）：
+--   select n.nspname, pg_size_pretty(sum(pg_total_relation_size(c.oid)))
+--     from pg_class c join pg_namespace n on n.oid = c.relnamespace
+--    where c.relkind = 'r' group by 1 order by 2 desc;
+
 select
   relname as table_name,
   pg_size_pretty(pg_total_relation_size(c.oid)) as total_size,
