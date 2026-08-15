@@ -104,3 +104,63 @@ export function MixPreviewSheet({ target, onClose }: { target: MixPreviewTarget;
         </div>
     );
 }
+
+// ── 提示词结构速查 ──
+// 让作者知道自己写的东西最终落在提示词的哪一段、和别的材料怎么排队。
+
+const STRUCTURE_ROWS: { section: string; from: string; kind?: string }[] = [
+    { section: "（固定开场说明）", from: "系统自带，声明这是角色扮演、越靠后优先级越高" },
+    { section: "## 扮演总纲", from: "基底", kind: "base" },
+    { section: "## 角色资料", from: "角色卡：角色名 / 基础信息 / 性格 / 外貌 / 背景", kind: "character" },
+    { section: "## 世界与剧情", from: "角色卡：世界观 / 初始认知 / 关系与身份 / 当前剧情 / 附加设定", kind: "character" },
+    { section: "## 文风", from: "风味", kind: "flavor" },
+    { section: "## 输出格式", from: "杯型", kind: "glass" },
+    { section: "## 小票", from: "小票的输出契约（系统自动追加包裹指令）", kind: "ticket" },
+    { section: "## 示例对话", from: "角色卡：示例对话", kind: "character" },
+];
+
+export function MixStructureSheet({ highlight, onClose }: { highlight?: string; onClose: () => void }) {
+    return (
+        <div className="mix-sheet-mask" onClick={onClose}>
+            <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
+                <div className="mix-sheet-head">
+                    <div className="mix-sheet-title">提示词结构</div>
+                    <button type="button" className="mix-icon-btn" onClick={onClose} aria-label="关闭"><X size={18} /></button>
+                </div>
+                <div className="mix-sheet-body">
+                    <div className="mix-struct-note">
+                        标题用 Markdown 二级标题（<code>##</code>）。<b>没填的字段整段消失</b>，不会留空壳标题；
+                        文本里的 <code>{"{{char}}"}</code> / <code>{"{{user}}"}</code> 装配时会换成角色名和玩家代入名。
+                    </div>
+
+                    <div className="mix-detail-label" style={{ marginTop: 14 }}>系统提示词（对话历史之前）</div>
+                    <div className="mix-struct-list">
+                        {STRUCTURE_ROWS.map((row) => (
+                            <div className="mix-struct-row" data-on={highlight && row.kind === highlight ? "true" : undefined} key={row.section}>
+                                <div className="mix-struct-section">{row.section}</div>
+                                <div className="mix-struct-from">← {row.from}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="mix-struct-divider">［ 对话历史 ］</div>
+
+                    <div className="mix-struct-list">
+                        <div className="mix-struct-row" data-on={highlight === "strength" ? "true" : undefined}>
+                            <div className="mix-struct-section">【最高优先级要求】</div>
+                            <div className="mix-struct-from">← 浓度（唯一放在历史之后的部分，离生成最近、最难被忘）</div>
+                        </div>
+                    </div>
+
+                    <div className="mix-struct-divider">［ 本轮生成 ］</div>
+
+                    <div className="mix-detail-label" style={{ marginTop: 16 }}>不进提示词的两味</div>
+                    <div className="mix-struct-note">
+                        <b>装饰</b>（CSS）和<b>尾调</b>（HTML）只影响界面呈现，不会发给模型，
+                        所以写多长都不占上下文。<b>开场白</b>也不在系统提示词里，它作为对局的第一条角色消息单独送出。
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

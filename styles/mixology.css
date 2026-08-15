@@ -1193,3 +1193,93 @@
 .mix-garnish-stage .mix-prose {
     margin: 0;
 }
+
+/* ── 编辑器导语 · 提示词结构速查 ── */
+.mix-guide {
+    margin: 4px 0 6px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(141, 123, 245, 0.08);
+    border: 1px solid rgba(141, 123, 245, 0.16);
+}
+
+.mix-guide-what {
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: var(--mix-text);
+}
+
+.mix-guide-where {
+    margin-top: 6px;
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--mix-dim);
+}
+
+.mix-guide-link {
+    margin-top: 9px;
+    border: none;
+    background: none;
+    padding: 0;
+    color: var(--mix-violet);
+    font-size: 11.5px;
+    cursor: pointer;
+}
+
+.mix-struct-note {
+    font-size: 12px;
+    line-height: 1.75;
+    color: var(--mix-dim);
+}
+
+.mix-struct-note b {
+    color: var(--mix-text);
+}
+
+.mix-struct-note code {
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--mix-gold);
+}
+
+.mix-struct-list {
+    margin-top: 8px;
+    border-left: 2px solid rgba(141, 123, 245, 0.28);
+    padding-left: 12px;
+}
+
+.mix-struct-row {
+    padding: 7px 0;
+}
+
+.mix-struct-row[data-on="true"] .mix-struct-section {
+    color: var(--mix-gold);
+}
+
+.mix-struct-row[data-on="true"] .mix-struct-from {
+    color: var(--mix-text);
+}
+
+.mix-struct-section {
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--mix-violet);
+}
+
+.mix-struct-from {
+    margin-top: 2px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--mix-faint);
+}
+
+.mix-struct-divider {
+    margin: 12px 0 4px;
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    color: var(--mix-faint);
+}
