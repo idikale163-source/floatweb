@@ -114,7 +114,7 @@ export function resolveStatusRegionSection(config: StatusRegionConfig): string {
     if (isCustomStatusRegionActive(config)) {
         return [
             "## 状态栏",
-            "【逻辑】按下方契约输出状态栏内容；不要输出 [内心]...[/内心] 标签，也不要输出 [好感度:X] 等原生状态值标签，相关内容一律按契约表达。",
+            "【逻辑】按下方契约输出状态栏内容。",
             "【格式】整块包裹输出，外层标签固定：[状态栏]（壳内按契约填写）[/状态栏]",
             "【契约】",
             config.contract.trim(),
