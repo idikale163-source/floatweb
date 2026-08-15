@@ -90,6 +90,8 @@ export interface AssemblerInput {
     chatBilingualInstruction?: string;       // session-specific bilingual output rule for {{chatBilingualInstruction}}
     statusRegionSection?: string;            // {{statusRegionSection}} — 状态区章节（native 原文 / 空 / 自定义契约）
     statusRegionExampleLine?: string;        // {{statusRegionExampleLine}} — 主动消息输出示例中的状态区行
+    statusRegionComposition?: string;        // {{statusRegionComposition}} — 文字聊天模式【输出构成】行
+    statusRegionFullExample?: string;        // {{statusRegionFullExample}} — 完整示例中的状态值+内心行
     offlineBilingualInstruction?: string;    // offline-mode bilingual output rule for {{offlineBilingualInstruction}}
     offlineSummaryTag?: string;              // XML tag used for offline-mode summary output
     checkPhoneBilingualInstruction?: string; // checkphone bilingual output rule for {{checkPhoneBilingualInstruction}}
@@ -679,6 +681,8 @@ export function assemblePromptPayload(input: AssemblerInput): LLMMessage[] {
         engine.chatBilingualInstruction = input.chatBilingualInstruction ?? "";
         engine.statusRegionSection = input.statusRegionSection ?? "";
         engine.statusRegionExampleLine = input.statusRegionExampleLine ?? "";
+        engine.statusRegionComposition = input.statusRegionComposition ?? "";
+        engine.statusRegionFullExample = input.statusRegionFullExample ?? "";
         engine.offlineBilingualInstruction = input.offlineBilingualInstruction ?? "";
         engine.offlineSummaryTag = input.offlineSummaryTag ?? "summary";
         engine.checkPhoneBilingualInstruction = input.checkPhoneBilingualInstruction ?? "";
@@ -1589,6 +1593,8 @@ export interface GroupAssemblerInput {
     chatBilingualInstruction?: string;
     statusRegionSection?: string;
     statusRegionExampleLine?: string;
+    statusRegionComposition?: string;
+    statusRegionFullExample?: string;
     offlineBilingualInstruction?: string;
     offlineSummaryTag?: string;
     checkPhoneBilingualInstruction?: string;
@@ -1842,6 +1848,8 @@ export function assembleGroupPromptPayload(input: GroupAssemblerInput): LLMMessa
         engine.chatBilingualInstruction = input.chatBilingualInstruction ?? "";
         engine.statusRegionSection = input.statusRegionSection ?? "";
         engine.statusRegionExampleLine = input.statusRegionExampleLine ?? "";
+        engine.statusRegionComposition = input.statusRegionComposition ?? "";
+        engine.statusRegionFullExample = input.statusRegionFullExample ?? "";
         engine.offlineBilingualInstruction = input.offlineBilingualInstruction ?? "";
         engine.offlineSummaryTag = input.offlineSummaryTag ?? "summary";
         engine.checkPhoneBilingualInstruction = input.checkPhoneBilingualInstruction ?? "";

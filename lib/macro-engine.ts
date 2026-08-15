@@ -53,6 +53,8 @@ export class MacroEngine {
     chatBilingualInstruction: string = "";
     statusRegionSection: string = "";
     statusRegionExampleLine: string = "";
+    statusRegionComposition: string = "";
+    statusRegionFullExample: string = "";
     offlineBilingualInstruction: string = "";
     offlineSummaryTag: string = "summary";
     checkPhoneBilingualInstruction: string = "";
@@ -181,8 +183,11 @@ export class MacroEngine {
         if (body === "groupRoster") return this.groupRoster || "\x00TRIM\x00";
         if (body === "customAppRichMediaDirectives" || body === "customAppChatCapabilities") return this.customAppRichMediaDirectives || "\x00TRIM\x00";
         if (body === "chatBilingualInstruction") return this.chatBilingualInstruction || "\x00TRIM\x00";
-        if (body === "statusRegionSection") return this.statusRegionSection || "\x00TRIM\x00";
-        if (body === "statusRegionExampleLine") return this.statusRegionExampleLine || "\x00TRIM\x00";
+        // 状态区宏：空值直返空串而非 TRIM——TRIM 会吞掉相邻换行把上下行粘死，off 挡留空行更安全
+        if (body === "statusRegionSection") return this.statusRegionSection;
+        if (body === "statusRegionExampleLine") return this.statusRegionExampleLine;
+        if (body === "statusRegionComposition") return this.statusRegionComposition;
+        if (body === "statusRegionFullExample") return this.statusRegionFullExample;
         if (body === "offlineBilingualInstruction") return this.offlineBilingualInstruction || "\x00TRIM\x00";
         if (body === "offlineSummaryTag") return this.offlineSummaryTag || "summary";
         if (body === "checkPhoneBilingualInstruction") return this.checkPhoneBilingualInstruction || "\x00TRIM\x00";

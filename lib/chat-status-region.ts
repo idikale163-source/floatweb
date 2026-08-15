@@ -30,16 +30,38 @@ registerKvMigration(STORAGE_KEY);
 
 export const STATUS_REGION_SECTION_MACRO = "{{statusRegionSection}}";
 export const STATUS_REGION_EXAMPLE_MACRO = "{{statusRegionExampleLine}}";
+export const STATUS_REGION_COMPOSITION_MACRO = "{{statusRegionComposition}}";
+export const STATUS_REGION_FULL_EXAMPLE_MACRO = "{{statusRegionFullExample}}";
 
-/** 原「## 内心想法」章节原文——native 挡解析值，必须与历史版本逐字一致 */
+/** 原「## 状态数值」+「## 内心想法」章节原文——native 挡解析值，必须与历史版本逐字一致。
+ *  状态数值也归入状态区：关闭原生后 [好感度:X] 等标签一并从提示词移除（好感度等会话状态随之停更）。 */
 export const NATIVE_STATUS_REGION_SECTION = [
+    "## 状态数值",
+    "【逻辑】基于当前状态 {{state}}，根据本轮对话的情绪起伏进行实时增减（范围 0-100）。",
+    "【格式】[好感度:X][占有欲:X][焦虑值:X]",
+    "【示例】[好感度:85][占有欲:60][焦虑值:45]",
+    "",
     "## 内心想法",
     "【逻辑】反映角色在回复前的真实心理活动、潜台词或情绪波动。",
     "【格式】[内心]在此处填写内心的潜台词[/内心]",
 ].join("\n");
 
-/** 主动消息类条目输出示例中的内心行原文 */
-export const NATIVE_STATUS_REGION_EXAMPLE_LINE = "[内心]你的所有内心想法写在这里。[/内心]";
+/** 主动消息类条目里的静默输出格式原文（静默行+状态值行+内心行整块归宏） */
+export const NATIVE_STATUS_REGION_EXAMPLE_LINE = [
+    "如果决定静默，按照以下格式输出：",
+    "[好感度:X][占有欲:X][焦虑值:X]",
+    "[内心]你的所有内心想法写在这里。[/内心]",
+].join("\n");
+
+/** 文字聊天模式开头的【输出构成】行原文 */
+export const NATIVE_STATUS_REGION_COMPOSITION =
+    "【输出构成】输出格式由四个部分组成：状态数值、内心想法、聊天消息、富媒体动作（可选）。";
+
+/** 「## 完整示例」里的状态值+内心两行原文 */
+export const NATIVE_STATUS_REGION_FULL_EXAMPLE = [
+    "[好感度:72][占有欲:25][焦虑值:15]",
+    "[内心]等了{{user}}一整晚，回复这么冷淡，心里有点堵得慌。[/内心]",
+].join("\n");
 
 export const DEFAULT_STATUS_REGION_CONFIG: StatusRegionConfig = {
     mode: "native",
@@ -92,7 +114,7 @@ export function resolveStatusRegionSection(config: StatusRegionConfig): string {
     if (isCustomStatusRegionActive(config)) {
         return [
             "## 状态栏",
-            "【逻辑】按下方契约输出状态栏内容；不要输出 [内心]...[/内心] 标签，内心相关内容并入状态栏契约。",
+            "【逻辑】按下方契约输出状态栏内容；不要输出 [内心]...[/内心] 标签，也不要输出 [好感度:X] 等原生状态值标签，相关内容一律按契约表达。",
             "【格式】整块包裹输出，外层标签固定：[状态栏]（壳内按契约填写）[/状态栏]",
             "【契约】",
             config.contract.trim(),
@@ -101,11 +123,29 @@ export function resolveStatusRegionSection(config: StatusRegionConfig): string {
     return NATIVE_STATUS_REGION_SECTION;
 }
 
-/** {{statusRegionExampleLine}} 的解析值（主动消息类条目的输出示例行） */
+/** {{statusRegionExampleLine}} 的解析值（主动消息类条目的静默输出格式块） */
 export function resolveStatusRegionExampleLine(config: StatusRegionConfig): string {
+    if (config.mode === "off") return "如果决定静默，不输出任何内容。";
+    if (isCustomStatusRegionActive(config)) {
+        return "如果决定静默，按照以下格式输出：\n[状态栏]（按状态栏契约输出）[/状态栏]";
+    }
+    return NATIVE_STATUS_REGION_EXAMPLE_LINE;
+}
+
+/** {{statusRegionComposition}} 的解析值（文字聊天模式的【输出构成】行） */
+export function resolveStatusRegionComposition(config: StatusRegionConfig): string {
+    if (config.mode === "off") return "【输出构成】输出格式由两个部分组成：聊天消息、富媒体动作（可选）。";
+    if (isCustomStatusRegionActive(config)) {
+        return "【输出构成】输出格式由三个部分组成：状态栏、聊天消息、富媒体动作（可选）。";
+    }
+    return NATIVE_STATUS_REGION_COMPOSITION;
+}
+
+/** {{statusRegionFullExample}} 的解析值（「## 完整示例」里的状态值+内心行） */
+export function resolveStatusRegionFullExample(config: StatusRegionConfig): string {
     if (config.mode === "off") return "";
     if (isCustomStatusRegionActive(config)) return "[状态栏]（按状态栏契约输出）[/状态栏]";
-    return NATIVE_STATUS_REGION_EXAMPLE_LINE;
+    return NATIVE_STATUS_REGION_FULL_EXAMPLE;
 }
 
 /** 预设是否声明了状态区宏（聊天信息页自定义入口的可用性判定） */

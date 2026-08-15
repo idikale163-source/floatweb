@@ -34,7 +34,7 @@ import {
 } from "./settings-storage";
 import { assemblePromptPayload, applyOutputRegex, type LLMMessage, type LLMContentPart } from "./llm-prompt-assembler";
 import { MacroEngine, postProcessTrim } from "./macro-engine";
-import { getStatusRegionConfig, resolveStatusRegionSection, resolveStatusRegionExampleLine } from "./chat-status-region";
+import { getStatusRegionConfig, resolveStatusRegionSection, resolveStatusRegionExampleLine, resolveStatusRegionComposition, resolveStatusRegionFullExample } from "./chat-status-region";
 import {
     buildProviderDebugMessages,
     buildProviderRequest,
@@ -1922,6 +1922,8 @@ export async function buildChatPromptMessages(
         chatBilingualInstruction,
         statusRegionSection: resolveStatusRegionSection(statusRegionCfg),
         statusRegionExampleLine: resolveStatusRegionExampleLine(statusRegionCfg),
+        statusRegionComposition: resolveStatusRegionComposition(statusRegionCfg),
+        statusRegionFullExample: resolveStatusRegionFullExample(statusRegionCfg),
         offlineBilingualInstruction,
         offlineSummaryTag: preset?.story_summary_tag?.trim() || "summary",
         nativeToolHistory: usesNativeActions,

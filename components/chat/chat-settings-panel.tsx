@@ -763,7 +763,7 @@ export function ChatSettingsPanel({
                             <ChatInfoIcon icon={Code} color={BINDING_ACCENTS.preset} />
                             <div className="menu-label-group">
                                 <span className="menu-label">原生状态栏</span>
-                                <span className="menu-desc">{statusPresetSupported ? "内心便利贴与默认状态区输出" : "当前预设未声明状态区宏，仅默认预设支持"}</span>
+                                <span className="menu-desc">{statusPresetSupported ? "状态值与内心的默认输出（关闭后整块从提示词移除）" : "当前预设未声明状态区宏，仅默认预设支持"}</span>
                             </div>
                             <div className="menu-right">
                                 <Toggle
