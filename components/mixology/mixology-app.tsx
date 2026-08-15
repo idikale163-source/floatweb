@@ -11,9 +11,12 @@ import {
     Download,
     GlassWater,
     Martini,
+    MoreHorizontal,
     Pencil,
+    Play,
     Plus,
     Share2,
+    SlidersHorizontal,
     Trash2,
     Upload,
     Users,
@@ -64,6 +67,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     const [editor, setEditor] = useState<{ kind: MixMaterialKind; initial?: MixMaterial } | null>(null);
     const [kindPickerOpen, setKindPickerOpen] = useState(false);
     const [barTab, setBarTab] = useState<"create" | "mine">("create");
+    const [recipeMenu, setRecipeMenu] = useState<MixRecipe | null>(null);
     const [barSlots, setBarSlots] = useState<Partial<Record<MixMaterialKind, string>>>({});
     const [slotPicker, setSlotPicker] = useState<MixMaterialKind | null>(null);
     const [nameSheetOpen, setNameSheetOpen] = useState(false);
@@ -363,10 +367,25 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                             </div>
                                         </div>
                                         <div className="mix-recipe-actions">
-                                            <button type="button" className="mix-pill-btn" data-tone="gold" onClick={() => handleStartRecipe(recipe)}>开始</button>
-                                            <button type="button" className="mix-pill-btn" data-tone="ghost" onClick={() => { setBarSlots({ ...recipe.slots }); setBarTab("create"); showToast("已装回吧台，可以微调。"); }}>装载</button>
-                                            <button type="button" className="mix-pill-btn" data-tone="ghost" onClick={() => void handleShareRecipe(recipe)} disabled={sharing}>分享</button>
-                                            <button type="button" className="mix-pill-btn" data-tone="ghost" onClick={() => { deleteMixRecipe(recipe.id); refresh(); }}>删除</button>
+                                            <button
+                                                type="button"
+                                                className="mix-round-btn"
+                                                data-tone="gold"
+                                                onClick={() => handleStartRecipe(recipe)}
+                                                aria-label="开始对局"
+                                                title="开始"
+                                            >
+                                                <Play size={17} fill="currentColor" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="mix-round-btn"
+                                                onClick={() => setRecipeMenu(recipe)}
+                                                aria-label="更多操作"
+                                                title="更多"
+                                            >
+                                                <MoreHorizontal size={18} />
+                                            </button>
                                         </div>
                                     </div>
                                 );
@@ -627,6 +646,60 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 <button type="button" className="mix-ghost-btn" onClick={() => setNameSheetOpen(false)}>再想想</button>
                                 <button type="button" className="mix-brew-btn" onClick={handleSaveRecipe}>存入方案</button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
+            {/* 特调更多操作 */}
+            {recipeMenu ? (
+                <div className="mix-sheet-mask" onClick={() => setRecipeMenu(null)}>
+                    <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
+                        <div className="mix-sheet-head">
+                            <div className="mix-sheet-title">{recipeMenu.name}</div>
+                            <button type="button" className="mix-icon-btn" onClick={() => setRecipeMenu(null)} aria-label="关闭"><X size={18} /></button>
+                        </div>
+                        <div className="mix-sheet-body">
+                            <button
+                                type="button"
+                                className="mix-action-row"
+                                onClick={() => {
+                                    setBarSlots({ ...recipeMenu.slots });
+                                    setBarTab("create");
+                                    setRecipeMenu(null);
+                                    showToast("已装回吧台，可以微调。");
+                                }}
+                            >
+                                <SlidersHorizontal size={17} />
+                                <span>装载到吧台<i>把这杯的材料放回槽位，改一改再存</i></span>
+                            </button>
+                            <button
+                                type="button"
+                                className="mix-action-row"
+                                disabled={sharing}
+                                onClick={() => {
+                                    const target = recipeMenu;
+                                    setRecipeMenu(null);
+                                    void handleShareRecipe(target);
+                                }}
+                            >
+                                <Share2 size={17} />
+                                <span>分享到大厅<i>连同材料一起发布，别人可以连料入柜</i></span>
+                            </button>
+                            <button
+                                type="button"
+                                className="mix-action-row"
+                                data-tone="danger"
+                                onClick={() => {
+                                    deleteMixRecipe(recipeMenu.id);
+                                    setRecipeMenu(null);
+                                    refresh();
+                                    showToast("这杯特调已倒掉。");
+                                }}
+                            >
+                                <Trash2 size={17} />
+                                <span>删除这杯<i>材料还在酒柜里，只删配方本身</i></span>
+                            </button>
                         </div>
                     </div>
                 </div>

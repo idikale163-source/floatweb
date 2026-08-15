@@ -469,7 +469,7 @@
     overflow: hidden;
     margin-bottom: 12px;
     background: var(--mix-panel);
-    min-height: 96px;
+    min-height: 76px;
     display: flex;
     align-items: stretch;
 }
@@ -516,9 +516,8 @@
 .mix-recipe-actions {
     position: relative;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 6px;
+    align-items: center;
+    gap: 8px;
     padding: 10px 12px;
 }
 
@@ -1330,4 +1329,86 @@
     flex-direction: column;
     justify-content: center;
     padding-top: 0;
+}
+
+/* ── 特调卡：图标按钮 + 更多操作单 ── */
+.mix-round-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--mix-dim);
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, transform 0.15s;
+}
+
+.mix-round-btn:active {
+    transform: scale(0.92);
+}
+
+.mix-round-btn[data-tone="gold"] {
+    background: rgba(217, 176, 106, 0.18);
+    color: var(--mix-gold);
+}
+
+.mix-action-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 13px 12px;
+    margin-bottom: 8px;
+    border: none;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--mix-text);
+    text-align: left;
+    font-size: 13.5px;
+    cursor: pointer;
+    transition: background 0.2s, opacity 0.2s;
+}
+
+.mix-action-row:first-of-type {
+    margin-top: 4px;
+}
+
+.mix-action-row:active {
+    background: rgba(255, 255, 255, 0.09);
+}
+
+.mix-action-row[disabled] {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.mix-action-row svg {
+    flex: 0 0 auto;
+    color: var(--mix-violet);
+}
+
+.mix-action-row span {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.mix-action-row i {
+    font-style: normal;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--mix-faint);
+}
+
+.mix-action-row[data-tone="danger"] svg {
+    color: #e2a3a3;
+}
+
+.mix-action-row[data-tone="danger"] {
+    color: #e2a3a3;
 }
