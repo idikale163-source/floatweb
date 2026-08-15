@@ -51,6 +51,8 @@ export class MacroEngine {
     groupRoster: string = "";
     customAppRichMediaDirectives: string = "";
     chatBilingualInstruction: string = "";
+    statusRegionSection: string = "";
+    statusRegionExampleLine: string = "";
     offlineBilingualInstruction: string = "";
     offlineSummaryTag: string = "summary";
     checkPhoneBilingualInstruction: string = "";
@@ -179,6 +181,8 @@ export class MacroEngine {
         if (body === "groupRoster") return this.groupRoster || "\x00TRIM\x00";
         if (body === "customAppRichMediaDirectives" || body === "customAppChatCapabilities") return this.customAppRichMediaDirectives || "\x00TRIM\x00";
         if (body === "chatBilingualInstruction") return this.chatBilingualInstruction || "\x00TRIM\x00";
+        if (body === "statusRegionSection") return this.statusRegionSection || "\x00TRIM\x00";
+        if (body === "statusRegionExampleLine") return this.statusRegionExampleLine || "\x00TRIM\x00";
         if (body === "offlineBilingualInstruction") return this.offlineBilingualInstruction || "\x00TRIM\x00";
         if (body === "offlineSummaryTag") return this.offlineSummaryTag || "summary";
         if (body === "checkPhoneBilingualInstruction") return this.checkPhoneBilingualInstruction || "\x00TRIM\x00";

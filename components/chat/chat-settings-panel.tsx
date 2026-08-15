@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import {
     CHAT_INITIAL_VISIBLE_MESSAGE_COUNT,
     CHAT_LOAD_MORE_MESSAGE_COUNT,
@@ -37,7 +37,9 @@ import { triggerDeleteFriendReaction } from "@/lib/friend-request-engine";
 import { loadCharacters } from "@/lib/character-storage";
 import { isAgentComputerConfigured } from "@/lib/agent-computer";
 import { CharacterComputerPage } from "./character-computer-page";
-import { resolveUserIdentity } from "@/lib/settings-storage";
+import { resolveUserIdentity, loadBindingConfig, loadPresets, resolveBinding } from "@/lib/settings-storage";
+import { getStatusRegionConfig, saveStatusRegionConfig, presetSupportsStatusRegion, isCustomStatusRegionActive, type StatusRegionConfig } from "@/lib/chat-status-region";
+import { CustomStatusFrame } from "@/components/chat/custom-status-frame";
 import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Laptop, Trash2, Smile, Sparkles, type LucideIcon } from "lucide-react";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
@@ -45,6 +47,34 @@ import { ConfirmDialog } from "@/components/ui/modal";
 import { CHAT_SESSION_CSS_EXAMPLE } from "@/lib/css-examples";
 import { Toggle, Input } from "@/components/ui/form";
 import { PageShell } from "@/components/ui/page-shell";
+
+// 自定义状态栏预填模板：键值对契约 + 解析渲染（用户照改即可跑）
+const STATUS_REGION_STARTER_CONTRACT = [
+    "每行一个字段，用=分隔，除以下字段外不要输出其他内容：",
+    "心情=<一个词>|<一句原因>",
+    "体力=<0-100 数字>",
+    "没说出口的话=<一句话>",
+].join("\n");
+
+const STATUS_REGION_STARTER_RENDER = `<style>
+  body{margin:0;font:12px/1.6 system-ui;color:#4a3f35;background:transparent}
+  .card{background:linear-gradient(135deg,#fef9ef,#fdf3e0);border:1px solid rgba(222,184,135,.35);border-radius:12px;padding:12px}
+  .bar{height:6px;background:rgba(0,0,0,.08);border-radius:3px;overflow:hidden;margin:4px 0 8px}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,#7da8ff,#ff8fa3)}
+  .quiet{font-style:italic;color:#8a7a66}
+</style>
+<div class="card" id="root">…</div>
+<script>
+  const data = {};
+  (window.STATUS_RAW || "").split("\\n").forEach(l => { const i = l.indexOf("="); if (i > 0) data[l.slice(0, i).trim()] = l.slice(i + 1).trim(); });
+  const [mood, reason = ""] = (data["心情"] || "").split("|");
+  const hp = Math.max(0, Math.min(100, parseInt(data["体力"]) || 0));
+  document.getElementById("root").innerHTML =
+    '<div><b>' + (mood || "—") + '</b> <span style="opacity:.6">' + reason + '</span></div>' +
+    '<div style="margin-top:6px;font-size:11px;opacity:.7">体力 ' + hp + '%</div><div class="bar"><i style="width:' + hp + '%"></i></div>' +
+    '<div class="quiet">"' + (data["没说出口的话"] || "") + '"</div>';
+</` + `script>`;
+
 import {
     DEFAULT_CHAT_BILINGUAL_PROMPT,
     DEFAULT_GROUP_CHAT_BILINGUAL_PROMPT,
@@ -169,6 +199,32 @@ export function ChatSettingsPanel({
     const [videoBackground, setVideoBackground] = useState<string>(session.videoBackground || "");
     const [voiceBackground, setVoiceBackground] = useState<string>(session.voiceBackground || "");
     const [isPinned, setIsPinned] = useState(session.isPinned || false);
+    // 自定义状态栏（状态区）
+    const [statusRegion, setStatusRegion] = useState<StatusRegionConfig>(() => getStatusRegionConfig(session.id));
+    const [showStatusRegionDialog, setShowStatusRegionDialog] = useState(false);
+    const [draftContract, setDraftContract] = useState("");
+    const [draftRender, setDraftRender] = useState("");
+    const [statusPreviewRaw, setStatusPreviewRaw] = useState("心情=雀跃|刚收到消息\n体力=80\n没说出口的话=其实有点想你");
+    const [previewHtml, setPreviewHtml] = useState("");
+    const statusPresetSupported = useMemo(() => {
+        if (session.isGroup) return false;
+        try {
+            const slot = resolveBinding(loadBindingConfig(), session.contactId, "chat");
+            const presets = loadPresets();
+            const preset = (slot.presetId ? presets.find(item => item.id === slot.presetId) : null) ?? presets.find(item => item.builtIn) ?? null;
+            return !!preset && presetSupportsStatusRegion(preset.prompts.map(item => item.content));
+        } catch { return false; }
+    }, [session.isGroup, session.contactId]);
+    const saveStatusRegion = (next: StatusRegionConfig) => {
+        setStatusRegion(next);
+        saveStatusRegionConfig(session.id, next);
+    };
+    const openStatusRegionDialog = () => {
+        setDraftContract(statusRegion.contract || STATUS_REGION_STARTER_CONTRACT);
+        setDraftRender(statusRegion.renderHtml || STATUS_REGION_STARTER_RENDER);
+        setPreviewHtml("");
+        setShowStatusRegionDialog(true);
+    };
     const [visionImagePromptLimit, setVisionImagePromptLimit] = useState(() => normalizeVisionImagePromptLimit(session.visionImagePromptLimit));
     const [bilingualTranslationEnabled, setBilingualTranslationEnabled] = useState(session.bilingualTranslationEnabled !== false);
     const [collapseBilingualTranslation, setCollapseBilingualTranslation] = useState(session.collapseBilingualTranslation !== false);
@@ -696,6 +752,42 @@ export function ChatSettingsPanel({
                                     <span className="menu-desc">上帝操作：无视群规则直接拿回群主</span>
                                 </div>
                             </button>
+                        )}
+                    </div>
+                )}
+
+                {/* 状态栏（状态区）：原生开关 + 自定义契约/渲染 */}
+                {!session.isGroup && (
+                    <div className="menu-group">
+                        <div className="menu-item">
+                            <ChatInfoIcon icon={Code} color={BINDING_ACCENTS.preset} />
+                            <div className="menu-label-group">
+                                <span className="menu-label">原生状态栏</span>
+                                <span className="menu-desc">{statusPresetSupported ? "内心便利贴与默认状态区输出" : "当前预设未声明状态区宏，仅默认预设支持"}</span>
+                            </div>
+                            <div className="menu-right">
+                                <Toggle
+                                    checked={statusRegion.mode === "native"}
+                                    disabled={!statusPresetSupported}
+                                    onChange={c => {
+                                        if (!statusPresetSupported) return;
+                                        saveStatusRegion({
+                                            ...statusRegion,
+                                            mode: c ? "native" : (statusRegion.contract.trim() && statusRegion.renderHtml.trim() ? "custom" : "off"),
+                                        });
+                                    }}
+                                />
+                            </div>
+                        </div>
+                        {statusPresetSupported && statusRegion.mode !== "native" && (
+                            <div className="menu-item cursor-pointer" onClick={openStatusRegionDialog}>
+                                <ChatInfoIcon icon={Sparkles} color={BINDING_ACCENTS.preset} />
+                                <div className="menu-label-group">
+                                    <span className="menu-label">自定义状态栏</span>
+                                    <span className="menu-desc">{isCustomStatusRegionActive(statusRegion) ? "已启用：输出契约 + 渲染代码" : "未配置——关闭原生后折叠区为空，点此填写契约与渲染"}</span>
+                                </div>
+                                <div className="menu-right"><ChevronRight size={18} /></div>
+                            </div>
                         )}
                     </div>
                 )}
@@ -1284,6 +1376,77 @@ export function ChatSettingsPanel({
                         </div>
                     </PageShell>
                 </div>
+                </div>
+            )}
+            {showStatusRegionDialog && (
+                <div className="fixed inset-0 z-[10030] flex items-end justify-center bg-black/45 sm:items-center" role="dialog" aria-modal="true" aria-label="自定义状态栏">
+                    <div className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-[var(--c-page-body-bg)] text-[var(--c-text)] shadow-2xl sm:rounded-2xl">
+                        <div className="flex items-center justify-between border-b border-[var(--c-panel-border)] px-5 py-3">
+                            <div>
+                                <div className="font-bold">自定义状态栏</div>
+                                <div className="mt-0.5 ts-10 opacity-60">AI 每轮只输出数据（契约），画法由渲染代码固定——外层标签固定为 [状态栏]...[/状态栏]</div>
+                            </div>
+                            <button type="button" className="px-2 py-1 font-semibold" onClick={() => setShowStatusRegionDialog(false)}>关闭</button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4">
+                            <div className="ts-11 font-semibold opacity-80">① 输出契约（写进提示词，告诉 AI 壳内输出什么）</div>
+                            <textarea
+                                value={draftContract}
+                                onChange={e => setDraftContract(e.target.value)}
+                                className="ui-input mt-1 w-full font-mono"
+                                style={{ minHeight: 110, fontSize: 12, lineHeight: 1.6 }}
+                                spellCheck={false}
+                            />
+                            <div className="mt-3 ts-11 font-semibold opacity-80">② 输出渲染（HTML+CSS+JS，沙盒运行；数据经 window.STATUS_RAW 或 {"{{RAW}}"} 注入）</div>
+                            <textarea
+                                value={draftRender}
+                                onChange={e => setDraftRender(e.target.value)}
+                                className="ui-input mt-1 w-full font-mono"
+                                style={{ minHeight: 180, fontSize: 12, lineHeight: 1.6 }}
+                                spellCheck={false}
+                            />
+                            <div className="mt-3 flex items-center justify-between">
+                                <span className="ts-11 font-semibold opacity-80">③ 预览（用下方示例数据渲染）</span>
+                                <button type="button" className="ui-btn ui-btn-ghost h-7 px-3 ts-11" onClick={() => setPreviewHtml(draftRender)}>刷新预览</button>
+                            </div>
+                            <textarea
+                                value={statusPreviewRaw}
+                                onChange={e => setStatusPreviewRaw(e.target.value)}
+                                className="ui-input mt-1 w-full font-mono"
+                                style={{ minHeight: 56, fontSize: 11, lineHeight: 1.5 }}
+                                spellCheck={false}
+                            />
+                            {previewHtml.trim() && (
+                                <div className="mt-2 rounded-xl border border-dashed border-[var(--c-panel-border)] p-2">
+                                    <CustomStatusFrame key={previewHtml + statusPreviewRaw} html={previewHtml} raw={statusPreviewRaw} />
+                                </div>
+                            )}
+                            <p className="mt-3 ts-10 leading-relaxed opacity-55">
+                                {"保存后：AI 按契约输出，聊天折叠区由渲染代码接管（数值面板保留）；原生时期的消息不受影响，可随时切回。若启用了改写 [状态栏] 的正则，两者会互相竞争。"}
+                            </p>
+                        </div>
+                        <div className="flex gap-2 border-t border-[var(--c-panel-border)] px-5 py-3">
+                            <button
+                                type="button"
+                                className="ui-btn flex-1"
+                                onClick={() => setShowStatusRegionDialog(false)}
+                            >
+                                取消
+                            </button>
+                            <button
+                                type="button"
+                                className="ui-btn ui-btn-primary flex-1"
+                                onClick={() => {
+                                    const contract = draftContract.trim();
+                                    const renderHtml = draftRender.trim();
+                                    saveStatusRegion({ mode: contract && renderHtml ? "custom" : "off", contract, renderHtml });
+                                    setShowStatusRegionDialog(false);
+                                }}
+                            >
+                                保存并启用
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </PageShell>
