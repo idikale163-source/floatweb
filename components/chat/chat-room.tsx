@@ -13,6 +13,7 @@ import { EmojiPanel, StickerPanel } from "./emoji-panel";
 import { StickerSearchSuggest } from "./sticker-search-suggest";
 import { StateValuesPanel } from "./state-values-panel";
 import { generateChatCompletion, generateOfflineChatCompletion, flattenCompletionResult, ChatEngineError } from "@/lib/chat-engine";
+import { formatOfflineTurnXml as formatOfflineTurnXmlShared, buildOfflinePromptHistory as buildOfflinePromptHistoryShared } from "@/lib/offline-prompt-builder";
 import { sendBrowserNotification } from "@/lib/browser-notification";
 import { dispatchChatMessageNotice } from "@/lib/chat-notification-events";
 import { shouldSendChatInputOnEnter } from "@/lib/chat-input-keyboard";
@@ -3763,58 +3764,12 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
         return true;
     };
 
-    const formatOfflineTurnXml = useCallback((turn: ChatOfflineTurn): string => {
-        if (turn.rawText?.trim()) return turn.rawText.trim();
-        const summaryTag = turn.summaryTag?.trim() || "summary";
-        return [
-            "<content>",
-            turn.assistantContent,
-            "</content>",
-            `<${summaryTag}>`,
-            turn.summary,
-            `</${summaryTag}>`,
-        ].join("\n");
-    }, []);
+    // 线下 XML 构造与提示词查看器共用 lib/offline-prompt-builder（社区 #108），
+    // 保证「预览 = 真实发出的提示词」；此处仅包一层稳定引用。
+    const formatOfflineTurnXml = useCallback((turn: ChatOfflineTurn): string => formatOfflineTurnXmlShared(turn), []);
 
-    const buildOfflinePromptHistory = (turns: ChatOfflineTurn[], pendingUserContent: string): ChatMessage[] => {
-        const history: ChatMessage[] = [];
-        for (const turn of turns) {
-            const assistantAt = turn.createdAt;
-            const userAtMs = new Date(turn.createdAt).getTime() - 1;
-            const userAt = Number.isFinite(userAtMs) ? new Date(userAtMs).toISOString() : turn.createdAt;
-            if (turn.userContent.trim()) {
-                history.push({
-                    id: `${turn.id}_user`,
-                    sessionId: session.id,
-                    role: "user",
-                    content: turn.userContent,
-                    status: "sent",
-                    createdAt: userAt,
-                });
-            }
-            history.push({
-                id: `${turn.id}_assistant`,
-                sessionId: session.id,
-                role: "assistant",
-                content: formatOfflineTurnXml(turn),
-                status: "sent",
-                createdAt: assistantAt,
-                ...(session.isGroup ? { senderName: session.groupName || "群聊线下" } : {}),
-            });
-        }
-        if (pendingUserContent.trim()) {
-            history.push({
-                id: `offline_pending_${Date.now()}`,
-                sessionId: session.id,
-                role: "user",
-                content: pendingUserContent.trim(),
-                status: "sent",
-                createdAt: new Date().toISOString(),
-            });
-        }
-        return history;
-    };
-
+    const buildOfflinePromptHistory = (turns: ChatOfflineTurn[], pendingUserContent: string): ChatMessage[] =>
+        buildOfflinePromptHistoryShared(session, turns, pendingUserContent);
     const getOfflineCopyText = (turn: ChatOfflineTurn, role: OfflineActionTarget["role"]): string => {
         if (role === "user") return turn.userContent;
         return formatOfflineTurnXml(turn);
