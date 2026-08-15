@@ -34,6 +34,7 @@ import { PhoneResourcesApp, type ResourceSubPage } from "@/components/phone-reso
 import { CheckPhoneApp } from "@/components/checkphone/checkphone-app";
 import { ShoppingApp } from "@/components/shopping/shopping-app";
 import { GameHubApp } from "@/components/game/game-hub-app";
+import { MixologyApp } from "@/components/mixology/mixology-app";
 import InterviewMagazineApp from "@/components/interview/interview-magazine-app";
 import { CoCreateApp } from "@/components/cocreate/cocreate-app";
 import { AppMarketApp } from "@/components/app-market/app-market-app";
@@ -136,7 +137,7 @@ import { startWeixinCloudRealtimeSync } from "@/lib/weixin-cloud-sync";
 import { sendBrowserNotification } from "@/lib/browser-notification";
 import type { ChatSharePayload } from "@/lib/chat-share";
 import { completePendingMcpOAuthCallback } from "@/lib/tool-executor";
-import { LayoutGrid, LoaderCircle, Martini, RefreshCw } from "lucide-react";
+import { LayoutGrid, LoaderCircle, RefreshCw } from "lucide-react";
 
 const EMOJI_FONTS = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla"';
 
@@ -1076,8 +1077,6 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   const [glassPaintPass, setGlassPaintPass] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [activeApp, setActiveApp] = useState<DesktopIconId | null>(null);
-  // 独家特调：施工中占位弹窗（正式功能落地前，图标只弹牌子不进应用）
-  const [mixologyNoticeOpen, setMixologyNoticeOpen] = useState(false);
   const [customApps, setCustomApps] = useState<InstalledCustomApp[]>([]);
   // 自定义 APP 桌面图标样式偏好（global = 忽略上传图标走全局效果）
   const [customAppIconStyles, setCustomAppIconStyles] = useState<Record<string, CustomAppIconStyle>>({});
@@ -2219,10 +2218,6 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       return;
     }
     const builtinIconId = iconId as IconId;
-    if (builtinIconId === "mixology") {
-      setMixologyNoticeOpen(true);
-      return;
-    }
     const meta = ICONS[builtinIconId];
     if (meta?.path && meta.id === "worldbuilder") {
       openWorldBuilder(meta.path);
@@ -3950,6 +3945,10 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       return <GameHubApp onClose={() => setActiveApp(null)} />;
     }
 
+    if (activeApp === "mixology") {
+      return <MixologyApp onClose={() => setActiveApp(null)} />;
+    }
+
     if (activeApp === "appmarket") {
       return (
         <AppMarketApp
@@ -4049,43 +4048,6 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                 <aside className="phone-shell-notice" role="status" aria-live="polite">
                   {notice}
                 </aside>
-              ) : null}
-
-              {mixologyNoticeOpen ? (
-                <div
-                  className="modal-overlay"
-                  data-ui="modal"
-                  role="presentation"
-                  onClick={() => setMixologyNoticeOpen(false)}
-                >
-                  <div
-                    className="modal-dialog"
-                    data-ui="modal-dialog"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label="独家特调"
-                    onClick={event => event.stopPropagation()}
-                  >
-                    <div className="modal-header" data-ui="modal-header">
-                      <div className="ui-icon-circle" data-variant="action">
-                        <Martini size={20} />
-                      </div>
-                      <h3 className="modal-title">独家特调</h3>
-                    </div>
-                    <div className="modal-body" data-ui="modal-body">
-                      <p>{"这个APP还在施工中，先去别的地方看看吧～"}</p>
-                    </div>
-                    <div className="modal-footer" data-ui="modal-footer">
-                      <button
-                        type="button"
-                        className="ui-btn ui-btn-primary"
-                        onClick={() => setMixologyNoticeOpen(false)}
-                      >
-                        好的
-                      </button>
-                    </div>
-                  </div>
-                </div>
               ) : null}
 
               {customAppUpdatePrompt ? (
