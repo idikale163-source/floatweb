@@ -49,31 +49,121 @@ import { CHAT_SESSION_CSS_EXAMPLE } from "@/lib/css-examples";
 import { Toggle, Input } from "@/components/ui/form";
 import { PageShell } from "@/components/ui/page-shell";
 
-// 自定义状态栏预填模板：键值对契约 + 解析渲染（用户照改即可跑）
+// 自定义状态栏预填模板：微博主页（契约=「状态栏」章节整段正文，含【逻辑】【格式】与包裹要求）
 const STATUS_REGION_STARTER_CONTRACT = [
-    "每行一个字段，用=分隔，除以下字段外不要输出其他内容：",
-    "心情=<一个词>|<一句原因>",
-    "体力=<0-100 数字>",
-    "没说出口的话=<一句话>",
+    "【逻辑】你在维护{{char}}的微博主页。每行一个字段，用=分隔，除格式列出的字段外不要输出其他内容；帖子与评论要符合当前剧情与{{char}}的心境，网友评论可玩梗。按生成的内容整块用 [状态栏]...[/状态栏] 包裹输出。",
+    "【格式】",
+    "[状态栏]",
+    "名字=<微博昵称>",
+    "认证=<一句认证/身份标签>",
+    "简介=<一句个性签名，随剧情心境更新>",
+    "关注=<数字>",
+    "粉丝=<数字，可带万>",
+    "帖子=<时间，如 5分钟前>|<微博正文，可带 #话题#>|<0~4个emoji当配图，没有留空>|<转发数>|<评论数>|<点赞数>",
+    "评论=<网友昵称>|<评论内容>|<点赞数>",
+    "评论=<网友昵称>|<评论内容>|<点赞数>",
+    "评论=<网友昵称>|<评论内容>|<点赞数>",
+    "[/状态栏]",
 ].join("\n");
 
 const STATUS_REGION_STARTER_RENDER = `<style>
-  body{margin:0;font:12px/1.6 system-ui;color:#4a3f35;background:transparent}
-  .card{background:linear-gradient(135deg,#fef9ef,#fdf3e0);border:1px solid rgba(222,184,135,.35);border-radius:12px;padding:12px}
-  .bar{height:6px;background:rgba(0,0,0,.08);border-radius:3px;overflow:hidden;margin:4px 0 8px}
-  .bar i{display:block;height:100%;background:linear-gradient(90deg,#7da8ff,#ff8fa3)}
-  .quiet{font-style:italic;color:#8a7a66}
+  :root{--bg:#fff;--text:#333;--sub:#93999f;--accent:#ff8200;--soft:#f6f7f9;--line:#f0f1f3}
+  @media (prefers-color-scheme:dark){:root{--bg:#1c1c1e;--text:#e8e8ea;--sub:#8e8e93;--soft:#2a2a2c;--line:#333}}
+  body{margin:0;font:12.5px/1.6 -apple-system,system-ui,sans-serif;color:var(--text);background:transparent}
+  .wb{background:var(--bg);border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+  .cover{height:44px;background:linear-gradient(120deg,#ffb46b,#ff7d52 55%,#f65e7c)}
+  .head{padding:0 14px 10px}
+  .ava{width:52px;height:52px;border-radius:50%;margin-top:-24px;border:3px solid var(--bg);
+       display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff}
+  .nrow{display:flex;align-items:center;gap:5px;margin-top:6px}
+  .name{font-size:15px;font-weight:700}
+  .vip{width:15px;height:15px;border-radius:50%;background:#ffa100;color:#fff;font-size:10px;font-weight:800;
+       display:inline-flex;align-items:center;justify-content:center}
+  .verify{color:var(--accent);font-size:11px;margin-top:2px}
+  .bio{color:var(--sub);font-size:11.5px;margin-top:3px}
+  .stats{display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--sub)}
+  .stats b{color:var(--text);font-size:12.5px;margin-right:3px}
+  .post{margin:0 10px;padding:10px 4px 8px;border-top:1px solid var(--line)}
+  .ptime{font-size:10.5px;color:var(--sub)}
+  .ptxt{margin-top:4px;white-space:pre-wrap;word-break:break-word}
+  .topic{color:#ff8200}
+  .pics{display:flex;gap:5px;margin-top:8px}
+  .pic{flex:0 0 30%;aspect-ratio:1;border-radius:8px;background:var(--soft);
+       display:flex;align-items:center;justify-content:center;font-size:30px}
+  .bar{display:flex;margin-top:8px;color:var(--sub);font-size:11px}
+  .bar span{flex:1;text-align:center}
+  .cmts{margin:0 10px 10px;background:var(--soft);border-radius:10px;padding:8px 10px}
+  .cmt{display:flex;gap:7px;padding:5px 0}
+  .cmt+.cmt{border-top:1px solid var(--line)}
+  .cava{width:22px;height:22px;border-radius:50%;flex:none;
+        display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff}
+  .cbody{flex:1;min-width:0}
+  .cname{color:#eb7340;font-size:11px}
+  .ctxt{font-size:11.5px;word-break:break-word}
+  .clike{font-size:10px;color:var(--sub);flex:none;padding-top:2px}
 </style>
-<div class="card" id="root">…</div>
+<div id="app"></div>
 <script>
-  const data = {};
-  (window.STATUS_RAW || "").split("\\n").forEach(l => { const i = l.indexOf("="); if (i > 0) data[l.slice(0, i).trim()] = l.slice(i + 1).trim(); });
-  const [mood, reason = ""] = (data["心情"] || "").split("|");
-  const hp = Math.max(0, Math.min(100, parseInt(data["体力"]) || 0));
-  document.getElementById("root").innerHTML =
-    '<div><b>' + (mood || "—") + '</b> <span style="opacity:.6">' + reason + '</span></div>' +
-    '<div style="margin-top:6px;font-size:11px;opacity:.7">体力 ' + hp + '%</div><div class="bar"><i style="width:' + hp + '%"></i></div>' +
-    '<div class="quiet">"' + (data["没说出口的话"] || "") + '"</div>';
+(function(){
+  var G=[["#f89b6c","#f65e7c"],["#6cb6f8","#5e7cf6"],["#8ce08a","#3cb98f"],["#c99bf5","#8a6cf6"],["#f8d06c","#f6975e"]];
+  function grad(s){var n=0;for(var i=0;i<s.length;i++)n+=s.charCodeAt(i);var g=G[n%G.length];
+    return "linear-gradient(135deg,"+g[0]+","+g[1]+")";}
+  function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;
+    if(txt!=null)e.textContent=txt;return e;}
+  var d={},cmts=[];
+  (window.STATUS_RAW||"").split(/\\r?\\n/).forEach(function(line){
+    var i=line.indexOf("=");if(i<1)return;
+    var k=line.slice(0,i).trim(),v=line.slice(i+1).trim();
+    if(k==="评论")cmts.push(v);else d[k]=v;
+  });
+  var name=d["名字"]||"微博用户";
+  var app=document.getElementById("app"),wb=el("div","wb");
+  wb.appendChild(el("div","cover"));
+  var head=el("div","head");
+  var ava=el("div","ava",name.slice(0,1));ava.style.background=grad(name);head.appendChild(ava);
+  var nrow=el("div","nrow");nrow.appendChild(el("span","name",name));
+  nrow.appendChild(el("span","vip","V"));head.appendChild(nrow);
+  if(d["认证"])head.appendChild(el("div","verify","\\u5fae\\u535a\\u8ba4\\u8bc1\\uff1a"+d["认证"]));
+  if(d["简介"])head.appendChild(el("div","bio",d["简介"]));
+  var st=el("div","stats"),s1=el("span"),s2=el("span");
+  s1.appendChild(el("b",null,d["关注"]||"0"));s1.appendChild(document.createTextNode("关注"));
+  s2.appendChild(el("b",null,d["粉丝"]||"0"));s2.appendChild(document.createTextNode("粉丝"));
+  st.appendChild(s1);st.appendChild(s2);head.appendChild(st);wb.appendChild(head);
+  if(d["帖子"]){
+    var f=d["帖子"].split("|"),post=el("div","post");
+    post.appendChild(el("div","ptime",(f[0]||"刚刚")+" \\u00b7 来自微博手机版"));
+    var ptxt=el("div","ptxt");
+    (f[1]||"").split(/(#[^#]{1,20}#)/).forEach(function(seg){
+      if(!seg)return;
+      ptxt.appendChild(seg.charAt(0)==="#"&&seg.charAt(seg.length-1)==="#"?el("span","topic",seg):document.createTextNode(seg));
+    });
+    post.appendChild(ptxt);
+    var emo=Array.from(f[2]||"").filter(function(c){return c.trim()&&!/[\\ufe0f\\u200d]/.test(c)});
+    if(emo.length){var pics=el("div","pics");
+      emo.slice(0,3).forEach(function(c){pics.appendChild(el("div","pic",c));});
+      post.appendChild(pics);}
+    var bar=el("div","bar");
+    bar.appendChild(el("span",null,"\\u21bb "+(f[3]||"0")));
+    bar.appendChild(el("span",null,"\\ud83d\\udcac "+(f[4]||"0")));
+    bar.appendChild(el("span",null,"\\u2661 "+(f[5]||"0")));
+    post.appendChild(bar);wb.appendChild(post);
+  }
+  if(cmts.length){
+    var box=el("div","cmts");
+    cmts.forEach(function(line){
+      var p=line.split("|"),c=el("div","cmt");
+      var ca=el("div","cava",(p[0]||"?").slice(0,1));ca.style.background=grad(p[0]||"?");
+      var body=el("div","cbody");
+      body.appendChild(el("div","cname",p[0]||"网友"));
+      body.appendChild(el("div","ctxt",p[1]||""));
+      c.appendChild(ca);c.appendChild(body);
+      c.appendChild(el("div","clike","\\u2661 "+String(p[2]||"").replace(/[^0-9.\\u4e07\\u4ebf]/g,"")));
+      box.appendChild(c);
+    });
+    wb.appendChild(box);
+  }
+  app.appendChild(wb);
+})();
 </` + `script>`;
 
 import {
@@ -205,7 +295,7 @@ export function ChatSettingsPanel({
     const [showStatusRegionDialog, setShowStatusRegionDialog] = useState(false);
     const [draftContract, setDraftContract] = useState("");
     const [draftRender, setDraftRender] = useState("");
-    const [statusPreviewRaw, setStatusPreviewRaw] = useState("心情=雀跃|刚收到消息\n体力=80\n没说出口的话=其实有点想你");
+    const [statusPreviewRaw, setStatusPreviewRaw] = useState("名字=林晚\n认证=美食探店博主 · 深夜觅食团成员\n简介=白天写方案，晚上寻宵夜｜私信不回工作请走邮箱\n关注=132\n粉丝=8.7万\n帖子=23分钟前|谁懂啊，加班到十点，楼下面馆居然还给我留了最后一碗牛肉面🥹 #深夜食堂# 老板说看我常来……突然就不想跳槽了|🍜🌃✨|56|203|1.2万\n评论=小奶糖|这就是深夜的意义吧|赞 231\n评论=风住了|老板收留我当洗碗工吧，只求管饭|赞 89\n评论=momo不吃香菜|蹲一个面馆定位！|赞 156");
     const [previewHtml, setPreviewHtml] = useState("");
     const statusImportInputRef = useRef<HTMLInputElement | null>(null);
     const exportStatusRegion = () => {
@@ -1417,7 +1507,7 @@ export function ChatSettingsPanel({
                         <div className="flex-1 overflow-y-auto px-4 pb-4">
                             <div className="flex items-baseline justify-between px-1">
                                 <span className="ts-12 font-semibold text-[var(--c-text-title)]">输出契约</span>
-                                <span className="ts-10 opacity-40">AI 每轮照此输出</span>
+                                <span className="ts-10 opacity-40">整节写进提示词</span>
                             </div>
                             <textarea
                                 value={draftContract}

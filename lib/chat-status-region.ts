@@ -5,7 +5,7 @@
 // 对应 {{statusRegionExampleLine}}），按本模块的会话配置解析：
 //   native（默认）→ 原章节文本，字节级等于历史版本，所有存量用户无感；
 //   off           → 空，整节从提示词消失，AI 自然不再输出 [内心]；
-//   custom        → 固定信封指令（外层仍是 [状态栏]...[/状态栏]）+ 用户输出契约。
+//   custom        → 「## 状态栏」+ 契约整段正文（契约自带【逻辑】【格式】与包裹要求）。
 // 只有包含宏的预设（默认预设天生包含；社区预设作者可自愿声明）支持自定义——
 // 不含宏的预设完全不受本机制影响，聊天信息页的入口会置灰。
 //
@@ -112,13 +112,8 @@ export function isCustomStatusRegionActive(config: StatusRegionConfig): boolean 
 export function resolveStatusRegionSection(config: StatusRegionConfig): string {
     if (config.mode === "off") return "";
     if (isCustomStatusRegionActive(config)) {
-        return [
-            "## 状态栏",
-            "【逻辑】按下方契约输出状态栏内容。",
-            "【格式】整块包裹输出，外层标签固定：[状态栏]（壳内按契约填写）[/状态栏]",
-            "【契约】",
-            config.contract.trim(),
-        ].join("\n");
+        // 契约即「## 状态栏」章节的整个正文（含【逻辑】【格式】与 [状态栏] 包裹要求），不再套固定信封
+        return "## 状态栏\n" + config.contract.trim();
     }
     return NATIVE_STATUS_REGION_SECTION;
 }
