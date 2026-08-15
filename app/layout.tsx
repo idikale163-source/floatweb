@@ -59,16 +59,6 @@ export default function RootLayout({
         <ChatPluginBootstrap />
         <ChatReasoningVisibilityController />
         {children}
-        {/* 手机横屏提示：网页无法阻止浏览器转屏（部分国产浏览器会自动横屏），
-            纯 CSS 检测"触屏+横屏+矮视口"时盖全屏提示，转回竖屏自动消失。
-            已安装 PWA 由 manifest orientation:portrait 系统级锁定，不会看到它。 */}
-        <div className="rotate-lock-hint" aria-hidden>
-          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="7" y="3" width="10" height="18" rx="2" />
-            <path d="M3 8a9 9 0 0 1 3-4M21 16a9 9 0 0 1-3 4" />
-          </svg>
-          <span>请竖屏使用</span>
-        </div>
       </body>
     </html>
   );
