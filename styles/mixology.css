@@ -1283,3 +1283,51 @@
     letter-spacing: 0.16em;
     color: var(--mix-faint);
 }
+
+/* ── 吧台内层 tab：创建配方 / 我的配方 ── */
+.mix-subtabs {
+    display: flex;
+    gap: 4px;
+    margin: 12px 0 4px;
+    padding: 4px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    flex: 0 0 auto;
+}
+
+.mix-subtabs button {
+    flex: 1;
+    padding: 9px 0;
+    border: none;
+    border-radius: 9px;
+    background: none;
+    color: var(--mix-dim);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.mix-subtabs button[data-active="true"] {
+    background: rgba(141, 123, 245, 0.22);
+    color: var(--mix-violet);
+    font-weight: 600;
+}
+
+/* 创建配方：槽位轮盘 + 调配按钮在剩余空间里垂直居中 */
+.mix-body[data-fill="true"] {
+    display: flex;
+    flex-direction: column;
+}
+
+.mix-body[data-fill="true"]::after {
+    content: none;
+}
+
+.mix-bar-stage[data-centered="true"] {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-top: 0;
+}

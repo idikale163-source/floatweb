@@ -63,6 +63,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     const [detail, setDetail] = useState<MixMaterial | null>(null);
     const [editor, setEditor] = useState<{ kind: MixMaterialKind; initial?: MixMaterial } | null>(null);
     const [kindPickerOpen, setKindPickerOpen] = useState(false);
+    const [barTab, setBarTab] = useState<"create" | "mine">("create");
     const [barSlots, setBarSlots] = useState<Partial<Record<MixMaterialKind, string>>>({});
     const [slotPicker, setSlotPicker] = useState<MixMaterialKind | null>(null);
     const [nameSheetOpen, setNameSheetOpen] = useState(false);
@@ -146,6 +147,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
         setNameSheetOpen(false);
         setBarSlots({});
         refresh();
+        setBarTab("mine");
         showToast(`「${name}」已入方案。`);
     };
 
@@ -268,7 +270,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                 ) : null}
             </div>
 
-            <div className="mix-body">
+            <div className="mix-body" data-fill={tab === "bar" && barTab === "create" ? "true" : undefined}>
                 {tab === "menu" ? (
                     <MixologyHall mode="menu" onToast={showToast} onImported={refresh} />
                 ) : null}
@@ -278,7 +280,15 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                 ) : null}
 
                 {tab === "bar" ? (
-                    <div className="mix-bar-stage">
+                    <>
+                        <div className="mix-subtabs">
+                            <button type="button" data-active={barTab === "create" ? "true" : undefined} onClick={() => setBarTab("create")}>创建配方</button>
+                            <button type="button" data-active={barTab === "mine" ? "true" : undefined} onClick={() => setBarTab("mine")}>
+                                我的配方{recipes.length ? ` · ${recipes.length}` : ""}
+                            </button>
+                        </div>
+                    {barTab === "create" ? (
+                    <div className="mix-bar-stage" data-centered="true">
                         <div className="mix-bar-hint">左右滑动切换槽位 · 点击槽位选材料</div>
                         <div className="mix-wheel" ref={wheelRef} onScroll={handleWheelScroll}>
                             {MIX_SLOT_ORDER.map((kind) => {
@@ -327,14 +337,13 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                         <button type="button" className="mix-brew-btn" onClick={handleBrew} disabled={!barSlots.character}>
                             <Martini size={17} />调 配
                         </button>
-
-                        <div className="mix-section-title">我的特调<small>{recipes.length ? `${recipes.length} 杯` : ""}</small></div>
-                        {recipes.length === 0 ? (
-                            <div className="mix-empty">
+                    </div>
+                    ) : recipes.length === 0 ? (
+                            <div className="mix-empty" style={{ paddingTop: 70 }}>
                                 <Wine size={32} strokeWidth={1.4} />
                                 还没有保存过特调——
                                 <br />
-                                在上面配齐材料，按下「调配」。
+                                去「创建配方」配齐材料，按下「调配」。
                             </div>
                         ) : (
                             recipes.map((recipe) => {
@@ -355,7 +364,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                         </div>
                                         <div className="mix-recipe-actions">
                                             <button type="button" className="mix-pill-btn" data-tone="gold" onClick={() => handleStartRecipe(recipe)}>开始</button>
-                                            <button type="button" className="mix-pill-btn" data-tone="ghost" onClick={() => { setBarSlots({ ...recipe.slots }); showToast("已装回吧台，可以微调。"); }}>装载</button>
+                                            <button type="button" className="mix-pill-btn" data-tone="ghost" onClick={() => { setBarSlots({ ...recipe.slots }); setBarTab("create"); showToast("已装回吧台，可以微调。"); }}>装载</button>
                                             <button type="button" className="mix-pill-btn" data-tone="ghost" onClick={() => void handleShareRecipe(recipe)} disabled={sharing}>分享</button>
                                             <button type="button" className="mix-pill-btn" data-tone="ghost" onClick={() => { deleteMixRecipe(recipe.id); refresh(); }}>删除</button>
                                         </div>
@@ -363,7 +372,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 );
                             })
                         )}
-                    </div>
+                    </>
                 ) : null}
 
                 {tab === "cabinet" ? (
