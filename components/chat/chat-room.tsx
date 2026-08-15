@@ -3460,6 +3460,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                                 responseRoundId,
                                 editableResponseText,
                                 statusPanel,
+                                statusRegionMode: customStatusActive && statusPanel ? "custom" as const : undefined,
                                 innerMonologue,
                                 reasoningText: roundReasoning,
                                 stateValues: stateValues.length > 0 ? stateValues : undefined,
@@ -4312,6 +4313,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                         rawResponseText: segment.responseText,
                         responseBatchId,
                         statusPanel,
+                        statusRegionMode: customStatusActive && statusPanel ? "custom" as const : undefined,
                         innerMonologue,
                         stateValues: stateValues.length > 0 ? stateValues : undefined,
                         freshStateValues,
@@ -4399,6 +4401,10 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             }
         }
 
+        // 编辑只改文字，不改这批消息生成时所处的状态栏模式——沿用原戳，
+        // 否则编辑一次就退回原生渲染，而且切回原生后再编辑又会反向串档。
+        const originalStatusRegionMode = batchMessages.find(m => m.statusRegionMode === "custom")?.statusRegionMode;
+
         replaceResponseBatchWithParts(
             session.id,
             editingResponseBatchId,
@@ -4406,6 +4412,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
             normalizedParts,
             {
                 statusPanel,
+                statusRegionMode: originalStatusRegionMode,
                 innerMonologue,
                 stateValues: stateValues.length > 0 ? stateValues : undefined,
                 freshStateValues,
@@ -4807,6 +4814,11 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                 const id = index < batch.length ? sourceId : `${batch[0].id}__display_${index}`;
                 const isMetaSlot = index === displayMetaIdx;
                 const statusPanelHere = isMetaSlot ? (parsed.statusPanel || storedMeta?.statusPanel) : undefined;
+                // 面板从 storedMeta 挪到了别的槽位，戳要跟着面板走：光靠 ...base 展开会取到
+                // 槽位那条消息的戳（多半是空的），投影后状态栏就退回原生渲染了。
+                const statusRegionModeHere = isMetaSlot && statusPanelHere
+                    ? (storedMeta?.statusRegionMode ?? base.statusRegionMode)
+                    : undefined;
                 const innerMonologueHere = isMetaSlot ? (parsed.innerMonologue || storedMeta?.innerMonologue) : undefined;
                 const reasoningTextHere = isMetaSlot ? storedMeta?.reasoningText : undefined;
                 const stateValuesHere = isMetaSlot ? storedMeta?.stateValues : undefined;
@@ -4827,6 +4839,7 @@ export function ChatRoom({ session, onBack }: ChatRoomProps) {
                     mediaType: part.mediaType,
                     mediaData,
                     statusPanel: statusPanelHere,
+                    statusRegionMode: statusRegionModeHere,
                     innerMonologue: innerMonologueHere,
                     reasoningText: reasoningTextHere,
                     stateValues: stateValuesHere,
