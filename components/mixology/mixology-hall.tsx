@@ -326,83 +326,95 @@ export function MixologyHall({
 
     // ── 渲染 ──
 
-    if (loading) {
-        return <div className="mix-empty" style={{ paddingTop: 80 }}>调酒师正在开灯…</div>;
-    }
+    // TAG 行是导航骨架，不跟着加载/未开张一起消失——否则每点一个 TAG 整行都会闪一下
+    const chipRow = mode === "menu" ? (
+        <div className="mix-chip-row">
+            <button type="button" className="mix-chip" data-active={kind === "all" ? "true" : undefined} onClick={() => setKind("all")}>全部</button>
+            {MIX_SLOT_ORDER.map((k) => (
+                <button type="button" className="mix-chip" data-active={kind === k ? "true" : undefined} onClick={() => setKind(k)} key={k}>
+                    {MIX_KIND_LABELS[k]}
+                </button>
+            ))}
+        </div>
+    ) : null;
 
-    if (notReady) {
-        return (
-            <div className="mix-empty" style={{ paddingTop: 80 }}>
-                <Wine size={36} strokeWidth={1.4} />
-                {notReady}
-                <br />
-                本地的吧台和酒柜不受影响，先自己调一杯。
-            </div>
-        );
-    }
-
-    return (
-        <>
-            {mode === "menu" ? (
-                <>
-                    <div className="mix-chip-row">
-                        <button type="button" className="mix-chip" data-active={kind === "all" ? "true" : undefined} onClick={() => setKind("all")}>全部</button>
-                        {MIX_SLOT_ORDER.map((k) => (
-                            <button type="button" className="mix-chip" data-active={kind === k ? "true" : undefined} onClick={() => setKind(k)} key={k}>
-                                {MIX_KIND_LABELS[k]}
-                            </button>
-                        ))}
+    function renderBody() {
+        if (loading) {
+            return <div className="mix-empty" style={{ paddingTop: 60 }}>调酒师正在开灯…</div>;
+        }
+        if (notReady) {
+            return (
+                <div className="mix-empty" style={{ paddingTop: 60 }}>
+                    <Wine size={36} strokeWidth={1.4} />
+                    {notReady}
+                    <br />
+                    本地的吧台和酒柜不受影响，先自己调一杯。
+                </div>
+            );
+        }
+        if (mode === "menu") {
+            if (materials.length === 0) {
+                return (
+                    <div className="mix-empty">
+                        <Inbox size={32} strokeWidth={1.4} />
+                        {kind === "all" ? "酒单上还空着——" : `还没有人分享${MIX_KIND_LABELS[kind]}——`}
+                        <br />
+                        在酒柜里打开自己的材料，点「分享到酒单」。
                     </div>
-                    {materials.length === 0 ? (
-                        <div className="mix-empty">
-                            <Inbox size={32} strokeWidth={1.4} />
-                            这一栏还空着——
-                            <br />
-                            在酒柜里打开自己的材料，点「分享到酒单」。
-                        </div>
-                    ) : (
-                        <div className="mix-waterfall">
-                            {materials.map((entry) => (
-                                <MatCard
-                                    kind={entry.kind}
-                                    name={entry.name}
-                                    hook={entry.hook}
-                                    cover={entry.cover}
-                                    author={entry.authorName}
-                                    stats={statsLine(entry)}
-                                    onClick={() => void openMaterial(entry)}
-                                    key={entry.id}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </>
-            ) : recipes.length === 0 ? (
+                );
+            }
+            return (
+                <div className="mix-waterfall">
+                    {materials.map((entry) => (
+                        <MatCard
+                            kind={entry.kind}
+                            name={entry.name}
+                            hook={entry.hook}
+                            cover={entry.cover}
+                            author={entry.authorName}
+                            stats={statsLine(entry)}
+                            onClick={() => void openMaterial(entry)}
+                            key={entry.id}
+                        />
+                    ))}
+                </div>
+            );
+        }
+        if (recipes.length === 0) {
+            return (
                 <div className="mix-empty" style={{ paddingTop: 60 }}>
                     <Wine size={32} strokeWidth={1.4} />
                     大厅里还没有配方——
                     <br />
                     在吧台给自己的特调点「分享」。
                 </div>
-            ) : (
-                <div style={{ paddingTop: 14 }}>
-                    {recipes.map((entry) => (
-                        <div className="mix-recipe-card" key={entry.id} onClick={() => void openRecipe(entry)}>
-                            {entry.cover ? <div className="mix-recipe-bg" style={{ backgroundImage: `url(${entry.cover})` }} /> : null}
-                            <div className="mix-recipe-main">
-                                <div className="mix-recipe-name">{entry.name}</div>
-                                <div className="mix-recipe-parts">
-                                    {entry.charName || "特调"}
-                                    {entry.partNames.length ? ` · ${entry.partNames.join(" · ")}` : ""}
-                                </div>
-                                <div className="mix-mat-stats">
-                                    @{entry.authorName} · {statsLine(entry)} · 浏览 {entry.viewCount}
-                                </div>
+            );
+        }
+        return (
+            <div style={{ paddingTop: 14 }}>
+                {recipes.map((entry) => (
+                    <div className="mix-recipe-card" key={entry.id} onClick={() => void openRecipe(entry)}>
+                        {entry.cover ? <div className="mix-recipe-bg" style={{ backgroundImage: `url(${entry.cover})` }} /> : null}
+                        <div className="mix-recipe-main">
+                            <div className="mix-recipe-name">{entry.name}</div>
+                            <div className="mix-recipe-parts">
+                                {entry.charName || "特调"}
+                                {entry.partNames.length ? ` · ${entry.partNames.join(" · ")}` : ""}
+                            </div>
+                            <div className="mix-mat-stats">
+                                @{entry.authorName} · {statsLine(entry)} · 浏览 {entry.viewCount}
                             </div>
                         </div>
-                    ))}
-                </div>
-            )}
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    return (
+        <>
+            {chipRow}
+            {renderBody()}
 
             {/* 材料详情 */}
             {detailMaterial ? (
