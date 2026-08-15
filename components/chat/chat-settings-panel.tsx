@@ -39,8 +39,9 @@ import { isAgentComputerConfigured } from "@/lib/agent-computer";
 import { CharacterComputerPage } from "./character-computer-page";
 import { resolveUserIdentity, loadBindingConfig, loadPresets, resolveBinding } from "@/lib/settings-storage";
 import { getStatusRegionConfig, saveStatusRegionConfig, presetSupportsStatusRegion, isCustomStatusRegionActive, type StatusRegionConfig } from "@/lib/chat-status-region";
+import { downloadFile } from "@/lib/download-utils";
 import { CustomStatusFrame } from "@/components/chat/custom-status-frame";
-import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Laptop, Trash2, Smile, Sparkles, X, RotateCw, type LucideIcon } from "lucide-react";
+import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Laptop, Trash2, Smile, Sparkles, X, Play, Upload, Download, type LucideIcon } from "lucide-react";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { ConfirmDialog } from "@/components/ui/modal";
@@ -206,6 +207,29 @@ export function ChatSettingsPanel({
     const [draftRender, setDraftRender] = useState("");
     const [statusPreviewRaw, setStatusPreviewRaw] = useState("心情=雀跃|刚收到消息\n体力=80\n没说出口的话=其实有点想你");
     const [previewHtml, setPreviewHtml] = useState("");
+    const statusImportInputRef = useRef<HTMLInputElement | null>(null);
+    const exportStatusRegion = () => {
+        const payload = { type: "ai-phone-status-region", version: 1, contract: draftContract, renderHtml: draftRender, previewRaw: statusPreviewRaw };
+        void downloadFile(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), "自定义状态栏.json");
+    };
+    const importStatusRegion = (file: File) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const parsed = JSON.parse(String(reader.result || "")) as Record<string, unknown>;
+                const contract = typeof parsed.contract === "string" ? parsed.contract : "";
+                const renderHtml = typeof parsed.renderHtml === "string" ? parsed.renderHtml : "";
+                if (!contract && !renderHtml) throw new Error("empty");
+                setDraftContract(contract);
+                setDraftRender(renderHtml);
+                if (typeof parsed.previewRaw === "string" && parsed.previewRaw) setStatusPreviewRaw(parsed.previewRaw);
+                setPreviewHtml(renderHtml);
+            } catch {
+                alert("导入失败：不是有效的状态栏配置文件");
+            }
+        };
+        reader.readAsText(file);
+    };
     const statusPresetSupported = useMemo(() => {
         if (session.isGroup) return false;
         try {
@@ -1382,12 +1406,17 @@ export function ChatSettingsPanel({
                 <div className="fixed inset-0 z-[10030] flex items-end justify-center bg-black/45 sm:items-center" role="dialog" aria-modal="true" aria-label="自定义状态栏">
                     <div className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-[var(--c-page-body-bg)] text-[var(--c-text)] shadow-2xl sm:rounded-2xl">
                         <div className="flex items-center justify-between px-5 pb-2 pt-4">
-                            <div className="font-bold">自定义状态栏</div>
-                            <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="关闭" onClick={() => setShowStatusRegionDialog(false)}><X size={18} /></button>
+                            <div className="font-bold text-[var(--c-text-title)]">自定义状态栏</div>
+                            <div className="flex items-center gap-1.5">
+                                <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="导入状态栏" onClick={() => statusImportInputRef.current?.click()}><Upload size={16} /></button>
+                                <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="导出状态栏" onClick={exportStatusRegion}><Download size={16} /></button>
+                                <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="关闭" onClick={() => setShowStatusRegionDialog(false)}><X size={18} /></button>
+                            </div>
+                            <input ref={statusImportInputRef} type="file" accept="application/json,.json" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importStatusRegion(f); e.target.value = ""; }} />
                         </div>
                         <div className="flex-1 overflow-y-auto px-4 pb-4">
                             <div className="flex items-baseline justify-between px-1">
-                                <span className="ts-11 font-semibold">输出契约</span>
+                                <span className="ts-12 font-semibold text-[var(--c-text-title)]">输出契约</span>
                                 <span className="ts-10 opacity-40">AI 每轮照此输出</span>
                             </div>
                             <textarea
@@ -1398,7 +1427,7 @@ export function ChatSettingsPanel({
                                 spellCheck={false}
                             />
                             <div className="mt-3 flex items-baseline justify-between px-1">
-                                <span className="ts-11 font-semibold">输出渲染</span>
+                                <span className="ts-12 font-semibold text-[var(--c-text-title)]">输出渲染</span>
                                 <span className="ts-10 opacity-40">HTML · 沙盒运行</span>
                             </div>
                             <textarea
@@ -1410,10 +1439,10 @@ export function ChatSettingsPanel({
                             />
                             <div className="mt-3 flex items-center justify-between px-1">
                                 <div className="flex items-baseline gap-2">
-                                    <span className="ts-11 font-semibold">预览</span>
+                                    <span className="ts-12 font-semibold text-[var(--c-text-title)]">预览</span>
                                     <span className="ts-10 opacity-40">示例数据可改</span>
                                 </div>
-                                <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="刷新预览" onClick={() => setPreviewHtml(draftRender)}><RotateCw size={15} /></button>
+                                <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="运行预览" onClick={() => setPreviewHtml(draftRender)}><Play size={15} /></button>
                             </div>
                             <textarea
                                 value={statusPreviewRaw}
