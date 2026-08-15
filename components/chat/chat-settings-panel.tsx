@@ -898,9 +898,25 @@ export function ChatSettingsPanel({
                                 <ChatInfoIcon icon={Sparkles} color={BINDING_ACCENTS.preset} />
                                 <div className="menu-label-group">
                                     <span className="menu-label">自定义状态栏</span>
-                                    <span className="menu-desc">{isCustomStatusRegionActive(statusRegion) ? "已启用：输出契约 + 渲染代码" : "未配置——关闭原生后折叠区为空，点此填写契约与渲染"}</span>
+                                    <span className="menu-desc">{isCustomStatusRegionActive(statusRegion)
+                                        ? "已启用——点此编辑契约与渲染"
+                                        : statusRegion.contract.trim() && statusRegion.renderHtml.trim()
+                                            ? "已停用——配置保留，拨开关重新启用"
+                                            : "未配置——点此填写契约与渲染"}</span>
                                 </div>
-                                <div className="menu-right"><ChevronRight size={18} /></div>
+                                <div className="menu-right" onClick={e => e.stopPropagation()}>
+                                    <Toggle
+                                        checked={isCustomStatusRegionActive(statusRegion)}
+                                        onChange={c => {
+                                            if (!c) { saveStatusRegion({ ...statusRegion, mode: "off" }); return; }
+                                            if (statusRegion.contract.trim() && statusRegion.renderHtml.trim()) {
+                                                saveStatusRegion({ ...statusRegion, mode: "custom" });
+                                            } else {
+                                                openStatusRegionDialog(); // 还没配置：先进弹窗填，保存即启用
+                                            }
+                                        }}
+                                    />
+                                </div>
                             </div>
                         )}
                     </div>
