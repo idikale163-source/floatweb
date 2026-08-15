@@ -635,7 +635,7 @@ export function PhoneThemeApp({
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {([
               { value: "auto", label: "自动（推荐）", desc: "按设备特征自动选择手机壳或桌面模拟器。" },
-              { value: "phone", label: "手机壳全屏", desc: "明明是手机却看到一圈\u201c壳\u201d或居中小屏时选这个（浏览器谎报了视口）。" },
+              { value: "phone", label: "手机全屏", desc: "手机/平板想满屏显示却看到一圈\u201c壳\u201d或居中小屏时选这个（设备被误判成了电脑）。" },
               { value: "desktop", label: "桌面模拟器", desc: "被误判成手机的大屏触控设备用；真手机上选择无效。" },
             ] as Array<{ value: ShellModeOverride; label: string; desc: string }>).map(option => (
               <button
