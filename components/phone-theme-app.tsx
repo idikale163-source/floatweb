@@ -8,6 +8,7 @@ import {
   Download,
   LayoutGrid,
   PaintBucket,
+  MonitorSmartphone,
   Plus,
   RotateCcw,
   Smartphone,
@@ -24,6 +25,7 @@ import { CUSTOM_APPS_UPDATED_EVENT, loadInstalledCustomApps } from "@/lib/custom
 import { toCustomAppIconId, type InstalledCustomApp } from "@/lib/custom-app-types";
 import { PageShell } from "@/components/ui/page-shell";
 import { readPwaDisplayPreference, writePwaDisplayPreference } from "@/lib/pwa-display-mode";
+import { readShellModeOverride, writeShellModeOverride, type ShellModeOverride } from "@/lib/mobile-shell";
 import {
   GRID_COLS,
   GRID_ROWS,
@@ -196,6 +198,8 @@ export function PhoneThemeApp({
     return "menu";
   });
   const [showStatusBarAdjust, setShowStatusBarAdjust] = useState(false);
+  const [showShellMode, setShowShellMode] = useState(false);
+  const [shellMode, setShellMode] = useState<ShellModeOverride>("auto");
   const [systemBarShown, setSystemBarShown] = useState(() => typeof document !== "undefined" && readPwaDisplayPreference(document.cookie) === "standalone");
   const [showTextAdjust, setShowTextAdjust] = useState(false);
   const [showThemeTransfer, setShowThemeTransfer] = useState(false);
@@ -342,6 +346,16 @@ export function PhoneThemeApp({
                     </div>
                   );
                 })()}
+                <button
+                  className="menu-item"
+                  type="button"
+                  onClick={() => { setShellMode(readShellModeOverride()); setShowShellMode(true); }}
+                >
+                  <span className="card-icon" style={menuIconStyle(BINDING_ACCENTS.memory)}>
+                    <MonitorSmartphone />
+                  </span>
+                  <span className="menu-label appearance-menu-item-label">{"显示形态"}</span>
+                </button>
                 {MENU_ITEMS.filter(item => ["text"].includes(item.section)).map((item) => (
                   <button
                     key={item.section}
@@ -605,6 +619,48 @@ export function PhoneThemeApp({
             />
             <p style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-icon)", lineHeight: 1.4 }}>
               {"安卓部分浏览器不能全屏（底部被真实状态栏顶出屏幕）时调大：把整块画面上移、裁掉顶部状态栏占位，让底部栏回到屏幕内。调到刚好铺满即可（约等于真实状态栏高度）。iOS 能正常全屏，保持 0。"}
+            </p>
+          </div>
+        </ContentDialog>,
+        document.querySelector(".phone-shell") ?? document.body
+      )}
+      {showShellMode && createPortal(
+        <ContentDialog
+          title={"显示形态"}
+          confirmLabel={"确定"}
+          cancelLabel={undefined}
+          onConfirm={() => setShowShellMode(false)}
+          onCancel={() => setShowShellMode(false)}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {([
+              { value: "auto", label: "自动（推荐）", desc: "按设备特征自动选择手机壳或桌面模拟器。" },
+              { value: "phone", label: "手机壳全屏", desc: "明明是手机却看到一圈\u201c壳\u201d或居中小屏时选这个（浏览器谎报了视口）。" },
+              { value: "desktop", label: "桌面模拟器", desc: "被误判成手机的大屏触控设备用；真手机上选择无效。" },
+            ] as Array<{ value: ShellModeOverride; label: string; desc: string }>).map(option => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  writeShellModeOverride(option.value);
+                  setShellMode(option.value);
+                  onNotice("显示形态已切换，部分布局重启应用后完全生效");
+                }}
+                style={{
+                  textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+                  border: shellMode === option.value ? "1.5px solid var(--c-success)" : "1px solid var(--c-input-border)",
+                  background: shellMode === option.value ? "color-mix(in srgb, var(--c-success) 8%, transparent)" : "transparent",
+                  color: "var(--c-text)",
+                }}
+              >
+                <div style={{ fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 600, marginBottom: 2 }}>
+                  {shellMode === option.value ? "● " : "○ "}{option.label}
+                </div>
+                <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-icon)", lineHeight: 1.5 }}>{option.desc}</div>
+              </button>
+            ))}
+            <p style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-icon)", lineHeight: 1.5, margin: 0 }}>
+              {"选择存在本机。切换会立即调整壳判定与缩放，个别深层布局在下次启动后完全对齐。"}
             </p>
           </div>
         </ContentDialog>,

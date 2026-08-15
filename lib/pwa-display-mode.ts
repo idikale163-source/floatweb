@@ -1,3 +1,5 @@
+import { shellChannel } from "./mobile-shell";
+
 export type PwaDisplayPreference = "fullscreen" | "standalone";
 export type RuntimePwaDisplayMode = "fullscreen" | "standalone" | "minimal-ui" | "browser";
 export type PwaHostedSurface = "custom-app" | "game";
@@ -49,12 +51,16 @@ export function writePwaDisplayPreference(preference: PwaDisplayPreference) {
   window.dispatchEvent(new CustomEvent(PWA_DISPLAY_MODE_CHANGED_EVENT, { detail: preference }));
 }
 
-/** Preserve the upstream default: mobile browsers request fullscreen unless Edge or explicitly disabled. */
+/** 是否请求沉浸全屏。优先级：用户显式偏好 > 渠道默认。
+ *  beta 渠道（测试站）没动过偏好时不强制全屏——延续测试线既有行为；
+ *  想要沉浸的测试用户把「显示系统状态栏」开关拨开再拨回即可（写入显式 fullscreen）。
+ *  stable 渠道保持主线默认：除 Edge 外点击即请求全屏。 */
 export function shouldRequestPwaFullscreen(): boolean {
   if (typeof document === "undefined" || typeof navigator === "undefined") return false;
   const preference = readPwaDisplayPreference(document.cookie);
   if (preference === "standalone") return false;
   if (preference === "fullscreen") return true;
+  if (shellChannel() === "beta") return false;
   return !/Edg/i.test(navigator.userAgent);
 }
 
