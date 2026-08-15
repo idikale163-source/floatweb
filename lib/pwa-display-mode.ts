@@ -1,6 +1,8 @@
 import { shellChannel } from "./mobile-shell";
 
-export type PwaDisplayPreference = "fullscreen" | "standalone";
+/** fullscreen=沉浸全屏 / browser=标准（不强制全屏，保留应用状态栏）/ standalone=显示系统状态栏。
+ *  未设置时走渠道默认（见 shouldRequestPwaFullscreen）。 */
+export type PwaDisplayPreference = "fullscreen" | "browser" | "standalone";
 export type RuntimePwaDisplayMode = "fullscreen" | "standalone" | "minimal-ui" | "browser";
 export type PwaHostedSurface = "custom-app" | "game";
 
@@ -42,7 +44,7 @@ export function readPwaDisplayPreference(cookie: string): PwaDisplayPreference |
   const match = cookie.match(new RegExp(`(?:^|;\\s*)${PWA_DISPLAY_MODE_COOKIE}=([^;]+)`));
   if (!match) return null;
   const value = decodeCookieValue(match[1]);
-  return value === "fullscreen" || value === "standalone" ? value : null;
+  return value === "fullscreen" || value === "browser" || value === "standalone" ? value : null;
 }
 
 export function writePwaDisplayPreference(preference: PwaDisplayPreference) {
@@ -58,7 +60,7 @@ export function writePwaDisplayPreference(preference: PwaDisplayPreference) {
 export function shouldRequestPwaFullscreen(): boolean {
   if (typeof document === "undefined" || typeof navigator === "undefined") return false;
   const preference = readPwaDisplayPreference(document.cookie);
-  if (preference === "standalone") return false;
+  if (preference === "standalone" || preference === "browser") return false;
   if (preference === "fullscreen") return true;
   if (shellChannel() === "beta") return false;
   return !/Edg/i.test(navigator.userAgent);

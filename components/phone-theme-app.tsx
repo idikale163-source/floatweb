@@ -24,8 +24,8 @@ import type { DesktopIconLayout } from "@/lib/desktop-layout-storage";
 import { CUSTOM_APPS_UPDATED_EVENT, loadInstalledCustomApps } from "@/lib/custom-app-storage";
 import { toCustomAppIconId, type InstalledCustomApp } from "@/lib/custom-app-types";
 import { PageShell } from "@/components/ui/page-shell";
-import { readPwaDisplayPreference, writePwaDisplayPreference } from "@/lib/pwa-display-mode";
-import { readShellModeOverride, writeShellModeOverride, type ShellModeOverride } from "@/lib/mobile-shell";
+import { readPwaDisplayPreference, writePwaDisplayPreference, type PwaDisplayPreference } from "@/lib/pwa-display-mode";
+import { readShellModeOverride, writeShellModeOverride, shellChannel, type ShellModeOverride } from "@/lib/mobile-shell";
 import {
   GRID_COLS,
   GRID_ROWS,
@@ -200,7 +200,8 @@ export function PhoneThemeApp({
   const [showStatusBarAdjust, setShowStatusBarAdjust] = useState(false);
   const [showShellMode, setShowShellMode] = useState(false);
   const [shellMode, setShellMode] = useState<ShellModeOverride>("auto");
-  const [systemBarShown, setSystemBarShown] = useState(() => typeof document !== "undefined" && readPwaDisplayPreference(document.cookie) === "standalone");
+  // 屏幕形态：未设置偏好时展示渠道默认挡位（beta=标准 / stable=沉浸全屏）
+  const [screenPref, setScreenPref] = useState<PwaDisplayPreference>("fullscreen");
   const [showTextAdjust, setShowTextAdjust] = useState(false);
   const [showThemeTransfer, setShowThemeTransfer] = useState(false);
   const [themeTransferBusy, setThemeTransferBusy] = useState(false);
@@ -319,7 +320,11 @@ export function PhoneThemeApp({
                 {(() => {
                   const caseItem = MENU_ITEMS.find(i => i.section === "case")!;
                   return (
-                    <div className="menu-item cursor-pointer" onClick={() => setShowStatusBarAdjust(true)}>
+                    <div className="menu-item cursor-pointer" onClick={() => {
+                        const stored = readPwaDisplayPreference(document.cookie);
+                        setScreenPref(stored ?? (shellChannel() === "beta" ? "browser" : "fullscreen"));
+                        setShowStatusBarAdjust(true);
+                      }}>
                       <span className="card-icon" style={menuIconStyle(caseItem.color)}><caseItem.icon /></span>
                       <span className="menu-label appearance-menu-item-label">{caseItem.label}</span>
                       <label
@@ -535,28 +540,36 @@ export function PhoneThemeApp({
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)" }}>{"显示系统状态栏"}</span>
-              <label className="block w-10 h-[22px] cursor-pointer relative shrink-0" onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  checked={systemBarShown}
-                  onChange={(e) => {
-                    const shown = e.target.checked;
-                    setSystemBarShown(shown);
-                    writePwaDisplayPreference(shown ? "standalone" : "fullscreen");
-                    if (shown && document.fullscreenElement) void document.exitFullscreen?.().catch(() => {});
-                    onNotice(shown ? "已开启系统状态栏，重新添加到桌面后完全生效" : "已恢复沉浸全屏，重新添加到桌面后完全生效");
-                  }}
-                  className="w-full h-full rounded-[11px] m-0 outline-none"
-                  style={{ appearance: "none", backgroundColor: systemBarShown ? "var(--c-success)" : "var(--c-page-body-bg)", border: systemBarShown ? "none" : "1px solid var(--c-input-border)", transition: "0.2s" }}
-                />
-                <div className="absolute w-[18px] h-[18px] bg-white rounded-full top-[2px] pointer-events-none" style={{ left: systemBarShown ? 20 : 2, transition: "0.2s", boxShadow: "0 2px 4px rgba(0,0,0,0.15)" }} />
-              </label>
-            </div>
-            <p style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-icon)", lineHeight: 1.4 }}>
-              {"显示手机系统自己的状态栏（时间/电量/通知），退出沉浸全屏，安卓不再反复弹全屏提示。开启后本页的虚拟状态栏不再显示；已装到桌面的需删除后重新「添加到主屏幕」才完全生效。"}
-            </p>
+            <div style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)", fontWeight: 600 }}>{"屏幕形态"}</div>
+            {([
+              { value: "fullscreen", label: "沉浸全屏", desc: "无状态栏，点一下屏幕进入全屏。" },
+              { value: "browser", label: "标准", desc: "不强制全屏，保留应用自己的状态栏。" },
+              { value: "standalone", label: "显示系统状态栏", desc: "显示手机系统的状态栏（时间/电量/通知）；已装到桌面的需删除后重新「添加到主屏幕」才完全生效。" },
+            ] as Array<{ value: PwaDisplayPreference; label: string; desc: string }>).map(option => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  writePwaDisplayPreference(option.value);
+                  setScreenPref(option.value);
+                  if (option.value !== "fullscreen" && document.fullscreenElement) void document.exitFullscreen?.().catch(() => {});
+                  onNotice(option.value === "standalone"
+                    ? "已开启系统状态栏，重新添加到桌面后完全生效"
+                    : option.value === "fullscreen" ? "已选择沉浸全屏，点一下屏幕进入" : "已选择标准形态");
+                }}
+                style={{
+                  textAlign: "left", padding: "9px 12px", borderRadius: 10, cursor: "pointer",
+                  border: screenPref === option.value ? "1.5px solid var(--c-success)" : "1px solid var(--c-input-border)",
+                  background: screenPref === option.value ? "color-mix(in srgb, var(--c-success) 8%, transparent)" : "transparent",
+                  color: "var(--c-text)",
+                }}
+              >
+                <div style={{ fontSize: "calc(13px*var(--app-text-scale,1))", fontWeight: 600, marginBottom: 2 }}>
+                  {screenPref === option.value ? "● " : "○ "}{option.label}
+                </div>
+                <div style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "var(--c-icon)", lineHeight: 1.5 }}>{option.desc}</div>
+              </button>
+            ))}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text)" }}>{"顶部偏移"}</span>
               <span style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "var(--c-text-title)", fontWeight: 600 }}>{statusBarTop}px</span>
