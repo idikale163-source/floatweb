@@ -40,7 +40,7 @@ import { CharacterComputerPage } from "./character-computer-page";
 import { resolveUserIdentity, loadBindingConfig, loadPresets, resolveBinding } from "@/lib/settings-storage";
 import { getStatusRegionConfig, saveStatusRegionConfig, presetSupportsStatusRegion, isCustomStatusRegionActive, type StatusRegionConfig } from "@/lib/chat-status-region";
 import { CustomStatusFrame } from "@/components/chat/custom-status-frame";
-import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Laptop, Trash2, Smile, Sparkles, type LucideIcon } from "lucide-react";
+import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Laptop, Trash2, Smile, Sparkles, X, RotateCw, type LucideIcon } from "lucide-react";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { ConfirmDialog } from "@/components/ui/modal";
@@ -1381,15 +1381,15 @@ export function ChatSettingsPanel({
             {showStatusRegionDialog && (
                 <div className="fixed inset-0 z-[10030] flex items-end justify-center bg-black/45 sm:items-center" role="dialog" aria-modal="true" aria-label="自定义状态栏">
                     <div className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-[var(--c-page-body-bg)] text-[var(--c-text)] shadow-2xl sm:rounded-2xl">
-                        <div className="flex items-center justify-between border-b border-[var(--c-panel-border)] px-5 py-3">
-                            <div>
-                                <div className="font-bold">自定义状态栏</div>
-                                <div className="mt-0.5 ts-10 opacity-60">AI 每轮只输出数据（契约），画法由渲染代码固定——外层标签固定为 [状态栏]...[/状态栏]</div>
-                            </div>
-                            <button type="button" className="px-2 py-1 font-semibold" onClick={() => setShowStatusRegionDialog(false)}>关闭</button>
+                        <div className="flex items-center justify-between px-5 pb-2 pt-4">
+                            <div className="font-bold">自定义状态栏</div>
+                            <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="关闭" onClick={() => setShowStatusRegionDialog(false)}><X size={18} /></button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-4">
-                            <div className="ts-11 font-semibold opacity-80">① 输出契约（写进提示词，告诉 AI 壳内输出什么）</div>
+                        <div className="flex-1 overflow-y-auto px-4 pb-4">
+                            <div className="flex items-baseline justify-between px-1">
+                                <span className="ts-11 font-semibold">输出契约</span>
+                                <span className="ts-10 opacity-40">AI 每轮照此输出</span>
+                            </div>
                             <textarea
                                 value={draftContract}
                                 onChange={e => setDraftContract(e.target.value)}
@@ -1397,7 +1397,10 @@ export function ChatSettingsPanel({
                                 style={{ minHeight: 110, fontSize: 12, lineHeight: 1.6 }}
                                 spellCheck={false}
                             />
-                            <div className="mt-3 ts-11 font-semibold opacity-80">② 输出渲染（HTML+CSS+JS，沙盒运行；数据经 window.STATUS_RAW 或 {"{{RAW}}"} 注入）</div>
+                            <div className="mt-3 flex items-baseline justify-between px-1">
+                                <span className="ts-11 font-semibold">输出渲染</span>
+                                <span className="ts-10 opacity-40">HTML · 沙盒运行</span>
+                            </div>
                             <textarea
                                 value={draftRender}
                                 onChange={e => setDraftRender(e.target.value)}
@@ -1405,9 +1408,12 @@ export function ChatSettingsPanel({
                                 style={{ minHeight: 180, fontSize: 12, lineHeight: 1.6 }}
                                 spellCheck={false}
                             />
-                            <div className="mt-3 flex items-center justify-between">
-                                <span className="ts-11 font-semibold opacity-80">③ 预览（用下方示例数据渲染）</span>
-                                <button type="button" className="ui-btn ui-btn-ghost h-7 px-3 ts-11" onClick={() => setPreviewHtml(draftRender)}>刷新预览</button>
+                            <div className="mt-3 flex items-center justify-between px-1">
+                                <div className="flex items-baseline gap-2">
+                                    <span className="ts-11 font-semibold">预览</span>
+                                    <span className="ts-10 opacity-40">示例数据可改</span>
+                                </div>
+                                <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="刷新预览" onClick={() => setPreviewHtml(draftRender)}><RotateCw size={15} /></button>
                             </div>
                             <textarea
                                 value={statusPreviewRaw}
@@ -1421,9 +1427,6 @@ export function ChatSettingsPanel({
                                     <CustomStatusFrame key={previewHtml + statusPreviewRaw} html={previewHtml} raw={statusPreviewRaw} />
                                 </div>
                             )}
-                            <p className="mt-3 ts-10 leading-relaxed opacity-55">
-                                {"保存后：AI 按契约输出，聊天折叠区由渲染代码接管（数值面板保留）；原生时期的消息不受影响，可随时切回。若启用了改写 [状态栏] 的正则，两者会互相竞争。"}
-                            </p>
                         </div>
                         <div className="flex gap-2 border-t border-[var(--c-panel-border)] px-5 py-3">
                             <button
