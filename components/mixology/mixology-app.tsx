@@ -8,12 +8,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Archive,
     ChevronLeft,
+    Download,
     GlassWater,
     Martini,
     Pencil,
     Plus,
     Share2,
     Trash2,
+    Upload,
     Users,
     Wine,
     X,
@@ -42,6 +44,7 @@ import {
     type MixSession,
 } from "@/lib/mixology/types";
 import { shareHallMaterial, shareHallRecipe } from "@/lib/mixology/hall-client";
+import { exportMixMaterial, parseMixMaterialsFromJson } from "@/lib/mixology/transfer";
 import { MixMaterialEditor } from "./mixology-editor";
 import { MixologyGame } from "./mixology-game";
 import { MixologyHall } from "./mixology-hall";
@@ -172,6 +175,19 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     };
 
     const [sharing, setSharing] = useState(false);
+    const importFileRef = useRef<HTMLInputElement | null>(null);
+
+    const handleImportFile = async (file: File | undefined) => {
+        if (!file) return;
+        try {
+            const materials = parseMixMaterialsFromJson(await file.text());
+            materials.forEach(saveMixMaterial);
+            refresh();
+            showToast(materials.length > 1 ? `已导入 ${materials.length} 件材料。` : `「${materials[0].name}」已入柜。`);
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : "导入失败");
+        }
+    };
 
     const handleShareMaterial = async (material: MixMaterial) => {
         if (sharing) return;
@@ -245,7 +261,10 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                 <button type="button" className="mix-icon-btn" onClick={onClose} aria-label="关闭"><ChevronLeft size={20} /></button>
                 <div className="mix-header-title">独家<em>特调</em></div>
                 {tab === "cabinet" ? (
-                    <button type="button" className="mix-icon-btn" onClick={() => setKindPickerOpen(true)} aria-label="新建材料"><Plus size={19} /></button>
+                    <>
+                        <button type="button" className="mix-icon-btn" onClick={() => importFileRef.current?.click()} aria-label="导入材料" title="从文件导入"><Upload size={17} /></button>
+                        <button type="button" className="mix-icon-btn" onClick={() => setKindPickerOpen(true)} aria-label="新建材料"><Plus size={19} /></button>
+                    </>
                 ) : null}
             </div>
 
@@ -453,6 +472,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 {detail.name}
                                 {isMixBuiltinId(detail.id) ? <span className="mix-mat-badge" style={{ marginLeft: 6 }}>官方</span> : null}
                             </div>
+                            <button type="button" className="mix-icon-btn" onClick={() => exportMixMaterial(detail)} aria-label="导出为文件" title="导出为文件"><Download size={16} /></button>
                             {!isMixBuiltinId(detail.id) ? (
                                 <>
                                     <button type="button" className="mix-icon-btn" onClick={() => void handleShareMaterial(detail)} disabled={sharing} aria-label="分享到酒单" title="分享到酒单"><Share2 size={16} /></button>
@@ -621,6 +641,14 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                     </div>
                 </div>
             ) : null}
+
+            <input
+                ref={importFileRef}
+                type="file"
+                accept="application/json,.json"
+                style={{ display: "none" }}
+                onChange={(e) => { void handleImportFile(e.target.files?.[0]); e.target.value = ""; }}
+            />
 
             {toast ? <div className="mix-toast">{toast}</div> : null}
         </div>

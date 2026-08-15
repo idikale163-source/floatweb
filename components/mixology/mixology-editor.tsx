@@ -4,6 +4,7 @@
 // Phase ③ 先给够用的表单闭环，创作工坊阶段再上专业编辑体验。
 
 import { useRef, useState, type ReactNode } from "react";
+import { Play, Plus, Trash2 } from "lucide-react";
 import type {
     MixCharacterCard,
     MixMaterial,
@@ -11,6 +12,7 @@ import type {
     MixTextMaterial,
 } from "@/lib/mixology/types";
 import { createMixId, MIX_KIND_LABELS } from "@/lib/mixology/types";
+import { MixPreviewSheet, type MixPreviewTarget } from "./mixology-preview";
 
 const OPENING_SEPARATOR = "\n---\n";
 
@@ -76,6 +78,9 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
     const [extra, setExtra] = useState(initialCard?.extra ?? "");
     const [openingsText, setOpeningsText] = useState(initialCard?.openings.join(OPENING_SEPARATOR) ?? "");
     const [authorNote, setAuthorNote] = useState(initialCard?.authorNote ?? "");
+    const [examples, setExamples] = useState<{ role: "user" | "char"; text: string }[]>(
+        initialCard?.examples ? initialCard.examples.map((e) => ({ ...e })) : [],
+    );
     // 文本类 / 小票 / 装饰 / 尾调
     const [content, setContent] = useState(
         initial && "content" in initial ? (initial as MixTextMaterial).content : "",
@@ -86,6 +91,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
     const [css, setCss] = useState(initial?.kind === "garnish" ? initial.css : "");
     const [html, setHtml] = useState(initial?.kind === "encore" ? initial.html : "");
     const [error, setError] = useState("");
+    const [preview, setPreview] = useState<MixPreviewTarget | null>(null);
     const fileRef = useRef<HTMLInputElement | null>(null);
 
     const handleCoverFile = async (file: File | undefined) => {
@@ -136,7 +142,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                 plot: plot.trim() || undefined,
                 extra: extra.trim() || undefined,
                 openings,
-                examples: initialCard?.examples,
+                examples: examples.filter((e) => e.text.trim()).map((e) => ({ role: e.role, text: e.text.trim() })),
                 authorNote: authorNote.trim() || undefined,
             };
             onSave(card);
@@ -220,6 +226,51 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     <Field label="开场白" hint="必填，多段用单独一行 --- 分隔">
                         <textarea className="mix-textarea" style={{ minHeight: 120 }} value={openingsText} onChange={(e) => setOpeningsText(e.target.value)} />
                     </Field>
+                    <Field label="示例对话" hint="文风锚点，不是已发生的剧情">
+                        <div className="mix-example-list">
+                            {examples.map((example, i) => (
+                                <div className="mix-example-row" key={i}>
+                                    <button
+                                        type="button"
+                                        className="mix-example-role"
+                                        data-role={example.role}
+                                        onClick={() => setExamples((prev) => prev.map((e, idx) => (
+                                            idx === i ? { ...e, role: e.role === "user" ? "char" : "user" } : e
+                                        )))}
+                                    >
+                                        {example.role === "user" ? "玩家" : "角色"}
+                                    </button>
+                                    <textarea
+                                        className="mix-textarea"
+                                        style={{ minHeight: 56 }}
+                                        value={example.text}
+                                        onChange={(e) => setExamples((prev) => prev.map((item, idx) => (
+                                            idx === i ? { ...item, text: e.target.value } : item
+                                        )))}
+                                        placeholder={example.role === "user" ? "玩家会怎么说" : "角色该怎么答"}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="mix-icon-btn"
+                                        onClick={() => setExamples((prev) => prev.filter((_, idx) => idx !== i))}
+                                        aria-label="删除这轮"
+                                    >
+                                        <Trash2 size={15} />
+                                    </button>
+                                </div>
+                            ))}
+                            <button
+                                type="button"
+                                className="mix-pill-btn"
+                                onClick={() => setExamples((prev) => [
+                                    ...prev,
+                                    { role: prev.length && prev[prev.length - 1].role === "user" ? "char" : "user", text: "" },
+                                ])}
+                            >
+                                <Plus size={13} style={{ verticalAlign: "-2px" }} /> 加一轮
+                            </button>
+                        </div>
+                    </Field>
                     <Field label="作者的话" hint="仅展示，不进提示词">
                         <textarea className="mix-textarea" value={authorNote} onChange={(e) => setAuthorNote(e.target.value)} />
                     </Field>
@@ -238,21 +289,53 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     <Field label="渲染代码" hint="必填，HTML/JS，数据经 {{RAW}} 或 window.TICKET_RAW 注入">
                         <textarea className="mix-textarea" data-code="true" style={{ minHeight: 170 }} value={renderHtml} onChange={(e) => setRenderHtml(e.target.value)} />
                     </Field>
-                    <Field label="预览示例数据">
+                    <Field label="预览示例数据" hint="模拟 AI 每轮吐出的内容">
                         <textarea className="mix-textarea" data-code="true" value={previewRaw} onChange={(e) => setPreviewRaw(e.target.value)} />
                     </Field>
+                    <button
+                        type="button"
+                        className="mix-pill-btn"
+                        style={{ marginTop: 10 }}
+                        onClick={() => setPreview({ kind: "ticket", html: renderHtml, raw: previewRaw })}
+                        disabled={!renderHtml.trim()}
+                    >
+                        <Play size={13} style={{ verticalAlign: "-2px" }} /> 预览小票
+                    </button>
                 </>
             ) : null}
             {kind === "garnish" ? (
-                <Field label="装饰 CSS" hint="必填，认 .mix-prose / .mix-dialogue / .mix-thought / .mix-scene / .mix-accent 等官方类">
-                    <textarea className="mix-textarea" data-code="true" style={{ minHeight: 190 }} value={css} onChange={(e) => setCss(e.target.value)} />
-                </Field>
+                <>
+                    <Field label="装饰 CSS" hint="必填，认 .mix-prose / .mix-dialogue / .mix-thought / .mix-scene / .mix-accent 等官方类">
+                        <textarea className="mix-textarea" data-code="true" style={{ minHeight: 190 }} value={css} onChange={(e) => setCss(e.target.value)} />
+                    </Field>
+                    <button
+                        type="button"
+                        className="mix-pill-btn"
+                        style={{ marginTop: 10 }}
+                        onClick={() => setPreview({ kind: "garnish", css })}
+                        disabled={!css.trim()}
+                    >
+                        <Play size={13} style={{ verticalAlign: "-2px" }} /> 试穿看看
+                    </button>
+                </>
             ) : null}
             {kind === "encore" ? (
-                <Field label="尾调 HTML" hint="必填，沙盒 iframe 内运行">
-                    <textarea className="mix-textarea" data-code="true" style={{ minHeight: 190 }} value={html} onChange={(e) => setHtml(e.target.value)} />
-                </Field>
+                <>
+                    <Field label="尾调 HTML" hint="必填，沙盒 iframe 内运行">
+                        <textarea className="mix-textarea" data-code="true" style={{ minHeight: 190 }} value={html} onChange={(e) => setHtml(e.target.value)} />
+                    </Field>
+                    <button
+                        type="button"
+                        className="mix-pill-btn"
+                        style={{ marginTop: 10 }}
+                        onClick={() => setPreview({ kind: "encore", html })}
+                        disabled={!html.trim()}
+                    >
+                        <Play size={13} style={{ verticalAlign: "-2px" }} /> 跑一下
+                    </button>
+                </>
             ) : null}
+            {preview ? <MixPreviewSheet target={preview} onClose={() => setPreview(null)} /> : null}
             {error ? <div style={{ color: "#e2a3a3", fontSize: 12, marginTop: 12 }}>{error}</div> : null}
             <div className="mix-form-footer">
                 <button type="button" className="mix-ghost-btn" onClick={onCancel}>取消</button>

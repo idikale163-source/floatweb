@@ -1137,3 +1137,59 @@
     flex: 1;
     min-width: 0;
 }
+
+/* ── 创作工坊：示例对话编辑 · 装饰试穿台 ── */
+.mix-example-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.mix-example-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+}
+
+.mix-example-row .mix-textarea {
+    flex: 1;
+    min-width: 0;
+}
+
+.mix-example-role {
+    flex: 0 0 auto;
+    width: 44px;
+    padding: 8px 0;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--mix-dim);
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.mix-example-role[data-role="char"] {
+    background: rgba(141, 123, 245, 0.18);
+    color: var(--mix-violet);
+}
+
+.mix-example-role[data-role="user"] {
+    background: rgba(217, 176, 106, 0.14);
+    color: var(--mix-gold);
+}
+
+/* 装饰试穿台：模拟对局画面的底色，让 CSS 效果所见即所得 */
+.mix-garnish-stage {
+    margin-top: 8px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(11, 11, 16, 0.55), rgba(11, 11, 16, 0.94)), var(--mix-panel-2);
+    border: 1px solid var(--mix-line);
+}
+
+.mix-garnish-stage .mix-prose {
+    margin: 0;
+}
