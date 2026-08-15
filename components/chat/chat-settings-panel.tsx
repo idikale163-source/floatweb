@@ -1394,7 +1394,7 @@ export function ChatSettingsPanel({
                                 value={draftContract}
                                 onChange={e => setDraftContract(e.target.value)}
                                 className="ui-input mt-1 w-full font-mono"
-                                style={{ minHeight: 110, fontSize: 12, lineHeight: 1.6 }}
+                                style={{ minHeight: 110, fontSize: 12, lineHeight: 1.6, border: "none", borderRadius: 12, background: "color-mix(in srgb, var(--c-text) 6%, transparent)" }}
                                 spellCheck={false}
                             />
                             <div className="mt-3 flex items-baseline justify-between px-1">
@@ -1405,7 +1405,7 @@ export function ChatSettingsPanel({
                                 value={draftRender}
                                 onChange={e => setDraftRender(e.target.value)}
                                 className="ui-input mt-1 w-full font-mono"
-                                style={{ minHeight: 180, fontSize: 12, lineHeight: 1.6 }}
+                                style={{ minHeight: 180, fontSize: 12, lineHeight: 1.6, border: "none", borderRadius: 12, background: "color-mix(in srgb, var(--c-text) 6%, transparent)" }}
                                 spellCheck={false}
                             />
                             <div className="mt-3 flex items-center justify-between px-1">
@@ -1419,16 +1419,16 @@ export function ChatSettingsPanel({
                                 value={statusPreviewRaw}
                                 onChange={e => setStatusPreviewRaw(e.target.value)}
                                 className="ui-input mt-1 w-full font-mono"
-                                style={{ minHeight: 56, fontSize: 11, lineHeight: 1.5 }}
+                                style={{ minHeight: 56, fontSize: 11, lineHeight: 1.5, border: "none", borderRadius: 12, background: "color-mix(in srgb, var(--c-text) 6%, transparent)" }}
                                 spellCheck={false}
                             />
                             {previewHtml.trim() && (
-                                <div className="mt-2 rounded-xl border border-dashed border-[var(--c-panel-border)] p-2">
+                                <div className="mt-2 rounded-xl p-2" style={{ background: "color-mix(in srgb, var(--c-text) 6%, transparent)" }}>
                                     <CustomStatusFrame key={previewHtml + statusPreviewRaw} html={previewHtml} raw={statusPreviewRaw} />
                                 </div>
                             )}
                         </div>
-                        <div className="flex gap-2 border-t border-[var(--c-panel-border)] px-5 py-3">
+                        <div className="flex gap-2 px-5 pb-4 pt-1">
                             <button
                                 type="button"
                                 className="ui-btn flex-1"
