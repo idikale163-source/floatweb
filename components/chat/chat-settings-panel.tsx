@@ -38,7 +38,7 @@ import { loadCharacters } from "@/lib/character-storage";
 import { isAgentComputerConfigured } from "@/lib/agent-computer";
 import { CharacterComputerPage } from "./character-computer-page";
 import { resolveUserIdentity, loadBindingConfig, loadPresets, resolveBinding } from "@/lib/settings-storage";
-import { getStatusRegionConfig, saveStatusRegionConfig, presetSupportsStatusRegion, isCustomStatusRegionActive, type StatusRegionConfig } from "@/lib/chat-status-region";
+import { getStatusRegionConfig, saveStatusRegionConfig, presetSupportsStatusRegion, isCustomStatusRegionActive, STATUS_REGION_SCHEME_TARGET, type StatusRegionConfig } from "@/lib/chat-status-region";
 import { downloadFile } from "@/lib/download-utils";
 import { getSchemes, saveScheme, deleteScheme, type CSSScheme } from "@/lib/css-scheme-storage";
 import { CustomStatusFrame } from "@/components/chat/custom-status-frame";
@@ -300,7 +300,7 @@ export function ChatSettingsPanel({
     const [previewHtml, setPreviewHtml] = useState("");
     const statusImportInputRef = useRef<HTMLInputElement | null>(null);
     // 状态栏方案库：复用 CSS 方案存储，负载为 JSON（契约+渲染+示例数据），全局跨会话
-    const STATUS_SCHEME_TARGET = "chat_status_region";
+    const STATUS_SCHEME_TARGET = STATUS_REGION_SCHEME_TARGET;
     const [showStatusSchemes, setShowStatusSchemes] = useState(false);
     const [statusSchemes, setStatusSchemes] = useState<CSSScheme[]>([]);
     const [statusSchemeName, setStatusSchemeName] = useState("");

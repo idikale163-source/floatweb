@@ -28,6 +28,9 @@ export type StatusRegionConfig = {
 const STORAGE_KEY = "ai_phone_chat_status_region_v1";
 registerKvMigration(STORAGE_KEY);
 
+/** 状态栏方案库在 css-scheme-storage 里的 target 键（负载=契约+渲染+示例数据 JSON） */
+export const STATUS_REGION_SCHEME_TARGET = "chat_status_region";
+
 export const STATUS_REGION_SECTION_MACRO = "{{statusRegionSection}}";
 export const STATUS_REGION_EXAMPLE_MACRO = "{{statusRegionExampleLine}}";
 export const STATUS_REGION_COMPOSITION_MACRO = "{{statusRegionComposition}}";
