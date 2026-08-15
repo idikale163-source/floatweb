@@ -7,6 +7,21 @@ export type PwaHostedSafeArea = {
   right: string;
   bottom: string;
   left: string;
+  /* 宿主顶部浮层（胶囊按钮/悬浮返回钮）所在行的几何：想跟宿主按钮同排摆自己
+     顶栏的应用用这组值贴行对齐，只需避开水平占位，不必整体让到 top 之下。 */
+  barTop: string;
+  barHeight: string;
+  barClearLeft: string;
+  barClearRight: string;
+};
+
+/** 宿主实测的浮层几何（px）；缺项用各表面的估算值兜底。 */
+export type PwaHostedOverlayMetrics = {
+  topPx?: number | null;
+  barTopPx?: number | null;
+  barHeightPx?: number | null;
+  barClearLeftPx?: number | null;
+  barClearRightPx?: number | null;
 };
 
 export const PWA_DISPLAY_MODE_COOKIE = "pwa_display_mode";
@@ -69,18 +84,26 @@ export function isNonImmersiveLayoutActive(): boolean {
 }
 
 /** Safe-area values injected into sandboxed apps, which cannot inherit host CSS variables.
- *  measuredTopPx：宿主实测的顶部浮层（胶囊按钮/悬浮返回钮）下沿，优先于估算值——
- *  壳布局以后再调整时数字不会失真。 */
-export function getPwaHostedSafeArea(surface: PwaHostedSurface, embedded = false, measuredTopPx?: number | null): PwaHostedSafeArea {
+ *  measured：宿主实测的浮层几何，优先于估算值——壳布局以后再调整时数字不会失真。
+ *  top 是"完全让开浮层"的保守值；bar* 描述浮层那一行本身，供想同排摆按钮的应用用。 */
+export function getPwaHostedSafeArea(surface: PwaHostedSurface, embedded = false, measured?: PwaHostedOverlayMetrics): PwaHostedSafeArea {
   if (embedded) {
-    return { top: "0px", right: "0px", bottom: "0px", left: "0px" };
+    return { top: "0px", right: "0px", bottom: "0px", left: "0px", barTop: "0px", barHeight: "0px", barClearLeft: "0px", barClearRight: "0px" };
   }
 
-  const fallbackTop = isNonImmersiveLayoutActive() ? (surface === "game" ? "60px" : "48px") : "88px";
+  const nonImmersive = isNonImmersiveLayoutActive();
+  const px = (value: number | null | undefined, fallback: number) =>
+    `${value != null && value > 0 ? Math.round(value) : fallback}px`;
+  // 兜底估算与两个浮层的 CSS 定位保持一致（app-market.css 胶囊 / game.css 悬浮返回钮）
+  const isGame = surface === "game";
   return {
-    top: measuredTopPx != null && measuredTopPx > 0 ? `${Math.round(measuredTopPx)}px` : fallbackTop,
+    top: px(measured?.topPx, nonImmersive ? (isGame ? 60 : 48) : 88),
     right: "16px",
     bottom: "24px",
     left: "16px",
+    barTop: px(measured?.barTopPx, isGame ? 38 : (nonImmersive ? 8 : 56)),
+    barHeight: px(measured?.barHeightPx, isGame ? 44 : 30),
+    barClearLeft: px(measured?.barClearLeftPx, isGame ? 66 : 0),
+    barClearRight: px(measured?.barClearRightPx, isGame ? 0 : 96),
   };
 }
