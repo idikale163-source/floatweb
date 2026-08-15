@@ -7,19 +7,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Archive,
-    BookOpen,
     ChevronLeft,
-    Feather,
-    Flame,
     GlassWater,
     Martini,
-    Music4,
     Pencil,
     Plus,
-    ReceiptText,
-    Sparkles,
+    Share2,
     Trash2,
-    UserRound,
+    Users,
     Wine,
     X,
 } from "lucide-react";
@@ -46,119 +41,13 @@ import {
     type MixRecipe,
     type MixSession,
 } from "@/lib/mixology/types";
+import { shareHallMaterial, shareHallRecipe } from "@/lib/mixology/hall-client";
 import { MixMaterialEditor } from "./mixology-editor";
 import { MixologyGame } from "./mixology-game";
+import { MixologyHall } from "./mixology-hall";
+import { KindGlyph, MatCard, MaterialDetail, formatMixTime } from "./mixology-shared";
 
-type MixTab = "menu" | "bar" | "cabinet" | "games";
-
-const KIND_ICONS: Record<MixMaterialKind, typeof UserRound> = {
-    character: UserRound,
-    base: BookOpen,
-    flavor: Feather,
-    glass: GlassWater,
-    strength: Flame,
-    ticket: ReceiptText,
-    garnish: Sparkles,
-    encore: Music4,
-};
-
-function KindGlyph({ kind, size = 26 }: { kind: MixMaterialKind; size?: number }) {
-    const Icon = KIND_ICONS[kind];
-    return <Icon size={size} strokeWidth={1.6} />;
-}
-
-function formatTime(ts: number): string {
-    const d = new Date(ts);
-    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-// ── 材料卡（瀑布用） ──
-
-function MaterialCard({ material, onClick }: { material: MixMaterial; onClick: () => void }) {
-    return (
-        <div className="mix-mat-card" data-kind={material.kind} onClick={onClick}>
-            {material.cover ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img className="mix-mat-cover" src={material.cover} alt={material.name} />
-            ) : (
-                <div className="mix-mat-glyph"><KindGlyph kind={material.kind} /></div>
-            )}
-            <div className="mix-mat-info">
-                <div className="mix-mat-name">
-                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{material.name}</span>
-                    {isMixBuiltinId(material.id) ? <span className="mix-mat-badge">官方</span> : null}
-                </div>
-                {material.hook ? <div className="mix-mat-hook">{material.hook}</div> : null}
-                {material.author && !isMixBuiltinId(material.id) ? <div className="mix-mat-author">@{material.author}</div> : null}
-            </div>
-        </div>
-    );
-}
-
-// ── 材料详情字段渲染 ──
-
-function DetailField({ label, value, code }: { label: string; value?: string; code?: boolean }) {
-    if (!value?.trim()) return null;
-    return (
-        <div className="mix-detail-field">
-            <div className="mix-detail-label">{label}</div>
-            <div className="mix-detail-value" data-code={code ? "true" : undefined}>{value}</div>
-        </div>
-    );
-}
-
-function MaterialDetail({ material }: { material: MixMaterial }) {
-    if (material.kind === "character") {
-        const card = material as MixCharacterCard;
-        return (
-            <>
-                <DetailField label="一句话介绍" value={card.hook} />
-                <DetailField label="基础信息" value={card.baseInfo} />
-                <DetailField label="性格" value={card.personality} />
-                <DetailField label="外貌" value={card.appearance} />
-                <DetailField label="背景" value={card.background} />
-                <DetailField label="世界观" value={card.worldview} />
-                <DetailField label="初始认知" value={card.cognition} />
-                <DetailField label="关系与身份" value={card.relations} />
-                <DetailField label="当前剧情" value={card.plot} />
-                <DetailField label="附加设定" value={card.extra} />
-                <DetailField label="开场白" value={card.openings.map((o, i) => `${card.openings.length > 1 ? `〔${i + 1}〕` : ""}${o}`).join("\n\n")} />
-                <DetailField label="作者的话" value={card.authorNote} />
-            </>
-        );
-    }
-    if (material.kind === "ticket") {
-        return (
-            <>
-                <DetailField label="一句话介绍" value={material.hook} />
-                <DetailField label="输出契约" value={material.contract} />
-                <DetailField label="渲染代码" value={material.renderHtml} code />
-            </>
-        );
-    }
-    if (material.kind === "garnish") {
-        return (
-            <>
-                <DetailField label="一句话介绍" value={material.hook} />
-                <DetailField label="装饰 CSS" value={material.css} code />
-            </>
-        );
-    }
-    if (material.kind === "encore") {
-        return (
-            <>
-                <DetailField label="一句话介绍" value={material.hook} />
-                <DetailField label="尾调 HTML" value={material.html} code />
-            </>
-        );
-    }
-    return (
-        <>
-            <DetailField label="一句话介绍" value={material.hook} />
-            <DetailField label={`${MIX_KIND_LABELS[material.kind]}内容`} value={material.content} />
-        </>
-    );
-}
+type MixTab = "menu" | "hall" | "bar" | "cabinet" | "games";
 
 // ── 主组件 ──
 
@@ -282,6 +171,48 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
         }
     };
 
+    const [sharing, setSharing] = useState(false);
+
+    const handleShareMaterial = async (material: MixMaterial) => {
+        if (sharing) return;
+        setSharing(true);
+        try {
+            await shareHallMaterial(material);
+            showToast(`「${material.name}」已分享到酒单。`);
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : "分享失败");
+        } finally {
+            setSharing(false);
+        }
+    };
+
+    const handleShareRecipe = async (recipe: MixRecipe) => {
+        if (sharing) return;
+        const materials = MIX_SLOT_ORDER
+            .map((k) => (recipe.slots[k] ? cabinet.find((m) => m.id === recipe.slots[k]) : null))
+            .filter((m): m is MixMaterial => Boolean(m));
+        const character = materials.find((m) => m.kind === "character");
+        if (!character || character.kind !== "character") {
+            showToast("这杯特调缺角色卡，没法分享。");
+            return;
+        }
+        setSharing(true);
+        try {
+            await shareHallRecipe({
+                name: recipe.name,
+                cover: character.cover ?? "",
+                charName: character.charName,
+                partNames: materials.filter((m) => m.kind !== "character").map((m) => m.name).slice(0, 8),
+                materials,
+            });
+            showToast(`「${recipe.name}」已分享到大厅。`);
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : "分享失败");
+        } finally {
+            setSharing(false);
+        }
+    };
+
     const handleDeleteMaterial = (material: MixMaterial) => {
         if (!deleteMixMaterial(material.id)) {
             showToast("官方出厂件不能删除。");
@@ -320,14 +251,11 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
 
             <div className="mix-body">
                 {tab === "menu" ? (
-                    <div className="mix-empty" style={{ paddingTop: 90 }}>
-                        <Martini size={40} strokeWidth={1.4} />
-                        酒单还在灯下打磨——
-                        <br />
-                        官网大厅开张后，这里会摆满大家分享的材料与配方。
-                        <br />
-                        先去吧台，用酒柜里的材料调一杯自己的。
-                    </div>
+                    <MixologyHall mode="menu" onToast={showToast} onImported={refresh} />
+                ) : null}
+
+                {tab === "hall" ? (
+                    <MixologyHall mode="hall" onToast={showToast} onImported={refresh} />
                 ) : null}
 
                 {tab === "bar" ? (
@@ -409,6 +337,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                         <div className="mix-recipe-actions">
                                             <button type="button" className="mix-pill-btn" data-tone="gold" onClick={() => handleStartRecipe(recipe)}>开始</button>
                                             <button type="button" className="mix-pill-btn" data-tone="ghost" onClick={() => { setBarSlots({ ...recipe.slots }); showToast("已装回吧台，可以微调。"); }}>装载</button>
+                                            <button type="button" className="mix-pill-btn" data-tone="ghost" onClick={() => void handleShareRecipe(recipe)} disabled={sharing}>分享</button>
                                             <button type="button" className="mix-pill-btn" data-tone="ghost" onClick={() => { deleteMixRecipe(recipe.id); refresh(); }}>删除</button>
                                         </div>
                                     </div>
@@ -438,7 +367,16 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                         ) : (
                             <div className="mix-waterfall">
                                 {cabinetFiltered.map((material) => (
-                                    <MaterialCard material={material} onClick={() => setDetail(material)} key={material.id} />
+                                    <MatCard
+                                        kind={material.kind}
+                                        name={material.name}
+                                        hook={material.hook}
+                                        cover={material.cover}
+                                        badge={isMixBuiltinId(material.id) ? "官方" : undefined}
+                                        author={!isMixBuiltinId(material.id) ? material.author : undefined}
+                                        onClick={() => setDetail(material)}
+                                        key={material.id}
+                                    />
                                 ))}
                             </div>
                         )}
@@ -470,7 +408,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                         )}
                                         <div className="mix-session-info">
                                             <div className="mix-session-name">{session.charName} · {session.recipe.name}</div>
-                                            <div className="mix-session-sub">{session.turns.length} 条 · {formatTime(session.updatedAt)}</div>
+                                            <div className="mix-session-sub">{session.turns.length} 条 · {formatMixTime(session.updatedAt)}</div>
                                         </div>
                                         <button
                                             type="button"
@@ -491,6 +429,9 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
             <div className="mix-nav">
                 <button type="button" className="mix-nav-btn" data-active={tab === "menu" ? "true" : undefined} onClick={() => setTab("menu")}>
                     <Wine size={19} strokeWidth={1.8} />酒单
+                </button>
+                <button type="button" className="mix-nav-btn" data-active={tab === "hall" ? "true" : undefined} onClick={() => setTab("hall")}>
+                    <Users size={19} strokeWidth={1.8} />大厅
                 </button>
                 <button type="button" className="mix-nav-btn" data-active={tab === "bar" ? "true" : undefined} onClick={() => setTab("bar")}>
                     <Martini size={19} strokeWidth={1.8} />吧台
@@ -514,6 +455,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             </div>
                             {!isMixBuiltinId(detail.id) ? (
                                 <>
+                                    <button type="button" className="mix-icon-btn" onClick={() => void handleShareMaterial(detail)} disabled={sharing} aria-label="分享到酒单" title="分享到酒单"><Share2 size={16} /></button>
                                     <button type="button" className="mix-icon-btn" onClick={() => { setEditor({ kind: detail.kind, initial: detail }); setDetail(null); }} aria-label="编辑"><Pencil size={16} /></button>
                                     <button type="button" className="mix-icon-btn" onClick={() => handleDeleteMaterial(detail)} aria-label="删除"><Trash2 size={16} /></button>
                                 </>
@@ -616,8 +558,12 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             ) : (
                                 <div className="mix-waterfall">
                                     {cabinet.filter((m) => m.kind === slotPicker).map((material) => (
-                                        <MaterialCard
-                                            material={material}
+                                        <MatCard
+                                            kind={material.kind}
+                                            name={material.name}
+                                            hook={material.hook}
+                                            cover={material.cover}
+                                            badge={isMixBuiltinId(material.id) ? "官方" : undefined}
                                             onClick={() => {
                                                 setBarSlots((prev) => ({ ...prev, [slotPicker]: material.id }));
                                                 setSlotPicker(null);

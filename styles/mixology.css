@@ -1032,3 +1032,108 @@
     animation: mixFadeIn 0.2s ease;
     pointer-events: none;
 }
+
+/* ── 酒单/大厅：数据行 · 点赞 · 评论 ── */
+.mix-mat-stats {
+    margin-top: 5px;
+    font-size: 10px;
+    color: var(--mix-faint);
+    line-height: 1.5;
+}
+
+.mix-like-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border: none;
+    border-radius: 999px;
+    padding: 5px 12px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--mix-dim);
+    font-size: 12px;
+    cursor: pointer;
+    flex: 0 0 auto;
+    transition: background 0.2s, color 0.2s;
+}
+
+.mix-like-btn[data-on="true"] {
+    background: rgba(217, 176, 106, 0.16);
+    color: var(--mix-gold);
+}
+
+.mix-comments {
+    padding-bottom: 6px;
+}
+
+.mix-comment {
+    padding: 10px 0 2px;
+    border-bottom: 1px solid var(--mix-line);
+}
+
+.mix-comment[data-depth="1"] {
+    margin-left: 16px;
+    border-bottom: none;
+    padding-top: 8px;
+}
+
+.mix-comment-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+}
+
+.mix-comment-author {
+    color: var(--mix-violet);
+    font-weight: 600;
+}
+
+.mix-comment-replyto {
+    color: var(--mix-faint);
+}
+
+.mix-comment-op {
+    border: none;
+    background: none;
+    color: var(--mix-faint);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 4px;
+}
+
+.mix-comment-content {
+    margin-top: 4px;
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: var(--mix-text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding-bottom: 8px;
+}
+
+.mix-comment-empty {
+    padding: 14px 0;
+    font-size: 12px;
+    color: var(--mix-faint);
+    text-align: center;
+}
+
+.mix-comment-replying {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--mix-gold);
+}
+
+.mix-comment-inputrow {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.mix-comment-inputrow .mix-input {
+    flex: 1;
+    min-width: 0;
+}
