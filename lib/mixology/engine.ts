@@ -54,7 +54,7 @@ function assembleFromSession(session: MixSession): MixAssembledPrompt {
     });
 }
 
-/** 历史回放时给 assistant 消息补回小票块，让模型看得到自己之前报过的状态 */
+/** 历史回放时给 assistant 消息补回状态栏块，让模型看得到自己之前报过的状态 */
 function turnToHistoryContent(turn: MixTurn): string {
     if (turn.role === "assistant" && turn.ticketRaw) {
         return `${turn.text}\n\n${MIX_TICKET_OPEN}\n${turn.ticketRaw}\n${MIX_TICKET_CLOSE}`;

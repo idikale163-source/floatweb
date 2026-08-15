@@ -1,7 +1,7 @@
 "use client";
 
 // 独家特调 · 小票渲染画布：小票材料的 renderHtml 在沙盒 iframe 里执行，
-// AI 的 [小票] 壳内原文通过 window.TICKET_RAW（JS 取用）与 {{RAW}}（模板直插，已转义）注入。
+// AI 的 [状态栏] 壳内原文通过 window.TICKET_RAW（JS 取用）与 {{RAW}}（模板直插，已转义）注入。
 // 高度自适应桥与自定义状态栏同款；allow-scripts 无 same-origin，碰不到宿主页面与数据。
 
 import { useEffect, useMemo, useRef, useState } from "react";

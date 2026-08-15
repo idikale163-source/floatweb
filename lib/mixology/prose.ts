@@ -5,7 +5,7 @@
 //   「对白」   → dialogue    *心声*   → thought（整句斜体）
 //   【场景】   → scene（独占一行，渲染成 — 场景 — 的过场行）
 //   ~强调~    → accent      其余     → narration（普通叙述）
-// 小票块 [小票]...[/小票] 在解析正文前剥离，交给沙盒 iframe 渲染。
+// 状态栏块 [状态栏]...[/状态栏] 在解析正文前剥离，交给沙盒 iframe 渲染。
 
 export type MixProseSegmentType = "dialogue" | "thought" | "accent" | "narration";
 
@@ -18,12 +18,13 @@ export type MixProseParagraph =
     | { type: "scene"; text: string }
     | { type: "text"; segments: MixProseSegment[] };
 
-const TICKET_BLOCK_RE = /\[小票\]([\s\S]*?)\[\/小票\]/g;
+// 兼容旧标签 [小票]：改名前开的局历史里还留着，别让它们的状态卡突然读不出来
+const TICKET_BLOCK_RE = /\[(状态栏|小票)\]([\s\S]*?)\[\/(?:状态栏|小票)\]/g;
 
-/** 从 AI 原文剥离小票块：返回干净正文 + 最后一个小票壳内原文 */
+/** 从 AI 原文剥离状态栏块：返回干净正文 + 最后一个壳内原文 */
 export function extractMixTicket(raw: string): { text: string; ticketRaw?: string } {
     let ticketRaw: string | undefined;
-    const text = raw.replace(TICKET_BLOCK_RE, (_all, inner: string) => {
+    const text = raw.replace(TICKET_BLOCK_RE, (_all, _tag: string, inner: string) => {
         const trimmed = inner.trim();
         if (trimmed) ticketRaw = trimmed;
         return "";

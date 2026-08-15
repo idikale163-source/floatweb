@@ -2,7 +2,7 @@
 // 独家特调 · 装配器：把一杯特调（角色卡 + 各槽材料）装配成提示词。
 //
 // 固定装配顺序（创作者不可调，保证"任意搭配都不散架"）：
-//   序言 → 基底 → 角色资料 → 世界与剧情 → 风味 → 杯型 → 小票契约 → 示例对话
+//   序言 → 基底 → 角色资料 → 世界与剧情 → 风味 → 杯型 → 状态栏契约 → 示例对话
 //   → [对话历史] → 浓度（离生成最近，权重最高）
 // 开场白作为首条 assistant 消息单独返回，不进系统提示词。
 // 所有材料文本支持 {{char}} / {{user}} 宏；空字段整段消失，不留空壳标题。
@@ -17,9 +17,10 @@ import type {
 
 export const MIX_DEFAULT_USER_NAME = "你";
 
-/** 小票壳标记：AI 每轮把状态数据放进这对标签，运行时剥出交给渲染 iframe */
-export const MIX_TICKET_OPEN = "[小票]";
-export const MIX_TICKET_CLOSE = "[/小票]";
+// 壳标记用「状态栏」而不是应用里的比喻词「小票」——提示词是写给模型看的，
+// 模型不知道"小票"是什么，但一眼能懂"状态栏"。
+export const MIX_TICKET_OPEN = "[状态栏]";
+export const MIX_TICKET_CLOSE = "[/状态栏]";
 
 export type MixAssembleInput = {
     character: MixCharacterCard;
@@ -72,12 +73,12 @@ const PREAMBLE = [
     "越靠后的要求优先级越高。",
 ].join("");
 
-/** 小票契约段：把 ticket 的 contract 包进固定壳指令 */
+/** 状态栏契约段：把小票材料的 contract 包进固定壳指令 */
 function ticketSection(ticket: MixTicketMaterial, charName: string, userName: string): string | null {
     const contract = ticket.contract.trim();
     if (!contract) return null;
     return [
-        "## 小票",
+        "## 状态栏",
         applyMixMacros(contract, charName, userName),
         `每轮正文结束后，把上述内容整块用 ${MIX_TICKET_OPEN}...${MIX_TICKET_CLOSE} 包裹，放在回复最末尾。`,
     ].join("\n");
