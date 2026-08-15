@@ -11,7 +11,7 @@ export type MixMaterialKind =
     | "base"      // 基底：扮演总纲
     | "flavor"    // 风味：文风
     | "glass"     // 杯型：输出格式
-    | "strength"  // 浓度：尾部强化（离生成最近、权重最高）
+    | "strength"  // 苦精：尾部强化（离生成最近、权重最高）
     | "ticket"    // 小票：状态数据卡（输出契约 + 渲染代码）
     | "garnish"   // 装饰：界面美化 CSS
     | "encore";   // 尾调：随卡互动 HTML 小品
@@ -21,7 +21,7 @@ export const MIX_KIND_LABELS: Record<MixMaterialKind, string> = {
     base: "基底",
     flavor: "风味",
     glass: "杯型",
-    strength: "浓度",
+    strength: "苦精",
     ticket: "小票",
     garnish: "装饰",
     encore: "尾调",
@@ -79,7 +79,7 @@ export type MixCharacterCard = MixMaterialMeta & {
     authorNote?: string;
 };
 
-/** 纯文本类材料：基底 / 风味 / 杯型 / 浓度 */
+/** 纯文本类材料：基底 / 风味 / 杯型 / 苦精 */
 export type MixTextMaterial = MixMaterialMeta & {
     kind: "base" | "flavor" | "glass" | "strength";
     content: string;

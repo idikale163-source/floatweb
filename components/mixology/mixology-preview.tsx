@@ -151,7 +151,7 @@ export function MixStructureSheet({ highlight, onClose }: { highlight?: string; 
                     <div className="mix-struct-list">
                         <div className="mix-struct-row" data-on={highlight === "strength" ? "true" : undefined}>
                             <div className="mix-struct-section">【最高优先级要求】</div>
-                            <div className="mix-struct-from">← 浓度（唯一放在历史之后的部分，离生成最近、最难被忘）</div>
+                            <div className="mix-struct-from">← 苦精（唯一放在历史之后的部分，离生成最近、最难被忘）</div>
                         </div>
                     </div>
 

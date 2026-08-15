@@ -35,8 +35,8 @@ const KIND_GUIDE: Record<MixMaterialKind, { what: string; where: string }> = {
         where: "落在提示词的「输出格式」。",
     },
     strength: {
-        what: "最后再叮嘱一遍的话，专治「说过又忘」。因为放在对话历史之后，模型最听得进去，所以别写长，挑一两条最要紧的。",
-        where: "放在对话历史之后、本轮生成之前，是唯一享受这个位置的材料。",
+        what: "调酒里的苦精按「滴」算，几滴就能把整杯的性格拧过来——这一味也一样。它排在所有对话之后，是模型动笔前看到的最后一句话，专治「说过又忘」。正因为位置太好，更要克制：挑一两条最要紧的，写长了反而稀释。",
+        where: "放在对话历史之后、本轮生成之前，标题是「最高优先级要求」，八味里只有它享受这个位置。",
     },
     ticket: {
         what: "每轮结束时角色额外「递」给你的一张数据卡片——好感度、当前心情、身上带了什么，都行。你定它报什么，也定它长什么样。",
@@ -52,7 +52,7 @@ const KIND_GUIDE: Record<MixMaterialKind, { what: string; where: string }> = {
     },
 };
 
-/** 文本类材料（基底/风味/杯型/浓度）的字段名与示例 */
+/** 文本类材料（基底/风味/杯型/苦精）的字段名与示例 */
 const TEXT_FIELD_COPY: Record<"base" | "flavor" | "glass" | "strength", { label: string; placeholder: string }> = {
     base: {
         label: "扮演总纲",
@@ -67,8 +67,8 @@ const TEXT_FIELD_COPY: Record<"base" | "flavor" | "glass" | "strength", { label:
         placeholder: "例：\n第三人称叙述，每轮 2~4 个自然段，段落之间空一行。\n- 说出口的话用「」包裹。\n- 没说出口的念头用 * * 包裹。\n- 在留有余韵处收笔，给{{user}}接话的空间。",
     },
     strength: {
-        label: "尾部强化",
-        placeholder: "例：\n始终保持{{char}}的克制感，不要替{{user}}总结感受。",
+        label: "最后叮嘱",
+        placeholder: "一两句就够，例：\n始终保持{{char}}的克制感，不要替{{user}}总结感受。",
     },
 };
 
