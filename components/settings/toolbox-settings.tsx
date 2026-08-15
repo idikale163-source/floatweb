@@ -1575,6 +1575,11 @@ export function ToolboxSettings() {
                                 <label className="menu-desc ml-1">服务器 URL</label>
                                 <Input value={editMcp.url} placeholder="https://mcp-server.example.com" onChange={e => setM({ url: e.target.value })} />
                             </div>
+                            <div className="flex items-center gap-2">
+                                <input type="checkbox" id={`mcp-direct-${editMcp.id}`} checked={editMcp.directFetch ?? false}
+                                    onChange={e => setM({ directFetch: e.target.checked })} />
+                                <label htmlFor={`mcp-direct-${editMcp.id}`} className="menu-desc">直连模式（浏览器直接请求，本机/内网 MCP 必开；需服务器允许 CORS，仅支持 Streamable HTTP）</label>
+                            </div>
                             <div className="flex flex-col gap-1">
                                 <label className="menu-desc ml-1">工具描述</label>
                                 <Input
