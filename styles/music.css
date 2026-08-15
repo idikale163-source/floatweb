@@ -1512,6 +1512,7 @@
 .music-discovery {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 12px 16px 120px;
     display: flex;
     flex-direction: column;
@@ -1615,7 +1616,7 @@
 
 .music-chart-grid {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
 }
 
