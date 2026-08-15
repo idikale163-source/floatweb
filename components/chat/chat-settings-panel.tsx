@@ -40,8 +40,9 @@ import { CharacterComputerPage } from "./character-computer-page";
 import { resolveUserIdentity, loadBindingConfig, loadPresets, resolveBinding } from "@/lib/settings-storage";
 import { getStatusRegionConfig, saveStatusRegionConfig, presetSupportsStatusRegion, isCustomStatusRegionActive, type StatusRegionConfig } from "@/lib/chat-status-region";
 import { downloadFile } from "@/lib/download-utils";
+import { getSchemes, saveScheme, deleteScheme, type CSSScheme } from "@/lib/css-scheme-storage";
 import { CustomStatusFrame } from "@/components/chat/custom-status-frame";
-import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Laptop, Trash2, Smile, Sparkles, X, Play, Upload, Download, type LucideIcon } from "lucide-react";
+import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Laptop, Trash2, Smile, Sparkles, X, Play, Upload, Download, Save, FolderOpen, type LucideIcon } from "lucide-react";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { ConfirmDialog } from "@/components/ui/modal";
@@ -298,6 +299,26 @@ export function ChatSettingsPanel({
     const [statusPreviewRaw, setStatusPreviewRaw] = useState("名字=林晚\n认证=美食探店博主 · 深夜觅食团成员\n简介=白天写方案，晚上寻宵夜｜私信不回工作请走邮箱\n关注=132\n粉丝=8.7万\n帖子=23分钟前|谁懂啊，加班到十点，楼下面馆居然还给我留了最后一碗牛肉面🥹 #深夜食堂# 老板说看我常来……突然就不想跳槽了|🍜🌃✨|56|203|1.2万\n评论=小奶糖|这就是深夜的意义吧|赞 231\n评论=风住了|老板收留我当洗碗工吧，只求管饭|赞 89\n评论=momo不吃香菜|蹲一个面馆定位！|赞 156");
     const [previewHtml, setPreviewHtml] = useState("");
     const statusImportInputRef = useRef<HTMLInputElement | null>(null);
+    // 状态栏方案库：复用 CSS 方案存储，负载为 JSON（契约+渲染+示例数据），全局跨会话
+    const STATUS_SCHEME_TARGET = "chat_status_region";
+    const [showStatusSchemes, setShowStatusSchemes] = useState(false);
+    const [statusSchemes, setStatusSchemes] = useState<CSSScheme[]>([]);
+    const [statusSchemeName, setStatusSchemeName] = useState("");
+    const [statusSchemeDeleteId, setStatusSchemeDeleteId] = useState<string | null>(null);
+    const applyStatusScheme = (scheme: CSSScheme) => {
+        try {
+            const parsed = JSON.parse(scheme.css) as Record<string, unknown>;
+            const contract = typeof parsed.contract === "string" ? parsed.contract : "";
+            const renderHtml = typeof parsed.renderHtml === "string" ? parsed.renderHtml : "";
+            if (!contract && !renderHtml) throw new Error("empty");
+            setDraftContract(contract);
+            setDraftRender(renderHtml);
+            if (typeof parsed.previewRaw === "string" && parsed.previewRaw) setStatusPreviewRaw(parsed.previewRaw);
+            setPreviewHtml(renderHtml);
+        } catch {
+            alert("方案数据损坏，无法应用");
+        }
+    };
     const exportStatusRegion = () => {
         const payload = { type: "ai-phone-status-region", version: 1, contract: draftContract, renderHtml: draftRender, previewRaw: statusPreviewRaw };
         void downloadFile(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), "自定义状态栏.json");
@@ -1514,6 +1535,7 @@ export function ChatSettingsPanel({
                         <div className="flex items-center justify-between px-5 pb-2 pt-4">
                             <div className="font-bold text-[var(--c-text-title)]">自定义状态栏</div>
                             <div className="flex items-center gap-1.5">
+                                <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="状态栏方案" onClick={() => { setStatusSchemes(getSchemes(STATUS_SCHEME_TARGET)); setStatusSchemeDeleteId(null); setShowStatusSchemes(v => !v); }}><FolderOpen size={16} /></button>
                                 <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="导入状态栏" onClick={() => statusImportInputRef.current?.click()}><Upload size={16} /></button>
                                 <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="导出状态栏" onClick={exportStatusRegion}><Download size={16} /></button>
                                 <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="关闭" onClick={() => setShowStatusRegionDialog(false)}><X size={18} /></button>
@@ -1521,6 +1543,38 @@ export function ChatSettingsPanel({
                             <input ref={statusImportInputRef} type="file" accept="application/json,.json" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importStatusRegion(f); e.target.value = ""; }} />
                         </div>
                         <div className="flex-1 overflow-y-auto px-4 pb-4">
+                            {showStatusSchemes && (
+                                <div className="mb-3 rounded-xl p-3" style={{ background: "color-mix(in srgb, var(--c-text) 6%, transparent)" }}>
+                                    <div className="ts-12 font-semibold text-[var(--c-text-title)]">方案</div>
+                                    {statusSchemes.length === 0 && <div className="mt-1 ts-11 opacity-45">还没有保存的方案</div>}
+                                    {statusSchemes.map(scheme => (
+                                        <div key={scheme.id} className="mt-1.5 flex items-center gap-2">
+                                            <button type="button" className="flex-1 truncate text-left ts-12" onClick={() => { applyStatusScheme(scheme); setShowStatusSchemes(false); }}>{scheme.name}</button>
+                                            {statusSchemeDeleteId === scheme.id ? (
+                                                <button type="button" className="ts-11 text-[var(--c-danger)]" onClick={() => { deleteScheme(scheme.id); setStatusSchemes(getSchemes(STATUS_SCHEME_TARGET)); setStatusSchemeDeleteId(null); }}>确认删除</button>
+                                            ) : (
+                                                <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label={`删除方案 ${scheme.name}`} onClick={() => setStatusSchemeDeleteId(scheme.id)}><Trash2 size={13} /></button>
+                                            )}
+                                        </div>
+                                    ))}
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <input
+                                            value={statusSchemeName}
+                                            onChange={e => setStatusSchemeName(e.target.value)}
+                                            placeholder="方案名称"
+                                            className="ui-input flex-1"
+                                            style={{ padding: "6px 10px", fontSize: 12, border: "none", borderRadius: 10, background: "var(--c-input)" }}
+                                        />
+                                        <button type="button" className="modal-header-btn modal-header-btn-muted" aria-label="保存当前为方案" onClick={() => {
+                                            const name = statusSchemeName.trim();
+                                            if (!name || !draftContract.trim() || !draftRender.trim()) return;
+                                            saveScheme(STATUS_SCHEME_TARGET, name, JSON.stringify({ contract: draftContract, renderHtml: draftRender, previewRaw: statusPreviewRaw }));
+                                            setStatusSchemes(getSchemes(STATUS_SCHEME_TARGET));
+                                            setStatusSchemeName("");
+                                        }}><Save size={15} /></button>
+                                    </div>
+                                </div>
+                            )}
                             <div className="flex items-baseline justify-between px-1">
                                 <span className="ts-12 font-semibold text-[var(--c-text-title)]">输出契约</span>
                                 <span className="ts-10 opacity-40">整节写进提示词</span>
