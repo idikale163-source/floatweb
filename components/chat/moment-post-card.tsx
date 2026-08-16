@@ -355,7 +355,7 @@ export function MomentPostCard({ post, onUpdate, onRequestDelete, onOpenCommentC
                     <div className="feed-post-photo-retry-stack">
                         <div className="feed-post-photo-retry-row">
                             <div
-                                className="feed-post-photo-description ts-13 italic leading-[1.8] opacity-80 text-[var(--c-text)] px-4 py-3 inline-block max-w-full"
+                                className="feed-post-photo-description ts-13 italic leading-[1.8] opacity-80 text-[var(--c-text)] px-4 py-3 block w-full"
                                 style={{ background: "color-mix(in srgb, var(--c-text) 10%, transparent)", borderRadius: 0, cursor: canRetryPhoto ? "pointer" : undefined }}
                                 onClick={canRetryPhoto ? (e => { e.stopPropagation(); setShowFallbackPreview(true); }) : undefined}
                             >
