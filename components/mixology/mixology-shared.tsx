@@ -139,19 +139,15 @@ export function isSealedMaterial(material: { kind: string; imported?: boolean })
     return Boolean(material.imported) && material.kind === "character";
 }
 
-/** 别人的角色卡：只给看门面，不摊开正文（与应用市场、游戏大厅同规矩） */
-export function SealedNote({ author, hook }: { author?: string; hook?: string }) {
+/**
+ * 别人的角色卡：设定正文不摊开，只留作者写给读者看的那两栏
+ *（与应用市场、游戏大厅同规矩）。
+ */
+export function SealedNote({ hook, authorNote }: { hook?: string; authorNote?: string }) {
     return (
         <>
-            {hook ? <DetailField label="一句话介绍" value={hook} /> : null}
-            <div className="mix-sealed">
-                <div className="mix-sealed-title">这张角色卡来自{author ? `创作者 @${author}` : "酒单"}</div>
-                <div className="mix-sealed-body">
-                    为保护创作者，站内不展示它的设定正文，也不能编辑或导出。
-                    <br />
-                    装进吧台直接开局即可，它在对局里照常生效。
-                </div>
-            </div>
+            <DetailField label="一句话介绍" value={hook} />
+            <DetailField label="作者的话" value={authorNote} />
         </>
     );
 }

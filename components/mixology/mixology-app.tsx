@@ -621,7 +621,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 <img src={detail.cover} alt={detail.name} style={{ width: 96, height: 128, objectFit: "cover", borderRadius: 12, margin: "4px 0 12px" }} />
                             ) : null}
                             {isSealedMaterial(detail)
-                                ? <SealedNote author={detail.author} hook={detail.hook} />
+                                ? <SealedNote hook={detail.hook} authorNote={(detail as MixCharacterCard).authorNote} />
                                 : <MaterialDetail material={detail} />}
                         </div>
                     </div>

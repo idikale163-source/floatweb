@@ -27,6 +27,7 @@ import { saveMixMaterial, saveMixRecipe } from "@/lib/mixology/storage";
 import {
     MIX_KIND_LABELS,
     MIX_SLOT_ORDER,
+    type MixCharacterCard,
     type MixMaterial,
     type MixMaterialKind,
     type MixRecipe,
@@ -475,7 +476,10 @@ export function MixologyHall({
                                 <>
                                     <div style={{ marginTop: 8 }}>
                                         {detailMaterial.kind === "character"
-                                            ? <SealedNote author={detailMaterial.authorName} hook={detailMaterial.hook} />
+                                            ? <SealedNote
+                                                hook={detailMaterial.hook}
+                                                authorNote={(detailMaterial.payload as MixCharacterCard).authorNote}
+                                            />
                                             : <MaterialDetail material={detailMaterial.payload} />}
                                     </div>
                                     <button type="button" className="mix-brew-btn" onClick={() => void importMaterial(detailMaterial)} disabled={busy}>
