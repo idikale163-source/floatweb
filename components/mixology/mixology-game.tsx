@@ -5,8 +5,8 @@
 // 装饰材料的 CSS 以 <style> 注入本画面容器（认 .mix-* 官方语义类）。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, Copy, CornerDownRight, History, Pencil, Plus, RotateCcw, Send, SlidersHorizontal, Undo2, X } from "lucide-react";
-import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, regenerateMixTail, rerollMixReply, truncateMixAfterTurn, undoMixLastRound } from "@/lib/mixology/engine";
+import { ChevronLeft, Copy, CornerDownRight, History, Pencil, Plus, RotateCcw, Send, SlidersHorizontal, X } from "lucide-react";
+import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, regenerateMixTail, rerollMixReply, truncateMixAfterTurn } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession, listMixMaterials, saveMixSession } from "@/lib/mixology/storage";
 import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, type MixCharacterCard, type MixMaterialKind, type MixSession, type MixTurn } from "@/lib/mixology/types";
 import { MixProseView } from "./prose-view";
@@ -223,7 +223,6 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
 
     const lastTurn = session.turns[session.turns.length - 1];
     const canReroll = !busy && lastTurn?.role === "assistant" && session.turns.length > 1;
-    const canUndo = !busy && session.turns.some((t) => t.role === "user");
 
     return (
         <div className="mix-game">
@@ -234,22 +233,6 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                 <div className="mix-game-title">{session.charName}</div>
                 <button type="button" className="mix-icon-btn" onClick={() => setRecipeOpen(true)} disabled={busy} aria-label="修改方案" title="修改方案">
                     <SlidersHorizontal size={17} />
-                </button>
-                <button
-                    type="button"
-                    className="mix-icon-btn"
-                    onClick={() => {
-                        try {
-                            undoMixLastRound(sessionId);
-                            setSession(getMixSession(sessionId));
-                        } catch (error) {
-                            onToast(error instanceof Error ? error.message : "撤回失败");
-                        }
-                    }}
-                    disabled={!canUndo}
-                    aria-label="撤回上一轮"
-                >
-                    <Undo2 size={17} />
                 </button>
             </div>
             <div className="mix-game-scroll" ref={scrollRef}>
