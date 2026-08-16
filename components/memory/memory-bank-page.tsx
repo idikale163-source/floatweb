@@ -45,7 +45,6 @@ const MEMORY_TOKEN_BUDGET_STEP: Record<MemoryBudgetKey, number> = {
     longTermTokenBudget: 1000,
 };
 const MANUAL_MEMORY_CONTENT_LIMIT = 3000;
-
 // 详情页时间线最多解析渲染的条数：全量历史可能有几万条，
 // 一次性解析+渲染会把 iOS Safari 的单页内存顶爆（灰屏杀页）
 const MEMORY_TIMELINE_ENTRY_CAP = 2000;
