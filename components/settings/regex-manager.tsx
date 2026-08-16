@@ -134,6 +134,9 @@ function HtmlPreviewFrame({ html }: { html: string }) {
             ref={iframeRef}
             srcDoc={srcDoc}
             title="正则渲染预览"
+            // 与聊天卡片同规格的沙箱：脚本可跑但跨源隔离——正则组可从别人处导入，
+            // 预览内容不可信，不加 sandbox 会让脚本摸到主应用的 localStorage/IndexedDB
+            sandbox="allow-scripts"
             style={{ width: "100%", height, border: "none", borderRadius: 12, background: "transparent" }}
         />
     );
