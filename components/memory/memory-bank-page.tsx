@@ -919,14 +919,13 @@ export function MemoryBankPage({ view, selectedCharId, onSelectChar, onNotice }:
 
                 {sourcePickerOpen ? (
                     <div className="modal-overlay modal-overlay-bottom" data-ui="modal" onClick={() => setSourcePickerOpen(false)}>
-                        <div className="modal-sheet" data-ui="modal-sheet" onClick={event => event.stopPropagation()}>
+                        <div className="modal-sheet memory-source-sheet" data-ui="modal-sheet" onClick={event => event.stopPropagation()}>
                             <div className="modal-header" data-ui="modal-header">
-                                <button className="modal-header-btn modal-header-btn-muted" onClick={() => setSourcePickerOpen(false)}><X size={18} /></button>
+                                <span style={{ width: 28 }} />
                                 <h3 className="modal-title">记忆来源</h3>
-                                <span style={{ width: 44 }} />
+                                <button className="modal-header-btn modal-header-btn-muted" onClick={() => setSourcePickerOpen(false)}><X size={18} /></button>
                             </div>
                             <div className="modal-body modal-body-tight" data-ui="modal-body">
-                                <p className="memory-source-note">关闭后，该来源的内容不进入上下文，也不参与长期总结；已跳过的内容重新开启后不会回补。</p>
                                 <div className="memory-source-chips" style={{ "--chip-accent": BINDING_ACCENTS.memory } as CSSProperties}>
                                     {MEMORY_SOURCE_OPTIONS.map(source => {
                                         const allowed = config.shortTermAllowedSources ?? {};

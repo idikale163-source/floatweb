@@ -2330,11 +2330,8 @@
 }
 
 /* ── 记忆来源选择弹层：等宽胶囊，每行三个 ── */
-.memory-source-note {
-  margin: 0 0 14px;
-  font-size: calc(10.8px*var(--app-text-scale,1));
-  color: var(--c-text);
-  line-height: 1.5;
+.memory-source-sheet .modal-header {
+  border-bottom: none;
 }
 
 .memory-source-chips {
