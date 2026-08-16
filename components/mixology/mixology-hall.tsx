@@ -26,6 +26,7 @@ import {
 import { saveMixMaterial, saveMixRecipe } from "@/lib/mixology/storage";
 import {
     MIX_KIND_LABELS,
+    MIX_KIND_SECTION_LABELS,
     MIX_SLOT_ORDER,
     mixKindHasCover,
     type MixCharacterCard,
@@ -377,8 +378,9 @@ export function MixologyHall({
     const chipRow = mode === "menu" ? (
         <div className="mix-chip-row">
             {MIX_SLOT_ORDER.map((k) => (
-                <button type="button" className="mix-chip" data-active={kind === k ? "true" : undefined} onClick={() => setKind(k)} key={k}>
-                    {MIX_KIND_LABELS[k]}
+                <button type="button" className="mix-chip" data-two-line="true" data-active={kind === k ? "true" : undefined} onClick={() => setKind(k)} key={k}>
+                    <span>{MIX_KIND_LABELS[k]}</span>
+                    <small>{MIX_KIND_SECTION_LABELS[k]}</small>
                 </button>
             ))}
         </div>

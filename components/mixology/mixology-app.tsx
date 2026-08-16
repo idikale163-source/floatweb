@@ -40,6 +40,7 @@ import { startMixSession } from "@/lib/mixology/engine";
 import {
     createMixId,
     MIX_KIND_LABELS,
+    MIX_KIND_SECTION_LABELS,
     MIX_SLOT_ORDER,
     mixKindHasCover,
     type MixCharacterCard,
@@ -67,7 +68,6 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     const [cabinetKind, setCabinetKind] = useState<MixMaterialKind>("character");
     const [detail, setDetail] = useState<MixMaterial | null>(null);
     const [editor, setEditor] = useState<{ kind: MixMaterialKind; initial?: MixMaterial } | null>(null);
-    const [kindPickerOpen, setKindPickerOpen] = useState(false);
     const [barTab, setBarTab] = useState<"create" | "mine">("create");
     const [recipeMenu, setRecipeMenu] = useState<MixRecipe | null>(null);
     const [confirm, setConfirm] = useState<{
@@ -315,10 +315,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                 <button type="button" className="mix-icon-btn" onClick={onClose} aria-label="关闭"><ChevronLeft size={20} /></button>
                 <div className="mix-header-title">独家<em>特调</em></div>
                 {tab === "cabinet" ? (
-                    <>
-                        <button type="button" className="mix-icon-btn" onClick={() => importFileRef.current?.click()} aria-label="导入材料" title="从文件导入"><Upload size={17} /></button>
-                        <button type="button" className="mix-icon-btn" onClick={() => setKindPickerOpen(true)} aria-label="新建材料"><Plus size={19} /></button>
-                    </>
+                    <button type="button" className="mix-icon-btn" onClick={() => importFileRef.current?.click()} aria-label="导入材料" title="从文件导入"><Upload size={17} /></button>
                 ) : null}
             </div>
 
@@ -446,8 +443,9 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                     <>
                         <div className="mix-chip-row">
                             {MIX_SLOT_ORDER.map((kind) => (
-                                <button type="button" className="mix-chip" data-active={cabinetKind === kind ? "true" : undefined} onClick={() => setCabinetKind(kind)} key={kind}>
-                                    {MIX_KIND_LABELS[kind]}
+                                <button type="button" className="mix-chip" data-two-line="true" data-active={cabinetKind === kind ? "true" : undefined} onClick={() => setCabinetKind(kind)} key={kind}>
+                                    <span>{MIX_KIND_LABELS[kind]}</span>
+                                    <small>{MIX_KIND_SECTION_LABELS[kind]}</small>
                                 </button>
                             ))}
                         </div>
@@ -456,7 +454,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 <Archive size={32} strokeWidth={1.4} />
                                 这一格还空着——
                                 <br />
-                                点右上角 ＋ 自建一件{MIX_KIND_LABELS[cabinetKind]}。
+                                点右下角 ＋ 自建一件{MIX_KIND_LABELS[cabinetKind]}。
                             </div>
                         ) : (
                             <div className={mixKindHasCover(cabinetKind) ? "mix-waterfall" : "mix-mat-list"}>
@@ -474,6 +472,15 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 ))}
                             </div>
                         )}
+                        <button
+                            type="button"
+                            className="mix-fab"
+                            onClick={() => setEditor({ kind: cabinetKind })}
+                            aria-label={`自建一件${MIX_KIND_LABELS[cabinetKind]}`}
+                            title={`自建一件${MIX_KIND_LABELS[cabinetKind]}`}
+                        >
+                            <Plus size={24} />
+                        </button>
                     </>
                 ) : null}
 
@@ -630,30 +637,6 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             ) : (
                                 <MaterialDetail material={detail} />
                             )}
-                        </div>
-                    </div>
-                </div>
-            ) : null}
-
-            {/* 新建：先挑种类 */}
-            {kindPickerOpen ? (
-                <div className="mix-sheet-mask" onClick={() => setKindPickerOpen(false)}>
-                    <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
-                        <div className="mix-sheet-head">
-                            <div className="mix-sheet-title">自建一件材料</div>
-                            <button type="button" className="mix-icon-btn" onClick={() => setKindPickerOpen(false)} aria-label="关闭"><X size={18} /></button>
-                        </div>
-                        <div className="mix-sheet-body">
-                            <div className="mix-waterfall">
-                                {MIX_SLOT_ORDER.map((kind) => (
-                                    <div className="mix-mat-card" data-kind={kind} key={kind} onClick={() => { setKindPickerOpen(false); setEditor({ kind }); }}>
-                                        <div className="mix-mat-glyph"><KindGlyph kind={kind} /></div>
-                                        <div className="mix-mat-info">
-                                            <div className="mix-mat-name">{MIX_KIND_LABELS[kind]}</div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
                         </div>
                     </div>
                 </div>

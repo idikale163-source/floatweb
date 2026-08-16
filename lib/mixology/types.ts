@@ -32,6 +32,18 @@ export const MIX_SLOT_ORDER: MixMaterialKind[] = [
     "character", "base", "flavor", "glass", "strength", "ticket", "garnish", "encore",
 ];
 
+/** 每类材料在提示词里的正规段名（装饰不进提示词，标它的实际职责） */
+export const MIX_KIND_SECTION_LABELS: Record<MixMaterialKind, string> = {
+    character: "角色资料",
+    base: "扮演总纲",
+    flavor: "文风",
+    glass: "正文输出要求",
+    strength: "最高优先级",
+    ticket: "状态栏",
+    garnish: "界面样式",
+    encore: "小剧场",
+};
+
 /** 必选槽：没配齐不能开局；其余槽可留空 */
 export const MIX_REQUIRED_KINDS: MixMaterialKind[] = ["character"];
 
