@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, CornerDownRight, Music4, RotateCcw, Send, Undo2, X } from "lucide-react";
 import { continueMix, generateMixReply, rerollMixReply, undoMixLastRound } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession } from "@/lib/mixology/storage";
-import type { MixSession, MixTurn } from "@/lib/mixology/types";
+import type { MixCharacterCard, MixSession, MixTurn } from "@/lib/mixology/types";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
 import { MixTicketFrame } from "./ticket-frame";
@@ -42,7 +42,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
 
     // 封面 / 小票渲染代码 / 装饰 CSS：按方案槽位从酒柜现取
     const assets = useMemo(() => {
-        if (!session) return { cover: "", ticketHtml: undefined as string | undefined, garnishCss: "", encoreHtml: "" };
+        if (!session) return { cover: "", ticketHtml: undefined as string | undefined, garnishCss: "", encoreHtml: "", canvasHtml: "" };
         const slots = session.recipe.slots;
         const character = slots.character ? getMixMaterial(slots.character) : null;
         const ticket = slots.ticket ? getMixMaterial(slots.ticket) : null;
@@ -53,6 +53,8 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             ticketHtml: ticket?.kind === "ticket" ? ticket.renderHtml : undefined,
             garnishCss: garnish?.kind === "garnish" ? garnish.css : "",
             encoreHtml: encore?.kind === "encore" ? encore.html : "",
+            // 开场画布：对局里作为故事扉页躺在滚动区最顶上，往上翻可见
+            canvasHtml: character?.kind === "character" ? (character as MixCharacterCard).canvas?.trim() ?? "" : "",
         };
     }, [session]);
 
@@ -139,6 +141,11 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                 </button>
             </div>
             <div className="mix-game-scroll" ref={scrollRef}>
+                {assets.canvasHtml ? (
+                    <div className="mix-game-canvas">
+                        <MixRichText text={assets.canvasHtml} />
+                    </div>
+                ) : null}
                 {session.turns.map((turn) =>
                     turn.role === "user" ? (
                         <div className="mix-user-turn" key={turn.id}>

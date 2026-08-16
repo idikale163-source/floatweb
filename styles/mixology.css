@@ -1702,3 +1702,10 @@
     display: block;
     height: calc(20px + env(safe-area-inset-bottom, 0px));
 }
+
+/* 对局内的开场画布：故事扉页，下缘一道细金分隔与正文断开 */
+.mix-game-canvas {
+    margin: 4px 0 18px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(217, 176, 106, 0.22);
+}
