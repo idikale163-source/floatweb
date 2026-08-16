@@ -927,7 +927,7 @@ export function MemoryBankPage({ view, selectedCharId, onSelectChar, onNotice }:
                             </div>
                             <div className="modal-body modal-body-tight" data-ui="modal-body">
                                 <p className="memory-source-note">关闭后，该来源的内容不进入上下文，也不参与长期总结；已跳过的内容重新开启后不会回补。</p>
-                                <div className="memory-source-chips">
+                                <div className="memory-source-chips" style={{ "--chip-accent": BINDING_ACCENTS.memory } as CSSProperties}>
                                     {MEMORY_SOURCE_OPTIONS.map(source => {
                                         const allowed = config.shortTermAllowedSources ?? {};
                                         const isChecked = allowed[source.key] !== false;
