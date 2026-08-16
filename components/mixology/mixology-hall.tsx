@@ -176,7 +176,7 @@ export function MixologyHall({
 }) {
     const [materials, setMaterials] = useState<MixHallMaterial[]>([]);
     const [recipes, setRecipes] = useState<MixHallRecipe[]>([]);
-    const [kind, setKind] = useState<MixMaterialKind | "all">("all");
+    const [kind, setKind] = useState<MixMaterialKind>("character");
     const [loading, setLoading] = useState(true);
     const [notReady, setNotReady] = useState<string | null>(null);
     const [detailMaterial, setDetailMaterial] = useState<MixHallMaterial | null>(null);
@@ -205,7 +205,7 @@ export function MixologyHall({
         setNotReady(null);
         try {
             if (mode === "menu") {
-                const { entries, setupRequired } = await fetchHallMaterials(kind === "all" ? undefined : kind);
+                const { entries, setupRequired } = await fetchHallMaterials(kind);
                 if (!mountedRef.current) return;
                 setMaterials(entries);
                 if (setupRequired) setNotReady("酒单的后厨还没开张（共享表未创建）。");
@@ -349,7 +349,6 @@ export function MixologyHall({
     // TAG 行是导航骨架，不跟着加载/未开张一起消失——否则每点一个 TAG 整行都会闪一下
     const chipRow = mode === "menu" ? (
         <div className="mix-chip-row">
-            <button type="button" className="mix-chip" data-active={kind === "all" ? "true" : undefined} onClick={() => setKind("all")}>全部</button>
             {MIX_SLOT_ORDER.map((k) => (
                 <button type="button" className="mix-chip" data-active={kind === k ? "true" : undefined} onClick={() => setKind(k)} key={k}>
                     {MIX_KIND_LABELS[k]}
@@ -377,7 +376,7 @@ export function MixologyHall({
                 return (
                     <div className="mix-empty">
                         <Inbox size={32} strokeWidth={1.4} />
-                        {kind === "all" ? "酒单上还空着——" : `还没有人分享${MIX_KIND_LABELS[kind]}——`}
+                        {`还没有人分享${MIX_KIND_LABELS[kind]}——`}
                         <br />
                         在酒柜里打开自己的材料，点「分享到酒单」。
                     </div>

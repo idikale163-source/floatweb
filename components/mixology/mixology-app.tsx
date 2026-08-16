@@ -62,7 +62,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     const [cabinet, setCabinet] = useState<MixMaterial[]>(() => loadMixCabinet());
     const [recipes, setRecipes] = useState<MixRecipe[]>(() => loadMixRecipes());
     const [sessions, setSessions] = useState<MixSession[]>(() => loadMixSessions());
-    const [cabinetKind, setCabinetKind] = useState<MixMaterialKind | "all">("all");
+    const [cabinetKind, setCabinetKind] = useState<MixMaterialKind>("character");
     const [detail, setDetail] = useState<MixMaterial | null>(null);
     const [editor, setEditor] = useState<{ kind: MixMaterialKind; initial?: MixMaterial } | null>(null);
     const [kindPickerOpen, setKindPickerOpen] = useState(false);
@@ -101,7 +101,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     }, []);
 
     const cabinetFiltered = useMemo(
-        () => (cabinetKind === "all" ? cabinet : cabinet.filter((m) => m.kind === cabinetKind)),
+        () => cabinet.filter((m) => m.kind === cabinetKind),
         [cabinet, cabinetKind],
     );
 
@@ -415,7 +415,6 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                 {tab === "cabinet" ? (
                     <>
                         <div className="mix-chip-row">
-                            <button type="button" className="mix-chip" data-active={cabinetKind === "all" ? "true" : undefined} onClick={() => setCabinetKind("all")}>全部</button>
                             {MIX_SLOT_ORDER.map((kind) => (
                                 <button type="button" className="mix-chip" data-active={cabinetKind === kind ? "true" : undefined} onClick={() => setCabinetKind(kind)} key={kind}>
                                     {MIX_KIND_LABELS[kind]}
@@ -427,7 +426,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 <Archive size={32} strokeWidth={1.4} />
                                 这一格还空着——
                                 <br />
-                                点右上角 ＋ 自建一件{cabinetKind === "all" ? "材料" : MIX_KIND_LABELS[cabinetKind]}。
+                                点右上角 ＋ 自建一件{MIX_KIND_LABELS[cabinetKind]}。
                             </div>
                         ) : (
                             <div className="mix-waterfall">
