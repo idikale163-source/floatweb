@@ -102,8 +102,8 @@ async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promi
 
 // ── 列表 / 详情 ──
 
-export async function fetchHallMaterials(kind?: MixMaterialKind): Promise<{ entries: MixHallMaterial[]; setupRequired: boolean }> {
-    const query = kind ? `&kind=${kind}` : "";
+export async function fetchHallMaterials(kind?: MixMaterialKind, mine?: boolean): Promise<{ entries: MixHallMaterial[]; setupRequired: boolean }> {
+    const query = `${kind ? `&kind=${kind}` : ""}${mine ? "&mine=1" : ""}`;
     const data = await fetchJson<HallListResponse>(`/api/mixology/hall?type=material${query}`, { cache: "no-store" });
     return { entries: (data.entries ?? []) as MixHallMaterial[], setupRequired: Boolean(data.setupRequired) };
 }
@@ -114,8 +114,8 @@ export async function fetchHallMaterial(id: string): Promise<MixHallMaterial> {
     return data.entry as MixHallMaterial;
 }
 
-export async function fetchHallRecipes(): Promise<{ entries: MixHallRecipe[]; setupRequired: boolean }> {
-    const data = await fetchJson<HallListResponse>("/api/mixology/hall?type=recipe", { cache: "no-store" });
+export async function fetchHallRecipes(mine?: boolean): Promise<{ entries: MixHallRecipe[]; setupRequired: boolean }> {
+    const data = await fetchJson<HallListResponse>(`/api/mixology/hall?type=recipe${mine ? "&mine=1" : ""}`, { cache: "no-store" });
     return { entries: (data.entries ?? []) as MixHallRecipe[], setupRequired: Boolean(data.setupRequired) };
 }
 

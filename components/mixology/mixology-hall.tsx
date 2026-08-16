@@ -200,6 +200,8 @@ export function MixologyHall({
     const [materials, setMaterials] = useState<MixHallMaterial[]>([]);
     const [recipes, setRecipes] = useState<MixHallRecipe[]>([]);
     const [kind, setKind] = useState<MixMaterialKind>("character");
+    // 大厅（全部）/ 我的发布：右上角滑动切换，方便找到并管理自己上架的内容
+    const [scope, setScope] = useState<"all" | "mine">("all");
     const [loading, setLoading] = useState(true);
     const [notReady, setNotReady] = useState<string | null>(null);
     const [detailMaterial, setDetailMaterial] = useState<MixHallMaterial | null>(null);
@@ -234,12 +236,12 @@ export function MixologyHall({
         setNotReady(null);
         try {
             if (mode === "menu") {
-                const { entries, setupRequired } = await fetchHallMaterials(kind);
+                const { entries, setupRequired } = await fetchHallMaterials(kind, scope === "mine");
                 if (!mountedRef.current) return;
                 setMaterials(entries);
                 if (setupRequired) setNotReady("酒材页的后厨还没开张（共享表未创建）。");
             } else {
-                const { entries, setupRequired } = await fetchHallRecipes();
+                const { entries, setupRequired } = await fetchHallRecipes(scope === "mine");
                 if (!mountedRef.current) return;
                 setRecipes(entries);
                 if (setupRequired) setNotReady("配方页还没开张（共享表未创建）。");
@@ -255,7 +257,7 @@ export function MixologyHall({
         }
     // reloadToken 只作触发器，值本身不参与请求
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mode, kind, reloadToken]);
+    }, [mode, kind, scope, reloadToken]);
 
     useEffect(() => { void load(); }, [load]);
 
@@ -414,17 +416,29 @@ export function MixologyHall({
 
     // ── 渲染 ──
 
-    // TAG 行是导航骨架，不跟着加载/未开张一起消失——否则每点一个 TAG 整行都会闪一下
-    const chipRow = mode === "menu" ? (
-        <div className="mix-chip-row">
-            {MIX_SLOT_ORDER.map((k) => (
-                <button type="button" className="mix-chip" data-two-line="true" data-active={kind === k ? "true" : undefined} onClick={() => setKind(k)} key={k}>
-                    <span>{MIX_KIND_LABELS[k]}</span>
-                    <small>{MIX_KIND_SECTION_LABELS[k]}</small>
-                </button>
-            ))}
+    // 吸顶工具区：大厅/我的发布切换 +（酒材页）TAG 行。
+    // 是导航骨架，不跟着加载/未开张一起消失——否则每次切换整行都会闪一下；
+    // sticky 吸在 .mix-body 顶部，列表拉多长都能随手切换。
+    const topBar = (
+        <div className="mix-sticky-top">
+            <div className="mix-scope-row">
+                <div className="mix-scope-toggle" role="tablist" aria-label="范围切换">
+                    <button type="button" data-active={scope === "all" ? "true" : undefined} onClick={() => setScope("all")}>大厅</button>
+                    <button type="button" data-active={scope === "mine" ? "true" : undefined} onClick={() => setScope("mine")}>我的发布</button>
+                </div>
+            </div>
+            {mode === "menu" ? (
+                <div className="mix-chip-row">
+                    {MIX_SLOT_ORDER.map((k) => (
+                        <button type="button" className="mix-chip" data-two-line="true" data-active={kind === k ? "true" : undefined} onClick={() => setKind(k)} key={k}>
+                            <span>{MIX_KIND_LABELS[k]}</span>
+                            <small>{MIX_KIND_SECTION_LABELS[k]}</small>
+                        </button>
+                    ))}
+                </div>
+            ) : null}
         </div>
-    ) : null;
+    );
 
     function renderBody() {
         if (loading) {
@@ -450,7 +464,7 @@ export function MixologyHall({
                 return (
                     <div className="mix-empty">
                         <Inbox size={32} strokeWidth={1.4} />
-                        {`还没有人分享${MIX_KIND_LABELS[kind]}——`}
+                        {scope === "mine" ? `你还没发布过${MIX_KIND_LABELS[kind]}——` : `还没有人分享${MIX_KIND_LABELS[kind]}——`}
                         <br />
                         在酒柜里打开自己的材料，点「分享到酒材页」。
                     </div>
@@ -477,7 +491,7 @@ export function MixologyHall({
             return (
                 <div className="mix-empty" style={{ paddingTop: 60 }}>
                     <Wine size={32} strokeWidth={1.4} />
-                    还没有人分享配方——
+                    {scope === "mine" ? "你还没分享过配方——" : "还没有人分享配方——"}
                     <br />
                     在吧台给自己的特调点「分享」。
                 </div>
@@ -506,7 +520,7 @@ export function MixologyHall({
 
     return (
         <>
-            {chipRow}
+            {topBar}
             {renderBody()}
 
             {/* 材料详情 */}

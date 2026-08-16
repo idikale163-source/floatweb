@@ -150,12 +150,61 @@
 }
 
 /* ── TAG 胶囊行 ── */
+/* 吸顶工具区：TAG 行 / 大厅-我的发布切换，列表拉多长都能随手够到 */
+.mix-sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    margin: 0 -14px;
+    padding: 0 14px 4px;
+    background: var(--mix-bg);
+    box-shadow: 0 6px 12px -8px rgba(0, 0, 0, 0.6);
+}
+
+/* 大厅 / 我的发布 滑动切换（右上角小胶囊） */
+.mix-scope-row {
+    display: flex;
+    justify-content: flex-end;
+    padding: 10px 2px 0;
+}
+
+.mix-scope-toggle {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.mix-scope-toggle button {
+    border: none;
+    background: none;
+    color: var(--mix-dim);
+    font-size: 11.5px;
+    line-height: 1;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.mix-scope-toggle button[data-active="true"] {
+    background: rgba(141, 123, 245, 0.25);
+    color: var(--mix-violet);
+    font-weight: 600;
+}
+
 .mix-chip-row {
     display: flex;
     gap: 8px;
     overflow-x: auto;
     padding: 12px 2px 4px;
     scrollbar-width: none;
+}
+
+/* 吸顶容器里的 TAG 行：上方已有切换行时收紧间距 */
+.mix-sticky-top .mix-chip-row {
+    padding-top: 8px;
 }
 
 .mix-chip-row::-webkit-scrollbar {

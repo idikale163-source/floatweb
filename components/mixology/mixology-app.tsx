@@ -548,13 +548,16 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
 
                 {tab === "cabinet" ? (
                     <>
-                        <div className="mix-chip-row">
-                            {MIX_SLOT_ORDER.map((kind) => (
-                                <button type="button" className="mix-chip" data-two-line="true" data-active={cabinetKind === kind ? "true" : undefined} onClick={() => setCabinetKind(kind)} key={kind}>
-                                    <span>{MIX_KIND_LABELS[kind]}</span>
-                                    <small>{MIX_KIND_SECTION_LABELS[kind]}</small>
-                                </button>
-                            ))}
+                        {/* TAG 行吸顶：材料一多也能随手切类目 */}
+                        <div className="mix-sticky-top">
+                            <div className="mix-chip-row">
+                                {MIX_SLOT_ORDER.map((kind) => (
+                                    <button type="button" className="mix-chip" data-two-line="true" data-active={cabinetKind === kind ? "true" : undefined} onClick={() => setCabinetKind(kind)} key={kind}>
+                                        <span>{MIX_KIND_LABELS[kind]}</span>
+                                        <small>{MIX_KIND_SECTION_LABELS[kind]}</small>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                         {cabinetFiltered.length === 0 ? (
                             <div className="mix-empty">
