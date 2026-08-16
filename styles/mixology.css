@@ -1412,3 +1412,185 @@
 .mix-action-row[data-tone="danger"] {
     color: #e2a3a3;
 }
+
+/* ── 海报式材料卡（有封面的，基本都是角色卡）── */
+.mix-mat-card[data-poster="true"] {
+    position: relative;
+    aspect-ratio: 3 / 4.4;
+    display: block;
+}
+
+.mix-mat-card[data-poster="true"] .mix-mat-cover {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    object-fit: cover;
+}
+
+.mix-poster-author {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    max-width: calc(100% - 16px);
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(11, 11, 16, 0.62);
+    backdrop-filter: blur(6px);
+    color: rgba(255, 255, 255, 0.86);
+    font-size: 10px;
+    line-height: 1.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mix-poster-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: rgba(11, 11, 16, 0.62);
+    backdrop-filter: blur(6px);
+    color: var(--mix-gold);
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1.6;
+}
+
+/* 底部渐变纱：让压在图上的文字任何封面都读得清 */
+.mix-poster-veil {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    padding: 34px 11px 11px;
+    background: linear-gradient(
+        180deg,
+        transparent 0%,
+        rgba(11, 11, 16, 0.55) 38%,
+        rgba(11, 11, 16, 0.92) 100%
+    );
+}
+
+.mix-poster-name {
+    font-size: 14.5px;
+    font-weight: 700;
+    line-height: 1.35;
+    color: #fff;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.mix-poster-hook {
+    margin-top: 4px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.66);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.mix-poster-stats {
+    margin-top: 6px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* 无封面材料：图标区加高，别矮成一条 */
+.mix-mat-glyph {
+    height: 104px;
+}
+
+/* ── 确认弹窗 ── */
+.mix-confirm-mask {
+    position: absolute;
+    inset: 0;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 30px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(3px);
+    animation: mixFadeIn 0.16s ease;
+}
+
+.mix-confirm {
+    width: 100%;
+    max-width: 300px;
+    border-radius: 18px;
+    background: #16161f;
+    border: 1px solid var(--mix-line);
+    padding: 20px 18px 14px;
+    animation: mixConfirmIn 0.18s cubic-bezier(0.22, 0.9, 0.3, 1);
+}
+
+@keyframes mixConfirmIn {
+    from { transform: scale(0.94); opacity: 0.4; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.mix-confirm-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--mix-text);
+    text-align: center;
+}
+
+.mix-confirm-body {
+    margin-top: 10px;
+    font-size: 12.5px;
+    line-height: 1.75;
+    color: var(--mix-dim);
+    text-align: center;
+}
+
+.mix-confirm-body b {
+    color: var(--mix-gold);
+    font-weight: 600;
+}
+
+.mix-confirm-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.mix-confirm-btn {
+    flex: 1;
+    padding: 11px 0;
+    border: none;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--mix-dim);
+    font-size: 13.5px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+}
+
+.mix-confirm-btn:active {
+    transform: scale(0.97);
+}
+
+.mix-confirm-btn[data-tone="primary"] {
+    background: linear-gradient(135deg, #8d7bf5, #6f5ce0);
+    color: #fff;
+    font-weight: 600;
+}
+
+.mix-confirm-btn[data-tone="danger"] {
+    background: rgba(198, 96, 96, 0.9);
+    color: #fff;
+    font-weight: 600;
+}

@@ -4,7 +4,7 @@
 // 酒柜（八类材料 TAG + 双列瀑布）/ 对局（酒局记录）。
 // 视觉：近黑 + 紫罗兰 + 琥珀金的暗色酒吧质感，见 styles/mixology.css。
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
     Archive,
     ChevronLeft,
@@ -51,7 +51,7 @@ import { exportMixMaterial, parseMixMaterialsFromJson } from "@/lib/mixology/tra
 import { MixMaterialEditor } from "./mixology-editor";
 import { MixologyGame } from "./mixology-game";
 import { MixologyHall } from "./mixology-hall";
-import { KindGlyph, MatCard, MaterialDetail, formatMixTime } from "./mixology-shared";
+import { KindGlyph, MatCard, MaterialDetail, MixConfirm, formatMixTime } from "./mixology-shared";
 
 type MixTab = "menu" | "hall" | "bar" | "cabinet" | "games";
 
@@ -68,6 +68,13 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     const [kindPickerOpen, setKindPickerOpen] = useState(false);
     const [barTab, setBarTab] = useState<"create" | "mine">("create");
     const [recipeMenu, setRecipeMenu] = useState<MixRecipe | null>(null);
+    const [confirm, setConfirm] = useState<{
+        title: string;
+        body?: ReactNode;
+        confirmText: string;
+        tone?: "danger";
+        run: () => void;
+    } | null>(null);
     const [barSlots, setBarSlots] = useState<Partial<Record<MixMaterialKind, string>>>({});
     const [slotPicker, setSlotPicker] = useState<MixMaterialKind | null>(null);
     const [nameSheetOpen, setNameSheetOpen] = useState(false);
@@ -254,7 +261,18 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                     onBack={() => { setPlaying(null); refresh(); }}
                     onToast={showToast}
                 />
-                {toast ? <div className="mix-toast">{toast}</div> : null}
+                {confirm ? (
+                <MixConfirm
+                    title={confirm.title}
+                    body={confirm.body}
+                    confirmText={confirm.confirmText}
+                    tone={confirm.tone}
+                    onConfirm={() => { const run = confirm.run; setConfirm(null); run(); }}
+                    onCancel={() => setConfirm(null)}
+                />
+            ) : null}
+
+            {toast ? <div className="mix-toast">{toast}</div> : null}
             </div>
         );
     }
@@ -460,7 +478,16 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                         <button
                                             type="button"
                                             className="mix-icon-btn"
-                                            onClick={(e) => { e.stopPropagation(); deleteMixSession(session.id); refresh(); }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setConfirm({
+                                                    title: "删除这场酒局？",
+                                                    body: <>「{session.charName} · {session.recipe.name}」的 {session.turns.length} 条对话会一起消失，无法找回。</>,
+                                                    confirmText: "删除",
+                                                    tone: "danger",
+                                                    run: () => { deleteMixSession(session.id); refresh(); },
+                                                });
+                                            }}
                                             aria-label="删除对局"
                                         >
                                             <Trash2 size={16} />
@@ -503,9 +530,36 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             <button type="button" className="mix-icon-btn" onClick={() => exportMixMaterial(detail)} aria-label="导出为文件" title="导出为文件"><Download size={16} /></button>
                             {!isMixBuiltinId(detail.id) ? (
                                 <>
-                                    <button type="button" className="mix-icon-btn" onClick={() => void handleShareMaterial(detail)} disabled={sharing} aria-label="分享到酒单" title="分享到酒单"><Share2 size={16} /></button>
+                                    <button
+                                        type="button"
+                                        className="mix-icon-btn"
+                                        onClick={() => setConfirm({
+                                            title: "分享到酒单？",
+                                            body: <>「{detail.name}」将出现在酒单上，<b>其他人能看到它的完整内容</b>，也能加进自己的酒柜。<br />不想公开就先别发。</>,
+                                            confirmText: "分享",
+                                            run: () => { const t = detail; setDetail(null); void handleShareMaterial(t); },
+                                        })}
+                                        disabled={sharing}
+                                        aria-label="分享到酒单"
+                                        title="分享到酒单"
+                                    >
+                                        <Share2 size={16} />
+                                    </button>
                                     <button type="button" className="mix-icon-btn" onClick={() => { setEditor({ kind: detail.kind, initial: detail }); setDetail(null); }} aria-label="编辑"><Pencil size={16} /></button>
-                                    <button type="button" className="mix-icon-btn" onClick={() => handleDeleteMaterial(detail)} aria-label="删除"><Trash2 size={16} /></button>
+                                    <button
+                                        type="button"
+                                        className="mix-icon-btn"
+                                        onClick={() => setConfirm({
+                                            title: "删除这件材料？",
+                                            body: <>「{detail.name}」将从酒柜里移除，用到它的特调会缺一味。<br />这一步不能撤销。</>,
+                                            confirmText: "删除",
+                                            tone: "danger",
+                                            run: () => handleDeleteMaterial(detail),
+                                        })}
+                                        aria-label="删除"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
                                 </>
                             ) : null}
                             <button type="button" className="mix-icon-btn" onClick={() => setDetail(null)} aria-label="关闭"><X size={18} /></button>
@@ -680,7 +734,12 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 onClick={() => {
                                     const target = recipeMenu;
                                     setRecipeMenu(null);
-                                    void handleShareRecipe(target);
+                                    setConfirm({
+                                        title: "分享到大厅？",
+                                        body: <>「{target.name}」会<b>连同里面每一件材料的完整内容一起发布</b>——包括角色卡。别人能看到，也能一键连料入柜。</>,
+                                        confirmText: "分享",
+                                        run: () => void handleShareRecipe(target),
+                                    });
                                 }}
                             >
                                 <Share2 size={17} />
@@ -691,10 +750,19 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 className="mix-action-row"
                                 data-tone="danger"
                                 onClick={() => {
-                                    deleteMixRecipe(recipeMenu.id);
+                                    const target = recipeMenu;
                                     setRecipeMenu(null);
-                                    refresh();
-                                    showToast("这杯特调已倒掉。");
+                                    setConfirm({
+                                        title: "删除这杯特调？",
+                                        body: <>只删「{target.name}」这个搭配，里面的材料还留在酒柜里。</>,
+                                        confirmText: "删除",
+                                        tone: "danger",
+                                        run: () => {
+                                            deleteMixRecipe(target.id);
+                                            refresh();
+                                            showToast("这杯特调已倒掉。");
+                                        },
+                                    });
                                 }}
                             >
                                 <Trash2 size={17} />
@@ -731,6 +799,17 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                 style={{ display: "none" }}
                 onChange={(e) => { void handleImportFile(e.target.files?.[0]); e.target.value = ""; }}
             />
+
+            {confirm ? (
+                <MixConfirm
+                    title={confirm.title}
+                    body={confirm.body}
+                    confirmText={confirm.confirmText}
+                    tone={confirm.tone}
+                    onConfirm={() => { const run = confirm.run; setConfirm(null); run(); }}
+                    onCancel={() => setConfirm(null)}
+                />
+            ) : null}
 
             {toast ? <div className="mix-toast">{toast}</div> : null}
         </div>

@@ -3,6 +3,7 @@
 // 独家特调 · 共享 UI 小件：材料卡 / 种类图标 / 详情字段渲染。
 // 酒柜（本地）与酒单/大厅（官网）两边共用，保持一套视觉语言。
 
+import type { ReactNode } from "react";
 import {
     BookOpen,
     Feather,
@@ -57,14 +58,27 @@ export function MatCard({
     stats?: string;
     onClick: () => void;
 }) {
+    // 有封面的（基本都是角色卡）走海报式：图铺满整张卡，文字压在底部渐变上，
+    // 高度足够撑起画面。没封面的材料走紧凑式，图标区加高，免得矮成一条。
+    if (cover) {
+        return (
+            <div className="mix-mat-card" data-kind={kind} data-poster="true" onClick={onClick}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="mix-mat-cover" src={cover} alt={name} />
+                {author ? <div className="mix-poster-author">@{author}</div> : null}
+                {badge ? <div className="mix-poster-badge">{badge}</div> : null}
+                <div className="mix-poster-veil">
+                    <div className="mix-poster-name">{name}</div>
+                    {hook ? <div className="mix-poster-hook">{hook}</div> : null}
+                    {stats ? <div className="mix-poster-stats">{stats}</div> : null}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="mix-mat-card" data-kind={kind} onClick={onClick}>
-            {cover ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img className="mix-mat-cover" src={cover} alt={name} />
-            ) : (
-                <div className="mix-mat-glyph"><KindGlyph kind={kind} /></div>
-            )}
+            <div className="mix-mat-glyph"><KindGlyph kind={kind} size={30} /></div>
             <div className="mix-mat-info">
                 <div className="mix-mat-name">
                     <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
@@ -73,6 +87,36 @@ export function MatCard({
                 {hook ? <div className="mix-mat-hook">{hook}</div> : null}
                 {author ? <div className="mix-mat-author">@{author}</div> : null}
                 {stats ? <div className="mix-mat-stats">{stats}</div> : null}
+            </div>
+        </div>
+    );
+}
+
+/** 确认弹窗：分享/删除/下架这类不可撤销或对外的操作统一走它 */
+export function MixConfirm({
+    title,
+    body,
+    confirmText = "确定",
+    tone,
+    onConfirm,
+    onCancel,
+}: {
+    title: string;
+    body?: ReactNode;
+    confirmText?: string;
+    tone?: "danger";
+    onConfirm: () => void;
+    onCancel: () => void;
+}) {
+    return (
+        <div className="mix-confirm-mask" onClick={onCancel}>
+            <div className="mix-confirm" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={title}>
+                <div className="mix-confirm-title">{title}</div>
+                {body ? <div className="mix-confirm-body">{body}</div> : null}
+                <div className="mix-confirm-actions">
+                    <button type="button" className="mix-confirm-btn" onClick={onCancel}>取消</button>
+                    <button type="button" className="mix-confirm-btn" data-tone={tone ?? "primary"} onClick={onConfirm}>{confirmText}</button>
+                </div>
             </div>
         </div>
     );

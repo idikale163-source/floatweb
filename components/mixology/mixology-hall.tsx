@@ -4,7 +4,7 @@
 // 双列瀑布 / 宽卡列表 + 详情弹层（入柜·点赞·评论楼中楼）。官网专用，
 // 未配后端（自部署）或表未建时按「还没开张」处理，不打扰本地玩法。
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { CornerDownRight, Heart, Inbox, Trash2, Wine, X } from "lucide-react";
 import { fetchCurrentAccount } from "@/lib/account-client";
 import {
@@ -31,7 +31,7 @@ import {
     type MixMaterialKind,
     type MixRecipe,
 } from "@/lib/mixology/types";
-import { MatCard, MaterialDetail } from "./mixology-shared";
+import { MatCard, MaterialDetail, MixConfirm } from "./mixology-shared";
 
 type HallMode = "menu" | "hall";
 
@@ -47,12 +47,14 @@ function CommentThread({
     myId,
     onToast,
     onCountChange,
+    requestConfirm,
 }: {
     type: MixHallType;
     targetId: string;
     myId: string;
     onToast: (message: string) => void;
     onCountChange: (delta: number) => void;
+    requestConfirm: (payload: { title: string; body?: ReactNode; confirmText: string; tone?: "danger"; run: () => void }) => void;
 }) {
     const [comments, setComments] = useState<MixHallComment[]>([]);
     const [loading, setLoading] = useState(true);
@@ -97,6 +99,17 @@ function CommentThread({
         }
     };
 
+    const onConfirmDelete = (comment: MixHallComment) => {
+        const hasReplies = comments.some((c) => c.parentId === comment.id);
+        requestConfirm({
+            title: "删除这条评论？",
+            body: hasReplies ? <>它下面的回复会一起删掉。</> : undefined,
+            confirmText: "删除",
+            tone: "danger",
+            run: () => void handleDelete(comment),
+        });
+    };
+
     const topLevel = comments.filter((c) => !c.parentId);
     const childrenOf = (id: string) => comments.filter((c) => c.parentId === id);
     const nameOf = (id?: string) => comments.find((c) => c.id === id)?.authorName;
@@ -111,7 +124,7 @@ function CommentThread({
                 <span style={{ flex: 1 }} />
                 <button type="button" className="mix-comment-op" onClick={() => setReplyTo(comment)}>回复</button>
                 {comment.authorId === myId ? (
-                    <button type="button" className="mix-comment-op" onClick={() => void handleDelete(comment)}>删除</button>
+                    <button type="button" className="mix-comment-op" onClick={() => onConfirmDelete(comment)}>删除</button>
                 ) : null}
             </div>
             <div className="mix-comment-content">{comment.content}</div>
@@ -170,6 +183,13 @@ export function MixologyHall({
     const [detailRecipe, setDetailRecipe] = useState<MixHallRecipe | null>(null);
     const [busy, setBusy] = useState(false);
     const [myId, setMyId] = useState("");
+    const [confirm, setConfirm] = useState<{
+        title: string;
+        body?: ReactNode;
+        confirmText: string;
+        tone?: "danger";
+        run: () => void;
+    } | null>(null);
     const mountedRef = useRef(true);
 
     useEffect(() => {
@@ -424,7 +444,20 @@ export function MixologyHall({
                             <div className="mix-sheet-title">{detailMaterial.name}</div>
                             {likeButton("material", detailMaterial)}
                             {detailMaterial.authorId === myId ? (
-                                <button type="button" className="mix-icon-btn" onClick={() => void handleRemove("material", detailMaterial.id, detailMaterial.name)} aria-label="下架"><Trash2 size={16} /></button>
+                                <button
+                                    type="button"
+                                    className="mix-icon-btn"
+                                    onClick={() => setConfirm({
+                                        title: "从酒单下架？",
+                                        body: <>「{detailMaterial.name}」将从酒单上撤下，别人看不到也拿不到了。<br />已经入柜的人手里那份不受影响。</>,
+                                        confirmText: "下架",
+                                        tone: "danger",
+                                        run: () => void handleRemove("material", detailMaterial.id, detailMaterial.name),
+                                    })}
+                                    aria-label="下架"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
                             ) : null}
                             <button type="button" className="mix-icon-btn" onClick={() => setDetailMaterial(null)} aria-label="关闭"><X size={18} /></button>
                         </div>
@@ -454,6 +487,7 @@ export function MixologyHall({
                                 myId={myId}
                                 onToast={onToast}
                                 onCountChange={(delta) => patchEntry("material", detailMaterial.id, { commentCount: Math.max(0, detailMaterial.commentCount + delta) })}
+                                requestConfirm={setConfirm}
                             />
                         </div>
                     </div>
@@ -468,7 +502,20 @@ export function MixologyHall({
                             <div className="mix-sheet-title">{detailRecipe.name}</div>
                             {likeButton("recipe", detailRecipe)}
                             {detailRecipe.authorId === myId ? (
-                                <button type="button" className="mix-icon-btn" onClick={() => void handleRemove("recipe", detailRecipe.id, detailRecipe.name)} aria-label="下架"><Trash2 size={16} /></button>
+                                <button
+                                    type="button"
+                                    className="mix-icon-btn"
+                                    onClick={() => setConfirm({
+                                        title: "从大厅下架？",
+                                        body: <>「{detailRecipe.name}」将从大厅撤下，别人看不到也导不了了。<br />已经导入的人手里那份不受影响。</>,
+                                        confirmText: "下架",
+                                        tone: "danger",
+                                        run: () => void handleRemove("recipe", detailRecipe.id, detailRecipe.name),
+                                    })}
+                                    aria-label="下架"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
                             ) : null}
                             <button type="button" className="mix-icon-btn" onClick={() => setDetailRecipe(null)} aria-label="关闭"><X size={18} /></button>
                         </div>
@@ -486,7 +533,17 @@ export function MixologyHall({
                                             .map((m) => `${MIX_KIND_LABELS[m.kind]} · ${m.name}`)
                                             .join("\n")}
                                     </div>
-                                    <button type="button" className="mix-brew-btn" onClick={() => void importRecipe(detailRecipe)} disabled={busy}>
+                                    <button
+                                        type="button"
+                                        className="mix-brew-btn"
+                                        onClick={() => setConfirm({
+                                            title: "连料入柜？",
+                                            body: <>会把「{detailRecipe.name}」以及里面的 <b>{detailRecipe.materials?.length ?? 0} 件材料</b>一并放进你的酒柜，之后在吧台就能开局。</>,
+                                            confirmText: "入柜",
+                                            run: () => void importRecipe(detailRecipe),
+                                        })}
+                                        disabled={busy}
+                                    >
                                         <CornerDownRight size={16} />{detailRecipe.savedByMe ? "再次导入" : "连料入柜"}
                                     </button>
                                 </>
@@ -499,10 +556,22 @@ export function MixologyHall({
                                 myId={myId}
                                 onToast={onToast}
                                 onCountChange={(delta) => patchEntry("recipe", detailRecipe.id, { commentCount: Math.max(0, detailRecipe.commentCount + delta) })}
+                                requestConfirm={setConfirm}
                             />
                         </div>
                     </div>
                 </div>
+            ) : null}
+
+            {confirm ? (
+                <MixConfirm
+                    title={confirm.title}
+                    body={confirm.body}
+                    confirmText={confirm.confirmText}
+                    tone={confirm.tone}
+                    onConfirm={() => { const run = confirm.run; setConfirm(null); run(); }}
+                    onCancel={() => setConfirm(null)}
+                />
             ) : null}
         </>
     );
