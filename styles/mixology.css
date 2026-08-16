@@ -1123,6 +1123,17 @@
     border-bottom: 1px solid var(--mix-line);
 }
 
+/* 删除请求在途：整条压暗防止误触，按钮文字改「删除中…」 */
+.mix-comment[data-deleting="true"] {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+/* 点赞请求在途：微暗示意，防连点 */
+.mix-like-btn[data-pending="true"] {
+    opacity: 0.5;
+}
+
 .mix-comment[data-depth="1"] {
     margin-left: 16px;
     border-bottom: none;
