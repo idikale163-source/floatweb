@@ -47,6 +47,8 @@ export type MixMaterialMeta = {
     tags?: string[];
     /** 封面图 dataURL 或远端地址（角色卡强烈建议有） */
     cover?: string;
+    /** 已发布到酒单时的线上 id：有它才谈得上"更新已发布版本" */
+    publishedId?: string;
     createdAt: number;
     updatedAt: number;
 };
@@ -121,6 +123,8 @@ export type MixRecipe = {
     name: string;
     /** kind → 材料 id；角色卡必有，其余可缺 */
     slots: Partial<Record<MixMaterialKind, string>>;
+    /** 已发布到大厅时的线上 id */
+    publishedId?: string;
     createdAt: number;
     updatedAt: number;
 };

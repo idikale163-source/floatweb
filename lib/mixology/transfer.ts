@@ -87,6 +87,7 @@ export function parseMixMaterialsFromJson(text: string): MixMaterial[] {
             materials.push({
                 ...(record as unknown as MixMaterial),
                 id: createMixId("mixmat"),
+                publishedId: undefined,
                 name,
                 openings,
                 createdAt: now,
@@ -97,6 +98,7 @@ export function parseMixMaterialsFromJson(text: string): MixMaterial[] {
         materials.push({
             ...(record as unknown as MixMaterial),
             id: createMixId("mixmat"),
+            publishedId: undefined,
             name,
             createdAt: now,
             updatedAt: now,

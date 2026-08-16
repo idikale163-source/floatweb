@@ -5,6 +5,12 @@
 
 import type { MixMaterial, MixMaterialKind } from "./types";
 
+/** publishedId 是本地记账用的，不该随内容发到线上被别人继承 */
+function stripLocalOnly(material: MixMaterial): MixMaterial {
+    const { publishedId: _publishedId, ...rest } = material;
+    return rest as MixMaterial;
+}
+
 export type MixHallType = "material" | "recipe";
 
 export type MixHallEntryBase = {
@@ -113,7 +119,7 @@ export async function shareHallMaterial(material: MixMaterial): Promise<MixHallM
             hook: material.hook ?? "",
             cover: material.cover ?? "",
             tags: material.tags ?? [],
-            payload: material,
+            payload: stripLocalOnly(material),
         }),
     });
     if (!data.entry) throw new Error("分享失败");
@@ -131,10 +137,67 @@ export async function shareHallRecipe(input: {
     const data = await fetchJson<HallEntryResponse>("/api/mixology/hall", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "recipe", ...input }),
+        body: JSON.stringify({ type: "recipe", ...input, materials: input.materials.map(stripLocalOnly) }),
     });
     if (!data.entry) throw new Error("分享失败");
     return data.entry as MixHallRecipe;
+}
+
+/** 发布内容已被下架/不属于自己时抛出，上层据此清掉本地的发布标记 */
+export class MixHallGoneError extends Error {}
+
+async function putHall(body: Record<string, unknown>): Promise<unknown> {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    try {
+        const response = await fetch("/api/mixology/hall", {
+            method: "PUT",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data?.ok === false) {
+            if (data?.gone) throw new MixHallGoneError(data?.error || "内容已下架");
+            throw new Error(data?.error || `HTTP ${response.status}`);
+        }
+        return (data as { entry?: unknown }).entry;
+    } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") throw new Error("请求超时，请稍后再试。");
+        throw err;
+    } finally {
+        window.clearTimeout(timeout);
+    }
+}
+
+export async function updateHallMaterial(publishedId: string, material: MixMaterial): Promise<MixHallMaterial> {
+    return await putHall({
+        type: "material",
+        id: publishedId,
+        kind: material.kind,
+        name: material.name,
+        hook: material.hook ?? "",
+        cover: material.cover ?? "",
+        tags: material.tags ?? [],
+        payload: stripLocalOnly(material),
+    }) as MixHallMaterial;
+}
+
+export async function updateHallRecipe(publishedId: string, input: {
+    name: string;
+    intro?: string;
+    cover?: string;
+    charName?: string;
+    partNames: string[];
+    materials: MixMaterial[];
+}): Promise<MixHallRecipe> {
+    return await putHall({
+        type: "recipe",
+        id: publishedId,
+        ...input,
+        materials: input.materials.map(stripLocalOnly),
+    }) as MixHallRecipe;
 }
 
 export async function removeHallEntry(type: MixHallType, id: string): Promise<void> {

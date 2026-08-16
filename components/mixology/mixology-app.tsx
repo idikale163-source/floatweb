@@ -15,6 +15,7 @@ import {
     Pencil,
     Play,
     Plus,
+    RefreshCw,
     Share2,
     SlidersHorizontal,
     Trash2,
@@ -46,7 +47,7 @@ import {
     type MixRecipe,
     type MixSession,
 } from "@/lib/mixology/types";
-import { shareHallMaterial, shareHallRecipe } from "@/lib/mixology/hall-client";
+import { MixHallGoneError, shareHallMaterial, shareHallRecipe, updateHallMaterial, updateHallRecipe } from "@/lib/mixology/hall-client";
 import { exportMixMaterial, parseMixMaterialsFromJson } from "@/lib/mixology/transfer";
 import { MixMaterialEditor } from "./mixology-editor";
 import { MixologyGame } from "./mixology-game";
@@ -206,10 +207,24 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
         if (sharing) return;
         setSharing(true);
         try {
-            await shareHallMaterial(material);
-            showToast(`「${material.name}」已分享到酒单。`);
+            if (material.publishedId) {
+                await updateHallMaterial(material.publishedId, material);
+                showToast(`酒单上的「${material.name}」已更新。`);
+            } else {
+                const entry = await shareHallMaterial(material);
+                // 记住线上身份，之后改了本地就能推更新，也不会重复发布出一堆同名卡
+                saveMixMaterial({ ...material, publishedId: entry.id });
+                refresh();
+                showToast(`「${material.name}」已分享到酒单。`);
+            }
         } catch (error) {
-            showToast(error instanceof Error ? error.message : "分享失败");
+            if (error instanceof MixHallGoneError) {
+                saveMixMaterial({ ...material, publishedId: undefined });
+                refresh();
+                showToast("它已经从酒单下架了，可以重新分享一次。");
+            } else {
+                showToast(error instanceof Error ? error.message : "分享失败");
+            }
         } finally {
             setSharing(false);
         }
@@ -226,17 +241,31 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
             return;
         }
         setSharing(true);
+        const input = {
+            name: recipe.name,
+            cover: character.cover ?? "",
+            charName: character.charName,
+            partNames: materials.filter((m) => m.kind !== "character").map((m) => m.name).slice(0, 8),
+            materials,
+        };
         try {
-            await shareHallRecipe({
-                name: recipe.name,
-                cover: character.cover ?? "",
-                charName: character.charName,
-                partNames: materials.filter((m) => m.kind !== "character").map((m) => m.name).slice(0, 8),
-                materials,
-            });
-            showToast(`「${recipe.name}」已分享到大厅。`);
+            if (recipe.publishedId) {
+                await updateHallRecipe(recipe.publishedId, input);
+                showToast(`大厅里的「${recipe.name}」已更新。`);
+            } else {
+                const entry = await shareHallRecipe(input);
+                saveMixRecipe({ ...recipe, publishedId: entry.id });
+                refresh();
+                showToast(`「${recipe.name}」已分享到大厅。`);
+            }
         } catch (error) {
-            showToast(error instanceof Error ? error.message : "分享失败");
+            if (error instanceof MixHallGoneError) {
+                saveMixRecipe({ ...recipe, publishedId: undefined });
+                refresh();
+                showToast("它已经从大厅下架了，可以重新分享一次。");
+            } else {
+                showToast(error instanceof Error ? error.message : "分享失败");
+            }
         } finally {
             setSharing(false);
         }
@@ -532,17 +561,22 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     <button
                                         type="button"
                                         className="mix-icon-btn"
-                                        onClick={() => setConfirm({
+                                        onClick={() => setConfirm(detail.publishedId ? {
+                                            title: "更新酒单上的版本？",
+                                            body: <>会把「{detail.name}」在酒单上的内容替换成现在这一份。<br />点赞、入柜数与评论都会保留。</>,
+                                            confirmText: "更新",
+                                            run: () => { const t = detail; setDetail(null); void handleShareMaterial(t); },
+                                        } : {
                                             title: "分享到酒单？",
                                             body: <>「{detail.name}」将出现在酒单上，<b>其他人能看到它的完整内容</b>，也能加进自己的酒柜。<br />不想公开就先别发。</>,
                                             confirmText: "分享",
                                             run: () => { const t = detail; setDetail(null); void handleShareMaterial(t); },
                                         })}
                                         disabled={sharing}
-                                        aria-label="分享到酒单"
-                                        title="分享到酒单"
+                                        aria-label={detail.publishedId ? "更新酒单上的版本" : "分享到酒单"}
+                                        title={detail.publishedId ? "更新酒单上的版本" : "分享到酒单"}
                                     >
-                                        <Share2 size={16} />
+                                        {detail.publishedId ? <RefreshCw size={16} /> : <Share2 size={16} />}
                                     </button>
                                     <button type="button" className="mix-icon-btn" onClick={() => { setEditor({ kind: detail.kind, initial: detail }); setDetail(null); }} aria-label="编辑"><Pencil size={16} /></button>
                                     <button
@@ -611,7 +645,10 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 kind={editor.kind}
                                 initial={editor.initial}
                                 onSave={(material) => {
-                                    saveMixMaterial(material);
+                                    // 编辑器不经手 publishedId，保存时从原件带回来，别把发布关联弄丢
+                                    saveMixMaterial(editor.initial?.publishedId
+                                        ? { ...material, publishedId: editor.initial.publishedId }
+                                        : material);
                                     setEditor(null);
                                     refresh();
                                     showToast(`「${material.name}」已入柜。`);
@@ -733,7 +770,12 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 onClick={() => {
                                     const target = recipeMenu;
                                     setRecipeMenu(null);
-                                    setConfirm({
+                                    setConfirm(target.publishedId ? {
+                                        title: "更新大厅里的版本？",
+                                        body: <>会把「{target.name}」在大厅上的内容替换成现在这一份（含全部材料）。<br />点赞、入柜数与评论都会保留。</>,
+                                        confirmText: "更新",
+                                        run: () => void handleShareRecipe(target),
+                                    } : {
                                         title: "分享到大厅？",
                                         body: <>「{target.name}」会<b>连同里面每一件材料的完整内容一起发布</b>——包括角色卡。别人能看到，也能一键连料入柜。</>,
                                         confirmText: "分享",
@@ -741,8 +783,11 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     });
                                 }}
                             >
-                                <Share2 size={17} />
-                                <span>分享到大厅<i>连同材料一起发布，别人可以连料入柜</i></span>
+                                {recipeMenu.publishedId ? <RefreshCw size={17} /> : <Share2 size={17} />}
+                                <span>
+                                    {recipeMenu.publishedId ? "更新大厅里的版本" : "分享到大厅"}
+                                    <i>{recipeMenu.publishedId ? "用现在这一份替换掉大厅上的旧版，社交数据保留" : "连同材料一起发布，别人可以连料入柜"}</i>
+                                </span>
                             </button>
                             <button
                                 type="button"

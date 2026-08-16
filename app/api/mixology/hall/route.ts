@@ -316,6 +316,80 @@ export async function POST(request: Request) {
   }
 }
 
+export async function PUT(request: Request) {
+  try {
+    const account = await getCurrentAccount(request);
+    if (!account) return NextResponse.json({ ok: false, error: "请先登录账号。" }, { status: 401 });
+    const body = await request.json();
+    const record = body && typeof body === "object" ? body as Record<string, unknown> : {};
+    const type = parseType(record.type);
+    const id = cleanText(record.id, 160);
+    if (!type || !id) return NextResponse.json({ ok: false, error: "missing_target" }, { status: 400 });
+    const name = cleanText(record.name, 80);
+    if (!name) return NextResponse.json({ ok: false, error: "missing_name" }, { status: 400 });
+
+    // 只改内容，不动 like/save/view/comment 计数与 created_at——更新不该清零社交数据
+    let payload: Record<string, unknown>;
+    if (type === "material") {
+      const kind = cleanText(record.kind, 20);
+      if (!(MATERIAL_KINDS as readonly string[]).includes(kind)) {
+        return NextResponse.json({ ok: false, error: "unknown_material_kind" }, { status: 400 });
+      }
+      const materialPayload = record.payload;
+      if (!materialPayload || typeof materialPayload !== "object") {
+        return NextResponse.json({ ok: false, error: "missing_payload" }, { status: 400 });
+      }
+      if (JSON.stringify(materialPayload).length > MAX_MATERIAL_PAYLOAD) {
+        return NextResponse.json({ ok: false, error: "材料太大了（封面图请压小一点）。" }, { status: 413 });
+      }
+      payload = {
+        kind,
+        name,
+        hook: cleanText(record.hook, 200),
+        cover: cleanText(record.cover, 2_000_000),
+        tags: normalizeTags(record.tags),
+        payload: materialPayload,
+        updated_at: new Date().toISOString(),
+      };
+    } else {
+      const materials = Array.isArray(record.materials) ? record.materials : [];
+      if (materials.length === 0) {
+        return NextResponse.json({ ok: false, error: "missing_materials" }, { status: 400 });
+      }
+      if (JSON.stringify(materials).length > MAX_RECIPE_PAYLOAD) {
+        return NextResponse.json({ ok: false, error: "配方太大了（封面图请压小一点）。" }, { status: 413 });
+      }
+      payload = {
+        name,
+        intro: cleanText(record.intro, 400),
+        cover: cleanText(record.cover, 2_000_000),
+        char_name: cleanText(record.charName, 80),
+        part_names: normalizeTags(record.partNames),
+        materials,
+        updated_at: new Date().toISOString(),
+      };
+    }
+
+    const columns = type === "material" ? ITEM_COLUMNS : RECIPE_COLUMNS;
+    const result = await supabaseFetch<unknown[]>(
+      `${TABLES[type]}?id=eq.${encodeFilter(id)}&author_id=eq.${encodeFilter(account.id)}&deleted_at=is.null&select=${columns}`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify(payload),
+      },
+    );
+    if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
+    if (!Array.isArray(result.data) || result.data.length === 0) {
+      // 已被自己下架、或根本不是自己的——让客户端清掉本地的发布标记，改走重新发布
+      return NextResponse.json({ ok: false, error: "没有找到可更新的发布内容，它可能已经下架了。", gone: true }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, entry: normalizeEntry(type, result.data[0], { withPayload: true }) });
+  } catch (err) {
+    return NextResponse.json({ ok: false, error: formatSupabaseError(err) }, { status: getSupabaseConfig() ? 400 : 503 });
+  }
+}
+
 export async function PATCH(request: Request) {
   try {
     const account = await getCurrentAccount(request);

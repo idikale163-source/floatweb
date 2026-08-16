@@ -274,7 +274,8 @@ export function MixologyHall({
         setBusy(true);
         try {
             const { saveCount } = await markHallSaved("material", entry.id);
-            const material = { ...entry.payload, id: entry.id, author: entry.authorName } as MixMaterial;
+            const { publishedId: _p, ...rest } = entry.payload as MixMaterial;
+            const material = { ...rest, id: entry.id, author: entry.authorName } as MixMaterial;
             saveMixMaterial(material);
             patchEntry("material", entry.id, { savedByMe: true, saveCount });
             onImported();
@@ -294,7 +295,8 @@ export function MixologyHall({
             const slots: Partial<Record<MixMaterialKind, string>> = {};
             for (const material of entry.materials) {
                 if (!material || typeof material !== "object" || !material.id || !material.kind) continue;
-                saveMixMaterial(material);
+                const { publishedId: _mp, ...clean } = material;
+                saveMixMaterial(clean as MixMaterial);
                 slots[material.kind] = material.id;
             }
             const recipe: MixRecipe = {
