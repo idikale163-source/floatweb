@@ -27,6 +27,16 @@ const TABLES: Record<HallType, string> = {
   recipe: "mixology_recipes",
 };
 
+/**
+ * 列表（非"我的发布"）的 CDN 缓存头：列表不含任何按用户注入的字段
+ *（likedByMe/savedByMe 只在详情里给），响应对所有人相同，让 Netlify 边缘
+ * 挡掉重复回源——列表带封面 base64，是特调这边 Supabase 出站的大头。
+ */
+const CDN_LIST_CACHE_HEADERS = {
+  "Cache-Control": "public, max-age=0, must-revalidate",
+  "Netlify-CDN-Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+} as const;
+
 function getSupabaseConfig(): { url: string; key: string } | null {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
@@ -301,7 +311,8 @@ export async function GET(request: Request) {
       const kind = cleanText(url.searchParams.get("kind"), 20);
       if ((MATERIAL_KINDS as readonly string[]).includes(kind)) filters.unshift(`kind=eq.${kind}`);
     }
-    if (url.searchParams.get("mine") === "1") {
+    const isMine = url.searchParams.get("mine") === "1";
+    if (isMine) {
       if (!account) return NextResponse.json({ ok: true, entries: [] });
       filters.unshift(`author_id=eq.${encodeFilter(userId)}`);
     }
@@ -315,8 +326,9 @@ export async function GET(request: Request) {
     const entries = result.data
       .map(item => normalizeEntry(type, item))
       .filter(Boolean) as Record<string, unknown>[];
-    await annotateMine(type, entries, userId);
-    return NextResponse.json({ ok: true, entries });
+    // 列表不做按用户标注（likedByMe/savedByMe 只在详情用得到）：响应因此对所有人相同，
+    // 公共列表可整体进 CDN 缓存；「我的发布」按账号过滤，不缓存
+    return NextResponse.json({ ok: true, entries }, isMine ? undefined : { headers: CDN_LIST_CACHE_HEADERS });
   } catch (err) {
     return NextResponse.json({ ok: false, error: formatSupabaseError(err), entries: [] }, { status: getSupabaseConfig() ? 500 : 503 });
   }

@@ -226,6 +226,10 @@ export function MixologyHall({
         run: () => void;
     } | null>(null);
     const mountedRef = useRef(true);
+    // 已拉取列表的会话内缓存（key = mode:kind:scope）：切 TAG/范围来回逛不重复回源，
+    // 点头部刷新（reloadToken 变化）或下架后整体作废
+    const listCacheRef = useRef(new Map<string, { materials: MixHallMaterial[]; recipes: MixHallRecipe[]; notReady: string | null }>());
+    const lastReloadRef = useRef(reloadToken);
 
     useEffect(() => {
         mountedRef.current = true;
@@ -236,26 +240,46 @@ export function MixologyHall({
     }, []);
 
     const load = useCallback(async () => {
+        if (lastReloadRef.current !== reloadToken) {
+            listCacheRef.current.clear();
+            lastReloadRef.current = reloadToken;
+        }
+        const cacheKey = `${mode}:${kind}:${scope}`;
+        const cached = listCacheRef.current.get(cacheKey);
+        if (cached) {
+            setMaterials(cached.materials);
+            setRecipes(cached.recipes);
+            setNotReady(cached.notReady);
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         setNotReady(null);
         try {
             if (mode === "menu") {
                 const { entries, setupRequired } = await fetchHallMaterials(kind, scope === "mine");
                 if (!mountedRef.current) return;
+                const notReadyText = setupRequired ? "酒材页的后厨还没开张（共享表未创建）。" : null;
                 setMaterials(entries);
-                if (setupRequired) setNotReady("酒材页的后厨还没开张（共享表未创建）。");
+                if (notReadyText) setNotReady(notReadyText);
+                listCacheRef.current.set(cacheKey, { materials: entries, recipes: [], notReady: notReadyText });
             } else {
                 const { entries, setupRequired } = await fetchHallRecipes(scope === "mine");
                 if (!mountedRef.current) return;
+                const notReadyText = setupRequired ? "配方页还没开张（共享表未创建）。" : null;
                 setRecipes(entries);
-                if (setupRequired) setNotReady("配方页还没开张（共享表未创建）。");
+                if (notReadyText) setNotReady(notReadyText);
+                listCacheRef.current.set(cacheKey, { materials: [], recipes: entries, notReady: notReadyText });
             }
         } catch (error) {
             if (!mountedRef.current) return;
             const message = error instanceof Error ? error.message : "暂时连不上后厨。";
-            setNotReady(/missing_supabase_env/.test(message)
-                ? "酒材页和配方页只在官网营业——本地部署没有联网后端。"
-                : message);
+            const permanent = /missing_supabase_env/.test(message);
+            const text = permanent ? "酒材页和配方页只在官网营业——本地部署没有联网后端。" : message;
+            setNotReady(text);
+            // 未配后端是会话内永久状态：缓存住，自部署环境切 TAG 不反复空打；
+            // 瞬时网络错误不缓存，下次切换自动重试
+            if (permanent) listCacheRef.current.set(cacheKey, { materials: [], recipes: [], notReady: text });
         } finally {
             if (mountedRef.current) setLoading(false);
         }
@@ -274,6 +298,11 @@ export function MixologyHall({
         } else {
             setRecipes((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
             setDetailRecipe((prev) => (prev?.id === id ? { ...prev, ...patch } as MixHallRecipe : prev));
+        }
+        // 写穿会话缓存：点赞/入柜/评论数的变化在切 TAG 回来后不回退
+        for (const cached of listCacheRef.current.values()) {
+            if (type === "material") cached.materials = cached.materials.map((e) => (e.id === id ? { ...e, ...patch } as MixHallMaterial : e));
+            else cached.recipes = cached.recipes.map((e) => (e.id === id ? { ...e, ...patch } as MixHallRecipe : e));
         }
     };
 
@@ -399,6 +428,8 @@ export function MixologyHall({
             }
             // 同步本地记账：清掉对应本地件的发布关联，「已上架」徽章立刻消失
             clearMixPublishedByCloudId(type, id);
+            // 下架改变了列表内容，会话缓存整体作废
+            listCacheRef.current.clear();
             onImported();
             onToast(`「${name}」已下架。`);
         } catch (error) {
