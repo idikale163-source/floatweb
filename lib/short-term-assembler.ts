@@ -9,6 +9,7 @@ import { loadMomentPosts, loadMomentComments } from "./moments-storage";
 import { loadCharacters } from "./character-storage";
 import { resolveUserIdentity } from "./settings-storage";
 import { loadMemoryConfig } from "./memory-storage";
+import type { MemoryConfig } from "./memory-types";
 import { estimateTokens } from "./token-counter";
 import { loadStoryProjectionEntries } from "./story-storage";
 import { buildTwoLevelMomentThreads } from "./moments-comment-threading";
@@ -884,6 +885,29 @@ function truncateTimelineByTokenBudget(
 }
 
 /**
+ * Drop timeline entries whose source app the user has switched off in
+ * 记忆来源 settings. Applies to every consumer of the timeline — the
+ * short-term context assembler as well as long-term summarization.
+ */
+export function filterTimelineByAllowedSources(
+    entries: NativeTimelineEntry[],
+    allowed?: MemoryConfig["shortTermAllowedSources"],
+): NativeTimelineEntry[] {
+    const rules = allowed ?? loadMemoryConfig().shortTermAllowedSources ?? {};
+    return entries.filter(entry => {
+        const source = entry.sourceApp;
+        if (source === "chat") {
+            if (entry.sourceDetail === "group") return rules.group_chat !== false;
+            return rules.chat !== false;
+        }
+        if (source === "story") return rules.story !== false;
+        if (source === "vn") return rules.vn !== false;
+        if (source === "map") return rules.adventure !== false;
+        return (rules as Record<string, boolean | undefined>)[source] !== false;
+    });
+}
+
+/**
  * Unified interface for all modules to get short-term memory context.
  *
  * Returns `RecentBlock[]` + `truncatedHistory`.
@@ -922,26 +946,7 @@ export function prepareShortTermContext(
     });
 
     const memConfig = loadMemoryConfig();
-    const allowed = memConfig.shortTermAllowedSources ?? {};
-    timeline = timeline.filter(entry => {
-        const source = entry.sourceApp;
-        if (source === "chat") {
-            if (entry.sourceDetail === "group") {
-                return allowed.group_chat !== false;
-            }
-            return allowed.chat !== false;
-        }
-        if (source === "story") {
-            return allowed.story !== false;
-        }
-        if (source === "vn") {
-            return allowed.vn !== false;
-        }
-        if (source === "map") {
-            return allowed.adventure !== false;
-        }
-        return (allowed as any)[source] !== false;
-    });
+    timeline = filterTimelineByAllowedSources(timeline, memConfig.shortTermAllowedSources);
 
     // Activation context: full timeline for keyword matching (not truncated)
     const wbActivationContext = timeline.slice(-10).map(e => e.content).join("\n");
@@ -1201,25 +1206,7 @@ export function prepareGroupShortTermContext(
             timeAware,
             promptTimestampOptions: options?.promptTimestampOptions,
         });
-        timeline = timeline.filter(entry => {
-            const source = entry.sourceApp;
-            if (source === "chat") {
-                if (entry.sourceDetail === "group") {
-                    return allowed.group_chat !== false;
-                }
-                return allowed.chat !== false;
-            }
-            if (source === "story") {
-                return allowed.story !== false;
-            }
-            if (source === "vn") {
-                return allowed.vn !== false;
-            }
-            if (source === "map") {
-                return allowed.adventure !== false;
-            }
-            return (allowed as any)[source] !== false;
-        });
+        timeline = filterTimelineByAllowedSources(timeline, allowed);
         for (const entry of timeline) {
             if (entry.sourceApp === "chat" && entry.sourceDetail === "group" && entry.groupSessionId === options?.excludeGroupSessionId) {
                 continue;
