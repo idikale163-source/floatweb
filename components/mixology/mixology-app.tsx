@@ -447,7 +447,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             }}
                             title="创作者资料：发布到酒材/配方页时的署名与头像"
                         >
-                            <AuthorAvatar name={profile.name} avatar={profile.avatar} size={22} />
+                            <AuthorAvatar name={profile.name} avatar={profile.avatar} size={26} />
                             <span className="mix-profile-name">{profile.name || "起个笔名"}</span>
                             <Pencil size={12} />
                         </button>
@@ -901,7 +901,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             </div>
                             <label className="mix-form-label">头像</label>
                             <div className="mix-cover-picker">
-                                <AuthorAvatar name={profileName || profile.name} avatar={profileAvatar} size={64} />
+                                <AuthorAvatar name={profileName || profile.name} avatar={profileAvatar} size={88} />
                                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                     <button type="button" className="mix-pill-btn" onClick={() => avatarFileRef.current?.click()}>选择图片</button>
                                     {profileAvatar ? (
