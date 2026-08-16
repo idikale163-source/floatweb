@@ -277,6 +277,41 @@ export async function continueMix(sessionId: string, signal?: AbortSignal): Prom
     return runMixGeneration(current, "（请接着上文继续推进剧情，直接续写，不要重复已写过的内容。）", signal);
 }
 
+/** 回溯到某条消息：保留它，删除其后的全部内容 */
+export function truncateMixAfterTurn(sessionId: string, turnId: string): MixSession {
+    const current = getMixSession(sessionId);
+    if (!current) throw new ChatEngineError("对局不存在。");
+    const idx = current.turns.findIndex((t) => t.id === turnId);
+    if (idx < 0) throw new ChatEngineError("消息不存在。");
+    const updated: MixSession = { ...current, turns: current.turns.slice(0, idx + 1) };
+    saveMixSession(updated);
+    return updated;
+}
+
+/**
+ * 编辑某条消息的正文：保存新文本并删除其后的全部内容。
+ * 编辑的是玩家发言时，调用方应随后用 regenerateMixTail 重新生成回复。
+ */
+export function editMixTurn(sessionId: string, turnId: string, newText: string): MixSession {
+    const current = getMixSession(sessionId);
+    if (!current) throw new ChatEngineError("对局不存在。");
+    const idx = current.turns.findIndex((t) => t.id === turnId);
+    if (idx < 0) throw new ChatEngineError("消息不存在。");
+    const trimmed = newText.trim();
+    if (!trimmed) throw new ChatEngineError("消息不能为空。");
+    const edited: MixTurn = { ...current.turns[idx], text: trimmed };
+    const updated: MixSession = { ...current, turns: [...current.turns.slice(0, idx), edited] };
+    saveMixSession(updated);
+    return updated;
+}
+
+/** 对当前历史直接生成回复（编辑玩家发言后的重新生成） */
+export async function regenerateMixTail(sessionId: string, signal?: AbortSignal): Promise<MixReplyResult> {
+    const current = getMixSession(sessionId);
+    if (!current) throw new ChatEngineError("对局不存在。");
+    return runMixGeneration(current, undefined, signal);
+}
+
 /** 撤回最后一轮：删掉最后一条玩家发言及其后的全部回复 */
 export function undoMixLastRound(sessionId: string): MixSession {
     const current = getMixSession(sessionId);

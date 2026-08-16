@@ -5,12 +5,13 @@
 // 装饰材料的 CSS 以 <style> 注入本画面容器（认 .mix-* 官方语义类）。
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, CornerDownRight, RotateCcw, Send, Undo2 } from "lucide-react";
-import { continueMix, generateMixReply, rerollMixReply, undoMixLastRound } from "@/lib/mixology/engine";
+import { ChevronLeft, Copy, CornerDownRight, History, Pencil, RotateCcw, Send, Undo2 } from "lucide-react";
+import { continueMix, editMixTurn, generateMixReply, regenerateMixTail, rerollMixReply, truncateMixAfterTurn, undoMixLastRound } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession } from "@/lib/mixology/storage";
 import { mixEncoreRenderHtml, type MixCharacterCard, type MixSession, type MixTurn } from "@/lib/mixology/types";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
+import { MixConfirm } from "./mixology-shared";
 import { MixTicketFrame } from "./ticket-frame";
 
 type GameProps = {
@@ -38,10 +39,39 @@ function AssistantTurn({ turn, ticketHtml, encoreHtml }: { turn: MixTurn; ticket
     );
 }
 
+/** 每条消息下方的操作行：复制 / 回溯到这里 / 编辑 */
+function TurnActions({
+    align,
+    disabled,
+    canRewind,
+    onCopy,
+    onRewind,
+    onEdit,
+}: {
+    align: "left" | "right";
+    disabled: boolean;
+    canRewind: boolean;
+    onCopy: () => void;
+    onRewind: () => void;
+    onEdit: () => void;
+}) {
+    return (
+        <div className="mix-turn-actions" data-align={align}>
+            <button type="button" className="mix-turn-act" onClick={onCopy} disabled={disabled} aria-label="复制"><Copy size={13} /></button>
+            {canRewind ? (
+                <button type="button" className="mix-turn-act" onClick={onRewind} disabled={disabled} aria-label="回溯到这里"><History size={13} /></button>
+            ) : null}
+            <button type="button" className="mix-turn-act" onClick={onEdit} disabled={disabled} aria-label="编辑"><Pencil size={13} /></button>
+        </div>
+    );
+}
+
 export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const [session, setSession] = useState<MixSession | null>(() => getMixSession(sessionId));
     const [input, setInput] = useState("");
     const [busy, setBusy] = useState(false);
+    const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null);
+    const [confirm, setConfirm] = useState<{ type: "rewind" | "edit"; turnId: string } | null>(null);
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const abortRef = useRef<AbortController | null>(null);
 
@@ -115,6 +145,51 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         void run((signal) => generateMixReply(sessionId, text, signal));
     };
 
+    const copyTurn = (turn: MixTurn) => {
+        const done = () => onToast("已复制");
+        if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(turn.text).then(done, () => onToast("复制失败"));
+            return;
+        }
+        const ta = document.createElement("textarea");
+        ta.value = turn.text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy"); done(); } catch { onToast("复制失败"); }
+        document.body.removeChild(ta);
+    };
+
+    const laterCount = (turnId: string) => {
+        const idx = session.turns.findIndex((t) => t.id === turnId);
+        return idx < 0 ? 0 : session.turns.length - idx - 1;
+    };
+
+    const doRewind = (turnId: string) => {
+        try {
+            truncateMixAfterTurn(sessionId, turnId);
+            setSession(getMixSession(sessionId));
+        } catch (error) {
+            onToast(error instanceof Error ? error.message : "回溯失败");
+        }
+    };
+
+    const saveEdit = () => {
+        if (!editing) return;
+        const target = session.turns.find((t) => t.id === editing.id);
+        setEditing(null);
+        try {
+            editMixTurn(sessionId, editing.id, editing.draft);
+            setSession(getMixSession(sessionId));
+        } catch (error) {
+            onToast(error instanceof Error ? error.message : "保存失败");
+            return;
+        }
+        // 编辑的是玩家发言：直接续生成新回复；编辑角色回复则到此为止
+        if (target?.role === "user") {
+            void run((signal) => regenerateMixTail(sessionId, signal));
+        }
+    };
+
     const lastTurn = session.turns[session.turns.length - 1];
     const canReroll = !busy && lastTurn?.role === "assistant" && session.turns.length > 1;
     const canUndo = !busy && session.turns.some((t) => t.role === "user");
@@ -149,15 +224,56 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                         <MixRichText text={assets.canvasHtml} />
                     </div>
                 ) : null}
-                {session.turns.map((turn) =>
-                    turn.role === "user" ? (
-                        <div className="mix-user-turn" key={turn.id}>
+                {session.turns.map((turn, idx) => {
+                    const isLast = idx === session.turns.length - 1;
+                    if (editing?.id === turn.id) {
+                        return (
+                            <div className="mix-turn-edit" key={turn.id}>
+                                <textarea
+                                    className="mix-textarea"
+                                    style={{ minHeight: 110 }}
+                                    value={editing.draft}
+                                    onChange={(e) => setEditing({ id: turn.id, draft: e.target.value })}
+                                />
+                                <div className="mix-turn-edit-actions">
+                                    <button type="button" className="mix-pill-btn" data-tone="ghost" onClick={() => setEditing(null)}>取消</button>
+                                    <button
+                                        type="button"
+                                        className="mix-pill-btn"
+                                        onClick={() => {
+                                            if (laterCount(turn.id) > 0) setConfirm({ type: "edit", turnId: turn.id });
+                                            else saveEdit();
+                                        }}
+                                    >
+                                        保存{turn.role === "user" ? "并重新生成" : ""}
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    }
+                    const actions = (
+                        <TurnActions
+                            align={turn.role === "user" ? "right" : "left"}
+                            disabled={busy}
+                            canRewind={!isLast}
+                            onCopy={() => copyTurn(turn)}
+                            onRewind={() => setConfirm({ type: "rewind", turnId: turn.id })}
+                            onEdit={() => setEditing({ id: turn.id, draft: turn.text })}
+                            key={`act-${turn.id}`}
+                        />
+                    );
+                    return turn.role === "user" ? (
+                        <div className="mix-user-turn" data-with-actions="true" key={turn.id}>
                             <div className="mix-user-bubble">{turn.text}</div>
+                            {actions}
                         </div>
                     ) : (
-                        <AssistantTurn turn={turn} ticketHtml={assets.ticketHtml} encoreHtml={assets.encoreTurnHtml} key={turn.id} />
-                    ),
-                )}
+                        <div className="mix-assistant-turn" key={turn.id}>
+                            <AssistantTurn turn={turn} ticketHtml={assets.ticketHtml} encoreHtml={assets.encoreTurnHtml} />
+                            {actions}
+                        </div>
+                    );
+                })}
                 {busy ? (
                     <div className="mix-game-thinking" aria-label="生成中">
                         <span /><span /><span />
@@ -208,6 +324,24 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                     <Send size={16} />
                 </button>
             </div>
+
+            {confirm ? (
+                <MixConfirm
+                    title={confirm.type === "rewind" ? "回溯到这条消息？" : "保存修改？"}
+                    body={confirm.type === "rewind"
+                        ? `这条消息之后的 ${laterCount(confirm.turnId)} 条内容将被删除。`
+                        : `保存后，这条消息之后的 ${laterCount(confirm.turnId)} 条内容将被删除${session.turns.find((t) => t.id === confirm.turnId)?.role === "user" ? "，并重新生成回复" : ""}。`}
+                    confirmText={confirm.type === "rewind" ? "回溯" : "保存"}
+                    tone="danger"
+                    onCancel={() => setConfirm(null)}
+                    onConfirm={() => {
+                        const target = confirm;
+                        setConfirm(null);
+                        if (target.type === "rewind") doRewind(target.turnId);
+                        else saveEdit();
+                    }}
+                />
+            ) : null}
         </div>
     );
 }
