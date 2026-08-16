@@ -21,7 +21,7 @@ type GameProps = {
 };
 
 function AssistantTurn({ turn, ticketHtml, encoreHtml }: { turn: MixTurn; ticketHtml?: string; encoreHtml?: string }) {
-    // 展示顺序：状态栏在正文前、小剧场在正文后（模型的输出顺序不变，界面重排）
+    // 展示顺序：状态栏在正文前、小剧场在正文后（与模型的输出顺序一致，无需重排）
     return (
         <>
             {ticketHtml && turn.ticketRaw ? (

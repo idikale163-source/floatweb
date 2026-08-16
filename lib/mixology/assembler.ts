@@ -98,7 +98,7 @@ function ticketSection(ticket: MixTicketMaterial, charName: string, userName: st
     if (!contract) return null;
     return [
         "## 状态栏",
-        `输出格式：每轮回复的最末尾，另起一行输出 ${MIX_TICKET_OPEN}，随后按「输出内容」的要求逐行填写本轮的实际数据，最后以 ${MIX_TICKET_CLOSE} 单独一行收束。任何一轮都不要省略这一段。`,
+        `输出格式：每轮回复的最开头，第一行输出 ${MIX_TICKET_OPEN}，随后按「输出内容」的要求逐行填写本轮的实际数据，以 ${MIX_TICKET_CLOSE} 单独一行收束，之后空一行再写正文。任何一轮都不要省略这一段。`,
         "输出内容：",
         applyMixMacros(contract, charName, userName),
     ].join("\n");
@@ -110,7 +110,7 @@ function encoreSection(encore: MixEncoreMaterial, charName: string, userName: st
     if (!contract) return null;
     return [
         "## 小剧场",
-        `输出格式：放在回复最末尾（状态栏之后），整块用 ${MIX_ENCORE_OPEN}...${MIX_ENCORE_CLOSE} 包裹；是否输出由「输出内容」的条件决定，不输出时整段省略，不要输出空壳。`,
+        `输出格式：放在回复最末尾（正文之后），整块用 ${MIX_ENCORE_OPEN}...${MIX_ENCORE_CLOSE} 包裹；是否输出由「输出内容」的条件决定，不输出时整段省略，不要输出空壳。`,
         "输出内容：",
         applyMixMacros(contract, charName, userName),
     ].join("\n");
@@ -121,7 +121,7 @@ function checklistSection(withTicket: boolean, withEncore: boolean): string | nu
     if (!withTicket && !withEncore) return null;
     const items = ["- 正文符合「正文输出要求」。"];
     if (withTicket) {
-        items.push(`- 回复最末尾已按「状态栏」的格式输出 ${MIX_TICKET_OPEN}...${MIX_TICKET_CLOSE} 块——任何一轮都不能缺。`);
+        items.push(`- 回复最开头已按「状态栏」的格式输出 ${MIX_TICKET_OPEN}...${MIX_TICKET_CLOSE} 块——任何一轮都不能缺。`);
     }
     if (withEncore) {
         items.push(`- 若本轮满足「小剧场」的输出条件，已用 ${MIX_ENCORE_OPEN}...${MIX_ENCORE_CLOSE} 块输出。`);

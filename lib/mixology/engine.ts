@@ -63,8 +63,10 @@ function assembleFromSession(session: MixSession): { prompt: MixAssembledPrompt;
  */
 export function mixTurnRawText(turn: MixTurn): string {
     if (turn.role !== "assistant") return turn.text;
-    const parts = [turn.text];
+    // 顺序与输出要求一致：状态栏在正文前、小剧场在正文后——历史回放就是模型的"输出习惯"示范
+    const parts = [];
     if (turn.ticketRaw) parts.push(`${MIX_TICKET_OPEN}\n${turn.ticketRaw}\n${MIX_TICKET_CLOSE}`);
+    parts.push(turn.text);
     if (turn.encoreRaw) parts.push(`${MIX_ENCORE_OPEN}\n${turn.encoreRaw}\n${MIX_ENCORE_CLOSE}`);
     return parts.filter(Boolean).join("\n\n");
 }
