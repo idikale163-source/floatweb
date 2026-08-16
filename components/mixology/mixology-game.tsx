@@ -20,14 +20,15 @@ type GameProps = {
 };
 
 function AssistantTurn({ turn, ticketHtml, encoreHtml }: { turn: MixTurn; ticketHtml?: string; encoreHtml?: string }) {
+    // 展示顺序：状态栏在正文前、小剧场在正文后（模型的输出顺序不变，界面重排）
     return (
         <>
-            {turn.text ? <MixProseView text={turn.text} /> : null}
             {ticketHtml && turn.ticketRaw ? (
                 <div className="mix-ticket-wrap">
                     <MixTicketFrame html={ticketHtml} raw={turn.ticketRaw} />
                 </div>
             ) : null}
+            {turn.text ? <MixProseView text={turn.text} /> : null}
             {encoreHtml && turn.encoreRaw ? (
                 <div className="mix-encore-turn">
                     <MixTicketFrame html={encoreHtml} raw={turn.encoreRaw} />
