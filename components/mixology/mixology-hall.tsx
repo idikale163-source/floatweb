@@ -5,6 +5,7 @@
 // 未配后端（自部署）或表未建时按「还没开张」处理，不打扰本地玩法。
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { CornerDownRight, Heart, Inbox, Trash2, Wine, X } from "lucide-react";
 import { fetchCurrentAccount } from "@/lib/account-client";
 import {
@@ -196,6 +197,11 @@ export function MixologyHall({
     const [busy, setBusy] = useState(false);
     const [likePending, setLikePending] = useState<string[]>([]);
     const [myId, setMyId] = useState("");
+    // 弹层宿主：.mix-body 是滚动容器（position:relative），弹层若留在其内部，
+    // inset:0 锚的是滚动坐标系——列表滚动后弹窗会"不贴底"。portal 到应用根层。
+    const [overlayHost, setOverlayHost] = useState<HTMLElement | null>(null);
+    useEffect(() => { setOverlayHost(document.querySelector<HTMLElement>(".mixology-app")); }, []);
+    const inOverlay = (node: ReactNode) => (overlayHost ? createPortal(node, overlayHost) : null);
     const [confirm, setConfirm] = useState<{
         title: string;
         body?: ReactNode;
@@ -465,7 +471,7 @@ export function MixologyHall({
             {renderBody()}
 
             {/* 材料详情 */}
-            {detailMaterial ? (
+            {detailMaterial ? inOverlay(
                 <div className="mix-sheet-mask" onClick={() => setDetailMaterial(null)}>
                     <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
                         {detailMaterial.kind === "character" && detailMaterial.cover ? (
@@ -531,7 +537,7 @@ export function MixologyHall({
             ) : null}
 
             {/* 配方详情 */}
-            {detailRecipe ? (
+            {detailRecipe ? inOverlay(
                 <div className="mix-sheet-mask" onClick={() => setDetailRecipe(null)}>
                     <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
                         <div className="mix-sheet-head">
@@ -599,7 +605,7 @@ export function MixologyHall({
                 </div>
             ) : null}
 
-            {confirm ? (
+            {confirm ? inOverlay(
                 <MixConfirm
                     title={confirm.title}
                     body={confirm.body}

@@ -476,15 +476,6 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 ))}
                             </div>
                         )}
-                        <button
-                            type="button"
-                            className="mix-fab"
-                            onClick={() => setEditor({ kind: cabinetKind })}
-                            aria-label={`自建一件${MIX_KIND_LABELS[cabinetKind]}`}
-                            title={`自建一件${MIX_KIND_LABELS[cabinetKind]}`}
-                        >
-                            <Plus size={24} />
-                        </button>
                     </>
                 ) : null}
 
@@ -539,6 +530,19 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                     </>
                 ) : null}
             </div>
+
+            {/* 悬浮创建按钮：必须在滚动容器之外，否则列表滚动后按钮会跟着内容坐标漂移 */}
+            {tab === "cabinet" ? (
+                <button
+                    type="button"
+                    className="mix-fab"
+                    onClick={() => setEditor({ kind: cabinetKind })}
+                    aria-label={`自建一件${MIX_KIND_LABELS[cabinetKind]}`}
+                    title={`自建一件${MIX_KIND_LABELS[cabinetKind]}`}
+                >
+                    <Plus size={24} />
+                </button>
+            ) : null}
 
             <div className="mix-nav">
                 <button type="button" className="mix-nav-btn" data-active={tab === "menu" ? "true" : undefined} onClick={() => setTab("menu")}>
