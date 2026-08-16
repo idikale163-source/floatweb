@@ -5,13 +5,13 @@
 // 装饰材料的 CSS 以 <style> 注入本画面容器（认 .mix-* 官方语义类）。
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, Copy, CornerDownRight, History, Pencil, RotateCcw, Send, Undo2 } from "lucide-react";
+import { ChevronLeft, Copy, CornerDownRight, History, Pencil, RotateCcw, Send, SlidersHorizontal, Undo2, X } from "lucide-react";
 import { continueMix, editMixTurn, generateMixReply, regenerateMixTail, rerollMixReply, truncateMixAfterTurn, undoMixLastRound } from "@/lib/mixology/engine";
-import { getMixMaterial, getMixSession } from "@/lib/mixology/storage";
-import { mixEncoreRenderHtml, type MixCharacterCard, type MixSession, type MixTurn } from "@/lib/mixology/types";
+import { getMixMaterial, getMixSession, listMixMaterials, saveMixSession } from "@/lib/mixology/storage";
+import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, type MixCharacterCard, type MixMaterialKind, type MixSession, type MixTurn } from "@/lib/mixology/types";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
-import { MixConfirm } from "./mixology-shared";
+import { KindGlyph, MixConfirm } from "./mixology-shared";
 import { MixTicketFrame } from "./ticket-frame";
 
 type GameProps = {
@@ -72,6 +72,8 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const [busy, setBusy] = useState(false);
     const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null);
     const [confirm, setConfirm] = useState<{ type: "rewind" | "edit"; turnId: string } | null>(null);
+    const [recipeOpen, setRecipeOpen] = useState(false);
+    const [slotPick, setSlotPick] = useState<MixMaterialKind | null>(null);
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const abortRef = useRef<AbortController | null>(null);
 
@@ -190,6 +192,18 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         }
     };
 
+    /** 换料：改本局方案快照的槽位，下一轮装配时生效 */
+    const setSlot = (kind: MixMaterialKind, materialId: string | undefined) => {
+        const slots = { ...session.recipe.slots };
+        if (materialId) slots[kind] = materialId;
+        else delete slots[kind];
+        const updated: MixSession = { ...session, recipe: { ...session.recipe, slots }, updatedAt: Date.now() };
+        saveMixSession(updated);
+        setSession(getMixSession(sessionId));
+        setSlotPick(null);
+        onToast("方案已更新，下一轮生效。");
+    };
+
     const lastTurn = session.turns[session.turns.length - 1];
     const canReroll = !busy && lastTurn?.role === "assistant" && session.turns.length > 1;
     const canUndo = !busy && session.turns.some((t) => t.role === "user");
@@ -201,6 +215,9 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             <div className="mix-game-header">
                 <button type="button" className="mix-icon-btn" onClick={onBack} aria-label="返回"><ChevronLeft size={20} /></button>
                 <div className="mix-game-title">{session.charName}</div>
+                <button type="button" className="mix-icon-btn" onClick={() => setRecipeOpen(true)} disabled={busy} aria-label="修改方案" title="修改方案">
+                    <SlidersHorizontal size={17} />
+                </button>
                 <button
                     type="button"
                     className="mix-icon-btn"
@@ -324,6 +341,83 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                     <Send size={16} />
                 </button>
             </div>
+
+            {/* 修改方案：换本局的槽位材料 */}
+            {recipeOpen ? (
+                <div className="mix-sheet-mask" onClick={() => setRecipeOpen(false)}>
+                    <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
+                        <div className="mix-sheet-head">
+                            <div className="mix-sheet-title">修改方案</div>
+                            <button type="button" className="mix-icon-btn" onClick={() => setRecipeOpen(false)} aria-label="关闭"><X size={18} /></button>
+                        </div>
+                        <div className="mix-sheet-body">
+                            <div className="mix-struct-note">只改这一局，下一轮生成时生效，已写出的内容不变；不影响吧台里保存的方案。</div>
+                            <div className="mix-mat-list">
+                                {MIX_SLOT_ORDER.map((kind) => {
+                                    const id = session.recipe.slots[kind];
+                                    const mat = id ? getMixMaterial(id) : null;
+                                    const locked = kind === "character";
+                                    return (
+                                        <div
+                                            className="mix-mat-row"
+                                            data-kind={kind}
+                                            data-locked={locked ? "true" : undefined}
+                                            onClick={() => { if (!locked) setSlotPick(kind); }}
+                                            key={kind}
+                                        >
+                                            <div className="mix-mat-row-glyph"><KindGlyph kind={kind} size={22} /></div>
+                                            <div className="mix-mat-info">
+                                                <div className="mix-mat-name"><span>{MIX_KIND_LABELS[kind]}</span></div>
+                                                <div className="mix-mat-hook">
+                                                    {locked ? `${mat?.name ?? session.charName} · 本局不可换` : mat ? mat.name : "空槽 · 点击选择"}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
+            {slotPick ? (
+                <div className="mix-sheet-mask" onClick={() => setSlotPick(null)}>
+                    <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
+                        <div className="mix-sheet-head">
+                            <div className="mix-sheet-title">选一件{MIX_KIND_LABELS[slotPick]}</div>
+                            <button type="button" className="mix-icon-btn" onClick={() => setSlotPick(null)} aria-label="关闭"><X size={18} /></button>
+                        </div>
+                        <div className="mix-sheet-body">
+                            <div className="mix-mat-list">
+                                {session.recipe.slots[slotPick] ? (
+                                    <div className="mix-mat-row" onClick={() => setSlot(slotPick, undefined)}>
+                                        <div className="mix-mat-row-glyph"><X size={18} /></div>
+                                        <div className="mix-mat-info">
+                                            <div className="mix-mat-name"><span>不用这味 · 清空槽位</span></div>
+                                        </div>
+                                    </div>
+                                ) : null}
+                                {listMixMaterials(slotPick).map((m) => (
+                                    <div className="mix-mat-row" data-kind={m.kind} onClick={() => setSlot(slotPick, m.id)} key={m.id}>
+                                        <div className="mix-mat-row-glyph"><KindGlyph kind={m.kind} size={22} /></div>
+                                        <div className="mix-mat-info">
+                                            <div className="mix-mat-name">
+                                                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{m.name}</span>
+                                                {session.recipe.slots[slotPick] === m.id ? <span className="mix-mat-badge">当前</span> : null}
+                                            </div>
+                                            {m.hook ? <div className="mix-mat-hook">{m.hook}</div> : null}
+                                        </div>
+                                    </div>
+                                ))}
+                                {listMixMaterials(slotPick).length === 0 ? (
+                                    <div className="mix-comment-empty">酒柜里还没有{MIX_KIND_LABELS[slotPick]}——去酒柜页自建一件。</div>
+                                ) : null}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
 
             {confirm ? (
                 <MixConfirm
