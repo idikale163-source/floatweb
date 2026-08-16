@@ -253,10 +253,14 @@ export function parseMixMaterialsFromJson(text: string): MixMaterial[] {
                 ? record.openings.filter((o): o is string => typeof o === "string" && Boolean(o.trim()))
                 : [];
             if (openings.length === 0) continue;
+            // 文件导入一律视为自己的本地作品：换新 id、剥掉发布关联与导入标记，
+            // 修改/导出/发布全部照常（酒材页入柜的"别人的作品"限制与此无关）
             materials.push({
                 ...(record as unknown as MixMaterial),
                 id: createMixId("mixmat"),
                 publishedId: undefined,
+                publishedAt: undefined,
+                imported: undefined,
                 name,
                 openings,
                 createdAt: now,
@@ -268,6 +272,8 @@ export function parseMixMaterialsFromJson(text: string): MixMaterial[] {
             ...(record as unknown as MixMaterial),
             id: createMixId("mixmat"),
             publishedId: undefined,
+            publishedAt: undefined,
+            imported: undefined,
             name,
             createdAt: now,
             updatedAt: now,
