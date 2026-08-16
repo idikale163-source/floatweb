@@ -1,7 +1,7 @@
 "use client";
 
-// 独家特调 · App 主壳：酒单（Phase ④ 官网大厅，暂为预告）/ 吧台（单槽轮盘调配）/
-// 酒柜（八类材料 TAG + 双列瀑布）/ 对局（酒局记录）。
+// 独家特调 · App 主壳：酒材/配方（官网在线共享页）/ 吧台（单槽轮盘调配）/
+// 酒柜（九类材料 TAG + 瀑布与列表）/ 对局（酒局记录）。
 // 视觉：近黑 + 紫罗兰 + 琥珀金的暗色酒吧质感，见 styles/mixology.css。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -50,11 +50,12 @@ import {
     type MixRecipe,
     type MixSession,
 } from "@/lib/mixology/types";
+import { fetchCurrentAccount } from "@/lib/account-client";
 import { MixHallGoneError, shareHallMaterial, shareHallRecipe, updateHallMaterial, updateHallRecipe } from "@/lib/mixology/hall-client";
 import { exportMixMaterial, exportMixMaterialPng, parseMixMaterialsFromJson, parseMixMaterialsFromPng } from "@/lib/mixology/transfer";
 import { MixMaterialEditor } from "./mixology-editor";
 import { MixologyGame } from "./mixology-game";
-import { MixologyHall } from "./mixology-hall";
+import { CommentThread, MixologyHall } from "./mixology-hall";
 import { KindGlyph, MatCard, MaterialDetail, MixConfirm, SealedNote, formatMixTime, isSealedMaterial } from "./mixology-shared";
 
 type MixTab = "menu" | "hall" | "bar" | "cabinet" | "games";
@@ -67,9 +68,11 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     const [recipes, setRecipes] = useState<MixRecipe[]>(() => loadMixRecipes());
     const [sessions, setSessions] = useState<MixSession[]>(() => loadMixSessions());
     const [cabinetKind, setCabinetKind] = useState<MixMaterialKind>("character");
-    // 酒单/大厅手动刷新：令牌触发子组件重拉，loading 驱动头部图标旋转
+    // 酒材/配方页手动刷新：令牌触发子组件重拉，loading 驱动头部图标旋转
     const [hallReload, setHallReload] = useState(0);
     const [hallLoading, setHallLoading] = useState(false);
+    // 自己的账号 id：酒柜详情里的评论区用它判断"哪条评论可删"
+    const [myId, setMyId] = useState("");
     const [detail, setDetail] = useState<MixMaterial | null>(null);
     const [editor, setEditor] = useState<{ kind: MixMaterialKind; initial?: MixMaterial } | null>(null);
     const [barTab, setBarTab] = useState<"create" | "mine">("create");
@@ -99,6 +102,14 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     }, []);
 
     useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        void fetchCurrentAccount()
+            .then((res) => { if (!cancelled && res.account) setMyId(res.account.id); })
+            .catch(() => { /* 未登录/自部署：匿名浏览态 */ });
+        return () => { cancelled = true; };
+    }, []);
 
     const refresh = useCallback(() => {
         setCabinet(loadMixCabinet());
@@ -217,19 +228,19 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
         try {
             if (material.publishedId) {
                 await updateHallMaterial(material.publishedId, material);
-                showToast(`酒单上的「${material.name}」已更新。`);
+                showToast(`酒材页上的「${material.name}」已更新。`);
             } else {
                 const entry = await shareHallMaterial(material);
                 // 记住线上身份，之后改了本地就能推更新，也不会重复发布出一堆同名卡
                 saveMixMaterial({ ...material, publishedId: entry.id });
                 refresh();
-                showToast(`「${material.name}」已分享到酒单。`);
+                showToast(`「${material.name}」已分享到酒材页。`);
             }
         } catch (error) {
             if (error instanceof MixHallGoneError) {
                 saveMixMaterial({ ...material, publishedId: undefined });
                 refresh();
-                showToast("它已经从酒单下架了，可以重新分享一次。");
+                showToast("它已经从酒材页下架了，可以重新分享一次。");
             } else {
                 showToast(error instanceof Error ? error.message : "分享失败");
             }
@@ -259,18 +270,18 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
         try {
             if (recipe.publishedId) {
                 await updateHallRecipe(recipe.publishedId, input);
-                showToast(`大厅里的「${recipe.name}」已更新。`);
+                showToast(`配方页上的「${recipe.name}」已更新。`);
             } else {
                 const entry = await shareHallRecipe(input);
                 saveMixRecipe({ ...recipe, publishedId: entry.id });
                 refresh();
-                showToast(`「${recipe.name}」已分享到大厅。`);
+                showToast(`「${recipe.name}」已分享到配方页。`);
             }
         } catch (error) {
             if (error instanceof MixHallGoneError) {
                 saveMixRecipe({ ...recipe, publishedId: undefined });
                 refresh();
-                showToast("它已经从大厅下架了，可以重新分享一次。");
+                showToast("它已经从配方页下架了，可以重新分享一次。");
             } else {
                 showToast(error instanceof Error ? error.message : "分享失败");
             }
@@ -315,6 +326,13 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     }
 
     const openingCard = openingPicker?.slots.character ? getMixMaterial(openingPicker.slots.character) : null;
+
+    // 酒柜详情里的评论区：自己发布过的（publishedId）或从酒材页整件入柜的
+    // （imported 且 id 就是线上 id，前缀 mxi_）能对上线上条目；随配方连料入柜的
+    // 材料 id 是作者本地 id，线上没有对应条目，不显示评论区。
+    const detailHallId = detail
+        ? detail.publishedId ?? (detail.imported && detail.id.startsWith("mxi_") ? detail.id : null)
+        : null;
 
     return (
         <div className="mixology-app">
@@ -561,10 +579,10 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
 
             <div className="mix-nav">
                 <button type="button" className="mix-nav-btn" data-active={tab === "menu" ? "true" : undefined} onClick={() => setTab("menu")}>
-                    <Wine size={19} strokeWidth={1.8} />酒单
+                    <Wine size={19} strokeWidth={1.8} />酒材
                 </button>
                 <button type="button" className="mix-nav-btn" data-active={tab === "hall" ? "true" : undefined} onClick={() => setTab("hall")}>
-                    <Users size={19} strokeWidth={1.8} />大厅
+                    <Users size={19} strokeWidth={1.8} />配方
                 </button>
                 <button type="button" className="mix-nav-btn" data-active={tab === "bar" ? "true" : undefined} onClick={() => setTab("bar")}>
                     <Martini size={19} strokeWidth={1.8} />吧台
@@ -609,19 +627,19 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                         type="button"
                                         className="mix-icon-btn"
                                         onClick={() => setConfirm(detail.publishedId ? {
-                                            title: "更新酒单上的版本？",
-                                            body: <>会把「{detail.name}」在酒单上的内容替换成现在这一份。<br />点赞、入柜数与评论都会保留。</>,
+                                            title: "更新酒材页上的版本？",
+                                            body: <>会把「{detail.name}」在酒材页上的内容替换成现在这一份。<br />点赞、入柜数与评论都会保留。</>,
                                             confirmText: "更新",
                                             run: () => { const t = detail; setDetail(null); void handleShareMaterial(t); },
                                         } : {
-                                            title: "分享到酒单？",
-                                            body: <>「{detail.name}」将出现在酒单上，<b>其他人能看到它的完整内容</b>，也能加进自己的酒柜。<br />不想公开就先别发。</>,
+                                            title: "分享到酒材页？",
+                                            body: <>「{detail.name}」将出现在酒材页上，<b>其他人能看到它的完整内容</b>，也能加进自己的酒柜。<br />不想公开就先别发。</>,
                                             confirmText: "分享",
                                             run: () => { const t = detail; setDetail(null); void handleShareMaterial(t); },
                                         })}
                                         disabled={sharing}
-                                        aria-label={detail.publishedId ? "更新酒单上的版本" : "分享到酒单"}
-                                        title={detail.publishedId ? "更新酒单上的版本" : "分享到酒单"}
+                                        aria-label={detail.publishedId ? "更新酒材页上的版本" : "分享到酒材页"}
+                                        title={detail.publishedId ? "更新酒材页上的版本" : "分享到酒材页"}
                                     >
                                         {detail.publishedId ? <RefreshCw size={16} /> : <Share2 size={16} />}
                                     </button>
@@ -648,7 +666,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     className="mix-icon-btn"
                                     onClick={() => setConfirm({
                                         title: "删除这张角色卡？",
-                                        body: <>「{detail.name}」将从酒柜里移除，用到它的特调会缺一味。<br />之后可以再去酒单入柜一次。</>,
+                                        body: <>「{detail.name}」将从酒柜里移除，用到它的特调会缺一味。<br />之后可以再去酒材页入柜一次。</>,
                                         confirmText: "删除",
                                         tone: "danger",
                                         run: () => handleDeleteMaterial(detail),
@@ -665,12 +683,22 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={detail.cover} alt={detail.name} style={{ width: 96, height: 128, objectFit: "cover", borderRadius: 12, margin: "4px 0 12px" }} />
                             ) : null}
-                            {/* 与酒单同一套展示：角色卡点开看门面（画布/一句话介绍），设定正文进「编辑」看 */}
+                            {/* 与酒材页同一套展示：角色卡点开看门面（画布/一句话介绍），设定正文进「编辑」看 */}
                             {detail.kind === "character" ? (
                                 <SealedNote hook={detail.hook} canvas={(detail as MixCharacterCard).canvas} />
                             ) : (
                                 <MaterialDetail material={detail} />
                             )}
+                            {detailHallId ? (
+                                <CommentThread
+                                    type="material"
+                                    targetId={detailHallId}
+                                    myId={myId}
+                                    onToast={showToast}
+                                    onCountChange={() => { /* 酒柜不落地线上评论数 */ }}
+                                    requestConfirm={setConfirm}
+                                />
+                            ) : null}
                         </div>
                     </div>
                 </div>
@@ -816,12 +844,12 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     const target = recipeMenu;
                                     setRecipeMenu(null);
                                     setConfirm(target.publishedId ? {
-                                        title: "更新大厅里的版本？",
-                                        body: <>会把「{target.name}」在大厅上的内容替换成现在这一份（含全部材料）。<br />点赞、入柜数与评论都会保留。</>,
+                                        title: "更新配方页上的版本？",
+                                        body: <>会把「{target.name}」在配方页上的内容替换成现在这一份（含全部材料）。<br />点赞、入柜数与评论都会保留。</>,
                                         confirmText: "更新",
                                         run: () => void handleShareRecipe(target),
                                     } : {
-                                        title: "分享到大厅？",
+                                        title: "分享到配方页？",
                                         body: <>「{target.name}」会<b>连同里面每一件材料的完整内容一起发布</b>——包括角色卡。别人能看到，也能一键连料入柜。</>,
                                         confirmText: "分享",
                                         run: () => void handleShareRecipe(target),
@@ -830,8 +858,8 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             >
                                 {recipeMenu.publishedId ? <RefreshCw size={17} /> : <Share2 size={17} />}
                                 <span>
-                                    {recipeMenu.publishedId ? "更新大厅里的版本" : "分享到大厅"}
-                                    <i>{recipeMenu.publishedId ? "用现在这一份替换掉大厅上的旧版，社交数据保留" : "连同材料一起发布，别人可以连料入柜"}</i>
+                                    {recipeMenu.publishedId ? "更新配方页上的版本" : "分享到配方页"}
+                                    <i>{recipeMenu.publishedId ? "用现在这一份替换掉配方页上的旧版，社交数据保留" : "连同材料一起发布，别人可以连料入柜"}</i>
                                 </span>
                             </button>
                             )}

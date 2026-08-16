@@ -1,12 +1,12 @@
 "use client";
 
-// 独家特调 · 酒单（在线材料）与大厅（在线配方）：
+// 独家特调 · 酒材页（在线材料）与配方页（在线配方）：
 // 双列瀑布 / 宽卡列表 + 详情弹层（入柜·点赞·评论楼中楼）。官网专用，
 // 未配后端（自部署）或表未建时按「还没开张」处理，不打扰本地玩法。
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { CornerDownRight, Heart, Inbox, Trash2, Wine, X } from "lucide-react";
+import { CornerDownRight, Heart, Inbox, Loader2, Trash2, Wine, X } from "lucide-react";
 import { fetchCurrentAccount } from "@/lib/account-client";
 import {
     deleteHallComment,
@@ -44,8 +44,9 @@ function statsLine(entry: { likeCount: number; saveCount: number; commentCount: 
 }
 
 // ── 评论区（楼中楼） ──
+// 酒材/配方详情用，也导出给酒柜详情用（本地材料带 publishedId / 导入件时能看同一条评论流）
 
-function CommentThread({
+export function CommentThread({
     type,
     targetId,
     myId,
@@ -135,7 +136,7 @@ function CommentThread({
                     <button type="button" className="mix-comment-op" onClick={() => setReplyTo(comment)} disabled={deleting}>回复</button>
                     {comment.authorId === myId ? (
                         <button type="button" className="mix-comment-op" onClick={() => onConfirmDelete(comment)} disabled={deleting}>
-                            {deleting ? "删除中…" : "删除"}
+                            {deleting ? <><Loader2 size={11} className="mix-spin" />删除中</> : "删除"}
                         </button>
                     ) : null}
                 </div>
@@ -149,7 +150,7 @@ function CommentThread({
         <div className="mix-comments">
             <div className="mix-detail-label" style={{ marginTop: 16 }}>评论{comments.length ? ` · ${comments.length}` : ""}</div>
             {loading ? (
-                <div className="mix-comment-empty">加载中…</div>
+                <div className="mix-comment-empty mix-loading-inline"><Loader2 size={14} className="mix-spin" />评论加载中…</div>
             ) : topLevel.length === 0 ? (
                 <div className="mix-comment-empty">还没有人评论，坐下聊两句？</div>
             ) : (
@@ -170,7 +171,9 @@ function CommentThread({
                     placeholder={replyTo ? `回复 ${replyTo.authorName}…` : "说点什么…"}
                     disabled={busy}
                 />
-                <button type="button" className="mix-pill-btn" onClick={() => void handlePost()} disabled={busy || !input.trim()}>{busy ? "发送中…" : "发送"}</button>
+                <button type="button" className="mix-pill-btn" onClick={() => void handlePost()} disabled={busy || !input.trim()}>
+                    {busy ? <><Loader2 size={13} className="mix-spin" />发送中</> : "发送"}
+                </button>
             </div>
         </div>
     );
@@ -233,18 +236,18 @@ export function MixologyHall({
                 const { entries, setupRequired } = await fetchHallMaterials(kind);
                 if (!mountedRef.current) return;
                 setMaterials(entries);
-                if (setupRequired) setNotReady("酒单的后厨还没开张（共享表未创建）。");
+                if (setupRequired) setNotReady("酒材页的后厨还没开张（共享表未创建）。");
             } else {
                 const { entries, setupRequired } = await fetchHallRecipes();
                 if (!mountedRef.current) return;
                 setRecipes(entries);
-                if (setupRequired) setNotReady("大厅还没开张（共享表未创建）。");
+                if (setupRequired) setNotReady("配方页还没开张（共享表未创建）。");
             }
         } catch (error) {
             if (!mountedRef.current) return;
-            const message = error instanceof Error ? error.message : "暂时连不上大厅。";
+            const message = error instanceof Error ? error.message : "暂时连不上后厨。";
             setNotReady(/missing_supabase_env/.test(message)
-                ? "酒单和大厅只在官网营业——本地部署没有联网后端。"
+                ? "酒材页和配方页只在官网营业——本地部署没有联网后端。"
                 : message);
         } finally {
             if (mountedRef.current) setLoading(false);
@@ -404,7 +407,12 @@ export function MixologyHall({
 
     function renderBody() {
         if (loading) {
-            return <div className="mix-empty" style={{ paddingTop: 60 }}>调酒师正在开灯…</div>;
+            return (
+                <div className="mix-empty" style={{ paddingTop: 60 }}>
+                    <Loader2 size={28} strokeWidth={1.6} className="mix-spin" />
+                    调酒师正在开灯…
+                </div>
+            );
         }
         if (notReady) {
             return (
@@ -423,7 +431,7 @@ export function MixologyHall({
                         <Inbox size={32} strokeWidth={1.4} />
                         {`还没有人分享${MIX_KIND_LABELS[kind]}——`}
                         <br />
-                        在酒柜里打开自己的材料，点「分享到酒单」。
+                        在酒柜里打开自己的材料，点「分享到酒材页」。
                     </div>
                 );
             }
@@ -448,7 +456,7 @@ export function MixologyHall({
             return (
                 <div className="mix-empty" style={{ paddingTop: 60 }}>
                     <Wine size={32} strokeWidth={1.4} />
-                    大厅里还没有配方——
+                    还没有人分享配方——
                     <br />
                     在吧台给自己的特调点「分享」。
                 </div>
@@ -495,8 +503,8 @@ export function MixologyHall({
                                     type="button"
                                     className="mix-icon-btn"
                                     onClick={() => setConfirm({
-                                        title: "从酒单下架？",
-                                        body: <>「{detailMaterial.name}」将从酒单上撤下，别人看不到也拿不到了。<br />已经入柜的人手里那份不受影响。</>,
+                                        title: "从酒材页下架？",
+                                        body: <>「{detailMaterial.name}」将从酒材页撤下，别人看不到也拿不到了。<br />已经入柜的人手里那份不受影响。</>,
                                         confirmText: "下架",
                                         tone: "danger",
                                         run: () => void handleRemove("material", detailMaterial.id, detailMaterial.name),
@@ -527,11 +535,12 @@ export function MixologyHall({
                                             : <MaterialDetail material={detailMaterial.payload} />}
                                     </div>
                                     <button type="button" className="mix-brew-btn" onClick={() => void importMaterial(detailMaterial)} disabled={busy}>
-                                        <CornerDownRight size={16} />{busy ? "处理中…" : detailMaterial.savedByMe ? "再次入柜" : "加入酒柜"}
+                                        {busy ? <Loader2 size={16} className="mix-spin" /> : <CornerDownRight size={16} />}
+                                        {busy ? "处理中…" : detailMaterial.savedByMe ? "再次入柜" : "加入酒柜"}
                                     </button>
                                 </>
                             ) : (
-                                <div className="mix-comment-empty">细节加载中…</div>
+                                <div className="mix-comment-empty mix-loading-inline"><Loader2 size={14} className="mix-spin" />细节加载中…</div>
                             )}
                             <CommentThread
                                 type="material"
@@ -558,8 +567,8 @@ export function MixologyHall({
                                     type="button"
                                     className="mix-icon-btn"
                                     onClick={() => setConfirm({
-                                        title: "从大厅下架？",
-                                        body: <>「{detailRecipe.name}」将从大厅撤下，别人看不到也导不了了。<br />已经导入的人手里那份不受影响。</>,
+                                        title: "从配方页下架？",
+                                        body: <>「{detailRecipe.name}」将从配方页撤下，别人看不到也导不了了。<br />已经导入的人手里那份不受影响。</>,
                                         confirmText: "下架",
                                         tone: "danger",
                                         run: () => void handleRemove("recipe", detailRecipe.id, detailRecipe.name),
@@ -596,11 +605,12 @@ export function MixologyHall({
                                         })}
                                         disabled={busy}
                                     >
-                                        <CornerDownRight size={16} />{busy ? "处理中…" : detailRecipe.savedByMe ? "再次导入" : "连料入柜"}
+                                        {busy ? <Loader2 size={16} className="mix-spin" /> : <CornerDownRight size={16} />}
+                                        {busy ? "处理中…" : detailRecipe.savedByMe ? "再次导入" : "连料入柜"}
                                     </button>
                                 </>
                             ) : (
-                                <div className="mix-comment-empty">细节加载中…</div>
+                                <div className="mix-comment-empty mix-loading-inline"><Loader2 size={14} className="mix-spin" />细节加载中…</div>
                             )}
                             <CommentThread
                                 type="recipe"
