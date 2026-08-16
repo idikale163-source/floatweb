@@ -8,7 +8,7 @@
 /** 材料九类（槽位一一对应） */
 export type MixMaterialKind =
     | "character" // 角色卡
-    | "persona"   // 客人：用户人设（{{user}} 的名字与设定）
+    | "persona"   // 面具：用户人设（{{user}} 的名字与设定）
     | "base"      // 基底：扮演总纲
     | "flavor"    // 风味：文风
     | "glass"     // 杯型：输出格式
@@ -19,7 +19,7 @@ export type MixMaterialKind =
 
 export const MIX_KIND_LABELS: Record<MixMaterialKind, string> = {
     character: "角色卡",
-    persona: "客人",
+    persona: "面具",
     base: "基底",
     flavor: "风味",
     glass: "杯型",
@@ -119,7 +119,7 @@ export type MixTextMaterial = MixMaterialMeta & {
     content: string;
 };
 
-/** 客人（用户人设）：{{user}} 是谁——代入名 + 人设正文，装配成「用户资料」段 */
+/** 面具（用户人设）：{{user}} 是谁——代入名 + 人设正文，装配成「用户资料」段 */
 export type MixPersonaMaterial = MixMaterialMeta & {
     kind: "persona";
     /** 玩家代入名，替换 {{user}}；留空用默认「你」 */

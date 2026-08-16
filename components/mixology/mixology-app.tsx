@@ -10,6 +10,7 @@ import {
     ChevronLeft,
     Download,
     GlassWater,
+    ImageDown,
     Martini,
     MoreHorizontal,
     Pencil,
@@ -50,7 +51,7 @@ import {
     type MixSession,
 } from "@/lib/mixology/types";
 import { MixHallGoneError, shareHallMaterial, shareHallRecipe, updateHallMaterial, updateHallRecipe } from "@/lib/mixology/hall-client";
-import { exportMixMaterial, parseMixMaterialsFromJson } from "@/lib/mixology/transfer";
+import { exportMixMaterial, exportMixMaterialPng, parseMixMaterialsFromJson, parseMixMaterialsFromPng } from "@/lib/mixology/transfer";
 import { MixMaterialEditor } from "./mixology-editor";
 import { MixologyGame } from "./mixology-game";
 import { MixologyHall } from "./mixology-hall";
@@ -195,7 +196,10 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     const handleImportFile = async (file: File | undefined) => {
         if (!file) return;
         try {
-            const materials = parseMixMaterialsFromJson(await file.text());
+            const isPng = file.type === "image/png" || /\.png$/i.test(file.name);
+            const materials = isPng
+                ? parseMixMaterialsFromPng(await file.arrayBuffer())
+                : parseMixMaterialsFromJson(await file.text());
             materials.forEach(saveMixMaterial);
             refresh();
             showToast(materials.length > 1 ? `已导入 ${materials.length} 件材料。` : `「${materials[0].name}」已入柜。`);
@@ -567,7 +571,18 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 {isMixBuiltinId(detail.id) ? <span className="mix-mat-badge" style={{ marginLeft: 6 }}>官方</span> : null}
                             </div>
                             {!isSealedMaterial(detail) ? (
-                                <button type="button" className="mix-icon-btn" onClick={() => exportMixMaterial(detail)} aria-label="导出为文件" title="导出为文件"><Download size={16} /></button>
+                                <>
+                                    <button type="button" className="mix-icon-btn" onClick={() => exportMixMaterial(detail)} aria-label="导出 JSON" title="导出 JSON"><Download size={16} /></button>
+                                    <button
+                                        type="button"
+                                        className="mix-icon-btn"
+                                        onClick={() => { void exportMixMaterialPng(detail).catch((err) => showToast(err instanceof Error ? err.message : "导出失败")); }}
+                                        aria-label="导出 PNG 卡"
+                                        title="导出 PNG 卡（图即是卡）"
+                                    >
+                                        <ImageDown size={16} />
+                                    </button>
+                                </>
                             ) : null}
                             {!isMixBuiltinId(detail.id) && !isSealedMaterial(detail) ? (
                                 <>
@@ -851,7 +866,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
             <input
                 ref={importFileRef}
                 type="file"
-                accept="application/json,.json"
+                accept="application/json,.json,image/png,.png"
                 style={{ display: "none" }}
                 onChange={(e) => { void handleImportFile(e.target.files?.[0]); e.target.value = ""; }}
             />

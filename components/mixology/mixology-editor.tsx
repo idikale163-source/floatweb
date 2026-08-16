@@ -245,7 +245,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
         }
         if (kind === "persona") {
             if (!content.trim()) {
-                setError("客人的人设内容不能为空。");
+                setError("面具的人设内容不能为空。");
                 return;
             }
             onSave({ ...meta, kind: "persona", userName: personaUserName.trim() || undefined, content: content.trim() });
