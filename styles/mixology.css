@@ -220,6 +220,26 @@
     gap: 6px;
 }
 
+/* 云端关联徽章：已上架（紫）/ 有未上架修改（金），配方卡与材料详情标题共用 */
+.mix-cloud-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px 2px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.5;
+    vertical-align: 2px;
+    background: rgba(141, 123, 245, 0.18);
+    color: var(--mix-violet);
+    white-space: nowrap;
+}
+
+.mix-cloud-badge[data-dirty="true"] {
+    background: rgba(217, 176, 106, 0.16);
+    color: var(--mix-gold);
+}
+
 /* 右下角悬浮创建按钮：当前 TAB 是哪类就建哪类。
    bottom 要整个越过底部导航（导航自身高度 + 安全区），否则会压在 TAB 栏上 */
 .mix-fab {

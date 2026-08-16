@@ -103,6 +103,28 @@ export function saveMixMaterial(material: MixMaterial): void {
     writeJson(CABINET_KEY, list);
 }
 
+/**
+ * 云端同步成功后的记账：写 publishedId 并把 publishedAt 对齐当前 updatedAt。
+ * 不能走 saveMixMaterial（它会重打 updatedAt，材料就永远显示"有未上架修改"）。
+ */
+export function markMixMaterialSynced(id: string, publishedId: string): void {
+    const list = loadMixCabinet();
+    const idx = list.findIndex((m) => m.id === id);
+    if (idx < 0) return;
+    list[idx] = { ...list[idx], publishedId, publishedAt: list[idx].updatedAt };
+    writeJson(CABINET_KEY, list);
+}
+
+/** 云端条目已下架/丢失时清掉本地的发布关联，回到"未上架"态 */
+export function clearMixMaterialPublished(id: string): void {
+    const list = loadMixCabinet();
+    const idx = list.findIndex((m) => m.id === id);
+    if (idx < 0) return;
+    const { publishedId: _publishedId, publishedAt: _publishedAt, ...rest } = list[idx];
+    list[idx] = rest as MixMaterial;
+    writeJson(CABINET_KEY, list);
+}
+
 /** 删除材料（官方件拒删）。返回是否真的删了。 */
 export function deleteMixMaterial(id: string): boolean {
     if (isMixBuiltinId(id)) return false;
@@ -136,6 +158,25 @@ export function saveMixRecipe(recipe: MixRecipe): void {
 export function deleteMixRecipe(id: string): void {
     const list = readJson<MixRecipe[]>(RECIPES_KEY, []);
     writeJson(RECIPES_KEY, list.filter((r) => r.id !== id));
+}
+
+/** 同 markMixMaterialSynced：配方云端同步成功后的记账 */
+export function markMixRecipeSynced(id: string, publishedId: string): void {
+    const list = readJson<MixRecipe[]>(RECIPES_KEY, []);
+    const idx = list.findIndex((r) => r.id === id);
+    if (idx < 0) return;
+    list[idx] = { ...list[idx], publishedId, publishedAt: list[idx].updatedAt };
+    writeJson(RECIPES_KEY, list);
+}
+
+/** 云端配方条目已下架/丢失时清掉本地发布关联 */
+export function clearMixRecipePublished(id: string): void {
+    const list = readJson<MixRecipe[]>(RECIPES_KEY, []);
+    const idx = list.findIndex((r) => r.id === id);
+    if (idx < 0) return;
+    const { publishedId: _publishedId, publishedAt: _publishedAt, ...rest } = list[idx];
+    list[idx] = rest as MixRecipe;
+    writeJson(RECIPES_KEY, list);
 }
 
 // ---------- 对局 ----------

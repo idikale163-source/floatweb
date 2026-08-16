@@ -72,10 +72,12 @@ export type MixMaterialMeta = {
     tags?: string[];
     /** 封面图 dataURL 或远端地址（角色卡强烈建议有） */
     cover?: string;
-    /** 已发布到酒单时的线上 id：有它才谈得上"更新已发布版本" */
+    /** 已上架到酒材页时的线上 id：有它才谈得上"更新已发布版本" */
     publishedId?: string;
+    /** 最近一次同步到云端成功时的 updatedAt 快照；本地 updatedAt 比它新 = 有未上架修改 */
+    publishedAt?: number;
     /**
-     * 来自酒单/大厅的别人的作品。与应用市场、游戏大厅同规矩：
+     * 来自酒材页/配方页的别人的作品。与应用市场、游戏大厅同规矩：
      * 能拿来开局，但站内不展示正文、不能编辑、不能导出、不能二次发布。
      */
     imported?: boolean;
@@ -176,9 +178,11 @@ export type MixRecipe = {
     name: string;
     /** kind → 材料 id；角色卡必有，其余可缺 */
     slots: Partial<Record<MixMaterialKind, string>>;
-    /** 已发布到大厅时的线上 id */
+    /** 已上架到配方页时的线上 id */
     publishedId?: string;
-    /** 从大厅导入的别人的配方：不能二次发布 */
+    /** 最近一次同步到云端成功时的 updatedAt 快照 */
+    publishedAt?: number;
+    /** 从配方页导入的别人的配方：不能二次发布 */
     imported?: boolean;
     createdAt: number;
     updatedAt: number;
@@ -212,6 +216,17 @@ export type MixSession = {
     createdAt: number;
     updatedAt: number;
 };
+
+/**
+ * 与云端的关联状态（参考应用市场的显式同步模型）：
+ * local = 没上架过；synced = 已上架且本地无改动；dirty = 已上架但本地改动还没同步。
+ * 同步是显式动作——本地保存永远不自动推云端，云端也不会反向覆盖本地。
+ */
+export function mixCloudState(item: { publishedId?: string; publishedAt?: number; updatedAt: number }): "local" | "synced" | "dirty" {
+    if (!item.publishedId) return "local";
+    if (!item.publishedAt || item.updatedAt > item.publishedAt) return "dirty";
+    return "synced";
+}
 
 /** 生成短 id（本地实体通用） */
 export function createMixId(prefix: string): string {

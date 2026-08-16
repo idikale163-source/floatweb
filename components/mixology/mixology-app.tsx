@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
     Archive,
     ChevronLeft,
+    Copy,
     Download,
     GlassWater,
     ImageDown,
@@ -26,6 +27,8 @@ import {
     X,
 } from "lucide-react";
 import {
+    clearMixMaterialPublished,
+    clearMixRecipePublished,
     deleteMixMaterial,
     deleteMixRecipe,
     deleteMixSession,
@@ -34,6 +37,8 @@ import {
     loadMixCabinet,
     loadMixRecipes,
     loadMixSessions,
+    markMixMaterialSynced,
+    markMixRecipeSynced,
     saveMixMaterial,
     saveMixRecipe,
 } from "@/lib/mixology/storage";
@@ -43,6 +48,7 @@ import {
     MIX_KIND_LABELS,
     MIX_KIND_SECTION_LABELS,
     MIX_SLOT_ORDER,
+    mixCloudState,
     mixKindHasCover,
     type MixCharacterCard,
     type MixMaterial,
@@ -228,17 +234,19 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
         try {
             if (material.publishedId) {
                 await updateHallMaterial(material.publishedId, material);
+                markMixMaterialSynced(material.id, material.publishedId);
+                refresh();
                 showToast(`酒材页上的「${material.name}」已更新。`);
             } else {
                 const entry = await shareHallMaterial(material);
                 // 记住线上身份，之后改了本地就能推更新，也不会重复发布出一堆同名卡
-                saveMixMaterial({ ...material, publishedId: entry.id });
+                markMixMaterialSynced(material.id, entry.id);
                 refresh();
                 showToast(`「${material.name}」已分享到酒材页。`);
             }
         } catch (error) {
             if (error instanceof MixHallGoneError) {
-                saveMixMaterial({ ...material, publishedId: undefined });
+                clearMixMaterialPublished(material.id);
                 refresh();
                 showToast("它已经从酒材页下架了，可以重新分享一次。");
             } else {
@@ -249,40 +257,88 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
         }
     };
 
-    const handleShareRecipe = async (recipe: MixRecipe) => {
-        if (sharing) return;
+    /**
+     * 配方分享计划：配方线上只存"槽位引用"，材料各自以酒材页条目为身份。
+     * - 官方出厂件：人人本地都有，builtin 引用，不上架；
+     * - 从酒材页入柜的别人材料（id 就是线上 id）：直接引用；
+     * - 自己的材料：没上架的要先上架（toPublish），改过没同步的要先推更新（toSync）；
+     * - 旧版"随配方连料入柜"的材料线上没有条目，没法引用（blockers）。
+     */
+    const planShareRecipe = (recipe: MixRecipe) => {
         const materials = MIX_SLOT_ORDER
             .map((k) => (recipe.slots[k] ? cabinet.find((m) => m.id === recipe.slots[k]) : null))
             .filter((m): m is MixMaterial => Boolean(m));
         const character = materials.find((m) => m.kind === "character");
-        if (!character || character.kind !== "character") {
+        const own = materials.filter((m) => !isMixBuiltinId(m.id) && !m.imported);
+        return {
+            materials,
+            character: character && character.kind === "character" ? character : null,
+            toPublish: own.filter((m) => !m.publishedId),
+            toSync: own.filter((m) => mixCloudState(m) === "dirty"),
+            blockers: materials.filter((m) => m.imported && !m.id.startsWith("mxi_")),
+        };
+    };
+
+    const handleShareRecipe = async (recipe: MixRecipe) => {
+        if (sharing) return;
+        const plan = planShareRecipe(recipe);
+        if (!plan.character) {
             showToast("这杯特调缺角色卡，没法分享。");
             return;
         }
         setSharing(true);
-        const input = {
-            name: recipe.name,
-            cover: character.cover ?? "",
-            charName: character.charName,
-            partNames: materials.filter((m) => m.kind !== "character").map((m) => m.name).slice(0, 8),
-            materials,
-        };
         try {
+            // 第一步：把自己的材料推上云端——没上架的上架，改过的同步（云端丢失就重新上架）
+            for (const material of plan.materials) {
+                if (isMixBuiltinId(material.id) || material.imported) continue;
+                if (!material.publishedId) {
+                    const entry = await shareHallMaterial(material);
+                    markMixMaterialSynced(material.id, entry.id);
+                } else if (mixCloudState(material) === "dirty") {
+                    try {
+                        await updateHallMaterial(material.publishedId, material);
+                        markMixMaterialSynced(material.id, material.publishedId);
+                    } catch (error) {
+                        if (!(error instanceof MixHallGoneError)) throw error;
+                        const entry = await shareHallMaterial(material);
+                        markMixMaterialSynced(material.id, entry.id);
+                    }
+                }
+            }
+            // 第二步：拿到最新的 publishedId 映射，拼出引用数组
+            const fresh = loadMixCabinet();
+            const parts = plan.materials.map((material) => {
+                if (isMixBuiltinId(material.id)) return { id: material.id, kind: material.kind, name: material.name, builtin: true as const };
+                if (material.imported) return { id: material.id, kind: material.kind, name: material.name };
+                const current = fresh.find((m) => m.id === material.id);
+                return { id: current?.publishedId ?? material.publishedId ?? material.id, kind: material.kind, name: material.name };
+            });
+            const character = plan.character;
+            const input = {
+                name: recipe.name,
+                cover: character.cover ?? "",
+                charName: character.charName,
+                partNames: plan.materials.filter((m) => m.kind !== "character").map((m) => m.name).slice(0, 8),
+                parts,
+            };
             if (recipe.publishedId) {
                 await updateHallRecipe(recipe.publishedId, input);
-                showToast(`配方页上的「${recipe.name}」已更新。`);
+                markMixRecipeSynced(recipe.id, recipe.publishedId);
+                refresh();
+                showToast(`配方页上的「${recipe.name}」已更新，材料已同步。`);
             } else {
                 const entry = await shareHallRecipe(input);
-                saveMixRecipe({ ...recipe, publishedId: entry.id });
+                markMixRecipeSynced(recipe.id, entry.id);
                 refresh();
                 showToast(`「${recipe.name}」已分享到配方页。`);
             }
         } catch (error) {
             if (error instanceof MixHallGoneError) {
-                saveMixRecipe({ ...recipe, publishedId: undefined });
+                clearMixRecipePublished(recipe.id);
                 refresh();
                 showToast("它已经从配方页下架了，可以重新分享一次。");
             } else {
+                refresh(); // 材料可能已部分上架成功，把徽章刷出来
                 showToast(error instanceof Error ? error.message : "分享失败");
             }
         } finally {
@@ -438,11 +494,25 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     .filter((k) => k !== "character" && recipe.slots[k])
                                     .map((k) => cabinet.find((m) => m.id === recipe.slots[k])?.name)
                                     .filter(Boolean);
+                                // 配方的云端徽章：自己改过搭配、或任一自有材料没上架/没同步，都算"有未上架修改"
+                                const cloudBadge = (() => {
+                                    if (recipe.imported || !recipe.publishedId) return null;
+                                    const partsDirty = MIX_SLOT_ORDER.some((k) => {
+                                        const id = recipe.slots[k];
+                                        if (!id || isMixBuiltinId(id)) return false;
+                                        const m = cabinet.find((x) => x.id === id);
+                                        return Boolean(m) && !m!.imported && mixCloudState(m!) !== "synced";
+                                    });
+                                    return mixCloudState(recipe) === "dirty" || partsDirty ? "有未上架修改" : "已上架";
+                                })();
                                 return (
                                     <div className="mix-recipe-card" key={recipe.id}>
                                         {card?.cover ? <div className="mix-recipe-bg" style={{ backgroundImage: `url(${card.cover})` }} /> : null}
                                         <div className="mix-recipe-main">
-                                            <div className="mix-recipe-name">{recipe.name}</div>
+                                            <div className="mix-recipe-name">
+                                                {recipe.name}
+                                                {cloudBadge ? <span className="mix-cloud-badge" data-dirty={cloudBadge === "已上架" ? undefined : "true"}>{cloudBadge}</span> : null}
+                                            </div>
                                             <div className="mix-recipe-parts">
                                                 {card ? card.name : "（角色卡缺失）"}
                                                 {parts.length ? ` · ${parts.join(" · ")}` : " · 素杯"}
@@ -501,7 +571,11 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                         name={material.name}
                                         hook={material.hook}
                                         cover={material.cover}
-                                        badge={isMixBuiltinId(material.id) ? "官方" : undefined}
+                                        badge={isMixBuiltinId(material.id)
+                                            ? "官方"
+                                            : material.imported || mixCloudState(material) === "local"
+                                                ? undefined
+                                                : mixCloudState(material) === "dirty" ? "有未上架修改" : "已上架"}
                                         author={!isMixBuiltinId(material.id) ? material.author : undefined}
                                         onClick={() => setDetail(material)}
                                         key={material.id}
@@ -606,7 +680,32 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             <div className="mix-sheet-title">
                                 {detail.name}
                                 {isMixBuiltinId(detail.id) ? <span className="mix-mat-badge" style={{ marginLeft: 6 }}>官方</span> : null}
+                                {!isMixBuiltinId(detail.id) && !detail.imported && mixCloudState(detail) !== "local" ? (
+                                    <span className="mix-cloud-badge" data-dirty={mixCloudState(detail) === "dirty" ? "true" : undefined}>
+                                        {mixCloudState(detail) === "dirty" ? "有未上架修改" : "已上架"}
+                                    </span>
+                                ) : null}
                             </div>
+                            {!detail.imported ? (
+                                <button
+                                    type="button"
+                                    className="mix-icon-btn"
+                                    onClick={() => {
+                                        // 复制＝断开云端关联的新件：基于原件继续改，不影响已上架的版本
+                                        const { publishedId: _p, publishedAt: _a, imported: _i, ...rest } = detail;
+                                        const now = Date.now();
+                                        const dup = { ...rest, id: createMixId("mixmat"), name: `${detail.name} 副本`, createdAt: now, updatedAt: now } as MixMaterial;
+                                        saveMixMaterial(dup);
+                                        setDetail(null);
+                                        refresh();
+                                        showToast(`已复制为「${dup.name}」，不关联云端。`);
+                                    }}
+                                    aria-label="复制一份（不关联云端）"
+                                    title="复制一份（不关联云端）"
+                                >
+                                    <Copy size={16} />
+                                </button>
+                            ) : null}
                             {!isSealedMaterial(detail) ? (
                                 <>
                                     <button type="button" className="mix-icon-btn" onClick={() => exportMixMaterial(detail)} aria-label="导出 JSON" title="导出 JSON"><Download size={16} /></button>
@@ -717,9 +816,10 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 kind={editor.kind}
                                 initial={editor.initial}
                                 onSave={(material) => {
-                                    // 编辑器不经手 publishedId，保存时从原件带回来，别把发布关联弄丢
+                                    // 编辑器不经手发布记账字段，保存时从原件带回来，别把云端关联弄丢；
+                                    // updatedAt 会被重打，所以保存后自然进入"有未上架修改"态
                                     saveMixMaterial(editor.initial?.publishedId
-                                        ? { ...material, publishedId: editor.initial.publishedId }
+                                        ? { ...material, publishedId: editor.initial.publishedId, publishedAt: editor.initial.publishedAt }
                                         : material);
                                     setEditor(null);
                                     refresh();
@@ -839,18 +939,55 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             <button
                                 type="button"
                                 className="mix-action-row"
+                                onClick={() => {
+                                    const { publishedId: _p, publishedAt: _a, imported: _i, ...rest } = recipeMenu;
+                                    const now = Date.now();
+                                    const dup: MixRecipe = { ...rest, id: createMixId("mixrec"), name: `${recipeMenu.name} 副本`, createdAt: now, updatedAt: now };
+                                    saveMixRecipe(dup);
+                                    setRecipeMenu(null);
+                                    refresh();
+                                    showToast(`已复制为「${dup.name}」，不关联云端。`);
+                                }}
+                            >
+                                <Copy size={17} />
+                                <span>复制配方<i>生成一杯不关联云端的新配方，基于它继续改</i></span>
+                            </button>
+                            )}
+                            {recipeMenu.imported ? null : (
+                            <button
+                                type="button"
+                                className="mix-action-row"
                                 disabled={sharing}
                                 onClick={() => {
                                     const target = recipeMenu;
+                                    const plan = planShareRecipe(target);
+                                    if (!plan.character) {
+                                        showToast("这杯特调缺角色卡，没法分享。");
+                                        return;
+                                    }
+                                    if (plan.blockers.length > 0) {
+                                        showToast(`「${plan.blockers[0].name}」是旧版随配方导入的材料，云端没有条目，换成酒材页上的版本再分享。`);
+                                        return;
+                                    }
                                     setRecipeMenu(null);
+                                    const syncNotes = (
+                                        <>
+                                            {plan.toPublish.length > 0 ? (
+                                                <><br /><b>{plan.toPublish.length} 味材料会先上架到酒材页</b>（完整内容公开、可被单独入柜）：{plan.toPublish.map((m) => m.name).join("、")}。</>
+                                            ) : null}
+                                            {plan.toSync.length > 0 ? (
+                                                <><br />{plan.toSync.length} 味已上架材料的本地修改会同步到云端：{plan.toSync.map((m) => m.name).join("、")}。</>
+                                            ) : null}
+                                        </>
+                                    );
                                     setConfirm(target.publishedId ? {
                                         title: "更新配方页上的版本？",
-                                        body: <>会把「{target.name}」在配方页上的内容替换成现在这一份（含全部材料）。<br />点赞、入柜数与评论都会保留。</>,
+                                        body: <>会把「{target.name}」在配方页上的搭配替换成现在这一份。<br />点赞、入柜数与评论都会保留。{syncNotes}</>,
                                         confirmText: "更新",
                                         run: () => void handleShareRecipe(target),
                                     } : {
                                         title: "分享到配方页？",
-                                        body: <>「{target.name}」会<b>连同里面每一件材料的完整内容一起发布</b>——包括角色卡。别人能看到，也能一键连料入柜。</>,
+                                        body: <>「{target.name}」发布的是<b>搭配与引用</b>，材料内容以酒材页上各自的条目为准，别人可以一键连料入柜。{syncNotes}</>,
                                         confirmText: "分享",
                                         run: () => void handleShareRecipe(target),
                                     });

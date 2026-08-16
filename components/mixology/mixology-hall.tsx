@@ -22,6 +22,7 @@ import {
     type MixHallComment,
     type MixHallMaterial,
     type MixHallRecipe,
+    type MixHallRecipePart,
     type MixHallType,
 } from "@/lib/mixology/hall-client";
 import { saveMixMaterial, saveMixRecipe } from "@/lib/mixology/storage";
@@ -296,7 +297,7 @@ export function MixologyHall({
     };
 
     const openRecipe = async (entry: MixHallRecipe) => {
-        setDetailRecipe({ ...entry, materials: undefined });
+        setDetailRecipe({ ...entry, parts: undefined });
         try {
             const full = await fetchHallRecipe(entry.id);
             setDetailRecipe((prev) => (prev?.id === entry.id ? full : prev));
@@ -311,7 +312,7 @@ export function MixologyHall({
         setBusy(true);
         try {
             const { saveCount } = await markHallSaved("material", entry.id);
-            const { publishedId: _p, ...rest } = entry.payload as MixMaterial;
+            const { publishedId: _p, publishedAt: _a, ...rest } = entry.payload as MixMaterial;
             const material = { ...rest, id: entry.id, author: entry.authorName, imported: true } as MixMaterial;
             saveMixMaterial(material);
             patchEntry("material", entry.id, { savedByMe: true, saveCount });
@@ -324,17 +325,35 @@ export function MixologyHall({
         }
     };
 
+    /** 连料入柜：云端件按酒材条目 id 存柜（与酒材页入柜同一身份），官方件直接用本地出厂版，下架件跳过 */
     const importRecipe = async (entry: MixHallRecipe) => {
-        if (!entry.materials?.length || busy) return;
+        if (!entry.parts?.length || busy) return;
+        const characterPart = entry.parts.find((p) => p.kind === "character");
+        if (!characterPart || characterPart.gone || (!characterPart.builtin && !characterPart.material)) {
+            onToast("角色卡已从酒材页下架，这杯配方没法入柜。");
+            return;
+        }
         setBusy(true);
         try {
             const { saveCount } = await markHallSaved("recipe", entry.id);
             const slots: Partial<Record<MixMaterialKind, string>> = {};
-            for (const material of entry.materials) {
-                if (!material || typeof material !== "object" || !material.id || !material.kind) continue;
-                const { publishedId: _mp, ...clean } = material;
-                saveMixMaterial({ ...clean, author: entry.authorName, imported: true } as MixMaterial);
-                slots[material.kind] = material.id;
+            let missing = 0;
+            for (const part of entry.parts) {
+                if (!part || !part.kind || !MIX_KIND_LABELS[part.kind]) continue;
+                if (part.builtin) {
+                    // 官方出厂件人人本地都有，直接指过去
+                    slots[part.kind] = part.id;
+                    continue;
+                }
+                if (part.gone || !part.material || typeof part.material !== "object") {
+                    missing += 1;
+                    continue;
+                }
+                const { publishedId: _p, publishedAt: _a, ...clean } = part.material;
+                saveMixMaterial({ ...clean, id: part.id, kind: part.kind, author: part.authorName || entry.authorName, imported: true } as MixMaterial);
+                slots[part.kind] = part.id;
+                // 给这味酒材也记一次入柜（材料作者拿到数据）；失败不打断整杯导入
+                void markHallSaved("material", part.id).catch(() => { /* 尽力而为 */ });
             }
             const recipe: MixRecipe = {
                 id: entry.id,
@@ -347,7 +366,9 @@ export function MixologyHall({
             saveMixRecipe(recipe);
             patchEntry("recipe", entry.id, { savedByMe: true, saveCount });
             onImported();
-            onToast(`「${entry.name}」已连料入柜，去吧台看看。`);
+            onToast(missing > 0
+                ? `「${entry.name}」已入柜，但 ${missing} 味材料已下架，这杯会缺味。`
+                : `「${entry.name}」已连料入柜，去吧台看看。`);
         } catch (error) {
             onToast(error instanceof Error ? error.message : "导入失败");
         } finally {
@@ -585,31 +606,40 @@ export function MixologyHall({
                                 @{detailRecipe.authorName} · 浏览 {detailRecipe.viewCount} · 评论 {detailRecipe.commentCount}
                             </div>
                             {detailRecipe.intro ? <div className="mix-detail-value" style={{ marginTop: 10 }}>{detailRecipe.intro}</div> : null}
-                            {detailRecipe.materials ? (
-                                <>
-                                    <div className="mix-detail-label" style={{ marginTop: 12 }}>这杯里有</div>
-                                    <div className="mix-detail-value">
-                                        {detailRecipe.materials
-                                            .filter((m) => m && m.kind && MIX_KIND_LABELS[m.kind])
-                                            .map((m) => `${MIX_KIND_LABELS[m.kind]} · ${m.name}`)
-                                            .join("\n")}
-                                    </div>
-                                    <button
-                                        type="button"
-                                        className="mix-brew-btn"
-                                        onClick={() => setConfirm({
-                                            title: "连料入柜？",
-                                            body: <>会把「{detailRecipe.name}」以及里面的 <b>{detailRecipe.materials?.length ?? 0} 件材料</b>一并放进你的酒柜，之后在吧台就能开局。</>,
-                                            confirmText: "入柜",
-                                            run: () => void importRecipe(detailRecipe),
-                                        })}
-                                        disabled={busy}
-                                    >
-                                        {busy ? <Loader2 size={16} className="mix-spin" /> : <CornerDownRight size={16} />}
-                                        {busy ? "处理中…" : detailRecipe.savedByMe ? "再次导入" : "连料入柜"}
-                                    </button>
-                                </>
-                            ) : (
+                            {detailRecipe.parts ? (() => {
+                                const parts = detailRecipe.parts.filter((p): p is MixHallRecipePart => Boolean(p) && Boolean(p.kind) && Boolean(MIX_KIND_LABELS[p.kind]));
+                                const goneCount = parts.filter((p) => p.gone).length;
+                                const characterPart = parts.find((p) => p.kind === "character");
+                                const characterOk = Boolean(characterPart && !characterPart.gone && (characterPart.builtin || characterPart.material));
+                                const importable = parts.length - goneCount;
+                                return (
+                                    <>
+                                        <div className="mix-detail-label" style={{ marginTop: 12 }}>这杯里有</div>
+                                        <div className="mix-detail-value">
+                                            {parts
+                                                .map((p) => `${MIX_KIND_LABELS[p.kind]} · ${p.name}${p.builtin ? "（官方件）" : p.gone ? "（已下架）" : p.authorName ? `（@${p.authorName}）` : ""}`)
+                                                .join("\n")}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="mix-brew-btn"
+                                            onClick={() => setConfirm({
+                                                title: "连料入柜？",
+                                                body: <>
+                                                    会把「{detailRecipe.name}」以及里面的 <b>{importable} 味材料</b>一并放进你的酒柜（官方件直接用本地出厂版），之后在吧台就能开局。
+                                                    {goneCount > 0 ? <><br />{goneCount} 味材料已从酒材页下架，这杯会缺味。</> : null}
+                                                </>,
+                                                confirmText: "入柜",
+                                                run: () => void importRecipe(detailRecipe),
+                                            })}
+                                            disabled={busy || !characterOk}
+                                        >
+                                            {busy ? <Loader2 size={16} className="mix-spin" /> : <CornerDownRight size={16} />}
+                                            {busy ? "处理中…" : !characterOk ? "角色卡已下架，无法入柜" : detailRecipe.savedByMe ? "再次导入" : "连料入柜"}
+                                        </button>
+                                    </>
+                                );
+                            })() : (
                                 <div className="mix-comment-empty mix-loading-inline"><Loader2 size={14} className="mix-spin" />细节加载中…</div>
                             )}
                             <CommentThread
