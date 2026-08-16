@@ -261,6 +261,65 @@
     gap: 6px;
 }
 
+/* ── 滤网编辑器：规则行 + 试跑结果 ── */
+.mix-filter-rule {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 12px;
+    background: var(--mix-panel);
+}
+
+.mix-filter-rule[data-bad="true"] {
+    outline: 1px solid rgba(226, 163, 163, 0.5);
+}
+
+.mix-filter-rule-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.mix-filter-mode {
+    flex: 0 0 auto;
+    align-self: center;
+    border: none;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    background: rgba(141, 123, 245, 0.2);
+    color: var(--mix-violet);
+}
+
+.mix-filter-mode[data-mode="context"] {
+    background: rgba(217, 176, 106, 0.16);
+    color: var(--mix-gold);
+}
+
+.mix-filter-rule-bad {
+    font-size: 10.5px;
+    color: #e2a3a3;
+}
+
+.mix-filter-result {
+    margin-top: 8px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 12.5px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--mix-dim);
+}
+
 /* 云端关联徽章：已上架（紫）/ 有未上架修改（金），配方卡与材料详情标题共用 */
 .mix-cloud-badge {
     display: inline-block;

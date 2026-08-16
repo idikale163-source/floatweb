@@ -8,7 +8,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, Copy, CornerDownRight, History, Pencil, Plus, RotateCcw, Send, SlidersHorizontal, X } from "lucide-react";
 import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, regenerateMixTail, rerollMixReply, truncateMixAfterTurn } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession, listMixMaterials, saveMixSession } from "@/lib/mixology/storage";
-import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, type MixCharacterCard, type MixMaterialKind, type MixSession, type MixTurn } from "@/lib/mixology/types";
+import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, type MixCharacterCard, type MixFilterRule, type MixMaterialKind, type MixSession, type MixTurn } from "@/lib/mixology/types";
+import { applyMixFilterRules } from "@/lib/mixology/prose";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
 import { KindGlyph, MixConfirm } from "./mixology-shared";
@@ -20,8 +21,10 @@ type GameProps = {
     onToast: (message: string) => void;
 };
 
-function AssistantTurn({ turn, ticketHtml, encoreHtml }: { turn: MixTurn; ticketHtml?: string; encoreHtml?: string }) {
+function AssistantTurn({ turn, ticketHtml, encoreHtml, filterRules }: { turn: MixTurn; ticketHtml?: string; encoreHtml?: string; filterRules?: MixFilterRule[] }) {
     // 展示顺序：状态栏在正文前、小剧场在正文后（与模型的输出顺序一致，无需重排）
+    // 滤网「仅显示」模式在这里生效：存储不动，渲染前替换，历史消息也即时生效
+    const shownText = applyMixFilterRules(turn.text, filterRules, "display");
     return (
         <>
             {ticketHtml && turn.ticketRaw ? (
@@ -29,7 +32,7 @@ function AssistantTurn({ turn, ticketHtml, encoreHtml }: { turn: MixTurn; ticket
                     <MixTicketFrame html={ticketHtml} raw={turn.ticketRaw} />
                 </div>
             ) : null}
-            {turn.text ? <MixProseView text={turn.text} /> : null}
+            {shownText ? <MixProseView text={shownText} /> : null}
             {encoreHtml && turn.encoreRaw ? (
                 <div className="mix-encore-turn">
                     <MixTicketFrame html={encoreHtml} raw={turn.encoreRaw} />
@@ -96,12 +99,13 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
 
     // 封面 / 小票渲染代码 / 装饰 CSS：按方案槽位从酒柜现取
     const assets = useMemo(() => {
-        if (!session) return { cover: "", ticketHtml: undefined as string | undefined, garnishCss: "", encoreTurnHtml: undefined as string | undefined, encoreStaticHtml: "", canvasHtml: "" };
+        if (!session) return { cover: "", ticketHtml: undefined as string | undefined, garnishCss: "", encoreTurnHtml: undefined as string | undefined, encoreStaticHtml: "", canvasHtml: "", filterRules: undefined as MixFilterRule[] | undefined };
         const slots = session.recipe.slots;
         const character = slots.character ? getMixMaterial(slots.character) : null;
         const ticket = slots.ticket ? getMixMaterial(slots.ticket) : null;
         const garnish = slots.garnish ? getMixMaterial(slots.garnish) : null;
         const encore = slots.encore ? getMixMaterial(slots.encore) : null;
+        const filterMat = slots.filter ? getMixMaterial(slots.filter) : null;
         const encoreMat = encore?.kind === "encore" ? encore : null;
         const encoreRender = encoreMat ? mixEncoreRenderHtml(encoreMat).trim() : "";
         const encoreHasContract = Boolean(encoreMat?.contract?.trim());
@@ -109,6 +113,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             cover: character?.cover ?? "",
             ticketHtml: ticket?.kind === "ticket" ? ticket.renderHtml : undefined,
             garnishCss: garnish?.kind === "garnish" ? garnish.css : "",
+            filterRules: filterMat?.kind === "filter" ? filterMat.rules : undefined,
             // 写了契约 = AI 小剧场（按轮渲染）；没写契约 = 静态小品（挂在对话末尾）
             encoreTurnHtml: encoreHasContract && encoreRender ? encoreRender : undefined,
             encoreStaticHtml: !encoreHasContract ? encoreRender : "",
@@ -261,7 +266,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                         </div>
                     ) : (
                         <div className="mix-assistant-turn" key={turn.id}>
-                            <AssistantTurn turn={turn} ticketHtml={assets.ticketHtml} encoreHtml={assets.encoreTurnHtml} />
+                            <AssistantTurn turn={turn} ticketHtml={assets.ticketHtml} encoreHtml={assets.encoreTurnHtml} filterRules={assets.filterRules} />
                             {actions}
                         </div>
                     );

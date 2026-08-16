@@ -9,7 +9,7 @@ import { getCurrentAccount } from "@/lib/server/account-auth";
 // builtin 指官方出厂件（客户端本地解析）；其余 id 指向 mixology_items 条目。
 // 详情接口现场联表把引用换成完整材料内容；已下架的标 gone。
 
-const MATERIAL_KINDS = ["character", "persona", "base", "flavor", "glass", "strength", "ticket", "garnish", "encore"] as const;
+const MATERIAL_KINDS = ["character", "persona", "base", "flavor", "glass", "strength", "ticket", "garnish", "encore", "filter"] as const;
 
 const ITEM_SUMMARY_COLUMNS = "id,kind,name,hook,cover,tags,author_id,author_name,like_count,save_count,view_count,comment_count,created_at,updated_at";
 const ITEM_COLUMNS = `${ITEM_SUMMARY_COLUMNS},payload`;

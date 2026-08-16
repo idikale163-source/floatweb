@@ -1,7 +1,7 @@
 "use client";
 
 // 独家特调 · App 主壳：酒材/配方（官网在线共享页）/ 吧台（单槽轮盘调配）/
-// 酒柜（九类材料 TAG + 瀑布与列表）/ 对局（酒局记录）。
+// 酒柜（十类材料 TAG + 瀑布与列表）/ 对局（酒局记录）。
 // 视觉：近黑 + 紫罗兰 + 琥珀金的暗色酒吧质感，见 styles/mixology.css。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";

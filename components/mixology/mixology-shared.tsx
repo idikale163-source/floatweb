@@ -8,6 +8,7 @@ import {
     BookOpen,
     CircleUserRound,
     Feather,
+    Filter,
     Flame,
     GlassWater,
     Music4,
@@ -29,6 +30,7 @@ const KIND_ICONS: Record<MixMaterialKind, typeof UserRound> = {
     ticket: ReceiptText,
     garnish: Sparkles,
     encore: Music4,
+    filter: Filter,
 };
 
 export function KindGlyph({ kind, size = 26 }: { kind: MixMaterialKind; size?: number }) {
@@ -211,6 +213,20 @@ export function MaterialDetail({ material }: { material: MixMaterial }) {
                 <DetailField label="一句话介绍" value={material.hook} />
                 <DetailField label="输出契约" value={material.contract} />
                 <DetailField label="渲染代码" value={mixEncoreRenderHtml(material)} code />
+            </>
+        );
+    }
+    if (material.kind === "filter") {
+        return (
+            <>
+                <DetailField label="一句话介绍" value={material.hook} />
+                <DetailField
+                    label={`清洗规则 · ${material.rules.length} 条`}
+                    value={material.rules
+                        .map((r, i) => `${i + 1}.（${r.mode === "display" ? "仅显示" : "进上下文"}）/${r.find}/ → ${r.replace || "（删除）"}`)
+                        .join("\n")}
+                    code
+                />
             </>
         );
     }
