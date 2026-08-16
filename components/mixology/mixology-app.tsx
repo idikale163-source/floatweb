@@ -53,6 +53,7 @@ import { MixMaterialEditor } from "./mixology-editor";
 import { MixologyGame } from "./mixology-game";
 import { MixologyHall } from "./mixology-hall";
 import { KindGlyph, MatCard, MaterialDetail, MixConfirm, SealedNote, formatMixTime, isSealedMaterial } from "./mixology-shared";
+import { MixRichText } from "./rich-text";
 
 type MixTab = "menu" | "hall" | "bar" | "cabinet" | "games";
 
@@ -550,6 +551,9 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
             {detail ? (
                 <div className="mix-sheet-mask" onClick={() => setDetail(null)}>
                     <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
+                        {detail.kind === "character" && detail.cover ? (
+                            <div className="mix-sheet-backdrop" style={{ backgroundImage: `url(${detail.cover})` }} />
+                        ) : null}
                         <div className="mix-sheet-head">
                             <div className="mix-sheet-title">
                                 {detail.name}
@@ -616,13 +620,22 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             <button type="button" className="mix-icon-btn" onClick={() => setDetail(null)} aria-label="关闭"><X size={18} /></button>
                         </div>
                         <div className="mix-sheet-body">
-                            {detail.cover ? (
+                            {detail.cover && detail.kind !== "character" ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={detail.cover} alt={detail.name} style={{ width: 96, height: 128, objectFit: "cover", borderRadius: 12, margin: "4px 0 12px" }} />
                             ) : null}
-                            {isSealedMaterial(detail)
-                                ? <SealedNote hook={detail.hook} authorNote={(detail as MixCharacterCard).authorNote} />
-                                : <MaterialDetail material={detail} />}
+                            {isSealedMaterial(detail) ? (
+                                <SealedNote hook={detail.hook} canvas={(detail as MixCharacterCard).canvas} />
+                            ) : (
+                                <>
+                                    {detail.kind === "character" && (detail as MixCharacterCard).canvas?.trim() ? (
+                                        <div className="mix-canvas-block">
+                                            <MixRichText text={(detail as MixCharacterCard).canvas as string} />
+                                        </div>
+                                    ) : null}
+                                    <MaterialDetail material={detail} />
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>

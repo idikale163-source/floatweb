@@ -6,6 +6,7 @@
 import { useMemo } from "react";
 import { X } from "lucide-react";
 import { MixProseView } from "./prose-view";
+import { MixRichText } from "./rich-text";
 import { MixTicketFrame } from "./ticket-frame";
 
 /** 装饰预览用的样例正文：覆盖五种正文标记，方便作者一眼看全 */
@@ -35,10 +36,14 @@ function SandboxFrame({ html, title }: { html: string; title: string }) {
 export type MixPreviewTarget =
     | { kind: "ticket"; html: string; raw: string }
     | { kind: "garnish"; css: string }
-    | { kind: "encore"; html: string };
+    | { kind: "encore"; html: string }
+    | { kind: "canvas"; html: string; cover?: string };
 
 export function MixPreviewSheet({ target, onClose }: { target: MixPreviewTarget; onClose: () => void }) {
-    const title = target.kind === "ticket" ? "小票预览" : target.kind === "garnish" ? "装饰试穿" : "尾调预览";
+    const title = target.kind === "ticket" ? "小票预览"
+        : target.kind === "garnish" ? "装饰试穿"
+        : target.kind === "canvas" ? "画布预览"
+        : "尾调预览";
     return (
         <div className="mix-sheet-mask" onClick={onClose}>
             <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
@@ -87,6 +92,20 @@ export function MixPreviewSheet({ target, onClose }: { target: MixPreviewTarget;
                                     ".mix-user-bubble 玩家气泡",
                                     ".mix-ticket-wrap 小票外框",
                                 ].join("\n")}
+                            </div>
+                        </>
+                    ) : null}
+
+                    {target.kind === "canvas" ? (
+                        <>
+                            <div className="mix-detail-label">铺在封面蒙版上的效果</div>
+                            <div
+                                className="mix-canvas-stage"
+                                style={target.cover ? { backgroundImage: `url(${target.cover})` } : undefined}
+                            >
+                                <div className="mix-canvas-stage-body">
+                                    <MixRichText text={target.html} />
+                                </div>
                             </div>
                         </>
                     ) : null}

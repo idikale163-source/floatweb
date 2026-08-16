@@ -443,6 +443,9 @@ export function MixologyHall({
             {detailMaterial ? (
                 <div className="mix-sheet-mask" onClick={() => setDetailMaterial(null)}>
                     <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
+                        {detailMaterial.kind === "character" && detailMaterial.cover ? (
+                            <div className="mix-sheet-backdrop" style={{ backgroundImage: `url(${detailMaterial.cover})` }} />
+                        ) : null}
                         <div className="mix-sheet-head">
                             <div className="mix-sheet-title">{detailMaterial.name}</div>
                             {likeButton("material", detailMaterial)}
@@ -468,7 +471,7 @@ export function MixologyHall({
                             <div className="mix-mat-stats" style={{ marginTop: 2 }}>
                                 {MIX_KIND_LABELS[detailMaterial.kind]} · @{detailMaterial.authorName} · 浏览 {detailMaterial.viewCount} · 评论 {detailMaterial.commentCount}
                             </div>
-                            {detailMaterial.cover ? (
+                            {detailMaterial.cover && detailMaterial.kind !== "character" ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={detailMaterial.cover} alt={detailMaterial.name} style={{ width: 96, height: 128, objectFit: "cover", borderRadius: 12, margin: "10px 0 4px" }} />
                             ) : null}
@@ -478,7 +481,7 @@ export function MixologyHall({
                                         {detailMaterial.kind === "character"
                                             ? <SealedNote
                                                 hook={detailMaterial.hook}
-                                                authorNote={(detailMaterial.payload as MixCharacterCard).authorNote}
+                                                canvas={(detailMaterial.payload as MixCharacterCard).canvas}
                                             />
                                             : <MaterialDetail material={detailMaterial.payload} />}
                                     </div>

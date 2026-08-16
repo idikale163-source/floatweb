@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { MixCharacterCard, MixMaterial, MixMaterialKind } from "@/lib/mixology/types";
 import { MIX_KIND_LABELS } from "@/lib/mixology/types";
+import { MixRichText } from "./rich-text";
 
 const KIND_ICONS: Record<MixMaterialKind, typeof UserRound> = {
     character: UserRound,
@@ -143,13 +144,11 @@ export function isSealedMaterial(material: { kind: string; imported?: boolean })
  * 别人的角色卡：设定正文不摊开，只留作者写给读者看的那两栏
  *（与应用市场、游戏大厅同规矩）。
  */
-export function SealedNote({ hook, authorNote }: { hook?: string; authorNote?: string }) {
-    return (
-        <>
-            <DetailField label="一句话介绍" value={hook} />
-            <DetailField label="作者的话" value={authorNote} />
-        </>
-    );
+export function SealedNote({ hook, canvas }: { hook?: string; canvas?: string }) {
+    if (canvas?.trim()) {
+        return <div className="mix-canvas-block"><MixRichText text={canvas} /></div>;
+    }
+    return <DetailField label="一句话介绍" value={hook} />;
 }
 
 export function DetailField({ label, value, code }: { label: string; value?: string; code?: boolean }) {
@@ -178,7 +177,6 @@ export function MaterialDetail({ material }: { material: MixMaterial }) {
                 <DetailField label="当前剧情" value={card.plot} />
                 <DetailField label="附加设定" value={card.extra} />
                 <DetailField label="开场白" value={card.openings.map((o, i) => `${card.openings.length > 1 ? `〔${i + 1}〕` : ""}${o}`).join("\n\n")} />
-                <DetailField label="作者的话" value={card.authorNote} />
             </>
         );
     }

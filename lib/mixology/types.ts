@@ -76,13 +76,15 @@ export type MixCharacterCard = MixMaterialMeta & {
     relations?: string;
     /** 当前剧情：开局时间点的情境 */
     plot?: string;
-    /** 开场白（可多个，玩家开局挑一个） */
+    /** 开场白（可多个，玩家开局挑一个；纯文本，进对局与提示词） */
     openings: string[];
+    /** 开场画布：点进卡详情时铺在封面蒙版上的门面页（HTML，沙盒渲染，不进提示词） */
+    canvas?: string;
     /** 示例对话：文风锚点（user/char 轮次） */
     examples?: { role: "user" | "char"; text: string }[];
     /** 附加设定：NPC、私设名词表等自由区 */
     extra?: string;
-    /** 作者的话（仅展示，不进提示词） */
+    /** @deprecated 已被开场画布取代，仅为兼容旧数据保留 */
     authorNote?: string;
 };
 

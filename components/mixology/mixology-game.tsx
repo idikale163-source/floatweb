@@ -5,11 +5,12 @@
 // 装饰材料的 CSS 以 <style> 注入本画面容器（认 .mix-* 官方语义类）。
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, CornerDownRight, RotateCcw, Send, Undo2 } from "lucide-react";
+import { ChevronLeft, CornerDownRight, Music4, RotateCcw, Send, Undo2, X } from "lucide-react";
 import { continueMix, generateMixReply, rerollMixReply, undoMixLastRound } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession } from "@/lib/mixology/storage";
 import type { MixSession, MixTurn } from "@/lib/mixology/types";
 import { MixProseView } from "./prose-view";
+import { MixRichText } from "./rich-text";
 import { MixTicketFrame } from "./ticket-frame";
 
 type GameProps = {
@@ -35,20 +36,23 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const [session, setSession] = useState<MixSession | null>(() => getMixSession(sessionId));
     const [input, setInput] = useState("");
     const [busy, setBusy] = useState(false);
+    const [encoreOpen, setEncoreOpen] = useState(false);
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const abortRef = useRef<AbortController | null>(null);
 
     // 封面 / 小票渲染代码 / 装饰 CSS：按方案槽位从酒柜现取
     const assets = useMemo(() => {
-        if (!session) return { cover: "", ticketHtml: undefined as string | undefined, garnishCss: "" };
+        if (!session) return { cover: "", ticketHtml: undefined as string | undefined, garnishCss: "", encoreHtml: "" };
         const slots = session.recipe.slots;
         const character = slots.character ? getMixMaterial(slots.character) : null;
         const ticket = slots.ticket ? getMixMaterial(slots.ticket) : null;
         const garnish = slots.garnish ? getMixMaterial(slots.garnish) : null;
+        const encore = slots.encore ? getMixMaterial(slots.encore) : null;
         return {
             cover: character?.cover ?? "",
             ticketHtml: ticket?.kind === "ticket" ? ticket.renderHtml : undefined,
             garnishCss: garnish?.kind === "garnish" ? garnish.css : "",
+            encoreHtml: encore?.kind === "encore" ? encore.html : "",
         };
     }, [session]);
 
@@ -106,6 +110,17 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             <div className="mix-game-header">
                 <button type="button" className="mix-icon-btn" onClick={onBack} aria-label="返回"><ChevronLeft size={20} /></button>
                 <div className="mix-game-title">{session.charName}</div>
+                {assets.encoreHtml ? (
+                    <button
+                        type="button"
+                        className="mix-icon-btn"
+                        onClick={() => setEncoreOpen(true)}
+                        aria-label="尾调"
+                        title="尾调"
+                    >
+                        <Music4 size={17} />
+                    </button>
+                ) : null}
                 <button
                     type="button"
                     className="mix-icon-btn"
@@ -139,6 +154,19 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                     </div>
                 ) : null}
             </div>
+            {encoreOpen && assets.encoreHtml ? (
+                <div className="mix-encore-layer">
+                    <div className="mix-game-header">
+                        <button type="button" className="mix-icon-btn" onClick={() => setEncoreOpen(false)} aria-label="关闭"><X size={18} /></button>
+                        <div className="mix-game-title">尾调</div>
+                        <span style={{ width: 32 }} />
+                    </div>
+                    <div className="mix-encore-scroll">
+                        <MixRichText text={assets.encoreHtml} />
+                    </div>
+                </div>
+            ) : null}
+
             <div className="mix-game-inputbar">
                 <button
                     type="button"

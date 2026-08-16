@@ -133,7 +133,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
     const [plot, setPlot] = useState(initialCard?.plot ?? "");
     const [extra, setExtra] = useState(initialCard?.extra ?? "");
     const [openingsText, setOpeningsText] = useState(initialCard?.openings.join(OPENING_SEPARATOR) ?? "");
-    const [authorNote, setAuthorNote] = useState(initialCard?.authorNote ?? "");
+    const [canvas, setCanvas] = useState(initialCard?.canvas ?? "");
     const [examples, setExamples] = useState<{ role: "user" | "char"; text: string }[]>(
         initialCard?.examples ? initialCard.examples.map((e) => ({ ...e })) : [],
     );
@@ -200,7 +200,8 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                 extra: extra.trim() || undefined,
                 openings,
                 examples: examples.filter((e) => e.text.trim()).map((e) => ({ role: e.role, text: e.text.trim() })),
-                authorNote: authorNote.trim() || undefined,
+                canvas: canvas.trim() || undefined,
+                authorNote: initialCard?.authorNote,
             };
             onSave(card);
             return;
@@ -343,9 +344,25 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             </button>
                         </div>
                     </Field>
-                    <Field label="作者的话" hint="仅展示，不进提示词">
-                        <textarea className="mix-textarea" value={authorNote} onChange={(e) => setAuthorNote(e.target.value)} />
+                    <Field label="开场画布" hint="选填，HTML；点进卡片时铺在封面蒙版上展示，不进提示词">
+                        <textarea
+                            className="mix-textarea"
+                            data-code="true"
+                            style={{ minHeight: 170 }}
+                            value={canvas}
+                            onChange={(e) => setCanvas(e.target.value)}
+                            placeholder={"这张卡的门面页：大标题、诗句、标签、给读者的说明，版面由你排。\n\n例：\n<div style=\"padding:28px 6px;color:#fff;font:14px/2 serif\">\n  <h1 style=\"font-size:34px;letter-spacing:.3em\">晏迟</h1>\n  <p style=\"opacity:.65\">便利店夜班 · 冷白皮</p>\n  <p style=\"margin-top:22px\">「今天也加班到这个点？」</p>\n</div>"}
+                        />
                     </Field>
+                    <button
+                        type="button"
+                        className="mix-pill-btn"
+                        style={{ marginTop: 10 }}
+                        onClick={() => setPreview({ kind: "canvas", html: canvas, cover })}
+                        disabled={!canvas.trim()}
+                    >
+                        <Play size={13} style={{ verticalAlign: "-2px" }} /> 预览画布
+                    </button>
                 </>
             ) : null}
             {kind === "base" || kind === "flavor" || kind === "glass" || kind === "strength" ? (
