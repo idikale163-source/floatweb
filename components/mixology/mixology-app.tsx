@@ -77,6 +77,8 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     // 酒材/配方页手动刷新：令牌触发子组件重拉，loading 驱动头部图标旋转
     const [hallReload, setHallReload] = useState(0);
     const [hallLoading, setHallLoading] = useState(false);
+    // 大厅（全部）/ 我的发布：头部刷新按钮左侧的滑动切换，两个在线页共用
+    const [hallScope, setHallScope] = useState<"all" | "mine">("all");
     // 自己的账号 id：酒柜详情里的评论区用它判断"哪条评论可删"
     const [myId, setMyId] = useState("");
     const [detail, setDetail] = useState<MixMaterial | null>(null);
@@ -399,26 +401,32 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                     <button type="button" className="mix-icon-btn" onClick={() => importFileRef.current?.click()} aria-label="导入材料" title="从文件导入"><Upload size={17} /></button>
                 ) : null}
                 {tab === "menu" || tab === "hall" ? (
-                    <button
-                        type="button"
-                        className="mix-icon-btn"
-                        onClick={() => setHallReload((n) => n + 1)}
-                        disabled={hallLoading}
-                        aria-label="刷新"
-                        title="刷新"
-                    >
-                        <RefreshCw size={17} className={hallLoading ? "mix-spin" : undefined} />
-                    </button>
+                    <>
+                        <div className="mix-scope-toggle" role="tablist" aria-label="范围切换">
+                            <button type="button" data-active={hallScope === "all" ? "true" : undefined} onClick={() => setHallScope("all")}>大厅</button>
+                            <button type="button" data-active={hallScope === "mine" ? "true" : undefined} onClick={() => setHallScope("mine")}>我的发布</button>
+                        </div>
+                        <button
+                            type="button"
+                            className="mix-icon-btn"
+                            onClick={() => setHallReload((n) => n + 1)}
+                            disabled={hallLoading}
+                            aria-label="刷新"
+                            title="刷新"
+                        >
+                            <RefreshCw size={17} className={hallLoading ? "mix-spin" : undefined} />
+                        </button>
+                    </>
                 ) : null}
             </div>
 
             <div className="mix-body" data-fill={tab === "bar" && barTab === "create" ? "true" : undefined}>
                 {tab === "menu" ? (
-                    <MixologyHall mode="menu" onToast={showToast} onImported={refresh} reloadToken={hallReload} onLoadingChange={setHallLoading} />
+                    <MixologyHall mode="menu" scope={hallScope} onToast={showToast} onImported={refresh} reloadToken={hallReload} onLoadingChange={setHallLoading} />
                 ) : null}
 
                 {tab === "hall" ? (
-                    <MixologyHall mode="hall" onToast={showToast} onImported={refresh} reloadToken={hallReload} onLoadingChange={setHallLoading} />
+                    <MixologyHall mode="hall" scope={hallScope} onToast={showToast} onImported={refresh} reloadToken={hallReload} onLoadingChange={setHallLoading} />
                 ) : null}
 
                 {tab === "bar" ? (

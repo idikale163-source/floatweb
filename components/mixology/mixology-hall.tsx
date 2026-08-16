@@ -184,12 +184,15 @@ export function CommentThread({
 
 export function MixologyHall({
     mode,
+    scope = "all",
     onToast,
     onImported,
     reloadToken = 0,
     onLoadingChange,
 }: {
     mode: HallMode;
+    /** 大厅（全部）/ 我的发布：由头部的切换胶囊控制 */
+    scope?: "all" | "mine";
     onToast: (message: string) => void;
     onImported: () => void;
     /** 父层的手动刷新令牌：数值变化即重新拉取 */
@@ -200,8 +203,6 @@ export function MixologyHall({
     const [materials, setMaterials] = useState<MixHallMaterial[]>([]);
     const [recipes, setRecipes] = useState<MixHallRecipe[]>([]);
     const [kind, setKind] = useState<MixMaterialKind>("character");
-    // 大厅（全部）/ 我的发布：右上角滑动切换，方便找到并管理自己上架的内容
-    const [scope, setScope] = useState<"all" | "mine">("all");
     const [loading, setLoading] = useState(true);
     const [notReady, setNotReady] = useState<string | null>(null);
     const [detailMaterial, setDetailMaterial] = useState<MixHallMaterial | null>(null);
@@ -416,29 +417,20 @@ export function MixologyHall({
 
     // ── 渲染 ──
 
-    // 吸顶工具区：大厅/我的发布切换 +（酒材页）TAG 行。
-    // 是导航骨架，不跟着加载/未开张一起消失——否则每次切换整行都会闪一下；
-    // sticky 吸在 .mix-body 顶部，列表拉多长都能随手切换。
-    const topBar = (
+    // TAG 行是导航骨架，不跟着加载/未开张一起消失——否则每点一个 TAG 整行都会闪一下；
+    // sticky 吸在 .mix-body 顶部，列表拉多长都能随手切类目。
+    const topBar = mode === "menu" ? (
         <div className="mix-sticky-top">
-            <div className="mix-scope-row">
-                <div className="mix-scope-toggle" role="tablist" aria-label="范围切换">
-                    <button type="button" data-active={scope === "all" ? "true" : undefined} onClick={() => setScope("all")}>大厅</button>
-                    <button type="button" data-active={scope === "mine" ? "true" : undefined} onClick={() => setScope("mine")}>我的发布</button>
-                </div>
+            <div className="mix-chip-row">
+                {MIX_SLOT_ORDER.map((k) => (
+                    <button type="button" className="mix-chip" data-two-line="true" data-active={kind === k ? "true" : undefined} onClick={() => setKind(k)} key={k}>
+                        <span>{MIX_KIND_LABELS[k]}</span>
+                        <small>{MIX_KIND_SECTION_LABELS[k]}</small>
+                    </button>
+                ))}
             </div>
-            {mode === "menu" ? (
-                <div className="mix-chip-row">
-                    {MIX_SLOT_ORDER.map((k) => (
-                        <button type="button" className="mix-chip" data-two-line="true" data-active={kind === k ? "true" : undefined} onClick={() => setKind(k)} key={k}>
-                            <span>{MIX_KIND_LABELS[k]}</span>
-                            <small>{MIX_KIND_SECTION_LABELS[k]}</small>
-                        </button>
-                    ))}
-                </div>
-            ) : null}
         </div>
-    );
+    ) : null;
 
     function renderBody() {
         if (loading) {
