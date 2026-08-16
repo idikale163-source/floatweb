@@ -1,6 +1,7 @@
 // lib/mixology/storage.ts
 // 独家特调 · 本地存取：酒柜（材料）/ 特调方案 / 对局，全部走 kv-db。
-// 官方出厂件（基底/杯型）首次加载自动入柜，MIX_BUILTIN_VERSION 升版时按 id 刷新内容。
+// 官方出厂件（基底/杯型）不落酒柜：按 id 从出厂工厂直读（人人可用、永远最新），
+// 在酒材页作为官方条目展示，吧台槽位选择时与酒柜材料并排可选。
 
 import { kvGet, kvSet, registerKvMigration } from "../kv-db";
 import type {
@@ -12,7 +13,6 @@ import type {
 import {
     MIX_BUILTIN_BASE_ID,
     MIX_BUILTIN_GLASS_ID,
-    MIX_BUILTIN_VERSION,
     createBuiltinBase,
     createBuiltinGlass,
 } from "./builtin";
@@ -27,7 +27,7 @@ registerKvMigration(RECIPES_KEY);
 registerKvMigration(SESSIONS_KEY);
 registerKvMigration(BUILTIN_VERSION_KEY);
 
-/** 官方件不可删除、不可改名（内容随出厂版本刷新） */
+/** 官方件不可删除、不可改名（内容永远是当前出厂版） */
 export const MIX_BUILTIN_IDS: readonly string[] = [
     MIX_BUILTIN_BASE_ID,
     MIX_BUILTIN_GLASS_ID,
@@ -35,6 +35,17 @@ export const MIX_BUILTIN_IDS: readonly string[] = [
 
 export function isMixBuiltinId(id: string): boolean {
     return MIX_BUILTIN_IDS.includes(id);
+}
+
+/** 出厂件工厂直读：不落库，每次现造，天然随版本更新 */
+export function listMixBuiltins(kind?: MixMaterialKind): MixMaterial[] {
+    const factory: MixMaterial[] = [createBuiltinBase(), createBuiltinGlass()];
+    return kind ? factory.filter((m) => m.kind === kind) : factory;
+}
+
+export function getMixBuiltin(id: string): MixMaterial | null {
+    if (!isMixBuiltinId(id)) return null;
+    return listMixBuiltins().find((m) => m.id === id) ?? null;
 }
 
 function readJson<T>(key: string, fallback: T): T {
@@ -54,33 +65,13 @@ function writeJson(key: string, value: unknown): void {
 
 // ---------- 酒柜（材料） ----------
 
-/** 出厂件补种/刷新：缺则种入，版本落后则用出厂内容覆盖（保留玩家无法改的官方件语义） */
-function ensureBuiltins(list: MixMaterial[]): { list: MixMaterial[]; changed: boolean } {
-    const storedVersion = Number(kvGet(BUILTIN_VERSION_KEY) ?? "0");
-    const factory: MixMaterial[] = [createBuiltinBase(), createBuiltinGlass()];
-    let changed = false;
-    const next = [...list];
-    for (const item of factory) {
-        const idx = next.findIndex((m) => m.id === item.id);
-        if (idx < 0) {
-            next.push(item);
-            changed = true;
-        } else if (storedVersion < MIX_BUILTIN_VERSION) {
-            next[idx] = { ...item, createdAt: next[idx].createdAt };
-            changed = true;
-        }
-    }
-    if (storedVersion < MIX_BUILTIN_VERSION) {
-        kvSet(BUILTIN_VERSION_KEY, String(MIX_BUILTIN_VERSION));
-    }
-    return { list: next, changed };
-}
-
 export function loadMixCabinet(): MixMaterial[] {
     const stored = readJson<MixMaterial[]>(CABINET_KEY, []);
-    const { list, changed } = ensureBuiltins(Array.isArray(stored) ? stored : []);
-    if (changed) writeJson(CABINET_KEY, list);
-    return list;
+    const list = Array.isArray(stored) ? stored : [];
+    // 迁移：老版本把出厂件种进了酒柜——现在出厂件工厂直读、酒材页展示，从柜里剔掉
+    const next = list.filter((m) => !isMixBuiltinId(m.id));
+    if (next.length !== list.length) writeJson(CABINET_KEY, next);
+    return next;
 }
 
 export function listMixMaterials(kind: MixMaterialKind): MixMaterial[] {
@@ -89,8 +80,13 @@ export function listMixMaterials(kind: MixMaterialKind): MixMaterial[] {
         .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
+/** 吧台/对局的槽位候选：官方出厂件在前 + 酒柜材料在后 */
+export function listMixPickables(kind: MixMaterialKind): MixMaterial[] {
+    return [...listMixBuiltins(kind), ...listMixMaterials(kind)];
+}
+
 export function getMixMaterial(id: string): MixMaterial | null {
-    return loadMixCabinet().find((m) => m.id === id) ?? null;
+    return getMixBuiltin(id) ?? loadMixCabinet().find((m) => m.id === id) ?? null;
 }
 
 /** 新增或整体覆盖一件材料（id 相同即覆盖） */
@@ -204,7 +200,7 @@ export function deleteMixSession(id: string): void {
     writeJson(SESSIONS_KEY, list.filter((s) => s.id !== id));
 }
 
-/** 按方案槽位从酒柜取材料实体；缺失的槽（材料被删）静默跳过，角色卡缺失返回 null */
+/** 按方案槽位取材料实体（出厂件走工厂直读）；缺失的槽（材料被删）静默跳过，角色卡缺失返回 null */
 export function resolveMixRecipeMaterials(
     recipe: MixRecipe,
 ): { materials: Partial<Record<MixMaterialKind, MixMaterial>>; missing: MixMaterialKind[] } {
@@ -213,8 +209,8 @@ export function resolveMixRecipeMaterials(
     const missing: MixMaterialKind[] = [];
     for (const [kind, id] of Object.entries(recipe.slots) as [MixMaterialKind, string][]) {
         if (!id) continue;
-        const found = cabinet.find((m) => m.id === id && m.kind === kind);
-        if (found) materials[kind] = found;
+        const found = getMixBuiltin(id) ?? cabinet.find((m) => m.id === id) ?? null;
+        if (found && found.kind === kind) materials[kind] = found;
         else missing.push(kind);
     }
     return { materials, missing };

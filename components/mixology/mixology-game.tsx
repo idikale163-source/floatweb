@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, Copy, CornerDownRight, History, Pencil, Plus, RotateCcw, Send, SlidersHorizontal, X } from "lucide-react";
 import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, regenerateMixTail, rerollMixReply, truncateMixAfterTurn } from "@/lib/mixology/engine";
-import { getMixMaterial, getMixSession, listMixMaterials, saveMixSession } from "@/lib/mixology/storage";
+import { getMixMaterial, getMixSession, listMixPickables, saveMixSession } from "@/lib/mixology/storage";
 import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, type MixCharacterCard, type MixFilterRule, type MixMaterialKind, type MixSession, type MixTurn } from "@/lib/mixology/types";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
 import { MixProseView } from "./prose-view";
@@ -405,7 +405,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                                         </div>
                                     </div>
                                 ) : null}
-                                {listMixMaterials(slotPick).map((m) => (
+                                {listMixPickables(slotPick).map((m) => (
                                     <div className="mix-mat-row" data-kind={m.kind} onClick={() => setSlot(slotPick, m.id)} key={m.id}>
                                         <div className="mix-mat-row-glyph"><KindGlyph kind={m.kind} size={22} /></div>
                                         <div className="mix-mat-info">
@@ -417,7 +417,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                                         </div>
                                     </div>
                                 ))}
-                                {listMixMaterials(slotPick).length === 0 ? (
+                                {listMixPickables(slotPick).length === 0 ? (
                                     <div className="mix-comment-empty">酒柜里还没有{MIX_KIND_LABELS[slotPick]}——去酒柜页自建一件。</div>
                                 ) : null}
                             </div>

@@ -150,15 +150,14 @@
 }
 
 /* ── TAG 胶囊行 ── */
-/* 吸顶工具区：TAG 行 / 大厅-我的发布切换，列表拉多长都能随手够到 */
-.mix-sticky-top {
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    margin: 0 -14px;
+/* 固定 TAG 工具行：位于头部与滚动区之间、不在滚动容器内，橡皮筋回弹带不动它 */
+.mix-topbar {
+    flex: 0 0 auto;
     padding: 0 14px 4px;
     background: var(--mix-bg);
     box-shadow: 0 6px 12px -8px rgba(0, 0, 0, 0.6);
+    position: relative;
+    z-index: 20;
 }
 
 /* 大厅 / 我的发布 滑动切换：头部刷新按钮左侧的小胶囊 */

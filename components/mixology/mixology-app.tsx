@@ -32,8 +32,10 @@ import {
     deleteMixMaterial,
     deleteMixRecipe,
     deleteMixSession,
+    getMixBuiltin,
     getMixMaterial,
     isMixBuiltinId,
+    listMixPickables,
     loadMixCabinet,
     loadMixRecipes,
     loadMixSessions,
@@ -79,6 +81,8 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     const [hallLoading, setHallLoading] = useState(false);
     // 大厅（全部）/ 我的发布：头部刷新按钮左侧的滑动切换，两个在线页共用
     const [hallScope, setHallScope] = useState<"all" | "mine">("all");
+    // 酒材页当前 TAG：状态在壳层，TAG 行渲染在滚动容器之外（真固定，不随橡皮筋回弹）
+    const [hallKind, setHallKind] = useState<MixMaterialKind>("character");
     // 自己的账号 id：酒柜详情里的评论区用它判断"哪条评论可删"
     const [myId, setMyId] = useState("");
     const [detail, setDetail] = useState<MixMaterial | null>(null);
@@ -135,8 +139,8 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
         for (const kind of MIX_SLOT_ORDER) {
             const id = barSlots[kind];
             if (!id) continue;
-            const found = cabinet.find((m) => m.id === id && m.kind === kind);
-            if (found) map[kind] = found;
+            const found = getMixBuiltin(id) ?? cabinet.find((m) => m.id === id) ?? null;
+            if (found && found.kind === kind) map[kind] = found;
         }
         return map;
     }, [barSlots, cabinet]);
@@ -268,7 +272,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
      */
     const planShareRecipe = (recipe: MixRecipe) => {
         const materials = MIX_SLOT_ORDER
-            .map((k) => (recipe.slots[k] ? cabinet.find((m) => m.id === recipe.slots[k]) : null))
+            .map((k) => (recipe.slots[k] ? getMixBuiltin(recipe.slots[k]!) ?? cabinet.find((m) => m.id === recipe.slots[k]) : null))
             .filter((m): m is MixMaterial => Boolean(m));
         const character = materials.find((m) => m.kind === "character");
         const own = materials.filter((m) => !isMixBuiltinId(m.id) && !m.imported);
@@ -420,9 +424,33 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                 ) : null}
             </div>
 
+            {/* TAG 行在滚动容器之外：真固定，橡皮筋回弹只作用下面的内容区 */}
+            {tab === "menu" || tab === "cabinet" ? (
+                <div className="mix-topbar">
+                    <div className="mix-chip-row">
+                        {MIX_SLOT_ORDER.map((kind) => {
+                            const active = (tab === "menu" ? hallKind : cabinetKind) === kind;
+                            return (
+                                <button
+                                    type="button"
+                                    className="mix-chip"
+                                    data-two-line="true"
+                                    data-active={active ? "true" : undefined}
+                                    onClick={() => (tab === "menu" ? setHallKind(kind) : setCabinetKind(kind))}
+                                    key={kind}
+                                >
+                                    <span>{MIX_KIND_LABELS[kind]}</span>
+                                    <small>{MIX_KIND_SECTION_LABELS[kind]}</small>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            ) : null}
+
             <div className="mix-body" data-fill={tab === "bar" && barTab === "create" ? "true" : undefined}>
                 {tab === "menu" ? (
-                    <MixologyHall mode="menu" scope={hallScope} onToast={showToast} onImported={refresh} reloadToken={hallReload} onLoadingChange={setHallLoading} />
+                    <MixologyHall mode="menu" kind={hallKind} scope={hallScope} onToast={showToast} onImported={refresh} reloadToken={hallReload} onLoadingChange={setHallLoading} />
                 ) : null}
 
                 {tab === "hall" ? (
@@ -500,7 +528,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 const card = recipe.slots.character ? cabinet.find((m) => m.id === recipe.slots.character) : null;
                                 const parts = MIX_SLOT_ORDER
                                     .filter((k) => k !== "character" && recipe.slots[k])
-                                    .map((k) => cabinet.find((m) => m.id === recipe.slots[k])?.name)
+                                    .map((k) => (getMixBuiltin(recipe.slots[k]!) ?? cabinet.find((m) => m.id === recipe.slots[k]))?.name)
                                     .filter(Boolean);
                                 // 配方的云端徽章：自己改过搭配、或任一自有材料没上架/没同步，都算"有未上架修改"
                                 const cloudBadge = (() => {
@@ -556,17 +584,6 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
 
                 {tab === "cabinet" ? (
                     <>
-                        {/* TAG 行吸顶：材料一多也能随手切类目 */}
-                        <div className="mix-sticky-top">
-                            <div className="mix-chip-row">
-                                {MIX_SLOT_ORDER.map((kind) => (
-                                    <button type="button" className="mix-chip" data-two-line="true" data-active={cabinetKind === kind ? "true" : undefined} onClick={() => setCabinetKind(kind)} key={kind}>
-                                        <span>{MIX_KIND_LABELS[kind]}</span>
-                                        <small>{MIX_KIND_SECTION_LABELS[kind]}</small>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
                         {cabinetFiltered.length === 0 ? (
                             <div className="mix-empty">
                                 <Archive size={32} strokeWidth={1.4} />
@@ -869,7 +886,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             <button type="button" className="mix-icon-btn" onClick={() => setSlotPicker(null)} aria-label="关闭"><X size={18} /></button>
                         </div>
                         <div className="mix-sheet-body">
-                            {cabinet.filter((m) => m.kind === slotPicker).length === 0 ? (
+                            {listMixPickables(slotPicker).length === 0 ? (
                                 <div className="mix-empty">
                                     <Archive size={30} strokeWidth={1.4} />
                                     酒柜里还没有{MIX_KIND_LABELS[slotPicker]}——
@@ -878,7 +895,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 </div>
                             ) : (
                                 <div className={mixKindHasCover(slotPicker) ? "mix-waterfall" : "mix-mat-list"}>
-                                    {cabinet.filter((m) => m.kind === slotPicker).map((material) => (
+                                    {listMixPickables(slotPicker).map((material) => (
                                         <MatCard
                                             kind={material.kind}
                                             name={material.name}

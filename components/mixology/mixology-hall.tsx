@@ -25,11 +25,9 @@ import {
     type MixHallRecipePart,
     type MixHallType,
 } from "@/lib/mixology/hall-client";
-import { saveMixMaterial, saveMixRecipe } from "@/lib/mixology/storage";
+import { listMixBuiltins, saveMixMaterial, saveMixRecipe } from "@/lib/mixology/storage";
 import {
     MIX_KIND_LABELS,
-    MIX_KIND_SECTION_LABELS,
-    MIX_SLOT_ORDER,
     mixKindHasCover,
     type MixCharacterCard,
     type MixMaterial,
@@ -184,6 +182,7 @@ export function CommentThread({
 
 export function MixologyHall({
     mode,
+    kind = "character",
     scope = "all",
     onToast,
     onImported,
@@ -191,6 +190,8 @@ export function MixologyHall({
     onLoadingChange,
 }: {
     mode: HallMode;
+    /** 酒材页当前 TAG：由壳层的固定 TAG 行控制（menu 模式用） */
+    kind?: MixMaterialKind;
     /** 大厅（全部）/ 我的发布：由头部的切换胶囊控制 */
     scope?: "all" | "mine";
     onToast: (message: string) => void;
@@ -202,11 +203,12 @@ export function MixologyHall({
 }) {
     const [materials, setMaterials] = useState<MixHallMaterial[]>([]);
     const [recipes, setRecipes] = useState<MixHallRecipe[]>([]);
-    const [kind, setKind] = useState<MixMaterialKind>("character");
     const [loading, setLoading] = useState(true);
     const [notReady, setNotReady] = useState<string | null>(null);
     const [detailMaterial, setDetailMaterial] = useState<MixHallMaterial | null>(null);
     const [detailRecipe, setDetailRecipe] = useState<MixHallRecipe | null>(null);
+    // 官方出厂件详情（本地直读，不走线上）
+    const [officialDetail, setOfficialDetail] = useState<MixMaterial | null>(null);
     const [busy, setBusy] = useState(false);
     const [likePending, setLikePending] = useState<string[]>([]);
     const [myId, setMyId] = useState("");
@@ -417,21 +419,6 @@ export function MixologyHall({
 
     // ── 渲染 ──
 
-    // TAG 行是导航骨架，不跟着加载/未开张一起消失——否则每点一个 TAG 整行都会闪一下；
-    // sticky 吸在 .mix-body 顶部，列表拉多长都能随手切类目。
-    const topBar = mode === "menu" ? (
-        <div className="mix-sticky-top">
-            <div className="mix-chip-row">
-                {MIX_SLOT_ORDER.map((k) => (
-                    <button type="button" className="mix-chip" data-two-line="true" data-active={kind === k ? "true" : undefined} onClick={() => setKind(k)} key={k}>
-                        <span>{MIX_KIND_LABELS[k]}</span>
-                        <small>{MIX_KIND_SECTION_LABELS[k]}</small>
-                    </button>
-                ))}
-            </div>
-        </div>
-    ) : null;
-
     function renderBody() {
         if (loading) {
             return (
@@ -441,18 +428,36 @@ export function MixologyHall({
                 </div>
             );
         }
+        // 官方出厂件：置顶在酒材页对应 TAG 下（本地直读，未开张/自部署也能看）
+        const official = mode === "menu" && scope === "all" ? listMixBuiltins(kind) : [];
+        const officialCards = official.map((m) => (
+            <MatCard
+                kind={m.kind}
+                name={m.name}
+                hook={m.hook}
+                cover={m.cover}
+                badge="官方"
+                onClick={() => setOfficialDetail(m)}
+                key={m.id}
+            />
+        ));
         if (notReady) {
             return (
-                <div className="mix-empty" style={{ paddingTop: 60 }}>
-                    <Wine size={36} strokeWidth={1.4} />
-                    {notReady}
-                    <br />
-                    本地的吧台和酒柜不受影响，先自己调一杯。
-                </div>
+                <>
+                    {official.length > 0 ? (
+                        <div className={mixKindHasCover(kind) ? "mix-waterfall" : "mix-mat-list"}>{officialCards}</div>
+                    ) : null}
+                    <div className="mix-empty" style={{ paddingTop: official.length > 0 ? 24 : 60 }}>
+                        <Wine size={36} strokeWidth={1.4} />
+                        {notReady}
+                        <br />
+                        本地的吧台和酒柜不受影响，先自己调一杯。
+                    </div>
+                </>
             );
         }
         if (mode === "menu") {
-            if (materials.length === 0) {
+            if (materials.length === 0 && official.length === 0) {
                 return (
                     <div className="mix-empty">
                         <Inbox size={32} strokeWidth={1.4} />
@@ -464,6 +469,7 @@ export function MixologyHall({
             }
             return (
                 <div className={mixKindHasCover(kind) ? "mix-waterfall" : "mix-mat-list"}>
+                    {officialCards}
                     {materials.map((entry) => (
                         <MatCard
                             kind={entry.kind}
@@ -512,8 +518,30 @@ export function MixologyHall({
 
     return (
         <>
-            {topBar}
             {renderBody()}
+
+            {/* 官方出厂件详情：本地内容，无点赞/评论/入柜——吧台槽位里直接可选 */}
+            {officialDetail ? inOverlay(
+                <div className="mix-sheet-mask" onClick={() => setOfficialDetail(null)}>
+                    <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
+                        <div className="mix-sheet-head">
+                            <div className="mix-sheet-title">
+                                {officialDetail.name}
+                                <span className="mix-mat-badge" style={{ marginLeft: 6 }}>官方</span>
+                            </div>
+                            <button type="button" className="mix-icon-btn" onClick={() => setOfficialDetail(null)} aria-label="关闭"><X size={18} /></button>
+                        </div>
+                        <div className="mix-sheet-body">
+                            <div className="mix-mat-stats" style={{ marginTop: 2 }}>
+                                {MIX_KIND_LABELS[officialDetail.kind]} · 官方出厂件 · 吧台槽位里直接可选，无需入柜
+                            </div>
+                            <div style={{ marginTop: 8 }}>
+                                <MaterialDetail material={officialDetail} />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
 
             {/* 材料详情 */}
             {detailMaterial ? inOverlay(
