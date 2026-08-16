@@ -33,6 +33,9 @@ import {
     type MixMaterial,
     type MixMaterialKind,
     type MixRecipe,
+    MIX_SLOT_MAX,
+    type MixCondition,
+    type MixSlotEntry,
 } from "@/lib/mixology/types";
 import { AuthorAvatar, MatCard, MaterialDetail, MixConfirm, SealedNote } from "./mixology-shared";
 
@@ -371,13 +374,20 @@ export function MixologyHall({
         setBusy(true);
         try {
             const { saveCount } = await markHallSaved("recipe", entry.id);
-            const slots: Partial<Record<MixMaterialKind, string>> = {};
+            const slots: Partial<Record<MixMaterialKind, MixSlotEntry[]>> = {};
+            // 一格可能叠了多件，按线上顺序依次落格；作者设的生效条件跟着一起带过来
+            const pushSlot = (kind: MixMaterialKind, materialId: string, when?: MixCondition) => {
+                const list = slots[kind] ?? [];
+                if (list.length >= MIX_SLOT_MAX) return;
+                list.push(when ? { materialId, when } : { materialId });
+                slots[kind] = list;
+            };
             let missing = 0;
             for (const part of entry.parts) {
                 if (!part || !part.kind || !MIX_KIND_LABELS[part.kind]) continue;
                 if (part.builtin) {
                     // 官方出厂件人人本地都有，直接指过去
-                    slots[part.kind] = part.id;
+                    pushSlot(part.kind, part.id, part.when);
                     continue;
                 }
                 if (part.gone || !part.material || typeof part.material !== "object") {
@@ -386,7 +396,7 @@ export function MixologyHall({
                 }
                 const { publishedId: _p, publishedAt: _a, ...clean } = part.material;
                 saveMixMaterial({ ...clean, id: part.id, kind: part.kind, author: part.authorName || entry.authorName, authorAvatar: part.authorAvatar || undefined, imported: true } as MixMaterial);
-                slots[part.kind] = part.id;
+                pushSlot(part.kind, part.id, part.when);
                 // 给这味酒材也记一次入柜（材料作者拿到数据）；失败不打断整杯导入
                 void markHallSaved("material", part.id).catch(() => { /* 尽力而为 */ });
             }

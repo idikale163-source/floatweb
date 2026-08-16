@@ -53,6 +53,34 @@ export const MIX_KIND_SECTION_LABELS: Record<MixMaterialKind, string> = {
 /** 必选槽：没配齐不能开局；其余槽可留空 */
 export const MIX_REQUIRED_KINDS: MixMaterialKind[] = ["character"];
 
+/** 一格最多叠几件 */
+export const MIX_SLOT_MAX = 3;
+
+/**
+ * 叠放语义：
+ * concat = 这一格里条件满足的全部生效，按顺序依次拼接（多段文风叠加、主装饰 + 补丁装饰）；
+ * first  = 只用第一件条件满足的（状态卡只能有一张、小剧场一轮只演一出）。
+ */
+export const MIX_SLOT_STACK: Record<MixMaterialKind, "concat" | "first"> = {
+    character: "first",
+    persona: "first",
+    base: "concat",
+    flavor: "concat",
+    glass: "concat",
+    strength: "concat",
+    ticket: "first",
+    garnish: "concat",
+    encore: "first",
+    filter: "concat",
+};
+
+/** 不给设生效条件的格：这两格没了这一局就不成立 */
+export const MIX_NO_CONDITION_KINDS: MixMaterialKind[] = ["character", "persona"];
+
+export function mixKindAllowsCondition(kind: MixMaterialKind): boolean {
+    return !MIX_NO_CONDITION_KINDS.includes(kind);
+}
+
 /**
  * 支持配图的种类：角色卡 + 三类"看效果"的视觉材料（小票/装饰/尾调），
  * 列表里走双列海报瀑布；其余纯文本材料不配图，走单列列表。
@@ -134,6 +162,17 @@ export type MixPersonaMaterial = MixMaterialMeta & {
     content: string;
 };
 
+/**
+ * 小票里被标成「记住」的一项：每轮从小票原文里按键名抽出来，跨轮留存。
+ * 抽不到就保留上一轮的值——宁可停滞，不能跳变。
+ */
+export type MixTicketVar = {
+    /** 变量名，同时就是小票原文里的键名 */
+    name: string;
+    /** 开局时的初始值 */
+    initial?: string;
+};
+
 /** 小票：输出契约进提示词，渲染代码在沙盒 iframe 接管展示 */
 export type MixTicketMaterial = MixMaterialMeta & {
     kind: "ticket";
@@ -143,6 +182,8 @@ export type MixTicketMaterial = MixMaterialMeta & {
     renderHtml: string;
     /** 编辑器预览用示例数据 */
     previewRaw?: string;
+    /** 这张小票里哪几项要记住（记住的值可被条件判断、可被 {{状态.X}} 取用） */
+    vars?: MixTicketVar[];
 };
 
 /** 装饰：对局界面美化（官方语义类 + 界面定位符的 CSS） */
@@ -197,12 +238,66 @@ export type MixMaterial =
     | MixEncoreMaterial
     | MixFilterMaterial;
 
-/** 特调方案：每个槽位记录所用材料 id（材料本体在酒柜里） */
+/** 条件里的比较符 */
+export type MixCompareOp = ">" | ">=" | "<" | "<=" | "=" | "!=";
+
+/**
+ * 一件材料的生效条件。不写 = 一直生效。
+ * 刻意只做「一句话能说清」的四种，不支持嵌套、不做表达式求值——
+ * 条件是纯数据，跟着材料分享出去也不会执行任何东西。
+ */
+export type MixCondition =
+    /** 聊到第 N 轮之后 */
+    | { type: "turn"; after: number }
+    /** 记住的某个值满足比较（数字按数字比，其余按文字比） */
+    | { type: "var"; name: string; op: MixCompareOp; value: string }
+    /** 最近 within 轮里提到过其中任一个词（默认只看最近 1 轮） */
+    | { type: "keyword"; words: string[]; within?: number }
+    /** 随机 percent% 的轮次生效 */
+    | { type: "chance"; percent: number };
+
+/** 配方里的一条材料：材料 id + 生效条件 */
+export type MixSlotEntry = {
+    materialId: string;
+    when?: MixCondition;
+};
+
+/** 对局记住的值：可能是数字（好感度 61），也可能是文字（时段 深夜） */
+export type MixStateValue = string | number;
+export type MixState = Record<string, MixStateValue>;
+
+/** 兼容早期数据：那时一格只放一件，槽位存的是材料 id 字符串 */
+export type MixSlotsRaw = Partial<Record<MixMaterialKind, string | MixSlotEntry[]>>;
+
+/** 读一格里的材料清单（吃得下新旧两种形状） */
+export function mixSlotEntries(slots: MixSlotsRaw | undefined, kind: MixMaterialKind): MixSlotEntry[] {
+    const raw = slots?.[kind];
+    if (!raw) return [];
+    if (typeof raw === "string") return [{ materialId: raw }];
+    return raw.filter((entry) => entry && typeof entry.materialId === "string" && entry.materialId);
+}
+
+/** 一格里第一件材料的 id（角色卡、面具这种单件格用） */
+export function mixSlotFirstId(slots: MixSlotsRaw | undefined, kind: MixMaterialKind): string | undefined {
+    return mixSlotEntries(slots, kind)[0]?.materialId;
+}
+
+/** 把任意形状的槽位统一成新形状（读盘时做一次，之后全程按新形状走） */
+export function normalizeMixSlots(slots: MixSlotsRaw | undefined): Partial<Record<MixMaterialKind, MixSlotEntry[]>> {
+    const out: Partial<Record<MixMaterialKind, MixSlotEntry[]>> = {};
+    for (const kind of MIX_SLOT_ORDER) {
+        const entries = mixSlotEntries(slots, kind).slice(0, MIX_SLOT_MAX);
+        if (entries.length) out[kind] = entries;
+    }
+    return out;
+}
+
+/** 特调方案：每个槽位记录所用材料（材料本体在酒柜里） */
 export type MixRecipe = {
     id: string;
     name: string;
-    /** kind → 材料 id；角色卡必有，其余可缺 */
-    slots: Partial<Record<MixMaterialKind, string>>;
+    /** kind → 这一格叠的材料（有序，最多 MIX_SLOT_MAX 件）；角色卡必有，其余可缺 */
+    slots: Partial<Record<MixMaterialKind, MixSlotEntry[]>>;
     /** 作者署名与头像：从配方页入柜时带回；自己的配方展示本地创作者资料 */
     author?: string;
     authorAvatar?: string;
@@ -226,6 +321,11 @@ export type MixTurn = {
     ticketRaw?: string;
     /** 该轮小剧场壳内原文（尾调写了契约且 AI 输出时才有） */
     encoreRaw?: string;
+    /**
+     * 这一轮结束时记住的值。回溯 / 重说 / 编辑某轮之后，
+     * 直接取剩下最后一轮的这份快照还原，数字不会停留在被丢掉的未来。
+     */
+    state?: MixState;
     createdAt: number;
 };
 
@@ -241,6 +341,8 @@ export type MixSession = {
     /** 选用的开场索引 */
     openingIndex: number;
     turns: MixTurn[];
+    /** 当前记住的值（小票里勾了「记住」的项，每轮更新） */
+    state?: MixState;
     createdAt: number;
     updatedAt: number;
 };

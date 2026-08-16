@@ -4,7 +4,7 @@
 // 自部署没配 Supabase 时接口返回 503/setupRequired，界面按未开张处理）。
 
 import { loadMixProfile } from "./storage";
-import type { MixMaterial, MixMaterialKind } from "./types";
+import type { MixCondition, MixMaterial, MixMaterialKind } from "./types";
 
 /** publishedId/publishedAt 是本地记账用的，不该随内容发到线上被别人继承 */
 function stripLocalOnly(material: MixMaterial): MixMaterial {
@@ -63,6 +63,8 @@ export type MixHallRecipePart = {
     /** 详情接口回填：这味酒材的作者 */
     authorName?: string;
     authorAvatar?: string;
+    /** 作者给这一件设的生效条件（不写 = 一直生效） */
+    when?: MixCondition;
 };
 
 export type MixHallRecipe = MixHallEntryBase & {

@@ -9,7 +9,9 @@ import type {
     MixMaterialKind,
     MixRecipe,
     MixSession,
+    MixSlotEntry,
 } from "./types";
+import { MIX_SLOT_ORDER, mixSlotEntries, normalizeMixSlots } from "./types";
 import {
     MIX_BUILTIN_BASE_ID,
     MIX_BUILTIN_GLASS_ID,
@@ -160,9 +162,16 @@ export function deleteMixMaterial(id: string): boolean {
 
 // ---------- 特调方案 ----------
 
+/** 早期一格只放一件、槽位存的是材料 id 字符串；读盘时统一成新形状（有序清单） */
+function migrateRecipeSlots<T extends { slots?: unknown }>(item: T): T {
+    return { ...item, slots: normalizeMixSlots(item.slots as never) };
+}
+
 export function loadMixRecipes(): MixRecipe[] {
     const stored = readJson<MixRecipe[]>(RECIPES_KEY, []);
-    return (Array.isArray(stored) ? stored : []).sort((a, b) => b.updatedAt - a.updatedAt);
+    return (Array.isArray(stored) ? stored : [])
+        .map(migrateRecipeSlots)
+        .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export function getMixRecipe(id: string): MixRecipe | null {
@@ -220,7 +229,10 @@ export function clearMixPublishedByCloudId(type: "material" | "recipe", cloudId:
 
 export function loadMixSessions(): MixSession[] {
     const stored = readJson<MixSession[]>(SESSIONS_KEY, []);
-    return (Array.isArray(stored) ? stored : []).sort((a, b) => b.updatedAt - a.updatedAt);
+    return (Array.isArray(stored) ? stored : [])
+        // 对局里存的是开局时的方案快照，同样要迁
+        .map((session) => ({ ...session, recipe: migrateRecipeSlots(session.recipe) }))
+        .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export function getMixSession(id: string): MixSession | null {
@@ -241,18 +253,35 @@ export function deleteMixSession(id: string): void {
     writeJson(SESSIONS_KEY, list.filter((s) => s.id !== id));
 }
 
-/** 按方案槽位取材料实体（出厂件走工厂直读）；缺失的槽（材料被删）静默跳过，角色卡缺失返回 null */
+/**
+ * 按方案槽位取材料实体（出厂件走工厂直读）。一格可能叠了多件，按顺序全部取出；
+ * 取不到的（材料被删）静默跳过并记进 missing。这里不判生效条件——条件要看对局现场，
+ * 由引擎在装配前逐条判定。
+ */
 export function resolveMixRecipeMaterials(
     recipe: MixRecipe,
-): { materials: Partial<Record<MixMaterialKind, MixMaterial>>; missing: MixMaterialKind[] } {
+): {
+    materials: Partial<Record<MixMaterialKind, MixMaterial[]>>;
+    entries: Partial<Record<MixMaterialKind, { entry: MixSlotEntry; material: MixMaterial }[]>>;
+    missing: MixMaterialKind[];
+} {
     const cabinet = loadMixCabinet();
-    const materials: Partial<Record<MixMaterialKind, MixMaterial>> = {};
+    const materials: Partial<Record<MixMaterialKind, MixMaterial[]>> = {};
+    const entries: Partial<Record<MixMaterialKind, { entry: MixSlotEntry; material: MixMaterial }[]>> = {};
     const missing: MixMaterialKind[] = [];
-    for (const [kind, id] of Object.entries(recipe.slots) as [MixMaterialKind, string][]) {
-        if (!id) continue;
-        const found = getMixBuiltin(id) ?? cabinet.find((m) => m.id === id) ?? null;
-        if (found && found.kind === kind) materials[kind] = found;
-        else missing.push(kind);
+    for (const kind of MIX_SLOT_ORDER) {
+        const slotEntries = mixSlotEntries(recipe.slots, kind);
+        if (!slotEntries.length) continue;
+        const resolved: { entry: MixSlotEntry; material: MixMaterial }[] = [];
+        for (const entry of slotEntries) {
+            const found = getMixBuiltin(entry.materialId) ?? cabinet.find((m) => m.id === entry.materialId) ?? null;
+            if (found && found.kind === kind) resolved.push({ entry, material: found });
+            else if (!missing.includes(kind)) missing.push(kind);
+        }
+        if (resolved.length) {
+            entries[kind] = resolved;
+            materials[kind] = resolved.map((r) => r.material);
+        }
     }
-    return { materials, missing };
+    return { materials, entries, missing };
 }

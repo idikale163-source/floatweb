@@ -60,6 +60,10 @@ import {
     type MixMaterialKind,
     type MixRecipe,
     type MixSession,
+    MIX_SLOT_MAX,
+    mixSlotEntries,
+    mixSlotFirstId,
+    type MixSlotEntry,
 } from "@/lib/mixology/types";
 import { fetchCurrentAccount } from "@/lib/account-client";
 import { MixHallGoneError, shareHallMaterial, shareHallRecipe, updateHallMaterial, updateHallRecipe } from "@/lib/mixology/hall-client";
@@ -130,7 +134,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
         tone?: "danger";
         run: () => void;
     } | null>(null);
-    const [barSlots, setBarSlots] = useState<Partial<Record<MixMaterialKind, string>>>({});
+    const [barSlots, setBarSlots] = useState<Partial<Record<MixMaterialKind, MixSlotEntry[]>>>({});
     const [slotPicker, setSlotPicker] = useState<MixMaterialKind | null>(null);
     const [nameSheetOpen, setNameSheetOpen] = useState(false);
     const [recipeName, setRecipeName] = useState("");
@@ -168,13 +172,16 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
         [cabinet, cabinetKind],
     );
 
+    /** 吧台每格已放的材料实体（一格可能叠了多件，按顺序取全） */
     const slotMaterials = useMemo(() => {
-        const map: Partial<Record<MixMaterialKind, MixMaterial>> = {};
+        const map: Partial<Record<MixMaterialKind, MixMaterial[]>> = {};
         for (const kind of MIX_SLOT_ORDER) {
-            const id = barSlots[kind];
-            if (!id) continue;
-            const found = getMixBuiltin(id) ?? cabinet.find((m) => m.id === id) ?? null;
-            if (found && found.kind === kind) map[kind] = found;
+            const list: MixMaterial[] = [];
+            for (const entry of mixSlotEntries(barSlots, kind)) {
+                const found = getMixBuiltin(entry.materialId) ?? cabinet.find((m) => m.id === entry.materialId) ?? null;
+                if (found && found.kind === kind) list.push(found);
+            }
+            if (list.length) map[kind] = list;
         }
         return map;
     }, [barSlots, cabinet]);
@@ -195,11 +202,11 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     }, []);
 
     const handleBrew = () => {
-        if (!barSlots.character) {
+        if (!mixSlotEntries(barSlots, "character").length) {
             showToast("先给第一槽挑一张角色卡。");
             return;
         }
-        const character = slotMaterials.character;
+        const character = slotMaterials.character?.[0];
         setRecipeName(character ? `${character.name}特调` : "我的特调");
         setNameSheetOpen(true);
     };
@@ -226,7 +233,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     };
 
     const handleStartRecipe = (recipe: MixRecipe) => {
-        const characterId = recipe.slots.character;
+        const characterId = mixSlotFirstId(recipe.slots, "character");
         const card = characterId ? getMixMaterial(characterId) : null;
         if (!card || card.kind !== "character") {
             showToast("这杯特调的角色卡已不在酒柜里。");
@@ -306,7 +313,8 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
      */
     const planShareRecipe = (recipe: MixRecipe) => {
         const materials = MIX_SLOT_ORDER
-            .map((k) => (recipe.slots[k] ? getMixBuiltin(recipe.slots[k]!) ?? cabinet.find((m) => m.id === recipe.slots[k]) : null))
+            .flatMap((k) => mixSlotEntries(recipe.slots, k)
+                .map((entry) => getMixBuiltin(entry.materialId) ?? cabinet.find((m) => m.id === entry.materialId) ?? null))
             .filter((m): m is MixMaterial => Boolean(m));
         const character = materials.find((m) => m.kind === "character");
         const own = materials.filter((m) => !isMixBuiltinId(m.id) && !m.imported);
@@ -421,7 +429,8 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
         );
     }
 
-    const openingCard = openingPicker?.slots.character ? getMixMaterial(openingPicker.slots.character) : null;
+    const openingCardId = openingPicker ? mixSlotFirstId(openingPicker.slots, "character") : undefined;
+    const openingCard = openingCardId ? getMixMaterial(openingCardId) : null;
 
     // 酒柜详情里的评论区：自己发布过的（publishedId）或从酒材页整件入柜的
     // （imported 且 id 就是线上 id，前缀 mxi_）能对上线上条目；随配方连料入柜的
@@ -520,7 +529,9 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                         <div className="mix-bar-hint">左右滑动切换槽位 · 点击槽位选材料</div>
                         <div className="mix-wheel" ref={wheelRef} onScroll={handleWheelScroll}>
                             {MIX_SLOT_ORDER.map((kind) => {
-                                const chosen = slotMaterials[kind];
+                                const stack = slotMaterials[kind] ?? [];
+                                const chosen = stack[0];
+                                const extra = stack.length - 1;
                                 return (
                                     <div
                                         className="mix-slot"
@@ -543,7 +554,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                                     ) : (
                                                         <div className="mix-slot-glyph"><KindGlyph kind={kind} size={34} /></div>
                                                     )}
-                                                    <div className="mix-slot-name">{chosen.name}</div>
+                                                    <div className="mix-slot-name">{chosen.name}{extra > 0 ? ` +${extra}` : ""}</div>
                                                     {chosen.hook ? <div className="mix-slot-hook">{chosen.hook}</div> : null}
                                                 </>
                                             ) : (
@@ -562,7 +573,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 <span className="mix-wheel-dot" data-active={i === wheelIndex ? "true" : undefined} key={kind} />
                             ))}
                         </div>
-                        <button type="button" className="mix-brew-btn" onClick={handleBrew} disabled={!barSlots.character}>
+                        <button type="button" className="mix-brew-btn" onClick={handleBrew} disabled={!mixSlotEntries(barSlots, "character").length}>
                             <Martini size={17} />调 配
                         </button>
                     </div>
@@ -575,20 +586,21 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             </div>
                         ) : (
                             recipes.map((recipe) => {
-                                const card = recipe.slots.character ? cabinet.find((m) => m.id === recipe.slots.character) : null;
+                                const recipeCardId = mixSlotFirstId(recipe.slots, "character");
+                                const card = recipeCardId ? cabinet.find((m) => m.id === recipeCardId) : null;
                                 const parts = MIX_SLOT_ORDER
-                                    .filter((k) => k !== "character" && recipe.slots[k])
-                                    .map((k) => (getMixBuiltin(recipe.slots[k]!) ?? cabinet.find((m) => m.id === recipe.slots[k]))?.name)
+                                    .filter((k) => k !== "character")
+                                    .flatMap((k) => mixSlotEntries(recipe.slots, k)
+                                        .map((entry) => (getMixBuiltin(entry.materialId) ?? cabinet.find((m) => m.id === entry.materialId))?.name))
                                     .filter(Boolean);
                                 // 配方的云端徽章：自己改过搭配、或任一自有材料没上架/没同步，都算"有未上架修改"
                                 const cloudBadge = (() => {
                                     if (recipe.imported || !recipe.publishedId) return null;
-                                    const partsDirty = MIX_SLOT_ORDER.some((k) => {
-                                        const id = recipe.slots[k];
-                                        if (!id || isMixBuiltinId(id)) return false;
-                                        const m = cabinet.find((x) => x.id === id);
+                                    const partsDirty = MIX_SLOT_ORDER.some((k) => mixSlotEntries(recipe.slots, k).some((entry) => {
+                                        if (isMixBuiltinId(entry.materialId)) return false;
+                                        const m = cabinet.find((x) => x.id === entry.materialId);
                                         return Boolean(m) && !m!.imported && mixCloudState(m!) !== "synced";
-                                    });
+                                    }));
                                     return mixCloudState(recipe) === "dirty" || partsDirty ? "有未上架修改" : "已上架";
                                 })();
                                 return (
@@ -676,9 +688,8 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             </div>
                         ) : (
                             sessions.map((session) => {
-                                const card = session.recipe.slots.character
-                                    ? cabinet.find((m) => m.id === session.recipe.slots.character)
-                                    : null;
+                                const sessionCardId = mixSlotFirstId(session.recipe.slots, "character");
+                                const card = sessionCardId ? cabinet.find((m) => m.id === sessionCardId) : null;
                                 return (
                                     <div className="mix-session-row" key={session.id} onClick={() => setPlaying(session.id)}>
                                         {card?.cover ? (
@@ -987,7 +998,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                     <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
                         <div className="mix-sheet-head">
                             <div className="mix-sheet-title">挑一件{MIX_KIND_LABELS[slotPicker]}</div>
-                            {slotPicker !== "character" && barSlots[slotPicker] ? (
+                            {slotPicker !== "character" && mixSlotEntries(barSlots, slotPicker).length ? (
                                 <button
                                     type="button"
                                     className="mix-pill-btn"
@@ -1024,7 +1035,15 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                             cover={material.cover}
                                             badge={isMixBuiltinId(material.id) ? "官方" : undefined}
                                             onClick={() => {
-                                                setBarSlots((prev) => ({ ...prev, [slotPicker]: material.id }));
+                                                setBarSlots((prev) => {
+                                                    const current = mixSlotEntries(prev, slotPicker);
+                                                    // 已经在这一格里就不重复加；满了就换掉最后一件
+                                                    if (current.some((e) => e.materialId === material.id)) return prev;
+                                                    const next = current.length >= MIX_SLOT_MAX
+                                                        ? [...current.slice(0, MIX_SLOT_MAX - 1), { materialId: material.id }]
+                                                        : [...current, { materialId: material.id }];
+                                                    return { ...prev, [slotPicker]: next };
+                                                });
                                                 setSlotPicker(null);
                                             }}
                                             key={material.id}
@@ -1049,8 +1068,8 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             <input className="mix-input" value={recipeName} onChange={(e) => setRecipeName(e.target.value)} placeholder="特调名" />
                             <div className="mix-detail-label" style={{ margin: "12px 2px 6px" }}>这杯里有</div>
                             <div className="mix-detail-value">
-                                {MIX_SLOT_ORDER.filter((k) => barSlots[k])
-                                    .map((k) => `${MIX_KIND_LABELS[k]} · ${slotMaterials[k]?.name ?? ""}`)
+                                {MIX_SLOT_ORDER.filter((k) => slotMaterials[k]?.length)
+                                    .map((k) => `${MIX_KIND_LABELS[k]} · ${(slotMaterials[k] ?? []).map((m) => m.name).join(" + ")}`)
                                     .join("\n")}
                             </div>
                             <div className="mix-form-footer">
