@@ -53,7 +53,6 @@ import { MixMaterialEditor } from "./mixology-editor";
 import { MixologyGame } from "./mixology-game";
 import { MixologyHall } from "./mixology-hall";
 import { KindGlyph, MatCard, MaterialDetail, MixConfirm, SealedNote, formatMixTime, isSealedMaterial } from "./mixology-shared";
-import { MixRichText } from "./rich-text";
 
 type MixTab = "menu" | "hall" | "bar" | "cabinet" | "games";
 
@@ -624,17 +623,11 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={detail.cover} alt={detail.name} style={{ width: 96, height: 128, objectFit: "cover", borderRadius: 12, margin: "4px 0 12px" }} />
                             ) : null}
-                            {isSealedMaterial(detail) ? (
+                            {/* 与酒单同一套展示：角色卡点开看门面（画布/一句话介绍），设定正文进「编辑」看 */}
+                            {detail.kind === "character" ? (
                                 <SealedNote hook={detail.hook} canvas={(detail as MixCharacterCard).canvas} />
                             ) : (
-                                <>
-                                    {detail.kind === "character" && (detail as MixCharacterCard).canvas?.trim() ? (
-                                        <div className="mix-canvas-block">
-                                            <MixRichText text={(detail as MixCharacterCard).canvas as string} />
-                                        </div>
-                                    ) : null}
-                                    <MaterialDetail material={detail} />
-                                </>
+                                <MaterialDetail material={detail} />
                             )}
                         </div>
                     </div>
