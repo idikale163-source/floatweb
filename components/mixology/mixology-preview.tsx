@@ -116,10 +116,11 @@ const STRUCTURE_ROWS: { section: string; from: string; kind?: string }[] = [
     { section: "## 角色资料", from: "角色卡：角色名 / 基础信息 / 性格 / 外貌 / 背景", kind: "character" },
     { section: "## 世界与剧情", from: "角色卡：世界观 / 初始认知 / 关系与身份 / 当前剧情 / 附加设定", kind: "character" },
     { section: "## 文风", from: "风味", kind: "flavor" },
-    { section: "## 输出格式", from: "杯型", kind: "glass" },
+    { section: "## 正文输出要求", from: "内置正文标记规则（在前）+ 杯型内容（在后）", kind: "glass" },
     { section: "## 状态栏", from: "小票的输出契约（格式说明在前、内容要求在后，壳为 [状态栏]...[/状态栏]）", kind: "ticket" },
     { section: "## 小剧场", from: "尾调的输出契约（写了契约才有这一段，壳为 [小剧场]...[/小剧场]）", kind: "encore" },
     { section: "## 示例对话", from: "角色卡：示例对话", kind: "character" },
+    { section: "## 输出格式检查", from: "系统自带的收尾核对清单（带状态栏/小剧场时出现）" },
 ];
 
 export function MixStructureSheet({ highlight, onClose }: { highlight?: string; onClose: () => void }) {
@@ -136,7 +137,7 @@ export function MixStructureSheet({ highlight, onClose }: { highlight?: string; 
                         文本里的 <code>{"{{char}}"}</code> / <code>{"{{user}}"}</code> 装配时会换成角色名和玩家代入名。
                         <br />
                         另外，<b>吧台上的叫法只给你看</b>——基底、杯型、小票这些比喻词不会出现在提示词里，
-                        发给模型的一律是「扮演总纲」「输出格式」「状态栏」这种它一眼能懂的说法。
+                        发给模型的一律是「扮演总纲」「正文输出要求」「状态栏」这种它一眼能懂的说法。
                     </div>
 
                     <div className="mix-detail-label" style={{ marginTop: 14 }}>系统提示词（对话历史之前）</div>

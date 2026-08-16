@@ -81,6 +81,16 @@ const PREAMBLE = [
     "越靠后的要求优先级越高。",
 ].join("");
 
+// 正文标记协议是 App 的渲染协议，内置且常驻——放在段首、用户杯型内容之后接，
+// 不随材料缺失而消失（装饰 CSS 与正文渲染都依赖这四种标记）。
+const PROSE_PROTOCOL = [
+    "正文标记规则（界面按此渲染，务必遵守）：",
+    "- 说出口的话用「」包裹；未说出口的心声用 * * 包裹。",
+    "- 场景或时间切换时，单独一行用【】标出。",
+    "- 需要重读的词可用 ~ ~ 包裹。",
+    "- 除以上四种外，不要使用任何其他富文本标记（不用 Markdown 标题、粗体、列表）。",
+].join("\n");
+
 /** 状态栏契约段：把小票材料的 contract 包进固定壳指令 */
 function ticketSection(ticket: MixTicketMaterial, charName: string, userName: string): string | null {
     const contract = ticket.contract.trim();
@@ -99,10 +109,23 @@ function encoreSection(encore: MixEncoreMaterial, charName: string, userName: st
     if (!contract) return null;
     return [
         "## 小剧场",
-        `输出格式：需要输出小剧场时，放在回复最末尾（状态栏之后），整块用 ${MIX_ENCORE_OPEN}...${MIX_ENCORE_CLOSE} 包裹；不需要时整段省略，不要输出空壳。`,
+        `输出格式：放在回复最末尾（状态栏之后），整块用 ${MIX_ENCORE_OPEN}...${MIX_ENCORE_CLOSE} 包裹；是否输出由「输出内容」的条件决定，不输出时整段省略，不要输出空壳。`,
         "输出内容：",
         applyMixMacros(contract, charName, userName),
     ].join("\n");
+}
+
+/** 收尾核对清单：放在最后压阵，防止模型写完正文忘了必须输出的块 */
+function checklistSection(withTicket: boolean, withEncore: boolean): string | null {
+    if (!withTicket && !withEncore) return null;
+    const items = ["- 正文符合「正文输出要求」。"];
+    if (withTicket) {
+        items.push(`- 回复最末尾已按「状态栏」的格式输出 ${MIX_TICKET_OPEN}...${MIX_TICKET_CLOSE} 块——任何一轮都不能缺。`);
+    }
+    if (withEncore) {
+        items.push(`- 若本轮满足「小剧场」的输出条件，已用 ${MIX_ENCORE_OPEN}...${MIX_ENCORE_CLOSE} 块输出。`);
+    }
+    return ["## 输出格式检查", "每轮回复发出前逐项核对：", ...items].join("\n");
 }
 
 function exampleSection(card: MixCharacterCard, charName: string, userName: string): string | null {
@@ -147,10 +170,15 @@ export function assembleMixPrompt(input: MixAssembleInput): MixAssembledPrompt {
             field("附加设定", card.extra),
         ].map((l) => (l ? apply(l) : l))),
         flavorText ? `## 文风\n${apply(flavorText)}` : null,
-        glassText ? `## 输出格式\n${apply(glassText)}` : null,
+        // 内置协议在前，用户的杯型内容接在后面
+        `## 正文输出要求\n${PROSE_PROTOCOL}${glassText ? `\n${apply(glassText)}` : ""}`,
         ticket ? ticketSection(ticket, charName, userName) : null,
         encore ? encoreSection(encore, charName, userName) : null,
         exampleSection(card, charName, userName),
+        checklistSection(
+            Boolean(ticket?.contract.trim()),
+            Boolean(encore?.contract?.trim()),
+        ),
     ];
 
     const openings = card.openings.filter((o) => o.trim());
