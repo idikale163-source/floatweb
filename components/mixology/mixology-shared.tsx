@@ -38,6 +38,15 @@ export function KindGlyph({ kind, size = 26 }: { kind: MixMaterialKind; size?: n
     return <Icon size={size} strokeWidth={1.6} />;
 }
 
+/** 作者小头像：没有头像就用名字首字的圆片。线上详情、酒柜详情、创作者资料入口共用 */
+export function AuthorAvatar({ name, avatar, size = 22 }: { name?: string; avatar?: string; size?: number }) {
+    if (avatar) {
+        // eslint-disable-next-line @next/next/no-img-element
+        return <img className="mix-avatar" src={avatar} alt={name || "作者"} style={{ width: size, height: size }} />;
+    }
+    return <span className="mix-avatar-fallback" style={{ width: size, height: size, fontSize: Math.round(size * 0.48) }}>{(name || "调").slice(0, 1)}</span>;
+}
+
 export function formatMixTime(ts: number): string {
     const d = new Date(ts);
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;

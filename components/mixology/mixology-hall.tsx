@@ -25,7 +25,7 @@ import {
     type MixHallRecipePart,
     type MixHallType,
 } from "@/lib/mixology/hall-client";
-import { listMixBuiltins, saveMixMaterial, saveMixRecipe } from "@/lib/mixology/storage";
+import { clearMixPublishedByCloudId, listMixBuiltins, saveMixMaterial, saveMixRecipe } from "@/lib/mixology/storage";
 import {
     MIX_KIND_LABELS,
     mixKindHasCover,
@@ -34,13 +34,14 @@ import {
     type MixMaterialKind,
     type MixRecipe,
 } from "@/lib/mixology/types";
-import { MatCard, MaterialDetail, MixConfirm, SealedNote } from "./mixology-shared";
+import { AuthorAvatar, MatCard, MaterialDetail, MixConfirm, SealedNote } from "./mixology-shared";
 
 type HallMode = "menu" | "hall";
 
 function statsLine(entry: { likeCount: number; saveCount: number; commentCount: number }): string {
     return `♥ ${entry.likeCount} · 入柜 ${entry.saveCount} · 评论 ${entry.commentCount}`;
 }
+
 
 // ── 评论区（楼中楼） ──
 // 酒材/配方详情用，也导出给酒柜详情用（本地材料带 publishedId / 导入件时能看同一条评论流）
@@ -318,7 +319,7 @@ export function MixologyHall({
         try {
             const { saveCount } = await markHallSaved("material", entry.id);
             const { publishedId: _p, publishedAt: _a, ...rest } = entry.payload as MixMaterial;
-            const material = { ...rest, id: entry.id, author: entry.authorName, imported: true } as MixMaterial;
+            const material = { ...rest, id: entry.id, author: entry.authorName, authorAvatar: entry.authorAvatar || undefined, imported: true } as MixMaterial;
             saveMixMaterial(material);
             patchEntry("material", entry.id, { savedByMe: true, saveCount });
             onImported();
@@ -355,7 +356,7 @@ export function MixologyHall({
                     continue;
                 }
                 const { publishedId: _p, publishedAt: _a, ...clean } = part.material;
-                saveMixMaterial({ ...clean, id: part.id, kind: part.kind, author: part.authorName || entry.authorName, imported: true } as MixMaterial);
+                saveMixMaterial({ ...clean, id: part.id, kind: part.kind, author: part.authorName || entry.authorName, authorAvatar: part.authorAvatar || undefined, imported: true } as MixMaterial);
                 slots[part.kind] = part.id;
                 // 给这味酒材也记一次入柜（材料作者拿到数据）；失败不打断整杯导入
                 void markHallSaved("material", part.id).catch(() => { /* 尽力而为 */ });
@@ -364,6 +365,8 @@ export function MixologyHall({
                 id: entry.id,
                 name: entry.name,
                 slots,
+                author: entry.authorName,
+                authorAvatar: entry.authorAvatar || undefined,
                 imported: true,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
@@ -394,6 +397,9 @@ export function MixologyHall({
                 setRecipes((prev) => prev.filter((e) => e.id !== id));
                 setDetailRecipe(null);
             }
+            // 同步本地记账：清掉对应本地件的发布关联，「已上架」徽章立刻消失
+            clearMixPublishedByCloudId(type, id);
+            onImported();
             onToast(`「${name}」已下架。`);
         } catch (error) {
             onToast(error instanceof Error ? error.message : "下架失败");
@@ -572,8 +578,10 @@ export function MixologyHall({
                             <button type="button" className="mix-icon-btn" onClick={() => setDetailMaterial(null)} aria-label="关闭"><X size={18} /></button>
                         </div>
                         <div className="mix-sheet-body">
-                            <div className="mix-mat-stats" style={{ marginTop: 2 }}>
-                                {MIX_KIND_LABELS[detailMaterial.kind]} · @{detailMaterial.authorName} · 浏览 {detailMaterial.viewCount} · 评论 {detailMaterial.commentCount}
+                            <div className="mix-author-row" style={{ marginTop: 4 }}>
+                                <AuthorAvatar name={detailMaterial.authorName} avatar={detailMaterial.authorAvatar} />
+                                <span className="mix-author-name">@{detailMaterial.authorName}</span>
+                                <span className="mix-mat-stats">{MIX_KIND_LABELS[detailMaterial.kind]} · 浏览 {detailMaterial.viewCount} · 评论 {detailMaterial.commentCount}</span>
                             </div>
                             {detailMaterial.cover && detailMaterial.kind !== "character" ? (
                                 // eslint-disable-next-line @next/next/no-img-element
@@ -636,8 +644,10 @@ export function MixologyHall({
                             <button type="button" className="mix-icon-btn" onClick={() => setDetailRecipe(null)} aria-label="关闭"><X size={18} /></button>
                         </div>
                         <div className="mix-sheet-body">
-                            <div className="mix-mat-stats" style={{ marginTop: 2 }}>
-                                @{detailRecipe.authorName} · 浏览 {detailRecipe.viewCount} · 评论 {detailRecipe.commentCount}
+                            <div className="mix-author-row" style={{ marginTop: 4 }}>
+                                <AuthorAvatar name={detailRecipe.authorName} avatar={detailRecipe.authorAvatar} />
+                                <span className="mix-author-name">@{detailRecipe.authorName}</span>
+                                <span className="mix-mat-stats">浏览 {detailRecipe.viewCount} · 评论 {detailRecipe.commentCount}</span>
                             </div>
                             {detailRecipe.intro ? <div className="mix-detail-value" style={{ marginTop: 10 }}>{detailRecipe.intro}</div> : null}
                             {detailRecipe.parts ? (() => {

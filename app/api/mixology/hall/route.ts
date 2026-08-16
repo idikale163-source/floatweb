@@ -11,9 +11,9 @@ import { getCurrentAccount } from "@/lib/server/account-auth";
 
 const MATERIAL_KINDS = ["character", "persona", "base", "flavor", "glass", "strength", "ticket", "garnish", "encore", "filter"] as const;
 
-const ITEM_SUMMARY_COLUMNS = "id,kind,name,hook,cover,tags,author_id,author_name,like_count,save_count,view_count,comment_count,created_at,updated_at";
+const ITEM_SUMMARY_COLUMNS = "id,kind,name,hook,cover,tags,author_id,author_name,author_avatar,like_count,save_count,view_count,comment_count,created_at,updated_at";
 const ITEM_COLUMNS = `${ITEM_SUMMARY_COLUMNS},payload`;
-const RECIPE_SUMMARY_COLUMNS = "id,name,intro,cover,char_name,part_names,author_id,author_name,like_count,save_count,view_count,comment_count,created_at,updated_at";
+const RECIPE_SUMMARY_COLUMNS = "id,name,intro,cover,char_name,part_names,author_id,author_name,author_avatar,like_count,save_count,view_count,comment_count,created_at,updated_at";
 const RECIPE_COLUMNS = `${RECIPE_SUMMARY_COLUMNS},materials`;
 
 const MAX_MATERIAL_PAYLOAD = 900_000;
@@ -173,6 +173,7 @@ function normalizeEntry(type: HallType, value: unknown, options: { withPayload?:
     name,
     authorId: cleanText(record.author_id, 160) || "anonymous",
     authorName: cleanText(record.author_name, 80) || "匿名调酒师",
+    authorAvatar: cleanText(record.author_avatar, 300_000),
     cover: cleanText(record.cover, 2_000_000),
     likeCount: clampCount(record.like_count),
     saveCount: clampCount(record.save_count),
@@ -236,6 +237,7 @@ async function hydrateRecipeParts(entry: Record<string, unknown>): Promise<void>
       kind: item.kind,
       name: item.name,
       authorName: item.authorName,
+      authorAvatar: item.authorAvatar,
       material: { ...(payload as Record<string, unknown>), id: item.id, kind: item.kind, name: item.name },
     };
   });
@@ -359,6 +361,7 @@ export async function POST(request: Request) {
             payload,
             author_id: account.id,
             author_name: cleanText(record.authorName, 80) || account.displayName,
+            author_avatar: cleanText(record.authorAvatar, 300_000),
             created_at: now,
             updated_at: now,
           }),
@@ -389,6 +392,7 @@ export async function POST(request: Request) {
           materials: normalized.parts,
           author_id: account.id,
           author_name: cleanText(record.authorName, 80) || account.displayName,
+          author_avatar: cleanText(record.authorAvatar, 300_000),
           created_at: now,
           updated_at: now,
         }),
@@ -434,6 +438,9 @@ export async function PUT(request: Request) {
         cover: cleanText(record.cover, 2_000_000),
         tags: normalizeTags(record.tags),
         payload: materialPayload,
+        // 更新时同步刷新署名与头像：发布身份以创作者资料当前值为准
+        author_name: cleanText(record.authorName, 80) || account.displayName,
+        author_avatar: cleanText(record.authorAvatar, 300_000),
         updated_at: new Date().toISOString(),
       };
     } else {
@@ -450,6 +457,8 @@ export async function PUT(request: Request) {
         char_name: cleanText(record.charName, 80),
         part_names: normalizeTags(record.partNames),
         materials: normalized.parts,
+        author_name: cleanText(record.authorName, 80) || account.displayName,
+        author_avatar: cleanText(record.authorAvatar, 300_000),
         updated_at: new Date().toISOString(),
       };
     }

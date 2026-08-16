@@ -37,12 +37,15 @@ import {
     isMixBuiltinId,
     listMixPickables,
     loadMixCabinet,
+    loadMixProfile,
     loadMixRecipes,
     loadMixSessions,
     markMixMaterialSynced,
     markMixRecipeSynced,
     saveMixMaterial,
+    saveMixProfile,
     saveMixRecipe,
+    type MixProfile,
 } from "@/lib/mixology/storage";
 import { startMixSession } from "@/lib/mixology/engine";
 import {
@@ -64,7 +67,32 @@ import { exportMixMaterial, exportMixMaterialPng, parseMixMaterialsFromJson, par
 import { MixMaterialEditor } from "./mixology-editor";
 import { MixologyGame } from "./mixology-game";
 import { CommentThread, MixologyHall } from "./mixology-hall";
-import { KindGlyph, MatCard, MaterialDetail, MixConfirm, SealedNote, formatMixTime } from "./mixology-shared";
+import { AuthorAvatar, KindGlyph, MatCard, MaterialDetail, MixConfirm, SealedNote, formatMixTime } from "./mixology-shared";
+
+/** 头像统一压成 192px JPEG dataURL 的小圆图，随发布上云也不占地方 */
+async function readAvatarFile(file: File): Promise<string> {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("读取图片失败"));
+        reader.readAsDataURL(file);
+    });
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error("图片解码失败"));
+        el.src = dataUrl;
+    });
+    const size = 192;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const scale = Math.max(size / img.width, size / img.height);
+    const w = img.width * scale;
+    const h = img.height * scale;
+    canvas.getContext("2d")?.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+    return canvas.toDataURL("image/jpeg", 0.85);
+}
 
 type MixTab = "menu" | "hall" | "bar" | "cabinet" | "games";
 
@@ -85,6 +113,12 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     const [hallKind, setHallKind] = useState<MixMaterialKind>("character");
     // 自己的账号 id：酒柜详情里的评论区用它判断"哪条评论可删"
     const [myId, setMyId] = useState("");
+    // 创作者资料：发布到酒材/配方页时的署名与头像（酒柜头部可编辑）
+    const [profile, setProfile] = useState<MixProfile>(() => loadMixProfile());
+    const [profileOpen, setProfileOpen] = useState(false);
+    const [profileName, setProfileName] = useState("");
+    const [profileAvatar, setProfileAvatar] = useState("");
+    const avatarFileRef = useRef<HTMLInputElement | null>(null);
     const [detail, setDetail] = useState<MixMaterial | null>(null);
     const [editor, setEditor] = useState<{ kind: MixMaterialKind; initial?: MixMaterial } | null>(null);
     const [barTab, setBarTab] = useState<"create" | "mine">("create");
@@ -402,7 +436,23 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                 <button type="button" className="mix-icon-btn" onClick={onClose} aria-label="关闭"><ChevronLeft size={20} /></button>
                 <div className="mix-header-title">独家<em>特调</em></div>
                 {tab === "cabinet" ? (
-                    <button type="button" className="mix-icon-btn" onClick={() => importFileRef.current?.click()} aria-label="导入材料" title="从文件导入"><Upload size={17} /></button>
+                    <>
+                        <button
+                            type="button"
+                            className="mix-profile-chip"
+                            onClick={() => {
+                                setProfileName(profile.name ?? "");
+                                setProfileAvatar(profile.avatar ?? "");
+                                setProfileOpen(true);
+                            }}
+                            title="创作者资料：发布到酒材/配方页时的署名与头像"
+                        >
+                            <AuthorAvatar name={profile.name} avatar={profile.avatar} size={22} />
+                            <span className="mix-profile-name">{profile.name || "起个笔名"}</span>
+                            <Pencil size={12} />
+                        </button>
+                        <button type="button" className="mix-icon-btn" onClick={() => importFileRef.current?.click()} aria-label="导入材料" title="从文件导入"><Upload size={17} /></button>
+                    </>
                 ) : null}
                 {tab === "menu" || tab === "hall" ? (
                     <>
@@ -798,6 +848,20 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             <button type="button" className="mix-icon-btn" onClick={() => setDetail(null)} aria-label="关闭"><X size={18} /></button>
                         </div>
                         <div className="mix-sheet-body">
+                            <div className="mix-author-row" style={{ marginTop: 2 }}>
+                                {detail.imported ? (
+                                    <>
+                                        <AuthorAvatar name={detail.author} avatar={detail.authorAvatar} />
+                                        <span className="mix-author-name">@{detail.author || "匿名调酒师"}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <AuthorAvatar name={profile.name} avatar={profile.avatar} />
+                                        <span className="mix-author-name">{profile.name || "我"}</span>
+                                        <span className="mix-mat-stats">发布时以创作者资料为准</span>
+                                    </>
+                                )}
+                            </div>
                             {detail.cover && detail.kind !== "character" ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={detail.cover} alt={detail.name} style={{ width: 96, height: 128, objectFit: "cover", borderRadius: 12, margin: "4px 0 12px" }} />
@@ -818,6 +882,71 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     requestConfirm={setConfirm}
                                 />
                             ) : null}
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
+            {/* 创作者资料编辑 */}
+            {profileOpen ? (
+                <div className="mix-sheet-mask" onClick={() => setProfileOpen(false)}>
+                    <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
+                        <div className="mix-sheet-head">
+                            <div className="mix-sheet-title">创作者资料</div>
+                            <button type="button" className="mix-icon-btn" onClick={() => setProfileOpen(false)} aria-label="关闭"><X size={18} /></button>
+                        </div>
+                        <div className="mix-sheet-body">
+                            <div className="mix-struct-note" style={{ marginTop: 4 }}>
+                                发布或更新到酒材页/配方页时，条目会展示这里的头像和笔名。笔名留空则用账号昵称。
+                            </div>
+                            <label className="mix-form-label">头像</label>
+                            <div className="mix-cover-picker">
+                                <AuthorAvatar name={profileName || profile.name} avatar={profileAvatar} size={64} />
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                    <button type="button" className="mix-pill-btn" onClick={() => avatarFileRef.current?.click()}>选择图片</button>
+                                    {profileAvatar ? (
+                                        <button type="button" className="mix-pill-btn" data-tone="ghost" onClick={() => setProfileAvatar("")}>移除</button>
+                                    ) : null}
+                                </div>
+                                <input
+                                    ref={avatarFileRef}
+                                    type="file"
+                                    accept="image/*"
+                                    style={{ display: "none" }}
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        e.target.value = "";
+                                        if (!file) return;
+                                        void readAvatarFile(file)
+                                            .then(setProfileAvatar)
+                                            .catch(() => showToast("头像读取失败，换一张试试。"));
+                                    }}
+                                />
+                            </div>
+                            <label className="mix-form-label">笔名</label>
+                            <input
+                                className="mix-input"
+                                value={profileName}
+                                onChange={(e) => setProfileName(e.target.value)}
+                                placeholder="发布时的署名，留空用账号昵称"
+                                maxLength={24}
+                            />
+                            <div className="mix-form-footer">
+                                <button type="button" className="mix-ghost-btn" onClick={() => setProfileOpen(false)}>取消</button>
+                                <button
+                                    type="button"
+                                    className="mix-brew-btn"
+                                    onClick={() => {
+                                        const next: MixProfile = { name: profileName.trim() || undefined, avatar: profileAvatar || undefined };
+                                        saveMixProfile(next);
+                                        setProfile(next);
+                                        setProfileOpen(false);
+                                        showToast("创作者资料已保存，之后的发布/更新都用它。");
+                                    }}
+                                >
+                                    保存
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -942,6 +1071,20 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             <button type="button" className="mix-icon-btn" onClick={() => setRecipeMenu(null)} aria-label="关闭"><X size={18} /></button>
                         </div>
                         <div className="mix-sheet-body">
+                            <div className="mix-author-row" style={{ margin: "2px 0 8px" }}>
+                                {recipeMenu.imported ? (
+                                    <>
+                                        <AuthorAvatar name={recipeMenu.author} avatar={recipeMenu.authorAvatar} />
+                                        <span className="mix-author-name">@{recipeMenu.author || "匿名调酒师"}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <AuthorAvatar name={profile.name} avatar={profile.avatar} />
+                                        <span className="mix-author-name">{profile.name || "我"}</span>
+                                        <span className="mix-mat-stats">发布时以创作者资料为准</span>
+                                    </>
+                                )}
+                            </div>
                             <button
                                 type="button"
                                 className="mix-action-row"

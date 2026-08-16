@@ -3,12 +3,19 @@
 // 独家特调 · 酒单/大厅客户端：走站内 /api/mixology/*（官网专用；
 // 自部署没配 Supabase 时接口返回 503/setupRequired，界面按未开张处理）。
 
+import { loadMixProfile } from "./storage";
 import type { MixMaterial, MixMaterialKind } from "./types";
 
 /** publishedId/publishedAt 是本地记账用的，不该随内容发到线上被别人继承 */
 function stripLocalOnly(material: MixMaterial): MixMaterial {
     const { publishedId: _publishedId, publishedAt: _publishedAt, ...rest } = material;
     return rest as MixMaterial;
+}
+
+/** 发布/更新时附带的创作者身份（酒柜头部可编辑；名字留空线上回退账号昵称） */
+function authorFields(): { authorName: string; authorAvatar: string } {
+    const profile = loadMixProfile();
+    return { authorName: profile.name ?? "", authorAvatar: profile.avatar ?? "" };
 }
 
 export type MixHallType = "material" | "recipe";
@@ -18,6 +25,7 @@ export type MixHallEntryBase = {
     name: string;
     authorId: string;
     authorName: string;
+    authorAvatar: string;
     cover: string;
     likeCount: number;
     saveCount: number;
@@ -54,6 +62,7 @@ export type MixHallRecipePart = {
     material?: MixMaterial | null;
     /** 详情接口回填：这味酒材的作者 */
     authorName?: string;
+    authorAvatar?: string;
 };
 
 export type MixHallRecipe = MixHallEntryBase & {
@@ -139,6 +148,7 @@ export async function shareHallMaterial(material: MixMaterial): Promise<MixHallM
             cover: material.cover ?? "",
             tags: material.tags ?? [],
             payload: stripLocalOnly(material),
+            ...authorFields(),
         }),
     });
     if (!data.entry) throw new Error("分享失败");
@@ -159,7 +169,7 @@ export async function shareHallRecipe(input: MixHallRecipeShareInput): Promise<M
     const data = await fetchJson<HallEntryResponse>("/api/mixology/hall", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "recipe", ...input }),
+        body: JSON.stringify({ type: "recipe", ...input, ...authorFields() }),
     });
     if (!data.entry) throw new Error("分享失败");
     return data.entry as MixHallRecipe;
@@ -203,6 +213,7 @@ export async function updateHallMaterial(publishedId: string, material: MixMater
         cover: material.cover ?? "",
         tags: material.tags ?? [],
         payload: stripLocalOnly(material),
+        ...authorFields(),
     }) as MixHallMaterial;
 }
 
@@ -211,6 +222,7 @@ export async function updateHallRecipe(publishedId: string, input: MixHallRecipe
         type: "recipe",
         id: publishedId,
         ...input,
+        ...authorFields(),
     }) as MixHallRecipe;
 }
 

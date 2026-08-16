@@ -21,11 +21,13 @@ const CABINET_KEY = "mixology_cabinet_v1";
 const RECIPES_KEY = "mixology_recipes_v1";
 const SESSIONS_KEY = "mixology_sessions_v1";
 const BUILTIN_VERSION_KEY = "mixology_builtin_version_v1";
+const PROFILE_KEY = "mixology_profile_v1";
 
 registerKvMigration(CABINET_KEY);
 registerKvMigration(RECIPES_KEY);
 registerKvMigration(SESSIONS_KEY);
 registerKvMigration(BUILTIN_VERSION_KEY);
+registerKvMigration(PROFILE_KEY);
 
 /** 官方件不可删除、不可改名（内容永远是当前出厂版） */
 export const MIX_BUILTIN_IDS: readonly string[] = [
@@ -61,6 +63,31 @@ function readJson<T>(key: string, fallback: T): T {
 
 function writeJson(key: string, value: unknown): void {
     kvSet(key, JSON.stringify(value));
+}
+
+// ---------- 创作者资料 ----------
+
+/** 发布到酒材/配方页时用的署名与头像（都选填；名字留空时线上回退到账号昵称） */
+export type MixProfile = {
+    name?: string;
+    /** 头像 dataURL（压缩后的小图） */
+    avatar?: string;
+};
+
+export function loadMixProfile(): MixProfile {
+    const stored = readJson<MixProfile>(PROFILE_KEY, {});
+    if (!stored || typeof stored !== "object") return {};
+    return {
+        name: typeof stored.name === "string" && stored.name.trim() ? stored.name.trim() : undefined,
+        avatar: typeof stored.avatar === "string" && stored.avatar ? stored.avatar : undefined,
+    };
+}
+
+export function saveMixProfile(profile: MixProfile): void {
+    writeJson(PROFILE_KEY, {
+        name: profile.name?.trim() || undefined,
+        avatar: profile.avatar || undefined,
+    });
 }
 
 // ---------- 酒柜（材料） ----------
@@ -173,6 +200,20 @@ export function clearMixRecipePublished(id: string): void {
     const { publishedId: _publishedId, publishedAt: _publishedAt, ...rest } = list[idx];
     list[idx] = rest as MixRecipe;
     writeJson(RECIPES_KEY, list);
+}
+
+/**
+ * 按云端条目 id 反查本地件并清掉发布关联——在「我的发布」里下架成功后调用，
+ * 让酒柜/配方列表的「已上架」徽章立刻消失，而不是等下次更新时撞 404。
+ */
+export function clearMixPublishedByCloudId(type: "material" | "recipe", cloudId: string): void {
+    if (type === "material") {
+        const material = loadMixCabinet().find((m) => m.publishedId === cloudId);
+        if (material) clearMixMaterialPublished(material.id);
+    } else {
+        const recipe = readJson<MixRecipe[]>(RECIPES_KEY, []).find((r) => r.publishedId === cloudId);
+        if (recipe) clearMixRecipePublished(recipe.id);
+    }
 }
 
 // ---------- 对局 ----------

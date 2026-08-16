@@ -72,6 +72,8 @@ export type MixMaterialMeta = {
     hook?: string;
     /** 创作者署名（本地自建可空） */
     author?: string;
+    /** 创作者头像 dataURL：入柜时随线上条目带回；自己的材料展示本地创作者资料，不用这个字段 */
+    authorAvatar?: string;
     tags?: string[];
     /** 封面图 dataURL 或远端地址（角色卡强烈建议有） */
     cover?: string;
@@ -201,6 +203,9 @@ export type MixRecipe = {
     name: string;
     /** kind → 材料 id；角色卡必有，其余可缺 */
     slots: Partial<Record<MixMaterialKind, string>>;
+    /** 作者署名与头像：从配方页入柜时带回；自己的配方展示本地创作者资料 */
+    author?: string;
+    authorAvatar?: string;
     /** 已上架到配方页时的线上 id */
     publishedId?: string;
     /** 最近一次同步到云端成功时的 updatedAt 快照 */
