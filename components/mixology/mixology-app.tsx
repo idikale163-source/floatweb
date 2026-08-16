@@ -64,7 +64,7 @@ import { exportMixMaterial, exportMixMaterialPng, parseMixMaterialsFromJson, par
 import { MixMaterialEditor } from "./mixology-editor";
 import { MixologyGame } from "./mixology-game";
 import { CommentThread, MixologyHall } from "./mixology-hall";
-import { KindGlyph, MatCard, MaterialDetail, MixConfirm, SealedNote, formatMixTime, isSealedMaterial } from "./mixology-shared";
+import { KindGlyph, MatCard, MaterialDetail, MixConfirm, SealedNote, formatMixTime } from "./mixology-shared";
 
 type MixTab = "menu" | "hall" | "bar" | "cabinet" | "games";
 
@@ -734,7 +734,9 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     <Copy size={16} />
                                 </button>
                             ) : null}
-                            {!isSealedMaterial(detail) ? (
+                            {/* 导入的别人的作品（全部种类）：不能导出、不能编辑、不能二次发布——只能删除或入柜再取。
+                                与应用市场同规矩；正文封存仅角色卡（isSealedMaterial），但操作限制对所有导入件生效 */}
+                            {!detail.imported ? (
                                 <>
                                     <button type="button" className="mix-icon-btn" onClick={() => exportMixMaterial(detail)} aria-label="导出 JSON" title="导出 JSON"><Download size={16} /></button>
                                     <button
@@ -748,7 +750,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     </button>
                                 </>
                             ) : null}
-                            {!isMixBuiltinId(detail.id) && !isSealedMaterial(detail) ? (
+                            {!isMixBuiltinId(detail.id) && !detail.imported ? (
                                 <>
                                     <button
                                         type="button"
@@ -771,29 +773,19 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                         {detail.publishedId ? <RefreshCw size={16} /> : <Share2 size={16} />}
                                     </button>
                                     <button type="button" className="mix-icon-btn" onClick={() => { setEditor({ kind: detail.kind, initial: detail }); setDetail(null); }} aria-label="编辑"><Pencil size={16} /></button>
-                                    <button
-                                        type="button"
-                                        className="mix-icon-btn"
-                                        onClick={() => setConfirm({
-                                            title: "删除这件材料？",
-                                            body: <>「{detail.name}」将从酒柜里移除，用到它的特调会缺一味。<br />这一步不能撤销。</>,
-                                            confirmText: "删除",
-                                            tone: "danger",
-                                            run: () => handleDeleteMaterial(detail),
-                                        })}
-                                        aria-label="删除"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
                                 </>
                             ) : null}
-                            {isMixBuiltinId(detail.id) || !isSealedMaterial(detail) ? null : (
+                            {!isMixBuiltinId(detail.id) ? (
                                 <button
                                     type="button"
                                     className="mix-icon-btn"
                                     onClick={() => setConfirm({
-                                        title: "删除这张角色卡？",
-                                        body: <>「{detail.name}」将从酒柜里移除，用到它的特调会缺一味。<br />之后可以再去酒材页入柜一次。</>,
+                                        title: "删除这件材料？",
+                                        body: <>
+                                            「{detail.name}」将从酒柜里移除，用到它的特调会缺一味。
+                                            <br />
+                                            {detail.imported ? "之后可以再去酒材页入柜一次。" : "这一步不能撤销，只删本地，已上架的版本不受影响。"}
+                                        </>,
                                         confirmText: "删除",
                                         tone: "danger",
                                         run: () => handleDeleteMaterial(detail),
@@ -802,7 +794,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 >
                                     <Trash2 size={16} />
                                 </button>
-                            )}
+                            ) : null}
                             <button type="button" className="mix-icon-btn" onClick={() => setDetail(null)} aria-label="关闭"><X size={18} /></button>
                         </div>
                         <div className="mix-sheet-body">
