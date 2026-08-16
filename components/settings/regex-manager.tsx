@@ -938,7 +938,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                                         onChange={(e) => updateRule(rule.id, { historyOnly: e.target.checked || undefined })} />
                                                                     仅历史消息
                                                                 </label>
-                                                                <span className="menu-desc !mt-0">勾选后只作用于聊天历史消息，不碰系统提示词/预设/世界书</span>
+                                                                <span className="menu-desc !mt-0">只作用于聊天历史消息，不碰系统提示词/预设/世界书。<b>需搭配生效环节「用户输入」</b>——它在组装提示词时过滤历史消息块；勾在「AI输出」等其它环节的规则上不会生效</span>
                                                             </div>
                                                         </div>
 
