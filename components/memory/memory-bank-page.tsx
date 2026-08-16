@@ -879,6 +879,54 @@ export function MemoryBankPage({ view, selectedCharId, onSelectChar, onNotice }:
                     </>
                 )}
 
+                {/* Source filters for Short-term memory */}
+                <p className="menu-group-desc mx-2">短期记忆来源选择</p>
+                <div className="menu-group">
+                    {([
+                        { key: "chat", label: "私聊上下文" },
+                        { key: "group_chat", label: "群聊上下文" },
+                        { key: "moments", label: "朋友圈" },
+                        { key: "checkphone", label: "查手机" },
+                        { key: "diary", label: "手记与便签墙" },
+                        { key: "xiaohongshu", label: "小红书" },
+                        { key: "interview_magazine", label: "在场访谈" },
+                        { key: "cocreate", label: "共创" },
+                        { key: "game", label: "内置小游戏" },
+                        { key: "story", label: "剧情/小剧场" },
+                        { key: "vn", label: "漫卷" },
+                        { key: "adventure", label: "地图冒险" },
+                        { key: "custom_app", label: "自定义应用" },
+                    ] as const).map(source => {
+                        const allowed = config.shortTermAllowedSources ?? {};
+                        const isChecked = allowed[source.key] !== false;
+                        return (
+                            <div className="menu-item" key={source.key}>
+                                <MemorySettingsIcon icon={Clock} color={BINDING_ACCENTS.memory} />
+                                <div className="menu-label-group">
+                                    <span className="menu-label">{source.label}</span>
+                                    <span className="menu-desc">是否允许「{source.label}」的数据放入短期记忆上下文</span>
+                                </div>
+                                <div className="menu-right">
+                                    <Toggle 
+                                        checked={isChecked} 
+                                        onChange={(v) => {
+                                            const next = {
+                                                ...config,
+                                                shortTermAllowedSources: {
+                                                    ...allowed,
+                                                    [source.key]: v
+                                                }
+                                            };
+                                            setConfig(next);
+                                            saveMemoryConfig(next);
+                                        }} 
+                                    />
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
                 {/* Feature toggles */}
                 <p className="menu-group-desc mx-2">自动化</p>
                 <div className="menu-group">

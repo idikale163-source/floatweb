@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
     CHAT_INITIAL_VISIBLE_MESSAGE_COUNT,
     CHAT_LOAD_MORE_MESSAGE_COUNT,
@@ -42,7 +42,9 @@ import { getStatusRegionConfig, saveStatusRegionConfig, presetSupportsStatusRegi
 import { downloadFile } from "@/lib/download-utils";
 import { getSchemes, saveScheme, deleteScheme, type CSSScheme } from "@/lib/css-scheme-storage";
 import { CustomStatusFrame } from "@/components/chat/custom-status-frame";
-import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Laptop, Trash2, Smile, Sparkles, X, Play, Upload, Download, Save, FolderOpen, type LucideIcon } from "lucide-react";
+import { KeyboardAutoSendDebounceItem } from "@/components/chat/keyboard-auto-send-debounce-item";
+import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, MessageSquare, Search, AlertCircle, Code, Laptop, Trash2, Smile, Sparkles, X, Play, Upload, Download, Save, FolderOpen, Clock, type LucideIcon } from "lucide-react";
+import { resolveVirtualNow } from "@/lib/character-time";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { ConfirmDialog } from "@/components/ui/modal";
@@ -376,6 +378,32 @@ export function ChatSettingsPanel({
         const latest = sessions.find(s => s.id === session.id);
         return (latest as Record<string, unknown>)?.customCSS as string || session.customCSS || "";
     });
+    const [virtualClockEnabled, setVirtualClockEnabled] = useState(Boolean(session.virtualClockAnchor));
+    const [virtualClockMode, setVirtualClockMode] = useState<"flowing" | "frozen">(session.virtualClockMode || "flowing");
+    const [virtualClockInput, setVirtualClockInput] = useState(() => {
+        if (!session.virtualClockAnchor) return "";
+        const date = new Date(session.virtualClockAnchor);
+        if (isNaN(date.getTime())) return "";
+        const pad = (value: number) => value < 10 ? `0${value}` : `${value}`;
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    });
+    const [virtualClockPreview, setVirtualClockPreview] = useState("");
+    const [virtualClockRevision, setVirtualClockRevision] = useState(0);
+
+    useEffect(() => {
+        if (!virtualClockEnabled || !session.virtualClockAnchor) {
+            setVirtualClockPreview("");
+            return;
+        }
+        const tick = () => {
+            const current = resolveVirtualNow(session);
+            const pad = (value: number) => value < 10 ? `0${value}` : `${value}`;
+            setVirtualClockPreview(`${current.getFullYear()}-${pad(current.getMonth() + 1)}-${pad(current.getDate())} ${pad(current.getHours())}:${pad(current.getMinutes())}:${pad(current.getSeconds())}`);
+        };
+        tick();
+        const timer = window.setInterval(tick, 1000);
+        return () => window.clearInterval(timer);
+    }, [virtualClockEnabled, virtualClockRevision, session.virtualClockAnchor, session.virtualClockSetAt, session.virtualClockMode]);
 
     const [showConfirmClear, setShowConfirmClear] = useState(false);
     const [showConfirmClearOffline, setShowConfirmClearOffline] = useState(false);
@@ -596,6 +624,29 @@ export function ChatSettingsPanel({
             saveChatSessions(sessions);
             Object.assign(session, updates);
         }
+    };
+
+    const applyVirtualClock = () => {
+        const anchor = new Date(virtualClockInput);
+        if (!virtualClockInput || isNaN(anchor.getTime())) return;
+        updateSession({
+            virtualClockAnchor: anchor.toISOString(),
+            virtualClockSetAt: new Date().toISOString(),
+            virtualClockMode,
+        });
+        setVirtualClockEnabled(true);
+        setVirtualClockRevision(revision => revision + 1);
+    };
+
+    const clearVirtualClock = () => {
+        updateSession({
+            virtualClockAnchor: undefined,
+            virtualClockSetAt: undefined,
+            virtualClockMode: undefined,
+        });
+        setVirtualClockEnabled(false);
+        setVirtualClockInput("");
+        setVirtualClockPreview("");
     };
 
     const handleClearHistory = () => {
@@ -1060,6 +1111,52 @@ export function ChatSettingsPanel({
                                 <ChevronRight size={16} />
                             </div>
                         </button>
+                        <div className="menu-item">
+                            <ChatInfoIcon icon={Clock} color={BINDING_ACCENTS.memory} />
+                            <div className="menu-label-group">
+                                <span className="menu-label">虚拟时间</span>
+                                <span className="menu-desc">让角色感知设定时间，消息真实时间不变</span>
+                            </div>
+                            <div className="menu-right">
+                                <Toggle checked={virtualClockEnabled} onChange={checked => checked ? setVirtualClockEnabled(true) : clearVirtualClock()} />
+                            </div>
+                        </div>
+                        {virtualClockEnabled && (
+                            <>
+                                <div className="menu-item" style={{ flexWrap: "wrap", gap: 8 }}>
+                                    <ChatInfoIcon icon={Clock} color={BINDING_ACCENTS.api} />
+                                    <div className="menu-label-group"><span className="menu-label">目标时间</span></div>
+                                    <input
+                                        type="datetime-local"
+                                        value={virtualClockInput}
+                                        onChange={event => setVirtualClockInput(event.target.value)}
+                                        className="ui-input h-8 text-xs"
+                                    />
+                                </div>
+                                <div className="menu-item">
+                                    <ChatInfoIcon icon={Clock} color={BINDING_ACCENTS.preset} />
+                                    <div className="menu-label-group">
+                                        <span className="menu-label">时间模式</span>
+                                        <span className="menu-desc">{virtualClockMode === "flowing" ? "流动：按真实时间继续前进" : "冻结：始终停留在目标时间"}</span>
+                                    </div>
+                                    <select value={virtualClockMode} onChange={event => setVirtualClockMode(event.target.value as "flowing" | "frozen")} className="ui-input h-8 text-xs">
+                                        <option value="flowing">流动</option>
+                                        <option value="frozen">冻结</option>
+                                    </select>
+                                </div>
+                                <div className="menu-item">
+                                    <ChatInfoIcon icon={Clock} color={BINDING_ACCENTS.voice} />
+                                    <div className="menu-label-group">
+                                        <span className="menu-label">当前虚拟时间</span>
+                                        <span className="menu-desc">{virtualClockPreview || "尚未应用"}</span>
+                                    </div>
+                                    <div className="menu-right gap-2">
+                                        <button type="button" className="ui-btn ui-btn-primary h-8 px-3 text-xs" onClick={applyVirtualClock} disabled={!virtualClockInput}>应用</button>
+                                        {session.virtualClockAnchor && <button type="button" className="ui-btn h-8 px-3 text-xs text-[var(--c-danger)]" onClick={clearVirtualClock}>清除</button>}
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </>
                 </div>
 
@@ -1133,6 +1230,7 @@ export function ChatSettingsPanel({
 
                 {/* Advanced */}
                 <div className="menu-group">
+                    <KeyboardAutoSendDebounceItem sessionId={session.id} />
                     <button className="menu-item" onClick={() => setEditingCSS(true)}>
                         <ChatInfoIcon icon={Code} color={BINDING_ACCENTS.embedding} />
                         <div className="menu-label-group"><span className="menu-label">自定义 CSS 样式</span></div>

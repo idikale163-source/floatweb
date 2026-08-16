@@ -69,7 +69,7 @@ import { getActiveAppTags } from "./content-tag-utils";
 import { isNeteaseConfigured, getUserPlaylists, getPlaylistTracks, checkLoginStatus, loadMusicApiConfig } from "./music-service";
 import { buildCalendarScheduleMarker, getCurrentCalendarScheduleForPrompt } from "./calendar-storage";
 import { getWeekStartIso } from "./calendar-utils";
-import { buildCharacterTimeContext } from "./character-time";
+import { buildCharacterTimeContext, resolveVirtualNow, resolveVirtualTimestamp } from "./character-time";
 import { getPromptTimestampOptionsForTimeContext } from "./prompt-time";
 import { kvGet, kvSet, kvRemove, registerKvMigration } from "./kv-db";
 import { stripStateAndInnerForPrompt } from "./prompt-sanitizer";
@@ -1822,9 +1822,19 @@ export async function buildChatPromptMessages(
         ]
         : history;
 
-    const now = new Date();
+    const now = resolveVirtualNow(session);
     const promptTimeContext = buildCharacterTimeContext(character.timeZone, now);
     const promptTimestampOptions = getPromptTimestampOptionsForTimeContext(promptTimeContext);
+    // Use virtual timestamps in model context without changing persisted messages.
+    const virtualHistory = historyForPrompt.map(message => {
+        const storedDate = new Date(message.createdAt);
+        return {
+            ...message,
+            createdAt: isNaN(storedDate.getTime())
+                ? message.createdAt
+                : resolveVirtualTimestamp(storedDate, session).toISOString(),
+        };
+    });
     const memConfig = loadMemoryConfig();
     const isOfflineMode = options?.appTags?.includes("offline") === true;
     const effectiveAppTags = mergeAppTags(options?.appTags, promptProfile?.appTags, resolvedAppId);
@@ -1834,7 +1844,7 @@ export async function buildChatPromptMessages(
         && (options?.forceEnableTools === true || presetIncludesToolsMacro(preset, resolvedAppId, effectiveAppTags));
     const usesNativeActions = Boolean(toolsEnabled && nativeToolProtocolForConfig(config));
     const { recentBlocks, truncatedHistory, wbActivationContext, unifiedRecentItems } = prepareShortTermContext(character.id, resolvedAppId, {
-        history: historyForPrompt,
+        history: virtualHistory,
         includeDirectChatEntries: isOfflineMode,
         includeNativeToolHistory: usesNativeActions,
         excludeOfflineSessionId: options?.excludeOfflineSessionId,

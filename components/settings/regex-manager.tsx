@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useContext, useCallback, useMemo } from "react";
-import { Plus, Trash2, Download, Database, Play, Upload, ChevronLeft, AlertCircle, Maximize2, X, Replace } from "lucide-react";
+import { Plus, Trash2, Download, Database, Play, Upload, ChevronLeft, AlertCircle, Maximize2, X, Replace, Copy, Check } from "lucide-react";
 import {
     loadRegexes,
     saveRegexes,
@@ -20,6 +20,124 @@ import { SettingsContext } from "../phone-settings-app";
 import { BottomSheet, ConfirmDialog, TextExpandModal } from "@/components/ui/modal";
 import { SwipeActionRow, useSwipeActions } from "@/components/ui/swipe-actions";
 import { notifyMascotPageContext } from "@/lib/mascot-events";
+
+function copyTextToClipboard(text: string): void {
+    const fallbackCopy = () => {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.cssText = "position:fixed;left:-9999px;top:-9999px;opacity:0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try { document.execCommand("copy"); } catch {}
+        document.body.removeChild(ta);
+    };
+    if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).catch(fallbackCopy);
+    } else {
+        fallbackCopy();
+    }
+}
+
+/** 复制「起效后的代码」（正则替换结果）的小按钮：点击后短暂显示「已复制」。 */
+function CopyCodeButton({ text, className }: { text: string; className?: string }) {
+    const [copied, setCopied] = useState(false);
+    return (
+        <button
+            type="button"
+            className={className}
+            disabled={!text}
+            title={text ? "复制起效后的代码" : "无内容可复制"}
+            onClick={(e) => {
+                e.stopPropagation();
+                copyTextToClipboard(text);
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1200);
+            }}
+            style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                border: "1px solid var(--c-panel-border)",
+                background: "var(--c-card)",
+                borderRadius: 8,
+                padding: "2px 8px",
+                cursor: text ? "pointer" : "not-allowed",
+                color: "var(--c-icon)",
+                opacity: text ? 1 : 0.4,
+                flexShrink: 0,
+            }}
+        >
+            {copied ? <Check size={12} /> : <Copy size={12} />}
+            <span className="ts-11">{copied ? "已复制" : "复制"}</span>
+        </button>
+    );
+}
+
+/** 从 ```html 围栏里提取真正的 HTML 文档（渲染预览用）。 */
+function extractHtmlForPreview(text: string): string {
+    const m = text.match(/```html\s*\n([\s\S]*?)```/);
+    return m ? m[1].trim() : text.trim();
+}
+
+/**
+ * 渲染预览 iframe：与聊天里真正的 HTML 卡片同机制（iframe + 脚本可执行 + 高度自适应）。
+ * 之前的预览用 dangerouslySetInnerHTML 直接把 HTML 塞进当前文档：
+ * <style> 会生效、<script> 永不执行，导致带脚本的卡片只显示空壳、文字全丢。
+ */
+function HtmlPreviewFrame({ html }: { html: string }) {
+    const iframeRef = useRef<HTMLIFrameElement>(null);
+    const [height, setHeight] = useState(360);
+    const srcDoc = useMemo(() => {
+        const action = `document.addEventListener("click",function(e){var t=e.target.closest("[data-action]");if(t){e.preventDefault();window.parent.postMessage({type:"_chat_action",text:t.getAttribute("data-action")},"*")}},true);`;
+        const resize = `
+            var n=0;
+            var send=function(){
+                if(n>=12)return;
+                n++;
+                var b=document.body;
+                if(!b)return;
+                var h=Math.max(Math.ceil(b.getBoundingClientRect().height),b.scrollHeight||0,80);
+                window.parent.postMessage({type:"_chat_inline_html_resize",h:h},"*");
+            };
+            window.addEventListener("load",send);
+            if(window.ResizeObserver&&document.body){new ResizeObserver(function(){n=0;send();}).observe(document.body);}
+            document.addEventListener("toggle",function(){n=0;setTimeout(send,50);},true);
+            setTimeout(send,300);
+            setTimeout(send,1200);
+            setTimeout(send,2500);`;
+        const inject = `<script>(function(){${action}${resize}})();<\/script>`;
+        let h = html;
+        if (h.includes("</body>")) h = h.replace("</body>", inject + "</body>");
+        else h = h + inject;
+        return h;
+    }, [html]);
+
+    useEffect(() => {
+        setHeight(360);
+    }, [srcDoc]);
+
+    useEffect(() => {
+        const handler = (e: MessageEvent) => {
+            if (!e.data || typeof e.data !== "object") return;
+            if (iframeRef.current && e.source !== iframeRef.current.contentWindow) return;
+            if (e.data.type === "_chat_inline_html_resize" && typeof e.data.h === "number") {
+                setHeight(Math.max(80, Math.ceil(e.data.h)));
+            }
+        };
+        window.addEventListener("message", handler);
+        return () => window.removeEventListener("message", handler);
+    }, []);
+
+    return (
+        <iframe
+            ref={iframeRef}
+            srcDoc={srcDoc}
+            title="正则渲染预览"
+            style={{ width: "100%", height, border: "none", borderRadius: 12, background: "transparent" }}
+        />
+    );
+}
 
 function getRuleTags(rule: Pick<RegexRule, "tags">): string[] {
     return rule.tags && rule.tags.length > 0 ? [...rule.tags] : [];
@@ -324,6 +442,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
         if (typeof obj.markdownOnly === "boolean") rule.markdownOnly = obj.markdownOnly;
         if (typeof obj.promptOnly === "boolean") rule.promptOnly = obj.promptOnly;
         if (typeof obj.runOnEdit === "boolean") rule.runOnEdit = obj.runOnEdit;
+        if (typeof obj.historyOnly === "boolean") rule.historyOnly = obj.historyOnly;
         if (typeof obj.substituteRegex === "number") rule.substituteRegex = obj.substituteRegex;
         if (typeof obj.minDepth === "number") rule.minDepth = obj.minDepth;
         if (typeof obj.maxDepth === "number") rule.maxDepth = obj.maxDepth;
@@ -569,8 +688,13 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                                     {step.skipped && <span className="ts-11" style={{ color: "var(--c-icon)", opacity: 0.6 }}>{step.skipped}</span>}
                                                                 </button>
                                                                 {groupTestExpandStep === i && !step.skipped && (
-                                                                    <div className="ui-code-block" style={{ maxHeight: 200, overflow: "auto", whiteSpace: "pre-wrap", fontSize: "calc(12px*var(--app-text-scale,1))", margin: "4px 0 8px" }}>
-                                                                        {step.output || <span className="menu-desc !mt-0">(空)</span>}
+                                                                    <div className="flex flex-col gap-1" style={{ margin: "4px 0 8px" }}>
+                                                                        <div className="flex items-center justify-end">
+                                                                            <CopyCodeButton text={step.output} />
+                                                                        </div>
+                                                                        <div className="ui-code-block" style={{ maxHeight: 200, overflow: "auto", whiteSpace: "pre-wrap", fontSize: "calc(12px*var(--app-text-scale,1))" }}>
+                                                                            {step.output || <span className="menu-desc !mt-0">(空)</span>}
+                                                                        </div>
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -578,7 +702,10 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                     </div>
                                                 </div>
                                                 <div className="flex flex-col gap-1">
-                                                    <label className="menu-desc">最终输出</label>
+                                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                        <label className="menu-desc !mt-0">最终输出</label>
+                                                        <CopyCodeButton text={groupOutput} />
+                                                    </div>
                                                     <div className="ui-code-block" style={{ maxHeight: 300, overflow: "auto", whiteSpace: "pre-wrap", fontSize: "calc(13px*var(--app-text-scale,1))" }}>
                                                         {groupOutput || <span className="menu-desc !mt-0">(空)</span>}
                                                     </div>
@@ -802,6 +929,14 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                                     编辑时执行
                                                                 </label>
                                                             </div>
+                                                            <div className="flex items-center justify-between gap-6 mt-2">
+                                                                <label className="ui-checkbox-label whitespace-nowrap">
+                                                                    <input type="checkbox" checked={rule.historyOnly ?? false}
+                                                                        onChange={(e) => updateRule(rule.id, { historyOnly: e.target.checked || undefined })} />
+                                                                    仅历史消息
+                                                                </label>
+                                                                <span className="menu-desc !mt-0">勾选后只作用于聊天历史消息，不碰系统提示词/预设/世界书</span>
+                                                            </div>
                                                         </div>
 
                                                         <div className="flex flex-col gap-1">
@@ -902,6 +1037,8 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                                                                 <span className="ui-tag" data-variant={matchCount > 0 ? "success" : "muted"}>
                                                                                     {matchCount > 0 ? `${matchCount} 处匹配` : "无匹配"}
                                                                                 </span>
+                                                                                <span className="flex-1" />
+                                                                                <CopyCodeButton text={output} />
                                                                             </div>
                                                                             <div className="ui-code-block">{output || <span className="menu-desc !mt-0">(空)</span>}</div>
                                                                         </div>
@@ -1026,7 +1163,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                         </button>
                     </header>
                     <div className="flex-1 overflow-auto p-4">
-                        <div className="chat-markdown" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                        <HtmlPreviewFrame html={extractHtmlForPreview(previewHtml)} />
                     </div>
                 </div>
             )}
