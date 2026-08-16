@@ -185,16 +185,6 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                 >
                     <RotateCcw size={18} />
                 </button>
-                <button
-                    type="button"
-                    className="mix-icon-btn"
-                    onClick={() => void run((signal) => continueMix(sessionId, signal))}
-                    disabled={busy}
-                    aria-label="继续"
-                    title="继续"
-                >
-                    <CornerDownRight size={18} />
-                </button>
                 <textarea
                     className="mix-game-input"
                     rows={1}
@@ -209,6 +199,16 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                     placeholder={busy ? "调制中…" : "说点什么…"}
                     disabled={busy}
                 />
+                <button
+                    type="button"
+                    className="mix-icon-btn"
+                    onClick={() => void run((signal) => continueMix(sessionId, signal))}
+                    disabled={busy}
+                    aria-label="继续生成"
+                    title="继续生成"
+                >
+                    <CornerDownRight size={18} />
+                </button>
                 <button type="button" className="mix-send-btn" onClick={handleSend} disabled={busy || !input.trim()} aria-label="发送">
                     <Send size={16} />
                 </button>

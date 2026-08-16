@@ -18,17 +18,46 @@ export type MixProseParagraph =
     | { type: "scene"; text: string }
     | { type: "text"; segments: MixProseSegment[] };
 
-// 兼容旧标签 [小票]：改名前开的局历史里还留着，别让它们的状态卡突然读不出来
-const TICKET_BLOCK_RE = /\[(状态栏|小票)\]([\s\S]*?)\[\/(?:状态栏|小票)\]/g;
+// 兼容旧标签 [小票]（改名前的历史局）、全角括号与标签内空格——模型输出没那么规矩
+const TICKET_OPEN_RE = /[\[【]\s*(?:状态栏|小票)\s*[\]】]/g;
+const TICKET_CLOSE_RE = /[\[【]\s*\/\s*(?:状态栏|小票)\s*[\]】]/g;
+// 截断兜底只认"行首"的开标签，避免误伤正文里顺嘴提到的「[状态栏]」字样
+const TICKET_OPEN_LINE_RE = /(?:^|\n)\s*[\[【]\s*(?:状态栏|小票)\s*[\]】]/g;
 
-/** 从 AI 原文剥离状态栏块：返回干净正文 + 最后一个壳内原文 */
+function lastMatch(re: RegExp, text: string): RegExpExecArray | null {
+    re.lastIndex = 0;
+    let last: RegExpExecArray | null = null;
+    for (let m = re.exec(text); m; m = re.exec(text)) last = m;
+    return last;
+}
+
+/**
+ * 从 AI 原文剥离状态栏块：返回干净正文 + 最后一个壳内原文。
+ * 配对策略是「最后一个闭合标签 + 它前面最近的开标签」，正文里顺嘴提到的
+ * 标签字样不会把中间的正文吞掉；漏写闭合（生成被截断）时走行首开标签兜底。
+ */
 export function extractMixTicket(raw: string): { text: string; ticketRaw?: string } {
+    let text = raw;
     let ticketRaw: string | undefined;
-    const text = raw.replace(TICKET_BLOCK_RE, (_all, _tag: string, inner: string) => {
-        const trimmed = inner.trim();
-        if (trimmed) ticketRaw = trimmed;
-        return "";
-    }).trim();
+    for (;;) {
+        const close = lastMatch(TICKET_CLOSE_RE, text);
+        if (!close) break;
+        const open = lastMatch(TICKET_OPEN_RE, text.slice(0, close.index));
+        if (!open) break;
+        const inner = text.slice(open.index + open[0].length, close.index).trim();
+        if (!ticketRaw && inner) ticketRaw = inner;
+        text = (text.slice(0, open.index) + text.slice(close.index + close[0].length)).trim();
+    }
+    if (!ticketRaw) {
+        const open = lastMatch(TICKET_OPEN_LINE_RE, text);
+        if (open) {
+            const inner = text.slice(open.index + open[0].length).trim();
+            if (inner) {
+                ticketRaw = inner;
+                text = text.slice(0, open.index).trim();
+            }
+        }
+    }
     return { text, ticketRaw };
 }
 

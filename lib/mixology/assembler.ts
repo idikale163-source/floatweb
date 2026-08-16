@@ -80,7 +80,7 @@ function ticketSection(ticket: MixTicketMaterial, charName: string, userName: st
     return [
         "## 状态栏",
         applyMixMacros(contract, charName, userName),
-        `每轮正文结束后，把上述内容整块用 ${MIX_TICKET_OPEN}...${MIX_TICKET_CLOSE} 包裹，放在回复最末尾。`,
+        `每轮回复的最末尾，必须另起一行输出 ${MIX_TICKET_OPEN}，按上述要求逐行填写本轮的实际数据，再以 ${MIX_TICKET_CLOSE} 单独一行收束。任何一轮都不要省略这一段。`,
     ].join("\n");
 }
 
