@@ -112,35 +112,6 @@ export function hasTimeZoneDifference(date: Date, characterTimeZone: string, sys
     || systemParts.minute !== characterParts.minute;
 }
 
-export type VirtualClockConfig = {
-  virtualClockAnchor?: string;
-  virtualClockSetAt?: string;
-  virtualClockMode?: "flowing" | "frozen";
-};
-
-export function resolveVirtualNow(config?: VirtualClockConfig | null): Date {
-  if (!config?.virtualClockAnchor) return new Date();
-  const anchor = new Date(config.virtualClockAnchor);
-  if (isNaN(anchor.getTime())) return new Date();
-  if (config.virtualClockMode === "frozen") return anchor;
-
-  const setAt = config.virtualClockSetAt ? new Date(config.virtualClockSetAt) : null;
-  if (!setAt || isNaN(setAt.getTime())) return anchor;
-  return new Date(anchor.getTime() + Math.max(0, Date.now() - setAt.getTime()));
-}
-
-/** Converts a real stored timestamp to the session's virtual-clock timestamp. */
-export function resolveVirtualTimestamp(date: Date, config?: VirtualClockConfig | null): Date {
-  if (!config?.virtualClockAnchor || !config.virtualClockSetAt) return date;
-  const anchor = new Date(config.virtualClockAnchor);
-  const setAt = new Date(config.virtualClockSetAt);
-  if (isNaN(anchor.getTime()) || isNaN(setAt.getTime())) return date;
-  const effectiveRealTime = config.virtualClockMode === "frozen"
-    ? Math.min(date.getTime(), setAt.getTime())
-    : date.getTime();
-  return new Date(anchor.getTime() + effectiveRealTime - setAt.getTime());
-}
-
 export function buildCharacterTimeContext(timeZone?: string | null, now = new Date()): CharacterTimeContext {
   const systemTimeZone = getSystemTimeZone();
   const systemTime = formatZonedChineseDateTime(now, systemTimeZone);

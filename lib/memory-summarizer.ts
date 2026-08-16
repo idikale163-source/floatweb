@@ -16,9 +16,7 @@ import {
     incrementCoreMemoryCounter,
 } from "./memory-storage";
 import { resolveAuxiliaryApiConfig } from "./settings-storage";
-import { loadNativeTimeline, formatTimelineForSummarization, type NativeTimelineEntry } from "./short-term-assembler";
-import { loadChatSessions } from "./chat-storage";
-import { resolveVirtualTimestamp } from "./character-time";
+import { loadNativeTimeline, formatTimelineForSummarization } from "./short-term-assembler";
 import { generateEmbedding, resolveEmbeddingModel } from "./memory-embedding";
 import { simpleLLMCall } from "./api-helpers";
 import { maybeRunCoreMemoryPipeline } from "./core-memory-builder";
@@ -78,24 +76,16 @@ export async function runSummarizationPipeline(
         ? undefined
         : options?.sinceTimestamp ?? (getLastSummarizedTimestamp(characterId) ?? undefined);
     const allEntries = loadNativeTimeline(characterId, afterTimestamp ? { afterTimestamp } : undefined);
-    const sessions = loadChatSessions();
-    const displayTimestamp = (entry: NativeTimelineEntry): string => {
-        const session = sessions.find(item => item.id === entry.sessionId || item.id === entry.groupSessionId);
-        const stored = new Date(entry.timestamp);
-        return session && !isNaN(stored.getTime())
-            ? resolveVirtualTimestamp(stored, session).toISOString()
-            : entry.timestamp;
-    };
 
     if (allEntries.length < 4) {
         if (!options?.force) resetEventCounter(characterId);
         return { success: false, error: allEntries.length === 0 ? "没有可总结的事件" : "事件不足 4 条" };
     }
 
-    const formatted = formatTimelineForSummarization(allEntries, { getDisplayTimestamp: displayTimestamp });
+    const formatted = formatTimelineForSummarization(allEntries);
     if (!formatted) return { success: false, error: "格式化事件数据失败" };
 
-    const { eventsText, earliest, latest, latestStored } = formatted;
+    const { eventsText, earliest, latest } = formatted;
 
     // Use user-editable prompt template from config, with placeholder substitution
     const promptTemplate = config.summarizationPrompt?.trim() || DEFAULT_SUMMARIZATION_PROMPT;
@@ -170,7 +160,7 @@ export async function runSummarizationPipeline(
     await saveMemoryEntry(longTermEntry);
 
     // Update last summarized timestamp + reset counter
-    setLastSummarizedTimestamp(characterId, latestStored);
+    setLastSummarizedTimestamp(characterId, latest);
     resetEventCounter(characterId);
 
     // Enforce long-term limit

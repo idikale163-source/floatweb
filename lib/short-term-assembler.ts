@@ -3,8 +3,7 @@
 // a unified timeline. Replaces the old ShortTermEvent IndexedDB approach.
 // Used by: memory-bank-page (UI display), memory-summarizer (summarization input).
 
-import { isReadingDiscussMessage, isSystemInstructionMessage, loadChatSessions, loadChatMessages, type ChatMessage, type ChatSession } from "./chat-storage";
-import { resolveVirtualTimestamp } from "./character-time";
+import { isReadingDiscussMessage, isSystemInstructionMessage, loadChatSessions, loadChatMessages, type ChatMessage } from "./chat-storage";
 import { buildGroupAdminBracketText } from "./group-admin";
 import { loadMomentPosts, loadMomentComments } from "./moments-storage";
 import { loadCharacters } from "./character-storage";
@@ -47,11 +46,6 @@ function formatPhotoDirectiveForPrompt(msg: ChatMessage): string {
     const description = msg.mediaData?.label?.trim() || "图片";
     const mode = msg.mediaData?.useReferenceImage === true ? "使用参考图" : "不使用参考图";
     return `[照片:${mode}:${description}]`;
-}
-
-function getVirtualTimelineTimestamp(timestamp: string, session?: ChatSession): string {
-    const stored = new Date(timestamp);
-    return isNaN(stored.getTime()) ? timestamp : resolveVirtualTimestamp(stored, session).toISOString();
 }
 
 export type NativeTimelineEntry = {
@@ -202,8 +196,7 @@ export function loadNativeTimeline(
             else if (msg.role === "system") continue; // skip system messages in group timeline
             else sender = msg.senderName || "未知";
 
-            const virtualTimestamp = getVirtualTimelineTimestamp(msg.createdAt, gs);
-            const msgLabel = formatPromptEventLabel(`群聊「${gs.groupName || "群聊"}」`, virtualTimestamp, timeAware, timestampOptions);
+            const msgLabel = formatPromptEventLabel(`群聊「${gs.groupName || "群聊"}」`, msg.createdAt, timeAware, timestampOptions);
             let content = stripStateAndInnerForPrompt(msg.content || "");
 
             // Action notifications: group format with names
@@ -286,8 +279,7 @@ export function loadNativeTimeline(
             if (isPromptHiddenChatMessage(msg)) continue;
             if (options?.afterTimestamp && msg.createdAt <= options.afterTimestamp) continue;
 
-            const virtualTimestamp = getVirtualTimelineTimestamp(msg.createdAt, session);
-            const msgLabel = formatPromptEventLabel("私聊", virtualTimestamp, timeAware, timestampOptions);
+            const msgLabel = formatPromptEventLabel("私聊", msg.createdAt, timeAware, timestampOptions);
 
             if (msg.role === "system") {
                 // UI-only notification — skip from prompt
@@ -1438,24 +1430,22 @@ export function prepareGroupShortTermContext(
  */
 export function formatTimelineForSummarization(
     entries: NativeTimelineEntry[],
-    options?: { timeAware?: boolean; getDisplayTimestamp?: (entry: NativeTimelineEntry) => string },
-): { eventsText: string; earliest: string; latest: string; latestStored: string; count: number } | null {
+    options?: { timeAware?: boolean },
+): { eventsText: string; earliest: string; latest: string; count: number } | null {
     if (entries.length === 0) return null;
 
     const timeAware = resolvePromptTimeAware(options?.timeAware);
-    const displayTimestamp = options?.getDisplayTimestamp || (entry => entry.timestamp);
     const eventsText = entries
         .map(e => `- ${timeAware ? e.content : formatStoredPromptEventContent(e.content, {
             label: "事件",
-            timestamp: displayTimestamp(e),
+            timestamp: e.timestamp,
             timeAware,
         })}`)
         .join("\n");
     return {
         eventsText,
-        earliest: displayTimestamp(entries[0]),
-        latest: displayTimestamp(entries[entries.length - 1]),
-        latestStored: entries[entries.length - 1].timestamp,
+        earliest: entries[0].timestamp,
+        latest: entries[entries.length - 1].timestamp,
         count: entries.length,
     };
 }
