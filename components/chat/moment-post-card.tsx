@@ -334,8 +334,11 @@ export function MomentPostCard({ post, onUpdate, onRequestDelete, onOpenCommentC
                 </div>
             )}
 
-            {/* Photo area */}
-            <div className="feed-post-media mb-5 w-full flex flex-col gap-2">
+            {/* Photo area —— 四块内容全无时整个容器不渲染：空壳会照样吃掉自己的下边距
+                （flex 容器不会自塌陷），无配图的帖子正文和时间行之间就凭空多出一截，看着像空了一行。
+                间距用 mb-3 与卡片其余部分（头像行/正文/位置）对齐，media 原本的 mb-5 是全卡唯一的孤例。 */}
+            {(resolvedPhotoUrl || fallbackPhotoDescription || photoRetryError) && (
+            <div className="feed-post-media mb-3 w-full flex flex-col gap-2">
                 {resolvedPhotoUrl && (
                     <MediaImageWithPreview
                         url={resolvedPhotoUrl}
@@ -389,6 +392,7 @@ export function MomentPostCard({ post, onUpdate, onRequestDelete, onOpenCommentC
                     </div>
                 )}
             </div>
+            )}
             {showFallbackPreview && fallbackPhotoDescription && (
                 <MediaPreviewOverlay
                     description={fallbackPhotoDescription}
