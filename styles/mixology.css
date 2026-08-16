@@ -1507,6 +1507,58 @@
     height: 104px;
 }
 
+/* 技法类视觉材料（小票/装饰/尾调）：同为海报卡，比角色卡矮一档 */
+.mix-mat-card[data-poster="true"]:not([data-kind="character"]) {
+    aspect-ratio: 3 / 3.4;
+}
+
+/* ── 纯文本材料（基底/风味/杯型/苦精）：不配图，单列横条 ── */
+.mix-mat-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 10px;
+}
+
+.mix-mat-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 14px;
+    border-radius: 14px;
+    background: var(--mix-panel);
+    cursor: pointer;
+    transition: transform 0.15s;
+}
+
+.mix-mat-row:active {
+    transform: scale(0.98);
+}
+
+.mix-mat-row-glyph {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    color: var(--mix-violet);
+    background:
+        radial-gradient(ellipse at 30% 20%, rgba(141, 123, 245, 0.14), transparent 65%),
+        var(--mix-panel-2);
+}
+
+.mix-mat-row[data-kind="strength"] .mix-mat-row-glyph {
+    color: var(--mix-gold);
+}
+
+.mix-mat-row .mix-mat-info {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+}
+
 /* ── 确认弹窗 ── */
 .mix-confirm-mask {
     position: absolute;

@@ -27,6 +27,7 @@ import { saveMixMaterial, saveMixRecipe } from "@/lib/mixology/storage";
 import {
     MIX_KIND_LABELS,
     MIX_SLOT_ORDER,
+    mixKindHasCover,
     type MixCharacterCard,
     type MixMaterial,
     type MixMaterialKind,
@@ -387,7 +388,7 @@ export function MixologyHall({
                 );
             }
             return (
-                <div className="mix-waterfall">
+                <div className={mixKindHasCover(kind) ? "mix-waterfall" : "mix-mat-list"}>
                     {materials.map((entry) => (
                         <MatCard
                             kind={entry.kind}

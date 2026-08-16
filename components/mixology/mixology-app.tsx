@@ -41,6 +41,7 @@ import {
     createMixId,
     MIX_KIND_LABELS,
     MIX_SLOT_ORDER,
+    mixKindHasCover,
     type MixCharacterCard,
     type MixMaterial,
     type MixMaterialKind,
@@ -458,7 +459,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 点右上角 ＋ 自建一件{MIX_KIND_LABELS[cabinetKind]}。
                             </div>
                         ) : (
-                            <div className="mix-waterfall">
+                            <div className={mixKindHasCover(cabinetKind) ? "mix-waterfall" : "mix-mat-list"}>
                                 {cabinetFiltered.map((material) => (
                                     <MatCard
                                         kind={material.kind}
@@ -720,7 +721,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     去酒柜页点 ＋ 自建一件。
                                 </div>
                             ) : (
-                                <div className="mix-waterfall">
+                                <div className={mixKindHasCover(slotPicker) ? "mix-waterfall" : "mix-mat-list"}>
                                     {cabinet.filter((m) => m.kind === slotPicker).map((material) => (
                                         <MatCard
                                             kind={material.kind}
