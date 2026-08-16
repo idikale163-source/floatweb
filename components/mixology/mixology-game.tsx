@@ -5,7 +5,7 @@
 // 装饰材料的 CSS 以 <style> 注入本画面容器（认 .mix-* 官方语义类）。
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, CornerDownRight, Music4, RotateCcw, Send, Undo2, X } from "lucide-react";
+import { ChevronLeft, CornerDownRight, RotateCcw, Send, Undo2 } from "lucide-react";
 import { continueMix, generateMixReply, rerollMixReply, undoMixLastRound } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession } from "@/lib/mixology/storage";
 import type { MixCharacterCard, MixSession, MixTurn } from "@/lib/mixology/types";
@@ -36,7 +36,6 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const [session, setSession] = useState<MixSession | null>(() => getMixSession(sessionId));
     const [input, setInput] = useState("");
     const [busy, setBusy] = useState(false);
-    const [encoreOpen, setEncoreOpen] = useState(false);
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const abortRef = useRef<AbortController | null>(null);
 
@@ -83,7 +82,11 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         abortRef.current = controller;
         setBusy(true);
         try {
-            await action(controller.signal);
+            const pending = action(controller.signal);
+            // 引擎的同步部分已经落库（重说删掉旧轮 / 发送写入用户消息），
+            // 立刻回读让界面先变，不等模型回来才一起刷
+            setSession(getMixSession(sessionId));
+            await pending;
             setSession(getMixSession(sessionId));
         } catch (error) {
             setSession(getMixSession(sessionId));
@@ -112,17 +115,6 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             <div className="mix-game-header">
                 <button type="button" className="mix-icon-btn" onClick={onBack} aria-label="返回"><ChevronLeft size={20} /></button>
                 <div className="mix-game-title">{session.charName}</div>
-                {assets.encoreHtml ? (
-                    <button
-                        type="button"
-                        className="mix-icon-btn"
-                        onClick={() => setEncoreOpen(true)}
-                        aria-label="尾调"
-                        title="尾调"
-                    >
-                        <Music4 size={17} />
-                    </button>
-                ) : null}
                 <button
                     type="button"
                     className="mix-icon-btn"
@@ -160,20 +152,12 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                         <span /><span /><span />
                     </div>
                 ) : null}
-            </div>
-            {encoreOpen && assets.encoreHtml ? (
-                <div className="mix-encore-layer">
-                    <div className="mix-game-header">
-                        <button type="button" className="mix-icon-btn" onClick={() => setEncoreOpen(false)} aria-label="关闭"><X size={18} /></button>
-                        <div className="mix-game-title">尾调</div>
-                        <span style={{ width: 32 }} />
-                    </div>
-                    <div className="mix-encore-scroll">
+                {assets.encoreHtml ? (
+                    <div className="mix-encore-inline">
                         <MixRichText text={assets.encoreHtml} />
                     </div>
-                </div>
-            ) : null}
-
+                ) : null}
+            </div>
             <div className="mix-game-inputbar">
                 <button
                     type="button"

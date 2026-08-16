@@ -1677,32 +1677,12 @@
     padding: 12px;
 }
 
-/* ── 对局内的尾调浮层：轻纱盖在底图上 ── */
-.mix-encore-layer {
-    position: absolute;
-    inset: 0;
-    z-index: 46;
-    display: flex;
-    flex-direction: column;
-    background: rgba(11, 11, 16, 0.42);
-    backdrop-filter: blur(3px);
-    animation: mixFadeIn 0.18s ease;
+/* ── 对局内的尾调：接在正文后面，上缘一道细金线与对话断开 ── */
+.mix-encore-inline {
+    margin: 20px 0 6px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(217, 176, 106, 0.22);
 }
-
-.mix-encore-scroll {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: 8px 14px;
-}
-
-.mix-encore-scroll::after {
-    content: "";
-    display: block;
-    height: calc(20px + env(safe-area-inset-bottom, 0px));
-}
-
 /* 对局内的开场画布：故事扉页，下缘一道细金分隔与正文断开 */
 .mix-game-canvas {
     margin: 4px 0 18px;
