@@ -15,7 +15,7 @@ import {
     UserRound,
 } from "lucide-react";
 import type { MixCharacterCard, MixMaterial, MixMaterialKind } from "@/lib/mixology/types";
-import { MIX_KIND_LABELS } from "@/lib/mixology/types";
+import { MIX_KIND_LABELS, mixEncoreRenderHtml } from "@/lib/mixology/types";
 import { MixRichText } from "./rich-text";
 
 const KIND_ICONS: Record<MixMaterialKind, typeof UserRound> = {
@@ -201,7 +201,8 @@ export function MaterialDetail({ material }: { material: MixMaterial }) {
         return (
             <>
                 <DetailField label="一句话介绍" value={material.hook} />
-                <DetailField label="尾调 HTML" value={material.html} code />
+                <DetailField label="输出契约" value={material.contract} />
+                <DetailField label="渲染代码" value={mixEncoreRenderHtml(material)} code />
             </>
         );
     }

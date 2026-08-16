@@ -111,11 +111,23 @@ export type MixGarnishMaterial = MixMaterialMeta & {
     css: string;
 };
 
-/** 尾调：随卡互动 HTML 小品（沙盒 iframe 展示） */
+/** 尾调（小剧场）：AI 按契约输出加演内容，渲染代码负责画出来；契约留空则为纯静态小品 */
 export type MixEncoreMaterial = MixMaterialMeta & {
     kind: "encore";
-    html: string;
+    /** 告诉 AI 小剧场何时出现、写什么；留空则不进提示词，渲染代码作为静态小品直接展示 */
+    contract?: string;
+    /** 完整 HTML（可含 JS），AI 输出经 window.ENCORE_RAW / {{RAW}} 注入 */
+    renderHtml?: string;
+    /** @deprecated 旧字段（纯静态 HTML），读取时等价于 renderHtml */
+    html?: string;
+    /** 编辑器预览用示例数据 */
+    previewRaw?: string;
 };
+
+/** 尾调渲染代码：新旧字段统一出口 */
+export function mixEncoreRenderHtml(material: MixEncoreMaterial): string {
+    return material.renderHtml ?? material.html ?? "";
+}
 
 export type MixMaterial =
     | MixCharacterCard
@@ -146,6 +158,8 @@ export type MixTurn = {
     text: string;
     /** 该轮小票壳内原文（有小票材料且 AI 按契约输出时才有） */
     ticketRaw?: string;
+    /** 该轮小剧场壳内原文（尾调写了契约且 AI 输出时才有） */
+    encoreRaw?: string;
     createdAt: number;
 };
 

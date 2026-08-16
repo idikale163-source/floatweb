@@ -3,7 +3,6 @@
 // 独家特调 · 创作工坊预览：小票 / 装饰 / 尾调 三类"要眼见为实"的材料，
 // 在编辑器里就地试穿——小票喂示例数据渲染，装饰套在样例正文上，尾调进沙盒跑。
 
-import { useMemo } from "react";
 import { X } from "lucide-react";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
@@ -17,26 +16,10 @@ const GARNISH_SAMPLE = [
     "外头的雨把整条街敲得发亮，~只剩这一盏灯还醒着~。",
 ].join("\n");
 
-function SandboxFrame({ html, title }: { html: string; title: string }) {
-    const srcDoc = useMemo(() => (
-        /<html[\s>]/i.test(html)
-            ? html
-            : `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head><body>${html}</body></html>`
-    ), [html]);
-    return (
-        <iframe
-            title={title}
-            sandbox="allow-scripts"
-            srcDoc={srcDoc}
-            style={{ width: "100%", height: 320, border: 0, display: "block", background: "transparent", borderRadius: 12 }}
-        />
-    );
-}
-
 export type MixPreviewTarget =
     | { kind: "ticket"; html: string; raw: string }
     | { kind: "garnish"; css: string }
-    | { kind: "encore"; html: string }
+    | { kind: "encore"; html: string; raw?: string }
     | { kind: "canvas"; html: string; cover?: string };
 
 export function MixPreviewSheet({ target, onClose }: { target: MixPreviewTarget; onClose: () => void }) {
@@ -112,9 +95,9 @@ export function MixPreviewSheet({ target, onClose }: { target: MixPreviewTarget;
 
                     {target.kind === "encore" ? (
                         <>
-                            <div className="mix-detail-label">沙盒中的运行效果</div>
+                            <div className="mix-detail-label">{target.raw?.trim() ? "用「预览示例数据」渲染的效果" : "静态小品的运行效果"}</div>
                             <div style={{ marginTop: 8, borderRadius: 12, overflow: "hidden", background: "rgba(255,255,255,0.03)" }}>
-                                <SandboxFrame html={target.html} title="尾调预览" />
+                                <MixTicketFrame html={target.html} raw={target.raw ?? ""} />
                             </div>
                         </>
                     ) : null}
@@ -134,7 +117,8 @@ const STRUCTURE_ROWS: { section: string; from: string; kind?: string }[] = [
     { section: "## 世界与剧情", from: "角色卡：世界观 / 初始认知 / 关系与身份 / 当前剧情 / 附加设定", kind: "character" },
     { section: "## 文风", from: "风味", kind: "flavor" },
     { section: "## 输出格式", from: "杯型", kind: "glass" },
-    { section: "## 状态栏", from: "小票的输出契约（自动追加「用 [状态栏]...[/状态栏] 包裹」）", kind: "ticket" },
+    { section: "## 状态栏", from: "小票的输出契约（格式说明在前、内容要求在后，壳为 [状态栏]...[/状态栏]）", kind: "ticket" },
+    { section: "## 小剧场", from: "尾调的输出契约（写了契约才有这一段，壳为 [小剧场]...[/小剧场]）", kind: "encore" },
     { section: "## 示例对话", from: "角色卡：示例对话", kind: "character" },
 ];
 
@@ -176,10 +160,10 @@ export function MixStructureSheet({ highlight, onClose }: { highlight?: string; 
 
                     <div className="mix-struct-divider">［ 本轮生成 ］</div>
 
-                    <div className="mix-detail-label" style={{ marginTop: 16 }}>不进提示词的两味</div>
+                    <div className="mix-detail-label" style={{ marginTop: 16 }}>不进提示词的部分</div>
                     <div className="mix-struct-note">
-                        <b>装饰</b>（CSS）和<b>尾调</b>（HTML）只影响界面呈现，不会发给模型，
-                        所以写多长都不占上下文。<b>开场白</b>也不在系统提示词里，它作为对局的第一条角色消息单独送出。
+                        <b>装饰</b>的 CSS、<b>小票与尾调</b>的渲染代码、<b>开场画布</b>都只在界面里执行，
+                        不发给模型，写多长都不占上下文。<b>开场白</b>也不在系统提示词里，它作为对局的第一条角色消息单独送出。
                     </div>
                 </div>
             </div>

@@ -17,7 +17,7 @@ function buildSrcDoc(html: string, raw: string): string {
     const base = /<html[\s>]/i.test(withRaw)
         ? withRaw
         : `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head><body>${withRaw}</body></html>`;
-    const inject = `<script>window.TICKET_RAW=${JSON.stringify(raw)};</` + `script>`;
+    const inject = `<script>window.TICKET_RAW=${JSON.stringify(raw)};window.ENCORE_RAW=window.TICKET_RAW;</` + `script>`;
     return /<head[\s>]/i.test(base)
         ? base.replace(/<head([^>]*)>/i, `<head$1>${inject}`)
         : inject + base;

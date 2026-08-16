@@ -8,8 +8,8 @@ import { ChatEngineError, sendLLMRequest } from "../chat-engine";
 import type { LLMMessage } from "../llm-prompt-assembler";
 import { loadApiConfigs, loadBindingConfig } from "../settings-storage";
 import type { ApiConfig } from "../settings-types";
-import { assembleMixPrompt, MIX_TICKET_CLOSE, MIX_TICKET_OPEN, type MixAssembledPrompt } from "./assembler";
-import { extractMixTicket } from "./prose";
+import { assembleMixPrompt, MIX_ENCORE_CLOSE, MIX_ENCORE_OPEN, MIX_TICKET_CLOSE, MIX_TICKET_OPEN, type MixAssembledPrompt } from "./assembler";
+import { extractMixBlocks } from "./prose";
 import {
     getMixMaterial,
     getMixSession,
@@ -54,12 +54,13 @@ function assembleFromSession(session: MixSession): MixAssembledPrompt {
     });
 }
 
-/** 历史回放时给 assistant 消息补回状态栏块，让模型看得到自己之前报过的状态 */
+/** 历史回放时给 assistant 消息补回状态栏/小剧场块，让模型看得到自己之前的输出习惯 */
 function turnToHistoryContent(turn: MixTurn): string {
-    if (turn.role === "assistant" && turn.ticketRaw) {
-        return `${turn.text}\n\n${MIX_TICKET_OPEN}\n${turn.ticketRaw}\n${MIX_TICKET_CLOSE}`;
-    }
-    return turn.text;
+    if (turn.role !== "assistant") return turn.text;
+    const parts = [turn.text];
+    if (turn.ticketRaw) parts.push(`${MIX_TICKET_OPEN}\n${turn.ticketRaw}\n${MIX_TICKET_CLOSE}`);
+    if (turn.encoreRaw) parts.push(`${MIX_ENCORE_OPEN}\n${turn.encoreRaw}\n${MIX_ENCORE_CLOSE}`);
+    return parts.join("\n\n");
 }
 
 function buildMixMessages(
@@ -152,7 +153,7 @@ async function runMixGeneration(
         { characterName: session.charName, userName: session.userName || "你" },
         { appId: MIX_PROMPT_APP_ID, appTags: MIX_PROMPT_TAGS, skipOutputRegex: true, signal },
     );
-    const { text, ticketRaw } = extractMixTicket(raw);
+    const { text, ticketRaw, encoreRaw } = extractMixBlocks(raw);
     if (!text && !ticketRaw) {
         throw new ChatEngineError("模型没有给出内容，请再试一次。");
     }
@@ -161,6 +162,7 @@ async function runMixGeneration(
         role: "assistant",
         text,
         ticketRaw: assembled.hasTicket ? ticketRaw : undefined,
+        encoreRaw: assembled.hasEncore ? encoreRaw : undefined,
         createdAt: Date.now(),
     };
     const updated: MixSession = { ...session, turns: [...session.turns, turn] };

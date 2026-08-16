@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, CornerDownRight, RotateCcw, Send, Undo2 } from "lucide-react";
 import { continueMix, generateMixReply, rerollMixReply, undoMixLastRound } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession } from "@/lib/mixology/storage";
-import type { MixCharacterCard, MixSession, MixTurn } from "@/lib/mixology/types";
+import { mixEncoreRenderHtml, type MixCharacterCard, type MixSession, type MixTurn } from "@/lib/mixology/types";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
 import { MixTicketFrame } from "./ticket-frame";
@@ -19,13 +19,18 @@ type GameProps = {
     onToast: (message: string) => void;
 };
 
-function AssistantTurn({ turn, ticketHtml }: { turn: MixTurn; ticketHtml?: string }) {
+function AssistantTurn({ turn, ticketHtml, encoreHtml }: { turn: MixTurn; ticketHtml?: string; encoreHtml?: string }) {
     return (
         <>
             {turn.text ? <MixProseView text={turn.text} /> : null}
             {ticketHtml && turn.ticketRaw ? (
                 <div className="mix-ticket-wrap">
                     <MixTicketFrame html={ticketHtml} raw={turn.ticketRaw} />
+                </div>
+            ) : null}
+            {encoreHtml && turn.encoreRaw ? (
+                <div className="mix-encore-turn">
+                    <MixTicketFrame html={encoreHtml} raw={turn.encoreRaw} />
                 </div>
             ) : null}
         </>
@@ -41,17 +46,22 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
 
     // 封面 / 小票渲染代码 / 装饰 CSS：按方案槽位从酒柜现取
     const assets = useMemo(() => {
-        if (!session) return { cover: "", ticketHtml: undefined as string | undefined, garnishCss: "", encoreHtml: "", canvasHtml: "" };
+        if (!session) return { cover: "", ticketHtml: undefined as string | undefined, garnishCss: "", encoreTurnHtml: undefined as string | undefined, encoreStaticHtml: "", canvasHtml: "" };
         const slots = session.recipe.slots;
         const character = slots.character ? getMixMaterial(slots.character) : null;
         const ticket = slots.ticket ? getMixMaterial(slots.ticket) : null;
         const garnish = slots.garnish ? getMixMaterial(slots.garnish) : null;
         const encore = slots.encore ? getMixMaterial(slots.encore) : null;
+        const encoreMat = encore?.kind === "encore" ? encore : null;
+        const encoreRender = encoreMat ? mixEncoreRenderHtml(encoreMat).trim() : "";
+        const encoreHasContract = Boolean(encoreMat?.contract?.trim());
         return {
             cover: character?.cover ?? "",
             ticketHtml: ticket?.kind === "ticket" ? ticket.renderHtml : undefined,
             garnishCss: garnish?.kind === "garnish" ? garnish.css : "",
-            encoreHtml: encore?.kind === "encore" ? encore.html : "",
+            // 写了契约 = AI 小剧场（按轮渲染）；没写契约 = 静态小品（挂在对话末尾）
+            encoreTurnHtml: encoreHasContract && encoreRender ? encoreRender : undefined,
+            encoreStaticHtml: !encoreHasContract ? encoreRender : "",
             // 开场画布：对局里作为故事扉页躺在滚动区最顶上，往上翻可见
             canvasHtml: character?.kind === "character" ? (character as MixCharacterCard).canvas?.trim() ?? "" : "",
         };
@@ -144,7 +154,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                             <div className="mix-user-bubble">{turn.text}</div>
                         </div>
                     ) : (
-                        <AssistantTurn turn={turn} ticketHtml={assets.ticketHtml} key={turn.id} />
+                        <AssistantTurn turn={turn} ticketHtml={assets.ticketHtml} encoreHtml={assets.encoreTurnHtml} key={turn.id} />
                     ),
                 )}
                 {busy ? (
@@ -152,9 +162,9 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                         <span /><span /><span />
                     </div>
                 ) : null}
-                {assets.encoreHtml ? (
+                {assets.encoreStaticHtml ? (
                     <div className="mix-encore-inline">
-                        <MixRichText text={assets.encoreHtml} />
+                        <MixRichText text={assets.encoreStaticHtml} />
                     </div>
                 ) : null}
             </div>

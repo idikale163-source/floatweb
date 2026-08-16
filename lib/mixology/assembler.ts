@@ -9,11 +9,13 @@
 
 import type {
     MixCharacterCard,
+    MixEncoreMaterial,
     MixMaterial,
     MixMaterialKind,
     MixTextMaterial,
     MixTicketMaterial,
 } from "./types";
+import { mixEncoreRenderHtml } from "./types";
 
 export const MIX_DEFAULT_USER_NAME = "你";
 
@@ -21,6 +23,10 @@ export const MIX_DEFAULT_USER_NAME = "你";
 // 模型不知道"小票"是什么，但一眼能懂"状态栏"。
 export const MIX_TICKET_OPEN = "[状态栏]";
 export const MIX_TICKET_CLOSE = "[/状态栏]";
+
+/** 小剧场壳标记：尾调写了契约时，AI 的加演内容放进这对标签 */
+export const MIX_ENCORE_OPEN = "[小剧场]";
+export const MIX_ENCORE_CLOSE = "[/小剧场]";
 
 export type MixAssembleInput = {
     character: MixCharacterCard;
@@ -41,6 +47,8 @@ export type MixAssembledPrompt = {
     opening: string;
     /** 本局是否带小票（运行时据此决定是否剥取小票块） */
     hasTicket: boolean;
+    /** 本局尾调是否为 AI 小剧场（有契约且有渲染代码） */
+    hasEncore: boolean;
 };
 
 export function applyMixMacros(text: string, charName: string, userName: string): string {
@@ -79,8 +87,21 @@ function ticketSection(ticket: MixTicketMaterial, charName: string, userName: st
     if (!contract) return null;
     return [
         "## 状态栏",
+        `输出格式：每轮回复的最末尾，另起一行输出 ${MIX_TICKET_OPEN}，随后按「输出内容」的要求逐行填写本轮的实际数据，最后以 ${MIX_TICKET_CLOSE} 单独一行收束。任何一轮都不要省略这一段。`,
+        "输出内容：",
         applyMixMacros(contract, charName, userName),
-        `每轮回复的最末尾，必须另起一行输出 ${MIX_TICKET_OPEN}，按上述要求逐行填写本轮的实际数据，再以 ${MIX_TICKET_CLOSE} 单独一行收束。任何一轮都不要省略这一段。`,
+    ].join("\n");
+}
+
+/** 小剧场契约段：格式说明在前，内容要求在后；契约留空则整段不存在 */
+function encoreSection(encore: MixEncoreMaterial, charName: string, userName: string): string | null {
+    const contract = encore.contract?.trim();
+    if (!contract) return null;
+    return [
+        "## 小剧场",
+        `输出格式：需要输出小剧场时，放在回复最末尾（状态栏之后），整块用 ${MIX_ENCORE_OPEN}...${MIX_ENCORE_CLOSE} 包裹；不需要时整段省略，不要输出空壳。`,
+        "输出内容：",
+        applyMixMacros(contract, charName, userName),
     ].join("\n");
 }
 
@@ -99,6 +120,7 @@ export function assembleMixPrompt(input: MixAssembleInput): MixAssembledPrompt {
     const userName = input.userName?.trim() || MIX_DEFAULT_USER_NAME;
     const m = input.materials;
     const ticket = m.ticket?.kind === "ticket" ? (m.ticket as MixTicketMaterial) : undefined;
+    const encore = m.encore?.kind === "encore" ? (m.encore as MixEncoreMaterial) : undefined;
 
     const apply = (text: string) => applyMixMacros(text, charName, userName);
 
@@ -127,6 +149,7 @@ export function assembleMixPrompt(input: MixAssembleInput): MixAssembledPrompt {
         flavorText ? `## 文风\n${apply(flavorText)}` : null,
         glassText ? `## 输出格式\n${apply(glassText)}` : null,
         ticket ? ticketSection(ticket, charName, userName) : null,
+        encore ? encoreSection(encore, charName, userName) : null,
         exampleSection(card, charName, userName),
     ];
 
@@ -143,5 +166,6 @@ export function assembleMixPrompt(input: MixAssembleInput): MixAssembledPrompt {
             : "",
         opening,
         hasTicket: Boolean(ticket?.contract.trim() && ticket?.renderHtml.trim()),
+        hasEncore: Boolean(encore?.contract?.trim() && encore && mixEncoreRenderHtml(encore).trim()),
     };
 }

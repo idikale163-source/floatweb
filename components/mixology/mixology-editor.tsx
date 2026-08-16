@@ -47,8 +47,8 @@ const KIND_GUIDE: Record<MixMaterialKind, { what: string; where: string }> = {
         where: "不进入提示词，仅改变呈现，不占用上下文。",
     },
     encore: {
-        what: "这里写互动小品：一段可交互的 HTML，例如角色的手账、排班表、关系图谱。",
-        where: "不进入提示词，在沙盒中独立运行。",
+        what: "这里写小剧场：正文之外的加演，例如旁观视角、朋友圈动态、一段监控录像。输出契约决定 AI 何时写什么，渲染代码决定它长什么样；契约留空则为纯静态小品（手账、排班表）。",
+        where: "契约进入提示词「小剧场」段；渲染代码不进提示词，仅在界面中执行。",
     },
 };
 
@@ -145,7 +145,9 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
     const [renderHtml, setRenderHtml] = useState(initial?.kind === "ticket" ? initial.renderHtml : "");
     const [previewRaw, setPreviewRaw] = useState(initial?.kind === "ticket" ? initial.previewRaw ?? "" : "");
     const [css, setCss] = useState(initial?.kind === "garnish" ? initial.css : "");
-    const [html, setHtml] = useState(initial?.kind === "encore" ? initial.html : "");
+    const [html, setHtml] = useState(initial?.kind === "encore" ? (initial.renderHtml ?? initial.html ?? "") : "");
+    const [encoreContract, setEncoreContract] = useState(initial?.kind === "encore" ? initial.contract ?? "" : "");
+    const [encorePreviewRaw, setEncorePreviewRaw] = useState(initial?.kind === "encore" ? initial.previewRaw ?? "" : "");
     const [error, setError] = useState("");
     const [preview, setPreview] = useState<MixPreviewTarget | null>(null);
     const [structureOpen, setStructureOpen] = useState(false);
@@ -224,10 +226,16 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
         }
         if (kind === "encore") {
             if (!html.trim()) {
-                setError("尾调不能是空的，写点 HTML 吧。");
+                setError("尾调的渲染代码不能为空。");
                 return;
             }
-            onSave({ ...meta, kind: "encore", html });
+            onSave({
+                ...meta,
+                kind: "encore",
+                contract: encoreContract.trim() || undefined,
+                renderHtml: html,
+                previewRaw: encorePreviewRaw.trim() || undefined,
+            });
             return;
         }
         if (!content.trim()) {
@@ -442,21 +450,33 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             ) : null}
             {kind === "encore" ? (
                 <>
-                    <Field label="小品 HTML" hint="必填，可带 CSS 和 JS，在沙盒里独立运行">
+                    <Field label="输出契约" hint="选填；写了 AI 才会在对局中输出小剧场，留空则为纯静态小品">
+                        <textarea
+                            className="mix-textarea"
+                            style={{ minHeight: 110 }}
+                            value={encoreContract}
+                            onChange={(e) => setEncoreContract(e.target.value)}
+                            placeholder={"告诉 AI 何时输出、写什么。例：\n仅在剧情出现明显进展或情绪转折时输出：以旁观视角（助理、监控、朋友圈动态等）写一段不超过 80 字的小剧场，第一行标注视角。平淡回合整段省略。"}
+                        />
+                    </Field>
+                    <Field label="渲染代码" hint="必填，HTML/JS；AI 输出经 {{RAW}} 或 window.ENCORE_RAW 注入，静态小品则直接展示">
                         <textarea
                             className="mix-textarea"
                             data-code="true"
-                            style={{ minHeight: 190 }}
+                            style={{ minHeight: 180 }}
                             value={html}
                             onChange={(e) => setHtml(e.target.value)}
-                            placeholder={"一段能看能点的小东西，例：角色的手账、值班表、关系图。\n\n<div style=\"padding:16px;color:#f2f0f7\">\n  <h3>晏迟的排班表</h3>\n  <p>周二 / 周四 / 周六 · 夜班</p>\n</div>"}
+                            placeholder={"例：\n<div style=\"padding:14px;background:#14111c;border-radius:10px;color:#f2f0f7\">\n  <pre style=\"margin:0;white-space:pre-wrap\">{{RAW}}</pre>\n</div>"}
                         />
+                    </Field>
+                    <Field label="预览示例数据" hint="选填，模拟 AI 的小剧场输出来试渲染">
+                        <textarea className="mix-textarea" data-code="true" value={encorePreviewRaw} onChange={(e) => setEncorePreviewRaw(e.target.value)} />
                     </Field>
                     <button
                         type="button"
                         className="mix-pill-btn"
                         style={{ marginTop: 10 }}
-                        onClick={() => setPreview({ kind: "encore", html })}
+                        onClick={() => setPreview({ kind: "encore", html, raw: encorePreviewRaw })}
                         disabled={!html.trim()}
                     >
                         <Play size={13} style={{ verticalAlign: "-2px" }} /> 跑一下

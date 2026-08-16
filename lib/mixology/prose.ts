@@ -18,11 +18,20 @@ export type MixProseParagraph =
     | { type: "scene"; text: string }
     | { type: "text"; segments: MixProseSegment[] };
 
-// 兼容旧标签 [小票]（改名前的历史局）、全角括号与标签内空格——模型输出没那么规矩
-const TICKET_OPEN_RE = /[\[【]\s*(?:状态栏|小票)\s*[\]】]/g;
-const TICKET_CLOSE_RE = /[\[【]\s*\/\s*(?:状态栏|小票)\s*[\]】]/g;
-// 截断兜底只认"行首"的开标签，避免误伤正文里顺嘴提到的「[状态栏]」字样
-const TICKET_OPEN_LINE_RE = /(?:^|\n)\s*[\[【]\s*(?:状态栏|小票)\s*[\]】]/g;
+// 兼容旧标签（[小票]/[尾调]）、全角括号与标签内空格——模型输出没那么规矩
+type TagFamily = { open: RegExp; close: RegExp; openLine: RegExp };
+
+function makeFamily(names: string): TagFamily {
+    return {
+        open: new RegExp(`[\\[【]\\s*(?:${names})\\s*[\\]】]`, "g"),
+        close: new RegExp(`[\\[【]\\s*\\/\\s*(?:${names})\\s*[\\]】]`, "g"),
+        // 截断兜底只认"行首"的开标签，避免误伤正文里顺嘴提到的标签字样
+        openLine: new RegExp(`(?:^|\\n)\\s*[\\[【]\\s*(?:${names})\\s*[\\]】]`, "g"),
+    };
+}
+
+const TICKET_TAGS = makeFamily("状态栏|小票");
+const ENCORE_TAGS = makeFamily("小剧场|尾调");
 
 function lastMatch(re: RegExp, text: string): RegExpExecArray | null {
     re.lastIndex = 0;
@@ -31,34 +40,49 @@ function lastMatch(re: RegExp, text: string): RegExpExecArray | null {
     return last;
 }
 
-/**
- * 从 AI 原文剥离状态栏块：返回干净正文 + 最后一个壳内原文。
- * 配对策略是「最后一个闭合标签 + 它前面最近的开标签」，正文里顺嘴提到的
- * 标签字样不会把中间的正文吞掉；漏写闭合（生成被截断）时走行首开标签兜底。
- */
-export function extractMixTicket(raw: string): { text: string; ticketRaw?: string } {
-    let text = raw;
-    let ticketRaw: string | undefined;
+/** 配对策略「最后闭合 + 它前面最近的开标签」，正文提及标签字样不会吞正文 */
+function pullFamily(text: string, tags: TagFamily): { text: string; raw?: string } {
+    let raw: string | undefined;
     for (;;) {
-        const close = lastMatch(TICKET_CLOSE_RE, text);
+        const close = lastMatch(tags.close, text);
         if (!close) break;
-        const open = lastMatch(TICKET_OPEN_RE, text.slice(0, close.index));
+        const open = lastMatch(tags.open, text.slice(0, close.index));
         if (!open) break;
         const inner = text.slice(open.index + open[0].length, close.index).trim();
-        if (!ticketRaw && inner) ticketRaw = inner;
+        if (!raw && inner) raw = inner;
         text = (text.slice(0, open.index) + text.slice(close.index + close[0].length)).trim();
     }
-    if (!ticketRaw) {
-        const open = lastMatch(TICKET_OPEN_LINE_RE, text);
-        if (open) {
-            const inner = text.slice(open.index + open[0].length).trim();
+    return { text, raw };
+}
+
+/** 从 AI 原文剥离状态栏与小剧场块；漏写闭合（生成截断）时走行首开标签兜底 */
+export function extractMixBlocks(rawInput: string): { text: string; ticketRaw?: string; encoreRaw?: string } {
+    const afterEncore = pullFamily(rawInput, ENCORE_TAGS);
+    const afterTicket = pullFamily(afterEncore.text, TICKET_TAGS);
+    let text = afterTicket.text;
+    let ticketRaw = afterTicket.raw;
+    let encoreRaw = afterEncore.raw;
+    if (!ticketRaw || !encoreRaw) {
+        const tOpen = ticketRaw ? null : lastMatch(TICKET_TAGS.openLine, text);
+        const eOpen = encoreRaw ? null : lastMatch(ENCORE_TAGS.openLine, text);
+        const pick = tOpen && eOpen ? (tOpen.index > eOpen.index ? "t" : "e") : tOpen ? "t" : eOpen ? "e" : null;
+        if (pick) {
+            const m = (pick === "t" ? tOpen : eOpen) as RegExpExecArray;
+            const inner = text.slice(m.index + m[0].length).trim();
             if (inner) {
-                ticketRaw = inner;
-                text = text.slice(0, open.index).trim();
+                if (pick === "t") ticketRaw = inner;
+                else encoreRaw = inner;
+                text = text.slice(0, m.index).trim();
             }
         }
     }
-    return { text, ticketRaw };
+    return { text, ticketRaw, encoreRaw };
+}
+
+/** 兼容旧调用：只关心状态栏 */
+export function extractMixTicket(raw: string): { text: string; ticketRaw?: string } {
+    const result = extractMixBlocks(raw);
+    return { text: result.text, ticketRaw: result.ticketRaw };
 }
 
 const INLINE_RE = /「([^」]*)」|\*([^*\n]+)\*|~([^~\n]+)~/g;
