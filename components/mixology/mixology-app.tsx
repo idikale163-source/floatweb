@@ -447,7 +447,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             }}
                             title="创作者资料：发布到酒材/配方页时的署名与头像"
                         >
-                            <AuthorAvatar name={profile.name} avatar={profile.avatar} size={26} />
+                            <AuthorAvatar name={profile.name || "我"} avatar={profile.avatar} size={32} />
                             <span className="mix-profile-name">{profile.name || "起个笔名"}</span>
                             <Pencil size={12} />
                         </button>
@@ -851,12 +851,12 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             <div className="mix-author-row" style={{ marginTop: 2 }}>
                                 {detail.imported ? (
                                     <>
-                                        <AuthorAvatar name={detail.author} avatar={detail.authorAvatar} />
+                                        <AuthorAvatar name={detail.author || "匿名调酒师"} avatar={detail.authorAvatar} />
                                         <span className="mix-author-name">@{detail.author || "匿名调酒师"}</span>
                                     </>
                                 ) : (
                                     <>
-                                        <AuthorAvatar name={profile.name} avatar={profile.avatar} />
+                                        <AuthorAvatar name={profile.name || "我"} avatar={profile.avatar} />
                                         <span className="mix-author-name">{profile.name || "我"}</span>
                                         <span className="mix-mat-stats">发布时以创作者资料为准</span>
                                     </>
@@ -901,7 +901,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             </div>
                             <label className="mix-form-label">头像</label>
                             <div className="mix-cover-picker">
-                                <AuthorAvatar name={profileName || profile.name} avatar={profileAvatar} size={88} />
+                                <AuthorAvatar name={profileName || profile.name || "我"} avatar={profileAvatar} size={88} />
                                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                     <button type="button" className="mix-pill-btn" onClick={() => avatarFileRef.current?.click()}>选择图片</button>
                                     {profileAvatar ? (
@@ -1074,12 +1074,12 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                             <div className="mix-author-row" style={{ margin: "2px 0 8px" }}>
                                 {recipeMenu.imported ? (
                                     <>
-                                        <AuthorAvatar name={recipeMenu.author} avatar={recipeMenu.authorAvatar} />
+                                        <AuthorAvatar name={recipeMenu.author || "匿名调酒师"} avatar={recipeMenu.authorAvatar} />
                                         <span className="mix-author-name">@{recipeMenu.author || "匿名调酒师"}</span>
                                     </>
                                 ) : (
                                     <>
-                                        <AuthorAvatar name={profile.name} avatar={profile.avatar} />
+                                        <AuthorAvatar name={profile.name || "我"} avatar={profile.avatar} />
                                         <span className="mix-author-name">{profile.name || "我"}</span>
                                         <span className="mix-mat-stats">发布时以创作者资料为准</span>
                                     </>
