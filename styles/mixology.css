@@ -1621,14 +1621,23 @@
     color: var(--mix-gold);
 }
 
-/* 对局内修改方案：角色卡槽锁定态 */
-.mix-mat-row[data-locked="true"] {
-    opacity: 0.5;
+/* 对局内修改方案：角色卡槽锁定态（卡槽轮与横条两种形态都认） */
+.mix-mat-row[data-locked="true"],
+.mix-slot[data-locked="true"] {
+    opacity: 0.55;
     cursor: default;
 }
 
 .mix-mat-row[data-locked="true"]:active {
     transform: none;
+}
+
+/* 消息编辑大弹窗的输入区 */
+.mix-edit-large {
+    min-height: 52vh;
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.8;
 }
 
 .mix-mat-row .mix-mat-info {
