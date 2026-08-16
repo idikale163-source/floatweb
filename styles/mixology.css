@@ -1594,3 +1594,24 @@
     color: #fff;
     font-weight: 600;
 }
+
+/* 角色卡缺图时的占位面：和封面同尺寸，保证同一类卡片等高 */
+.mix-poster-blank {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(141, 123, 245, 0.5);
+    background:
+        radial-gradient(ellipse at 50% 34%, rgba(141, 123, 245, 0.2), transparent 62%),
+        var(--mix-panel-2);
+}
+
+/* 非角色卡若配了图，压成固定高度的缩略图，同类之间仍然等高 */
+.mix-mat-thumb {
+    display: block;
+    width: 100%;
+    height: 104px;
+    object-fit: cover;
+}

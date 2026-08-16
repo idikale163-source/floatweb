@@ -58,13 +58,17 @@ export function MatCard({
     stats?: string;
     onClick: () => void;
 }) {
-    // 有封面的（基本都是角色卡）走海报式：图铺满整张卡，文字压在底部渐变上，
-    // 高度足够撑起画面。没封面的材料走紧凑式，图标区加高，免得矮成一条。
-    if (cover) {
+    // 卡型只看种类，不看有没有配图——否则同一类里配了图的高、没配图的矮，
+    // 双列瀑布会参差。角色卡一律海报式（缺图时用同尺寸的占位面），其余一律紧凑式。
+    if (kind === "character") {
         return (
             <div className="mix-mat-card" data-kind={kind} data-poster="true" onClick={onClick}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className="mix-mat-cover" src={cover} alt={name} />
+                {cover ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img className="mix-mat-cover" src={cover} alt={name} />
+                ) : (
+                    <div className="mix-poster-blank"><KindGlyph kind={kind} size={42} /></div>
+                )}
                 {author ? <div className="mix-poster-author">@{author}</div> : null}
                 {badge ? <div className="mix-poster-badge">{badge}</div> : null}
                 <div className="mix-poster-veil">
@@ -78,7 +82,12 @@ export function MatCard({
 
     return (
         <div className="mix-mat-card" data-kind={kind} onClick={onClick}>
-            <div className="mix-mat-glyph"><KindGlyph kind={kind} size={30} /></div>
+            {cover ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="mix-mat-thumb" src={cover} alt={name} />
+            ) : (
+                <div className="mix-mat-glyph"><KindGlyph kind={kind} size={30} /></div>
+            )}
             <div className="mix-mat-info">
                 <div className="mix-mat-name">
                     <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
