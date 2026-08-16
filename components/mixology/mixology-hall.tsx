@@ -182,10 +182,16 @@ export function MixologyHall({
     mode,
     onToast,
     onImported,
+    reloadToken = 0,
+    onLoadingChange,
 }: {
     mode: HallMode;
     onToast: (message: string) => void;
     onImported: () => void;
+    /** 父层的手动刷新令牌：数值变化即重新拉取 */
+    reloadToken?: number;
+    /** 拉取状态回报给父层（驱动头部刷新图标旋转） */
+    onLoadingChange?: (loading: boolean) => void;
 }) {
     const [materials, setMaterials] = useState<MixHallMaterial[]>([]);
     const [recipes, setRecipes] = useState<MixHallRecipe[]>([]);
@@ -243,9 +249,13 @@ export function MixologyHall({
         } finally {
             if (mountedRef.current) setLoading(false);
         }
-    }, [mode, kind]);
+    // reloadToken 只作触发器，值本身不参与请求
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [mode, kind, reloadToken]);
 
     useEffect(() => { void load(); }, [load]);
+
+    useEffect(() => { onLoadingChange?.(loading); }, [loading, onLoadingChange]);
 
     const patchEntry = (type: MixHallType, id: string, patch: Record<string, unknown>) => {
         if (type === "material") {

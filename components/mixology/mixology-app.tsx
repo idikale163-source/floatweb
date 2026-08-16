@@ -67,6 +67,9 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     const [recipes, setRecipes] = useState<MixRecipe[]>(() => loadMixRecipes());
     const [sessions, setSessions] = useState<MixSession[]>(() => loadMixSessions());
     const [cabinetKind, setCabinetKind] = useState<MixMaterialKind>("character");
+    // 酒单/大厅手动刷新：令牌触发子组件重拉，loading 驱动头部图标旋转
+    const [hallReload, setHallReload] = useState(0);
+    const [hallLoading, setHallLoading] = useState(false);
     const [detail, setDetail] = useState<MixMaterial | null>(null);
     const [editor, setEditor] = useState<{ kind: MixMaterialKind; initial?: MixMaterial } | null>(null);
     const [barTab, setBarTab] = useState<"create" | "mine">("create");
@@ -321,15 +324,27 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                 {tab === "cabinet" ? (
                     <button type="button" className="mix-icon-btn" onClick={() => importFileRef.current?.click()} aria-label="导入材料" title="从文件导入"><Upload size={17} /></button>
                 ) : null}
+                {tab === "menu" || tab === "hall" ? (
+                    <button
+                        type="button"
+                        className="mix-icon-btn"
+                        onClick={() => setHallReload((n) => n + 1)}
+                        disabled={hallLoading}
+                        aria-label="刷新"
+                        title="刷新"
+                    >
+                        <RefreshCw size={17} className={hallLoading ? "mix-spin" : undefined} />
+                    </button>
+                ) : null}
             </div>
 
             <div className="mix-body" data-fill={tab === "bar" && barTab === "create" ? "true" : undefined}>
                 {tab === "menu" ? (
-                    <MixologyHall mode="menu" onToast={showToast} onImported={refresh} />
+                    <MixologyHall mode="menu" onToast={showToast} onImported={refresh} reloadToken={hallReload} onLoadingChange={setHallLoading} />
                 ) : null}
 
                 {tab === "hall" ? (
-                    <MixologyHall mode="hall" onToast={showToast} onImported={refresh} />
+                    <MixologyHall mode="hall" onToast={showToast} onImported={refresh} reloadToken={hallReload} onLoadingChange={setHallLoading} />
                 ) : null}
 
                 {tab === "bar" ? (
