@@ -52,7 +52,7 @@ import { exportMixMaterial, parseMixMaterialsFromJson } from "@/lib/mixology/tra
 import { MixMaterialEditor } from "./mixology-editor";
 import { MixologyGame } from "./mixology-game";
 import { MixologyHall } from "./mixology-hall";
-import { KindGlyph, MatCard, MaterialDetail, MixConfirm, formatMixTime } from "./mixology-shared";
+import { KindGlyph, MatCard, MaterialDetail, MixConfirm, SealedNote, formatMixTime, isSealedMaterial } from "./mixology-shared";
 
 type MixTab = "menu" | "hall" | "bar" | "cabinet" | "games";
 
@@ -555,8 +555,10 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 {detail.name}
                                 {isMixBuiltinId(detail.id) ? <span className="mix-mat-badge" style={{ marginLeft: 6 }}>官方</span> : null}
                             </div>
-                            <button type="button" className="mix-icon-btn" onClick={() => exportMixMaterial(detail)} aria-label="导出为文件" title="导出为文件"><Download size={16} /></button>
-                            {!isMixBuiltinId(detail.id) ? (
+                            {!isSealedMaterial(detail) ? (
+                                <button type="button" className="mix-icon-btn" onClick={() => exportMixMaterial(detail)} aria-label="导出为文件" title="导出为文件"><Download size={16} /></button>
+                            ) : null}
+                            {!isMixBuiltinId(detail.id) && !isSealedMaterial(detail) ? (
                                 <>
                                     <button
                                         type="button"
@@ -595,6 +597,22 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     </button>
                                 </>
                             ) : null}
+                            {isMixBuiltinId(detail.id) || !isSealedMaterial(detail) ? null : (
+                                <button
+                                    type="button"
+                                    className="mix-icon-btn"
+                                    onClick={() => setConfirm({
+                                        title: "删除这张角色卡？",
+                                        body: <>「{detail.name}」将从酒柜里移除，用到它的特调会缺一味。<br />之后可以再去酒单入柜一次。</>,
+                                        confirmText: "删除",
+                                        tone: "danger",
+                                        run: () => handleDeleteMaterial(detail),
+                                    })}
+                                    aria-label="删除"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            )}
                             <button type="button" className="mix-icon-btn" onClick={() => setDetail(null)} aria-label="关闭"><X size={18} /></button>
                         </div>
                         <div className="mix-sheet-body">
@@ -602,7 +620,9 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={detail.cover} alt={detail.name} style={{ width: 96, height: 128, objectFit: "cover", borderRadius: 12, margin: "4px 0 12px" }} />
                             ) : null}
-                            <MaterialDetail material={detail} />
+                            {isSealedMaterial(detail)
+                                ? <SealedNote author={detail.author} hook={detail.hook} />
+                                : <MaterialDetail material={detail} />}
                         </div>
                     </div>
                 </div>
@@ -763,6 +783,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 <SlidersHorizontal size={17} />
                                 <span>装载到吧台<i>把这杯的材料放回槽位，改一改再存</i></span>
                             </button>
+                            {recipeMenu.imported ? null : (
                             <button
                                 type="button"
                                 className="mix-action-row"
@@ -789,6 +810,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     <i>{recipeMenu.publishedId ? "用现在这一份替换掉大厅上的旧版，社交数据保留" : "连同材料一起发布，别人可以连料入柜"}</i>
                                 </span>
                             </button>
+                            )}
                             <button
                                 type="button"
                                 className="mix-action-row"

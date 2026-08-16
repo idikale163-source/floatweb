@@ -131,6 +131,31 @@ export function MixConfirm({
     );
 }
 
+/**
+ * 是否封存：只有「从酒单/大厅拿来的别人的角色卡」需要藏正文。
+ * 基底、文风、输出格式这些是技法，互相看得见对社区更好，一律照常展示。
+ */
+export function isSealedMaterial(material: { kind: string; imported?: boolean }): boolean {
+    return Boolean(material.imported) && material.kind === "character";
+}
+
+/** 别人的角色卡：只给看门面，不摊开正文（与应用市场、游戏大厅同规矩） */
+export function SealedNote({ author, hook }: { author?: string; hook?: string }) {
+    return (
+        <>
+            {hook ? <DetailField label="一句话介绍" value={hook} /> : null}
+            <div className="mix-sealed">
+                <div className="mix-sealed-title">这张角色卡来自{author ? `创作者 @${author}` : "酒单"}</div>
+                <div className="mix-sealed-body">
+                    为保护创作者，站内不展示它的设定正文，也不能编辑或导出。
+                    <br />
+                    装进吧台直接开局即可，它在对局里照常生效。
+                </div>
+            </div>
+        </>
+    );
+}
+
 export function DetailField({ label, value, code }: { label: string; value?: string; code?: boolean }) {
     if (!value?.trim()) return null;
     return (

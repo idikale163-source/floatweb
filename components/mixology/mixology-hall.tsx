@@ -31,7 +31,7 @@ import {
     type MixMaterialKind,
     type MixRecipe,
 } from "@/lib/mixology/types";
-import { MatCard, MaterialDetail, MixConfirm } from "./mixology-shared";
+import { MatCard, MaterialDetail, MixConfirm, SealedNote } from "./mixology-shared";
 
 type HallMode = "menu" | "hall";
 
@@ -275,7 +275,7 @@ export function MixologyHall({
         try {
             const { saveCount } = await markHallSaved("material", entry.id);
             const { publishedId: _p, ...rest } = entry.payload as MixMaterial;
-            const material = { ...rest, id: entry.id, author: entry.authorName } as MixMaterial;
+            const material = { ...rest, id: entry.id, author: entry.authorName, imported: true } as MixMaterial;
             saveMixMaterial(material);
             patchEntry("material", entry.id, { savedByMe: true, saveCount });
             onImported();
@@ -296,13 +296,14 @@ export function MixologyHall({
             for (const material of entry.materials) {
                 if (!material || typeof material !== "object" || !material.id || !material.kind) continue;
                 const { publishedId: _mp, ...clean } = material;
-                saveMixMaterial(clean as MixMaterial);
+                saveMixMaterial({ ...clean, author: entry.authorName, imported: true } as MixMaterial);
                 slots[material.kind] = material.id;
             }
             const recipe: MixRecipe = {
                 id: entry.id,
                 name: entry.name,
                 slots,
+                imported: true,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
             };
@@ -473,7 +474,9 @@ export function MixologyHall({
                             {detailMaterial.payload ? (
                                 <>
                                     <div style={{ marginTop: 8 }}>
-                                        <MaterialDetail material={detailMaterial.payload} />
+                                        {detailMaterial.kind === "character"
+                                            ? <SealedNote author={detailMaterial.authorName} hook={detailMaterial.hook} />
+                                            : <MaterialDetail material={detailMaterial.payload} />}
                                     </div>
                                     <button type="button" className="mix-brew-btn" onClick={() => void importMaterial(detailMaterial)} disabled={busy}>
                                         <CornerDownRight size={16} />{detailMaterial.savedByMe ? "再次入柜" : "加入酒柜"}

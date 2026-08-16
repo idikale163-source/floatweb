@@ -49,6 +49,11 @@ export type MixMaterialMeta = {
     cover?: string;
     /** 已发布到酒单时的线上 id：有它才谈得上"更新已发布版本" */
     publishedId?: string;
+    /**
+     * 来自酒单/大厅的别人的作品。与应用市场、游戏大厅同规矩：
+     * 能拿来开局，但站内不展示正文、不能编辑、不能导出、不能二次发布。
+     */
+    imported?: boolean;
     createdAt: number;
     updatedAt: number;
 };
@@ -125,6 +130,8 @@ export type MixRecipe = {
     slots: Partial<Record<MixMaterialKind, string>>;
     /** 已发布到大厅时的线上 id */
     publishedId?: string;
+    /** 从大厅导入的别人的配方：不能二次发布 */
+    imported?: boolean;
     createdAt: number;
     updatedAt: number;
 };
