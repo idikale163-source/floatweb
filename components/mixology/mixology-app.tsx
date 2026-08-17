@@ -72,6 +72,8 @@ import { MixMaterialEditor } from "./mixology-editor";
 import { MixologyGame } from "./mixology-game";
 import { CommentThread, MixologyHall } from "./mixology-hall";
 import { AuthorAvatar, KindGlyph, MatCard, MaterialDetail, MixConfirm, SealedNote, formatMixTime } from "./mixology-shared";
+import { MixSlotEditor } from "./slot-editor";
+import { describeMixCondition } from "@/lib/mixology/state";
 
 /** 头像统一压成 192px JPEG dataURL 的小圆图，随发布上云也不占地方 */
 async function readAvatarFile(file: File): Promise<string> {
@@ -136,6 +138,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     } | null>(null);
     const [barSlots, setBarSlots] = useState<Partial<Record<MixMaterialKind, MixSlotEntry[]>>>({});
     const [slotPicker, setSlotPicker] = useState<MixMaterialKind | null>(null);
+    const [slotEditor, setSlotEditor] = useState<MixMaterialKind | null>(null);
     const [nameSheetOpen, setNameSheetOpen] = useState(false);
     const [recipeName, setRecipeName] = useState("");
     const [openingPicker, setOpeningPicker] = useState<MixRecipe | null>(null);
@@ -185,6 +188,19 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
         }
         return map;
     }, [barSlots, cabinet]);
+
+    /** 本杯小票里勾了「记住」的项：变量条件的可选项就是这些 */
+    const barVarNames = useMemo(() => {
+        const names: string[] = [];
+        for (const material of slotMaterials.ticket ?? []) {
+            if (material.kind !== "ticket") continue;
+            for (const item of material.vars ?? []) {
+                const name = item.name.trim();
+                if (name && !names.includes(name)) names.push(name);
+            }
+        }
+        return names;
+    }, [slotMaterials]);
 
     const handleWheelScroll = useCallback(() => {
         const el = wheelRef.current;
@@ -526,7 +542,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                         </div>
                     {barTab === "create" ? (
                     <div className="mix-bar-stage" data-centered="true">
-                        <div className="mix-bar-hint">左右滑动切换槽位 · 点击槽位选材料</div>
+                        <div className="mix-bar-hint">左右滑动切换槽位 · 点击槽位选材料 · 一格最多叠 3 件</div>
                         <div className="mix-wheel" ref={wheelRef} onScroll={handleWheelScroll}>
                             {MIX_SLOT_ORDER.map((kind) => {
                                 const stack = slotMaterials[kind] ?? [];
@@ -537,7 +553,8 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                         className="mix-slot"
                                         data-filled={chosen ? "true" : undefined}
                                         key={kind}
-                                        onClick={() => setSlotPicker(kind)}
+                                        // 空格子直接进选料（少点一下）；已有料的进这一格的编辑，能叠、能排序、能设条件
+                                        onClick={() => (chosen ? setSlotEditor(kind) : setSlotPicker(kind))}
                                     >
                                         <div className="mix-slot-kind">
                                             <b>{MIX_KIND_LABELS[kind]}</b>
@@ -555,7 +572,25 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                                         <div className="mix-slot-glyph"><KindGlyph kind={kind} size={34} /></div>
                                                     )}
                                                     <div className="mix-slot-name">{chosen.name}{extra > 0 ? ` +${extra}` : ""}</div>
-                                                    {chosen.hook ? <div className="mix-slot-hook">{chosen.hook}</div> : null}
+                                                    {stack.length > 1 ? (
+                                                        <div className="mix-slot-stack">
+                                                            {mixSlotEntries(barSlots, kind).map((entry, i) => {
+                                                                const mat = stack[i];
+                                                                if (!mat) return null;
+                                                                return (
+                                                                    <span className="mix-slot-stack-item" key={`${entry.materialId}-${i}`}>
+                                                                        {mat.name}
+                                                                        <i>{describeMixCondition(entry.when)}</i>
+                                                                    </span>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    ) : chosen.hook ? (
+                                                        <div className="mix-slot-hook">{chosen.hook}</div>
+                                                    ) : null}
+                                                    {stack.length === 1 && mixSlotEntries(barSlots, kind)[0]?.when ? (
+                                                        <div className="mix-slot-when">{describeMixCondition(mixSlotEntries(barSlots, kind)[0].when)}</div>
+                                                    ) : null}
                                                 </>
                                             ) : (
                                                 <>
@@ -993,6 +1028,23 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
             ) : null}
 
             {/* 吧台选材 */}
+            {slotEditor ? (
+                <MixSlotEditor
+                    kind={slotEditor}
+                    entries={mixSlotEntries(barSlots, slotEditor)}
+                    resolve={(id) => getMixBuiltin(id) ?? cabinet.find((m) => m.id === id) ?? null}
+                    varNames={barVarNames}
+                    onChange={(next) => setBarSlots((prev) => {
+                        const merged = { ...prev };
+                        if (next.length) merged[slotEditor] = next;
+                        else delete merged[slotEditor];
+                        return merged;
+                    })}
+                    onPickMore={() => setSlotPicker(slotEditor)}
+                    onClose={() => setSlotEditor(null)}
+                />
+            ) : null}
+
             {slotPicker ? (
                 <div className="mix-sheet-mask" onClick={() => setSlotPicker(null)}>
                     <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
