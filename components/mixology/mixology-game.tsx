@@ -10,14 +10,18 @@ import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, regenerateM
 import { getMixMaterial, getMixSession, listMixPickables, resolveMixRecipeMaterials, saveMixSession } from "@/lib/mixology/storage";
 import { buildMixConditionContext, pickActiveMixMaterials } from "@/lib/mixology/state";
 import { scopeMixCss } from "@/lib/mixology/css-scope";
-import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, mixSlotEntries, type MixCharacterCard, type MixFilterRule, type MixMaterialKind, type MixSession, type MixSlotEntry, type MixState, type MixTurn } from "@/lib/mixology/types";
+import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, mixSlotEntries, type MixCharacterCard, type MixFilterRule, type MixMaterialKind, type MixMechanismMaterial, type MixSession, type MixSlotEntry, type MixState, type MixTurn } from "@/lib/mixology/types";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
 import { KindGlyph, MixConfirm } from "./mixology-shared";
 import { MixTicketFrame } from "./ticket-frame";
+import { MixMechanismPanel } from "./mechanism-panel";
 
 /** 当前真正挂着的对局：严格模式的重复挂载靠它区分「真退出」与「假卸载」 */
+/** 同时活动的常驻界面上限：每件一个 iframe，手机上多开吃内存，屏幕也摆不下 */
+const MIX_PANEL_MAX = 3;
+
 const liveMixGames = new Set<string>();
 
 type GameProps = {
@@ -111,6 +115,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const [session, setSession] = useState<MixSession | null>(() => getMixSession(sessionId));
     const [input, setInput] = useState("");
     const [busy, setBusy] = useState(false);
+    const busyRef = useRef(false);
     const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null);
     const [confirm, setConfirm] = useState<{ type: "rewind" | "edit"; turnId: string } | null>(null);
     const [recipeOpen, setRecipeOpen] = useState(false);
@@ -167,6 +172,35 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     }, [session]);
 
     /**
+     * 条件命中、且配了停靠位的机括：这些是要常驻在画面边上的界面。
+     * 上限 3 件——每件一个 iframe，手机上多开吃内存，屏幕也摆不下。
+     */
+    const panels = useMemo(() => {
+        if (!session) return [] as MixMechanismMaterial[];
+        const { entries } = resolveMixRecipeMaterials(session.recipe);
+        const active = pickActiveMixMaterials(entries, buildMixConditionContext(session));
+        return (active.mechanism ?? [])
+            .filter((m): m is MixMechanismMaterial => m.kind === "mechanism" && Boolean(m.dock) && Boolean(m.panelHtml?.trim()))
+            .slice(0, MIX_PANEL_MAX);
+    }, [session]);
+
+    /** 界面写自己的存储 */
+    const handlePanelStore = useCallback((materialId: string, store: Record<string, string>) => {
+        const current = getMixSession(sessionId);
+        if (!current) return;
+        saveMixSession({ ...current, mechanismStore: { ...(current.mechanismStore ?? {}), [materialId]: store } });
+        setSession(getMixSession(sessionId));
+    }, [sessionId]);
+
+    /** 界面写记住的值 */
+    const handlePanelState = useCallback((patch: Record<string, string | number>) => {
+        const current = getMixSession(sessionId);
+        if (!current) return;
+        saveMixSession({ ...current, state: { ...(current.state ?? {}), ...patch } });
+        setSession(getMixSession(sessionId));
+    }, [sessionId]);
+
+    /**
      * 把记住的值挂成对局根节点上的 CSS 变量，装饰里可以直接用：
      *   .mix-game { background: hsl(calc(var(--mix-state-好感度) * 2) 40% 12%); }
      * 变量名里的空白和引号会被换成下划线，避免拼出非法的自定义属性名。
@@ -217,6 +251,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         const controller = new AbortController();
         abortRef.current = controller;
         setBusy(true);
+        busyRef.current = true;
         try {
             const pending = action(controller.signal);
             // 引擎的同步部分已经落库（重说删掉旧轮 / 发送写入用户消息），
@@ -229,6 +264,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             const message = error instanceof Error ? error.message : "生成失败，请重试。";
             if (!controller.signal.aborted) onToast(message);
         } finally {
+            busyRef.current = false;
             setBusy(false);
         }
     };
@@ -239,6 +275,12 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         setInput("");
         void run((signal) => generateMixReply(sessionId, text, signal));
     };
+
+    /** 界面以玩家身份发一句话：走的是和输入框一模一样的路径，不是特权通道 */
+    const handlePanelSay = useCallback((text: string) => {
+        if (busyRef.current) return;
+        void run((signal) => generateMixReply(sessionId, text, signal));
+    }, [sessionId]);
 
     const copyTurn = (turn: MixTurn) => {
         const done = () => onToast("已复制");
@@ -358,6 +400,24 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                     </div>
                 ) : null}
             </div>
+            {panels.length ? (
+                <div className="mix-panel-layer">
+                    {panels.map((material) => (
+                        <MixMechanismPanel
+                            key={material.id}
+                            materialId={material.id}
+                            name={material.name}
+                            dock={material.dock!}
+                            html={material.panelHtml ?? ""}
+                            state={session.state ?? {}}
+                            store={session.mechanismStore?.[material.id] ?? {}}
+                            onStore={handlePanelStore}
+                            onState={handlePanelState}
+                            onSay={handlePanelSay}
+                        />
+                    ))}
+                </div>
+            ) : null}
             <div className="mix-game-inputbar">
                 <button
                     type="button"

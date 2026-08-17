@@ -2462,3 +2462,111 @@
     background: rgba(141, 123, 245, 0.2);
     color: var(--mix-violet);
 }
+
+/* ══════════════════════════════════════════
+   机括的常驻界面与停靠位
+   位置一律由应用排布：界面只能选停靠位，不能自己定坐标——
+   否则三件机括一起糊满屏幕，输入框都点不到。
+   ══════════════════════════════════════════ */
+
+.mix-panel-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 6;
+}
+
+.mix-panel {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto;
+    border-radius: 14px;
+    overflow: hidden;
+    background: rgba(10, 9, 16, 0.72);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--mix-line);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+/* 收起时只剩一条把手 */
+.mix-panel-tab {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 6px 10px;
+    border: none;
+    background: transparent;
+    color: var(--mix-violet);
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+.mix-panel-tab-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mix-panel-frame {
+    flex: 1;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    min-height: 0;
+}
+
+/* ── 左右侧栏：竖条，顶到状态条下方，留出输入栏 ── */
+.mix-panel[data-dock="left"],
+.mix-panel[data-dock="right"] {
+    top: 12%;
+    width: 148px;
+    max-width: 42%;
+    max-height: 52%;
+}
+
+.mix-panel[data-dock="left"] { left: 8px; }
+.mix-panel[data-dock="right"] { right: 8px; }
+
+.mix-panel[data-dock="left"]:not([data-open]),
+.mix-panel[data-dock="right"]:not([data-open]) {
+    max-height: none;
+}
+
+/* ── 底部条：压在输入栏上方 ── */
+.mix-panel[data-dock="bottom"] {
+    left: 10px;
+    right: 10px;
+    bottom: 68px;
+    max-height: 34%;
+}
+
+.mix-panel[data-dock="bottom"][data-open="true"] .mix-panel-frame {
+    min-height: 96px;
+}
+
+/* ── 悬浮球：默认收起成一颗，展开是一块中等面板 ── */
+.mix-panel[data-dock="float"] {
+    right: 8px;
+    bottom: 128px;
+    width: 176px;
+    max-height: 44%;
+}
+
+.mix-panel[data-dock="float"]:not([data-open]) {
+    width: auto;
+    max-width: 132px;
+}
+
+.mix-panel[data-dock="float"][data-open="true"] .mix-panel-frame {
+    min-height: 140px;
+}
+
+/* 两件同侧时错开，别叠在一起 */
+.mix-panel[data-dock="left"] ~ .mix-panel[data-dock="left"] { top: 40%; }
+.mix-panel[data-dock="right"] ~ .mix-panel[data-dock="right"] { top: 40%; }
+.mix-panel[data-dock="bottom"] ~ .mix-panel[data-dock="bottom"] { bottom: 152px; }
+.mix-panel[data-dock="float"] ~ .mix-panel[data-dock="float"] { bottom: 196px; }
