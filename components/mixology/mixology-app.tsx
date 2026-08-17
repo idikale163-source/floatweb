@@ -292,6 +292,49 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
 
     const [sharing, setSharing] = useState(false);
     const importFileRef = useRef<HTMLInputElement | null>(null);
+    const editorFileRef = useRef<HTMLInputElement | null>(null);
+    // 换 key 强制重挂编辑器：表单各字段只在挂载时按 initial 初始化一次
+    const [editorSeq, setEditorSeq] = useState(0);
+
+    /**
+     * 编辑器里的「上传替换」：用文件内容替掉表单，但身份与云端关联留在原件上——
+     * id 不变，保存后覆盖同一条；已上架的那条也还认得它，点更新仍是覆盖而不是另发。
+     */
+    const handleEditorReplace = async (file: File | undefined) => {
+        if (!file || !editor) return;
+        try {
+            const isPng = file.type === "image/png" || /\.png$/i.test(file.name);
+            const materials = isPng
+                ? parseMixMaterialsFromPng(await file.arrayBuffer())
+                : parseMixMaterialsFromJson(await file.text());
+            // 一件都认不出时解析函数自己会抛错，所以走到这里 materials 一定非空
+            const picked = materials.find((m) => m.kind === editor.kind);
+            if (!picked) {
+                const kinds = [...new Set(materials.map((m) => MIX_KIND_LABELS[m.kind]))];
+                showToast(`这个文件里没有${MIX_KIND_LABELS[editor.kind]}，只有${kinds.join("、")}。`);
+                return;
+            }
+            const keep = editor.initial;
+            setEditor({
+                kind: editor.kind,
+                initial: keep
+                    ? {
+                        ...picked,
+                        id: keep.id,
+                        createdAt: keep.createdAt,
+                        publishedId: keep.publishedId,
+                        publishedAt: keep.publishedAt,
+                        author: keep.author,
+                        authorAvatar: keep.authorAvatar,
+                    } as MixMaterial
+                    : picked,
+            });
+            setEditorSeq((n) => n + 1);
+            showToast(`表单已换成「${picked.name}」的内容，还没保存。`);
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : "读取失败");
+        }
+    };
 
     const handleImportFile = async (file: File | undefined) => {
         if (!file) return;
@@ -1035,10 +1078,29 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                     <div className="mix-sheet" style={{ maxHeight: "92%" }}>
                         <div className="mix-sheet-head">
                             <div className="mix-sheet-title">{editor.initial ? "编辑" : "自建"}{MIX_KIND_LABELS[editor.kind]}</div>
+                            {/* 上传替换：改现成的件时先问一声，表单里已经有内容了 */}
+                            <button
+                                type="button"
+                                className="mix-icon-btn"
+                                onClick={() => {
+                                    if (!editor.initial) { editorFileRef.current?.click(); return; }
+                                    setConfirm({
+                                        title: "用文件替换表单内容？",
+                                        body: <>会把「{editor.initial.name}」现在填的内容整份换成文件里的那一份（JSON 或 PNG 卡都行）。<br />换完还没保存，看一眼不对可以直接关掉不存。<br />已上架的关联不会丢，保存后点更新仍是覆盖同一条。</>,
+                                        confirmText: "选择文件",
+                                        run: () => editorFileRef.current?.click(),
+                                    });
+                                }}
+                                aria-label="上传替换"
+                                title="上传文件替换表单内容（JSON / PNG 卡）"
+                            >
+                                <Upload size={17} />
+                            </button>
                             <button type="button" className="mix-icon-btn" onClick={() => setEditor(null)} aria-label="关闭"><X size={18} /></button>
                         </div>
                         <div className="mix-sheet-body">
                             <MixMaterialEditor
+                                key={`${editor.kind}-${editorSeq}`}
                                 kind={editor.kind}
                                 initial={editor.initial}
                                 onSave={(material) => {
@@ -1320,6 +1382,15 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                 accept="application/json,.json,image/png,.png"
                 style={{ display: "none" }}
                 onChange={(e) => { void handleImportFile(e.target.files?.[0]); e.target.value = ""; }}
+            />
+
+            {/* 编辑器里的上传替换用的是另一个 input：它不入柜，只替表单 */}
+            <input
+                ref={editorFileRef}
+                type="file"
+                accept="application/json,.json,image/png,.png"
+                style={{ display: "none" }}
+                onChange={(e) => { void handleEditorReplace(e.target.files?.[0]); e.target.value = ""; }}
             />
 
             {confirm ? (
