@@ -11,6 +11,7 @@ import type {
     MixMaterial,
     MixMaterialKind,
     MixTextMaterial,
+    MixTicketVar,
 } from "@/lib/mixology/types";
 import { createMixId, MIX_KIND_LABELS, mixKindHasCover } from "@/lib/mixology/types";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
@@ -155,6 +156,23 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
     const [contract, setContract] = useState(initial?.kind === "ticket" ? initial.contract : "");
     const [renderHtml, setRenderHtml] = useState(initial?.kind === "ticket" ? initial.renderHtml : "");
     const [previewRaw, setPreviewRaw] = useState(initial?.kind === "ticket" ? initial.previewRaw ?? "" : "");
+    const [vars, setVars] = useState<MixTicketVar[]>(initial?.kind === "ticket" ? initial.vars ?? [] : []);
+
+    /**
+     * 从契约正文里认出「字段名：说明」这样的行，做成一排可点的候选。
+     * 创作者写契约时本来就在列每轮报告什么，这里只是把那些名字捡出来让他点一下，
+     * 不用再手打一遍（打错一个字就抽不到值）。
+     */
+    const contractFieldNames = useMemo(() => {
+        const names: string[] = [];
+        for (const line of contract.split(/\r?\n/)) {
+            const matched = /^\s*[-*·]?\s*([^：:=\s][^：:=]{0,11})\s*[：:=]/.exec(line);
+            if (!matched) continue;
+            const name = matched[1].trim();
+            if (name && !names.includes(name)) names.push(name);
+        }
+        return names.slice(0, 12);
+    }, [contract]);
     const [css, setCss] = useState(initial?.kind === "garnish" ? initial.css : "");
     const [html, setHtml] = useState(initial?.kind === "encore" ? (initial.renderHtml ?? initial.html ?? "") : "");
     const [encoreContract, setEncoreContract] = useState(initial?.kind === "encore" ? initial.contract ?? "" : "");
@@ -241,7 +259,10 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                 setError("小票需要同时写「输出契约」和「渲染代码」。");
                 return;
             }
-            onSave({ ...meta, kind: "ticket", contract: contract.trim(), renderHtml, previewRaw: previewRaw.trim() || undefined });
+            const cleanVars = vars
+                .map((v) => ({ name: v.name.trim(), initial: v.initial?.trim() || undefined }))
+                .filter((v, i, all) => v.name && all.findIndex((x) => x.name === v.name) === i);
+            onSave({ ...meta, kind: "ticket", contract: contract.trim(), renderHtml, previewRaw: previewRaw.trim() || undefined, vars: cleanVars.length ? cleanVars : undefined });
             return;
         }
         if (kind === "garnish") {
@@ -481,6 +502,62 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             onChange={(e) => setPreviewRaw(e.target.value)}
                             placeholder={"照着上面的契约编一份，例：\n好感度: 62\n心情: 嘴硬\n此刻在想: 想留你再坐一会"}
                         />
+                    </Field>
+                    <Field label="要记住的项" hint="记住的值会一路留着，可以拿来设材料的「什么时候出现」；抽不到时保留上一轮的值">
+                        {contractFieldNames.length ? (
+                            <div className="mix-var-suggest">
+                                <span>契约里认出这几项：</span>
+                                {contractFieldNames.map((name) => {
+                                    const added = vars.some((v) => v.name.trim() === name);
+                                    return (
+                                        <button
+                                            type="button"
+                                            className="mix-var-chip"
+                                            data-on={added ? "true" : undefined}
+                                            key={name}
+                                            onClick={() => setVars((prev) => (added
+                                                ? prev.filter((v) => v.name.trim() !== name)
+                                                : [...prev, { name }]))}
+                                        >
+                                            {name}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        ) : null}
+                        {vars.length ? (
+                            <div className="mix-var-list">
+                                {vars.map((item, index) => (
+                                    <div className="mix-var-row" key={index}>
+                                        <input
+                                            className="mix-input"
+                                            value={item.name}
+                                            placeholder="项目名（和契约里的写法一致）"
+                                            onChange={(e) => setVars((prev) => prev.map((v, i) => (i === index ? { ...v, name: e.target.value } : v)))}
+                                        />
+                                        <input
+                                            className="mix-input mix-var-initial"
+                                            value={item.initial ?? ""}
+                                            placeholder="开局值"
+                                            onChange={(e) => setVars((prev) => prev.map((v, i) => (i === index ? { ...v, initial: e.target.value } : v)))}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="mix-icon-btn"
+                                            onClick={() => setVars((prev) => prev.filter((_, i) => i !== index))}
+                                            aria-label="删除"
+                                        >
+                                            <Trash2 size={15} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="mix-var-empty">还没有要记住的项——上面点一下契约里的字段，或手动添加。</div>
+                        )}
+                        <button type="button" className="mix-stack-add" onClick={() => setVars((prev) => [...prev, { name: "" }])}>
+                            <Plus size={15} /> 手动添加一项
+                        </button>
                     </Field>
                     <button
                         type="button"

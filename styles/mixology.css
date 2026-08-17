@@ -2305,3 +2305,136 @@
     font-size: 11px;
     color: var(--mix-faint);
 }
+
+/* ══════════════════════════════════════════
+   记住的值：小票里的声明 + 对局里的状态条
+   ══════════════════════════════════════════ */
+
+/* 编辑器：从契约里认出来的字段，点一下就记住 */
+.mix-var-suggest {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    font-size: 11px;
+    color: var(--mix-faint);
+}
+
+.mix-var-chip {
+    border: 1px solid var(--mix-line);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    background: transparent;
+    color: var(--mix-dim);
+}
+
+.mix-var-chip[data-on="true"] {
+    border-color: transparent;
+    background: rgba(141, 123, 245, 0.2);
+    color: var(--mix-violet);
+}
+
+.mix-var-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.mix-var-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mix-var-row .mix-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.mix-var-initial {
+    flex: 0 0 90px !important;
+}
+
+.mix-var-empty {
+    font-size: 11px;
+    color: var(--mix-faint);
+    margin-bottom: 10px;
+}
+
+/* 对局：顶栏下的状态条，没有任何值时整条不渲染 */
+.mix-state-bar {
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 3;
+    padding: 0 12px 6px;
+}
+
+.mix-state-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(6px);
+    color: inherit;
+    font-family: inherit;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.mix-state-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    white-space: nowrap;
+    font-size: 11px;
+}
+
+.mix-state-chip i {
+    font-style: normal;
+    color: var(--mix-faint);
+}
+
+.mix-state-chip b {
+    color: var(--mix-gold);
+    font-variant-numeric: tabular-nums;
+}
+
+.mix-state-more {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--mix-faint);
+}
+
+.mix-state-panel {
+    margin-top: 6px;
+    padding: 8px 12px;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.42);
+    backdrop-filter: blur(6px);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.mix-state-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--mix-dim);
+}
+
+.mix-state-row b {
+    color: var(--mix-gold);
+    font-variant-numeric: tabular-nums;
+}

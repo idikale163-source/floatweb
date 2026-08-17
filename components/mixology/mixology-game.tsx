@@ -4,12 +4,12 @@
 // 玩家右侧气泡、小票全宽卡；全程无任何标签徽章，保沉浸。
 // 装饰材料的 CSS 以 <style> 注入本画面容器（认 .mix-* 官方语义类）。
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChevronLeft, Copy, CornerDownRight, History, Pencil, Plus, RotateCcw, Send, SlidersHorizontal, X } from "lucide-react";
 import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, regenerateMixTail, rerollMixReply, truncateMixAfterTurn } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession, listMixPickables, resolveMixRecipeMaterials, saveMixSession } from "@/lib/mixology/storage";
 import { buildMixConditionContext, pickActiveMixMaterials } from "@/lib/mixology/state";
-import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, mixSlotEntries, type MixCharacterCard, type MixFilterRule, type MixMaterialKind, type MixSession, type MixSlotEntry, type MixTurn } from "@/lib/mixology/types";
+import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, mixSlotEntries, type MixCharacterCard, type MixFilterRule, type MixMaterialKind, type MixSession, type MixSlotEntry, type MixState, type MixTurn } from "@/lib/mixology/types";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
@@ -22,7 +22,7 @@ type GameProps = {
     onToast: (message: string) => void;
 };
 
-function AssistantTurn({ turn, ticketHtml, encoreHtml, filterRules }: { turn: MixTurn; ticketHtml?: string; encoreHtml?: string; filterRules?: MixFilterRule[] }) {
+function AssistantTurn({ turn, ticketHtml, encoreHtml, filterRules, state }: { turn: MixTurn; ticketHtml?: string; encoreHtml?: string; filterRules?: MixFilterRule[]; state?: MixState }) {
     // 展示顺序：状态栏在正文前、小剧场在正文后（与模型的输出顺序一致，无需重排）
     // 滤网「仅显示」模式在这里生效：存储不动，渲染前替换，历史消息也即时生效
     const shownText = applyMixFilterRules(turn.text, filterRules, "display");
@@ -30,13 +30,13 @@ function AssistantTurn({ turn, ticketHtml, encoreHtml, filterRules }: { turn: Mi
         <>
             {ticketHtml && turn.ticketRaw ? (
                 <div className="mix-ticket-wrap">
-                    <MixTicketFrame html={ticketHtml} raw={turn.ticketRaw} />
+                    <MixTicketFrame html={ticketHtml} raw={turn.ticketRaw} state={state} />
                 </div>
             ) : null}
             {shownText ? <MixProseView text={shownText} /> : null}
             {encoreHtml && turn.encoreRaw ? (
                 <div className="mix-encore-turn">
-                    <MixTicketFrame html={encoreHtml} raw={turn.encoreRaw} />
+                    <MixTicketFrame html={encoreHtml} raw={turn.encoreRaw} state={state} />
                 </div>
             ) : null}
         </>
@@ -66,6 +66,39 @@ function TurnActions({
                 <button type="button" className="mix-turn-act" onClick={onRewind} disabled={disabled} aria-label="回溯到这里"><History size={13} /></button>
             ) : null}
             <button type="button" className="mix-turn-act" onClick={onEdit} disabled={disabled} aria-label="编辑"><Pencil size={13} /></button>
+        </div>
+    );
+}
+
+/**
+ * 记住的值：顶栏下的一条横条，点开看全部。
+ * 没有任何值时整条不存在——没配小票的对局界面不变。
+ */
+function StateBar({ state }: { state: MixState }) {
+    const [open, setOpen] = useState(false);
+    const items = Object.entries(state);
+    if (!items.length) return null;
+    return (
+        <div className="mix-state-bar" data-open={open ? "true" : undefined}>
+            <button type="button" className="mix-state-strip" onClick={() => setOpen((v) => !v)}>
+                {items.slice(0, 3).map(([name, value]) => (
+                    <span className="mix-state-chip" key={name}>
+                        <i>{name}</i>
+                        <b>{String(value)}</b>
+                    </span>
+                ))}
+                {items.length > 3 ? <span className="mix-state-more">+{items.length - 3}</span> : null}
+            </button>
+            {open ? (
+                <div className="mix-state-panel">
+                    {items.map(([name, value]) => (
+                        <div className="mix-state-row" key={name}>
+                            <span>{name}</span>
+                            <b>{String(value)}</b>
+                        </div>
+                    ))}
+                </div>
+            ) : null}
         </div>
     );
 }
@@ -128,6 +161,20 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             canvasHtml: character?.kind === "character" ? (character as MixCharacterCard).canvas?.trim() ?? "" : "",
         };
     }, [session]);
+
+    /**
+     * 把记住的值挂成对局根节点上的 CSS 变量，装饰里可以直接用：
+     *   .mix-game { background: hsl(calc(var(--mix-state-好感度) * 2) 40% 12%); }
+     * 变量名里的空白和引号会被换成下划线，避免拼出非法的自定义属性名。
+     */
+    const stateCssVars = useMemo(() => {
+        const vars: Record<string, string> = {};
+        for (const [name, value] of Object.entries(session?.state ?? {})) {
+            const safe = name.trim().replace(/[\s"'\\;:{}()]/g, "_");
+            if (safe) vars[`--mix-state-${safe}`] = String(value);
+        }
+        return vars as CSSProperties;
+    }, [session?.state]);
 
     useEffect(() => {
         const el = scrollRef.current;
@@ -240,7 +287,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const canReroll = !busy && lastTurn?.role === "assistant" && session.turns.length > 1;
 
     return (
-        <div className="mix-game">
+        <div className="mix-game" style={stateCssVars}>
             {assets.garnishCss ? <style>{assets.garnishCss}</style> : null}
             <div className="mix-game-bg" style={assets.cover ? { backgroundImage: `url(${assets.cover})` } : undefined} />
             <div className="mix-game-header">
@@ -250,6 +297,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                     <SlidersHorizontal size={17} />
                 </button>
             </div>
+            <StateBar state={session.state ?? {}} />
             <div className="mix-game-scroll" ref={scrollRef}>
                 {assets.canvasHtml ? (
                     <div className="mix-game-canvas">
@@ -276,7 +324,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                         </div>
                     ) : (
                         <div className="mix-assistant-turn" key={turn.id}>
-                            <AssistantTurn turn={turn} ticketHtml={assets.ticketHtml} encoreHtml={assets.encoreTurnHtml} filterRules={assets.filterRules} />
+                            <AssistantTurn turn={turn} ticketHtml={assets.ticketHtml} encoreHtml={assets.encoreTurnHtml} filterRules={assets.filterRules} state={turn.state} />
                             {actions}
                         </div>
                     );
