@@ -494,29 +494,28 @@
 }
 
 /*
- * 标签片：卡面上排成一行（父级 nowrap + ellipsis），详情弹窗里换行摊开。
- * 用 inline 不用 inline-block——被裁掉一半时 text-overflow 才落得下省略号。
+ * 标签：无底色，之间用一根竖线隔开。
+ * 竖线做成前一个标签的 ::after 且整片 nowrap——换行只发生在竖线之后，
+ * 竖线不会跑到下一行行首去。inline 不用 inline-block，被裁一半时才落得下省略号。
  */
 .mix-tag {
     display: inline;
     font-size: 10px;
     line-height: 1.5;
-    color: rgba(255, 255, 255, 0.62);
-    background: rgba(255, 255, 255, 0.09);
-    border-radius: 4px;
-    padding: 2px 6px;
-    margin-right: 4px;
+    color: rgba(255, 255, 255, 0.6);
     white-space: nowrap;
 }
 
-.mix-tag-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+.mix-tag:not(:last-child)::after {
+    content: "|";
+    margin: 0 5px;
+    color: rgba(255, 255, 255, 0.24);
 }
 
-.mix-tag-list .mix-tag {
-    margin-right: 0;
+/* 详情弹窗：同一套竖线，行内排布、装不下自然换行 */
+.mix-tag-list {
+    font-size: 10px;
+    line-height: 1.9;
 }
 
 .mix-form-note {
