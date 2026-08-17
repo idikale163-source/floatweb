@@ -56,7 +56,7 @@ function readPngTextChunks(u8: Uint8Array): Map<string, string> {
                 out.set(new TextDecoder().decode(data.subarray(0, sep)).toLowerCase(), new TextDecoder("latin1").decode(data.subarray(sep + 1)));
             }
         } else if (type === "iTXt") {
-            let pos = data.indexOf(0);
+            const pos = data.indexOf(0);
             if (pos > 0) {
                 const kw = new TextDecoder().decode(data.subarray(0, pos)).toLowerCase();
                 const compressed = data[pos + 1];
