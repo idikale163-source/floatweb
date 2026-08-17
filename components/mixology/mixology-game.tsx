@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { ChevronLeft, Copy, CornerDownRight, History, Pencil, Plus, RotateCcw, Send, SlidersHorizontal, X } from "lucide-react";
 import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, refreshMixOpening, regenerateMixTail, rerollMixReply, runMixSessionEnd, truncateMixAfterTurn } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession, listMixPickables, resolveMixRecipeMaterials, saveMixSession } from "@/lib/mixology/storage";
+import { applyMixMacros, MIX_DEFAULT_USER_NAME } from "@/lib/mixology/assembler";
 import { buildMixConditionContext, pickActiveMixMaterials } from "@/lib/mixology/state";
 import { scopeMixCss } from "@/lib/mixology/css-scope";
 import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, mixSlotEntries, type MixCharacterCard, type MixFilterRule, type MixMaterialKind, type MixMechanismMaterial, type MixSession, type MixSlotEntry, type MixState, type MixTurn } from "@/lib/mixology/types";
@@ -167,7 +168,17 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             encoreTurnHtml: encoreHasContract && encoreRender ? encoreRender : undefined,
             encoreStaticHtml: !encoreHasContract ? encoreRender : "",
             // 开场画布：对局里作为故事扉页躺在滚动区最顶上，往上翻可见
-            canvasHtml: character?.kind === "character" ? (character as MixCharacterCard).canvas?.trim() ?? "" : "",
+            // 开场画布：作者会在里面写 {{user}} / {{char}}，而画布是原样进 iframe 的，
+            // 不经过提示词装配，所以在这里替换掉，否则玩家看到的是字面的「{{user}}」
+            canvasHtml: character?.kind === "character"
+                ? applyMixMacros(
+                    (character as MixCharacterCard).canvas?.trim() ?? "",
+                    session.charName,
+                    session.userName || MIX_DEFAULT_USER_NAME,
+                    session.state,
+                    { escapeHtml: true },
+                )
+                : "",
         };
     }, [session]);
 
