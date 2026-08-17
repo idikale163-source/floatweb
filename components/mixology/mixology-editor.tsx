@@ -4,7 +4,7 @@
 // Phase ③ 先给够用的表单闭环，创作工坊阶段再上专业编辑体验。
 
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { FileText, Play, Plus, Trash2 } from "lucide-react";
+import { FileText, Plus, Trash2 } from "lucide-react";
 import type {
     MixCharacterCard,
     MixFilterRule,
@@ -16,7 +16,7 @@ import type {
 import { createMixId, MIX_DOCK_LABELS, MIX_KIND_LABELS, mixKindHasCover } from "@/lib/mixology/types";
 import type { MixDock } from "@/lib/mixology/types";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
-import { MixPreviewSheet, MixStructureSheet, type MixPreviewTarget } from "./mixology-preview";
+import { MixPreviewInline, MixStructureSheet } from "./mixology-preview";
 
 const OPENING_SEPARATOR = "\n---\n";
 
@@ -203,7 +203,6 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
         return { badIndexes, result };
     }, [rules, filterSample]);
     const [error, setError] = useState("");
-    const [preview, setPreview] = useState<MixPreviewTarget | null>(null);
     const [structureOpen, setStructureOpen] = useState(false);
     const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -453,15 +452,11 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             placeholder={"这张卡的门面页：大标题、诗句、标签、给读者的说明，版面由你排。\n\n例：\n<div style=\"padding:28px 6px;color:#fff;font:14px/2 serif\">\n  <h1 style=\"font-size:34px;letter-spacing:.3em\">晏迟</h1>\n  <p style=\"opacity:.65\">便利店夜班 · 冷白皮</p>\n  <p style=\"margin-top:22px\">「今天也加班到这个点？」</p>\n</div>"}
                         />
                     </Field>
-                    <button
-                        type="button"
-                        className="mix-pill-btn"
-                        style={{ marginTop: 10 }}
-                        onClick={() => setPreview({ kind: "canvas", html: canvas, cover })}
+                    <MixPreviewInline
+                        label="预览画布"
+                        target={{ kind: "canvas", html: canvas, cover }}
                         disabled={!canvas.trim()}
-                    >
-                        <Play size={13} style={{ verticalAlign: "-2px" }} /> 预览画布
-                    </button>
+                    />
                 </>
             ) : null}
             {kind === "persona" ? (
@@ -577,15 +572,11 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             <Plus size={15} /> 手动添加一项
                         </button>
                     </Field>
-                    <button
-                        type="button"
-                        className="mix-pill-btn"
-                        style={{ marginTop: 10 }}
-                        onClick={() => setPreview({ kind: "ticket", html: renderHtml, raw: previewRaw })}
+                    <MixPreviewInline
+                        label="预览小票"
+                        target={{ kind: "ticket", html: renderHtml, raw: previewRaw }}
                         disabled={!renderHtml.trim()}
-                    >
-                        <Play size={13} style={{ verticalAlign: "-2px" }} /> 预览小票
-                    </button>
+                    />
                 </>
             ) : null}
             {kind === "mechanism" ? (
@@ -647,15 +638,11 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             placeholder={"例：\n.mix-dialogue { color: #ffd479; font-weight: 600 }\n.mix-thought  { color: #8d7bf5 }\n.mix-scene    { letter-spacing: .5em }"}
                         />
                     </Field>
-                    <button
-                        type="button"
-                        className="mix-pill-btn"
-                        style={{ marginTop: 10 }}
-                        onClick={() => setPreview({ kind: "garnish", css })}
+                    <MixPreviewInline
+                        label="试穿看看"
+                        target={{ kind: "garnish", css }}
                         disabled={!css.trim()}
-                    >
-                        <Play size={13} style={{ verticalAlign: "-2px" }} /> 试穿看看
-                    </button>
+                    />
                 </>
             ) : null}
             {kind === "encore" ? (
@@ -682,15 +669,11 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     <Field label="预览示例数据" hint="选填，模拟 AI 的小剧场输出来试渲染">
                         <textarea className="mix-textarea" data-code="true" value={encorePreviewRaw} onChange={(e) => setEncorePreviewRaw(e.target.value)} />
                     </Field>
-                    <button
-                        type="button"
-                        className="mix-pill-btn"
-                        style={{ marginTop: 10 }}
-                        onClick={() => setPreview({ kind: "encore", html, raw: encorePreviewRaw })}
+                    <MixPreviewInline
+                        label="跑一下"
+                        target={{ kind: "encore", html, raw: encorePreviewRaw }}
                         disabled={!html.trim()}
-                    >
-                        <Play size={13} style={{ verticalAlign: "-2px" }} /> 跑一下
-                    </button>
+                    />
                 </>
             ) : null}
             {kind === "filter" ? (
@@ -758,7 +741,6 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     </Field>
                 </>
             ) : null}
-            {preview ? <MixPreviewSheet target={preview} onClose={() => setPreview(null)} /> : null}
             {structureOpen ? <MixStructureSheet highlight={kind} onClose={() => setStructureOpen(false)} /> : null}
             {error ? <div style={{ color: "#e2a3a3", fontSize: 12, marginTop: 12 }}>{error}</div> : null}
             <div className="mix-form-footer">

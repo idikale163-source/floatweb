@@ -3,7 +3,8 @@
 // 独家特调 · 创作工坊预览：小票 / 装饰 / 尾调 三类"要眼见为实"的材料，
 // 在编辑器里就地试穿——小票喂示例数据渲染，装饰套在样例正文上，尾调进沙盒跑。
 
-import { X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Play, X } from "lucide-react";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
 import { MixTicketFrame } from "./ticket-frame";
@@ -23,91 +24,157 @@ export type MixPreviewTarget =
     | { kind: "encore"; html: string; raw?: string }
     | { kind: "canvas"; html: string; cover?: string };
 
-export function MixPreviewSheet({ target, onClose }: { target: MixPreviewTarget; onClose: () => void }) {
-    const title = target.kind === "ticket" ? "小票预览"
-        : target.kind === "garnish" ? "装饰试穿"
-        : target.kind === "canvas" ? "画布预览"
-        : "尾调预览";
+/** 预览内容本体：四类材料各自的"眼见为实" */
+function MixPreviewBody({ target }: { target: MixPreviewTarget }) {
     return (
-        <div className="mix-sheet-mask" onClick={onClose}>
-            <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
-                <div className="mix-sheet-head">
-                    <div className="mix-sheet-title">{title}</div>
-                    <button type="button" className="mix-icon-btn" onClick={onClose} aria-label="关闭"><X size={18} /></button>
+        <>
+        {target.kind === "ticket" ? (
+            target.raw.trim() ? (
+                <>
+                    <div className="mix-detail-label">用「预览示例数据」渲染的效果</div>
+                    <div className="mix-ticket-wrap" style={{ marginTop: 8 }}>
+                        <MixTicketFrame html={target.html} raw={target.raw} />
+                    </div>
+                </>
+            ) : (
+                <div className="mix-comment-empty">
+                    先在「预览示例数据」里写几行示例，
+                    <br />
+                    这里就能看到小票渲染成什么样。
                 </div>
-                <div className="mix-sheet-body">
-                    {target.kind === "ticket" ? (
-                        target.raw.trim() ? (
-                            <>
-                                <div className="mix-detail-label">用「预览示例数据」渲染的效果</div>
-                                <div className="mix-ticket-wrap" style={{ marginTop: 8 }}>
-                                    <MixTicketFrame html={target.html} raw={target.raw} />
-                                </div>
-                            </>
-                        ) : (
-                            <div className="mix-comment-empty">
-                                先在「预览示例数据」里写几行示例，
-                                <br />
-                                这里就能看到小票渲染成什么样。
-                            </div>
-                        )
-                    ) : null}
+            )
+        ) : null}
 
-                    {target.kind === "garnish" ? (
-                        <>
-                            <div className="mix-detail-label">套在样例正文上的效果</div>
-                            {/* 试穿也走同一套收口，所见即对局里的实际效果 */}
-                            <div className="mix-garnish-stage mix-garnish-scope">
-                                <style>{scopeMixCss(target.css)}</style>
-                                <MixProseView text={GARNISH_SAMPLE} />
-                                <div className="mix-user-turn">
-                                    <div className="mix-user-bubble">我把伞递过去，「一起走？」</div>
-                                </div>
-                            </div>
-                            <div className="mix-detail-label" style={{ marginTop: 14 }}>可用的官方类名</div>
-                            <div className="mix-detail-value" data-code="true">
-                                {[
-                                    ".mix-prose    正文容器",
-                                    ".mix-para     普通段落",
-                                    ".mix-scene    场景过场行（【】）",
-                                    ".mix-dialogue 对白（「」）",
-                                    ".mix-thought  心声（* *）",
-                                    ".mix-accent   强调（~ ~）",
-                                    ".mix-narration 叙述",
-                                    ".mix-user-bubble 玩家气泡",
-                                    ".mix-ticket-wrap 小票外框",
-                                    "",
-                                    "body / html / :root  等同于整个对局画面",
-                                    "样式只在对局画面内生效，改不到应用的其他页面",
-                                ].join("\n")}
-                            </div>
-                        </>
-                    ) : null}
-
-                    {target.kind === "canvas" ? (
-                        <>
-                            <div className="mix-detail-label">铺在封面蒙版上的效果</div>
-                            <div
-                                className="mix-canvas-stage"
-                                style={target.cover ? { backgroundImage: `url(${target.cover})` } : undefined}
-                            >
-                                <div className="mix-canvas-stage-body">
-                                    <MixRichText text={target.html} />
-                                </div>
-                            </div>
-                        </>
-                    ) : null}
-
-                    {target.kind === "encore" ? (
-                        <>
-                            <div className="mix-detail-label">{target.raw?.trim() ? "用「预览示例数据」渲染的效果" : "静态小品的运行效果"}</div>
-                            <div style={{ marginTop: 8, borderRadius: 12, overflow: "hidden", background: "rgba(255,255,255,0.03)" }}>
-                                <MixTicketFrame html={target.html} raw={target.raw ?? ""} />
-                            </div>
-                        </>
-                    ) : null}
+        {target.kind === "garnish" ? (
+            <>
+                <div className="mix-detail-label">套在样例正文上的效果</div>
+                {/* 试穿也走同一套收口，所见即对局里的实际效果 */}
+                <div className="mix-garnish-stage mix-garnish-scope">
+                    <style>{scopeMixCss(target.css)}</style>
+                    <MixProseView text={GARNISH_SAMPLE} />
+                    <div className="mix-user-turn">
+                        <div className="mix-user-bubble">我把伞递过去，「一起走？」</div>
+                    </div>
                 </div>
-            </div>
+                <div className="mix-detail-label" style={{ marginTop: 14 }}>可用的官方类名</div>
+                <div className="mix-detail-value" data-code="true">
+                    {[
+                        ".mix-prose    正文容器",
+                        ".mix-para     普通段落",
+                        ".mix-scene    场景过场行（【】）",
+                        ".mix-dialogue 对白（「」）",
+                        ".mix-thought  心声（* *）",
+                        ".mix-accent   强调（~ ~）",
+                        ".mix-narration 叙述",
+                        ".mix-user-bubble 玩家气泡",
+                        ".mix-ticket-wrap 小票外框",
+                        "",
+                        "body / html / :root  等同于整个对局画面",
+                        "样式只在对局画面内生效，改不到应用的其他页面",
+                    ].join("\n")}
+                </div>
+            </>
+        ) : null}
+
+        {target.kind === "canvas" ? (
+            <>
+                <div className="mix-detail-label">铺在封面蒙版上的效果</div>
+                <div
+                    className="mix-canvas-stage"
+                    style={target.cover ? { backgroundImage: `url(${target.cover})` } : undefined}
+                >
+                    <div className="mix-canvas-stage-body">
+                        <MixRichText text={target.html} />
+                    </div>
+                </div>
+            </>
+        ) : null}
+
+        {target.kind === "encore" ? (
+            <>
+                <div className="mix-detail-label">{target.raw?.trim() ? "用「预览示例数据」渲染的效果" : "静态小品的运行效果"}</div>
+                <div style={{ marginTop: 8, borderRadius: 12, overflow: "hidden", background: "rgba(255,255,255,0.03)" }}>
+                    <MixTicketFrame html={target.html} raw={target.raw ?? ""} />
+                </div>
+            </>
+        ) : null}
+        </>
+    );
+}
+
+/** 取一个能代表"内容变了"的键：用来给刷新做去抖，避免每敲一个字就重建沙盒 */
+function previewKey(target: MixPreviewTarget): string {
+    switch (target.kind) {
+        case "ticket": return `t${target.html}${target.raw}`;
+        case "garnish": return `g${target.css}`;
+        case "encore": return `e${target.html}${target.raw ?? ""}`;
+        case "canvas": return `c${target.html}${target.cover ?? ""}`;
+    }
+}
+
+/**
+ * 就地展开的预览：按钮点一下在下面直接铺开，不再弹窗。
+ * 弹窗盖在整页上，作者一边改一边看时得反复开关，还容易根本没注意到它弹出来了。
+ */
+export function MixPreviewInline({
+    label,
+    target,
+    disabled,
+}: {
+    label: string;
+    target: MixPreviewTarget;
+    disabled?: boolean;
+}) {
+    const [open, setOpen] = useState(false);
+    // 展开后是一直看得见的，若每次按键都重建 srcDoc，iframe 会不停闪。
+    // 停手 400ms 再跟上：既是活的预览，也不闪。
+    const [shown, setShown] = useState<MixPreviewTarget | null>(null);
+    const latest = useRef(target);
+    latest.current = target;
+    const panelRef = useRef<HTMLDivElement | null>(null);
+    const key = previewKey(target);
+
+    useEffect(() => {
+        if (!open) return;
+        const timer = window.setTimeout(() => setShown(latest.current), 400);
+        return () => window.clearTimeout(timer);
+    }, [open, key]);
+
+    // 按钮可能正好在视口最下缘，展开的东西在屏幕外——那又变成"没注意到"了
+    useEffect(() => {
+        if (!open) return;
+        const timer = window.setTimeout(() => {
+            panelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }, 60);
+        return () => window.clearTimeout(timer);
+    }, [open]);
+
+    // 内容被清空时收起，免得留一块空面板
+    useEffect(() => {
+        if (disabled && open) setOpen(false);
+    }, [disabled, open]);
+
+    return (
+        <div className="mix-preview-inline">
+            <button
+                type="button"
+                className="mix-pill-btn"
+                data-open={open ? "true" : undefined}
+                aria-expanded={open}
+                onClick={() => {
+                    if (!open) setShown(latest.current);
+                    setOpen((prev) => !prev);
+                }}
+                disabled={disabled}
+            >
+                <Play size={13} style={{ verticalAlign: "-2px" }} /> {label}
+                <ChevronDown size={13} className="mix-preview-caret" style={{ verticalAlign: "-2px" }} />
+            </button>
+            {open && shown ? (
+                <div className="mix-preview-panel" ref={panelRef}>
+                    <MixPreviewBody target={shown} />
+                </div>
+            ) : null}
         </div>
     );
 }

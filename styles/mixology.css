@@ -792,6 +792,44 @@
     color: var(--mix-dim);
 }
 
+/* ── 就地预览：按钮下方直接铺开，不弹窗 ── */
+.mix-preview-inline {
+    margin-top: 10px;
+}
+
+.mix-preview-inline > .mix-pill-btn[data-open="true"] {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.mix-preview-inline .mix-preview-caret {
+    transition: transform 0.2s ease;
+}
+
+.mix-preview-inline > .mix-pill-btn[data-open="true"] .mix-preview-caret {
+    transform: rotate(180deg);
+}
+
+/* 四处预览按钮都在各自表单的最末尾，展开后不会把要填的字段顶走，
+   所以不给它套嵌套滚动区——直接让页面滚，手感才像"就地展开"而不是又一个小弹窗 */
+.mix-preview-panel {
+    margin-top: 8px;
+    padding: 12px;
+    border: 1px solid rgba(141, 123, 245, 0.22);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.025);
+    animation: mix-preview-in 0.22s ease both;
+}
+
+@keyframes mix-preview-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: none; }
+}
+
+.mix-preview-panel > *:first-child {
+    margin-top: 0;
+}
+
 /* ── 对局列表 ── */
 .mix-session-row {
     display: flex;
