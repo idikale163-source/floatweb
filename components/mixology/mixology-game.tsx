@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChevronLeft, Copy, CornerDownRight, History, Pencil, Plus, RotateCcw, Send, SlidersHorizontal, X } from "lucide-react";
-import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, regenerateMixTail, rerollMixReply, runMixSessionEnd, truncateMixAfterTurn } from "@/lib/mixology/engine";
+import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, refreshMixOpening, regenerateMixTail, rerollMixReply, runMixSessionEnd, truncateMixAfterTurn } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession, listMixPickables, resolveMixRecipeMaterials, saveMixSession } from "@/lib/mixology/storage";
 import { buildMixConditionContext, pickActiveMixMaterials } from "@/lib/mixology/state";
 import { scopeMixCss } from "@/lib/mixology/css-scope";
@@ -220,6 +220,17 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     }, [session?.turns.length, busy]);
 
     useEffect(() => () => abortRef.current?.abort(), []);
+
+    // 进对局：还没开口的局用当前角色卡重取开场白。
+    // 开场白是建局时写死进 turns[0] 的一条消息，作者改完卡回来本来看不到新的那句；
+    // 已经聊过的局不动（refreshMixOpening 自己判），那是真实历史。
+    useEffect(() => {
+        const res = refreshMixOpening(sessionId);
+        if (res?.changed) {
+            setSession(res.session);
+            onToast("开场白已更新为角色卡最新的一版。");
+        }
+    }, [sessionId, onToast]);
 
     // 退出对局：跑一次收摊钩子并收掉这一局的全部沙盒，别让它们挂在页面上。
     // 延后一拍再判：开发期的严格模式会「挂载 → 立刻卸载 → 再挂载」，
