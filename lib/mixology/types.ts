@@ -107,6 +107,38 @@ export function mixKindHasCover(kind: MixMaterialKind): boolean {
     return MIX_VISUAL_KINDS.includes(kind);
 }
 
+/** 一件材料最多几个标签 / 每个标签最长几个字：与云端 normalizeTags 同口径 */
+export const MIX_TAG_MAX = 8;
+export const MIX_TAG_LEN = 24;
+
+/**
+ * 标签规整：去空白、去重、掐长度、掐个数。
+ * 本地和云端必须同一套口径——否则本地看着有九个标签，发布上去只剩八个，
+ * 作者会以为发布把标签吞了。
+ */
+export function normalizeMixTags(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    const out: string[] = [];
+    for (const item of value) {
+        if (typeof item !== "string") continue;
+        const tag = item.trim().replace(/\s+/g, " ").slice(0, MIX_TAG_LEN);
+        if (!tag || out.includes(tag)) continue;
+        out.push(tag);
+        if (out.length >= MIX_TAG_MAX) break;
+    }
+    return out;
+}
+
+/** 编辑器里一行文本拆成标签：逗号、顿号、竖线、井号、空格都算分隔 */
+export function parseMixTags(text: string): string[] {
+    return normalizeMixTags(text.split(/[,，、|｜#＃\s]+/));
+}
+
+/** 标签回填到编辑器那一行文本 */
+export function formatMixTags(tags: string[] | undefined): string {
+    return (tags ?? []).join("、");
+}
+
 /** 所有材料共有的元信息 */
 export type MixMaterialMeta = {
     id: string;

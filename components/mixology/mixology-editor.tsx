@@ -13,7 +13,7 @@ import type {
     MixTextMaterial,
     MixTicketVar,
 } from "@/lib/mixology/types";
-import { createMixId, MIX_DOCK_LABELS, MIX_KIND_LABELS, mixKindHasCover } from "@/lib/mixology/types";
+import { createMixId, formatMixTags, MIX_DOCK_LABELS, MIX_KIND_LABELS, MIX_TAG_MAX, mixKindHasCover, parseMixTags } from "@/lib/mixology/types";
 import type { MixDock } from "@/lib/mixology/types";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
 import { MixPreviewInline, MixStructureSheet } from "./mixology-preview";
@@ -137,6 +137,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
 
     const [name, setName] = useState(initial?.name ?? "");
     const [hook, setHook] = useState(initial?.hook ?? "");
+    const [tagsText, setTagsText] = useState(formatMixTags(initial?.tags));
     const [cover, setCover] = useState(initial?.cover ?? "");
     // 角色卡专属
     const [baseInfo, setBaseInfo] = useState(initialCard?.baseInfo ?? "");
@@ -206,6 +207,13 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
     const [structureOpen, setStructureOpen] = useState(false);
     const fileRef = useRef<HTMLInputElement | null>(null);
 
+    // 标签：输入的时候就按最终口径拆好给作者看，免得存下来才发现被掐了
+    const tags = useMemo(() => parseMixTags(tagsText), [tagsText]);
+    const tagsDropped = useMemo(() => {
+        const all = new Set(tagsText.split(/[,，、|｜#＃\s]+/).map((t) => t.trim()).filter(Boolean));
+        return Math.max(0, all.size - tags.length);
+    }, [tagsText, tags.length]);
+
     const handleCoverFile = async (file: File | undefined) => {
         if (!file) return;
         try {
@@ -226,7 +234,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             name: trimmedName,
             hook: hook.trim() || undefined,
             author: initial?.author,
-            tags: initial?.tags,
+            tags: tags.length ? tags : undefined,
             cover: cover || undefined,
             createdAt: initial?.createdAt ?? Date.now(),
             updatedAt: Date.now(),
@@ -351,6 +359,24 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             </Field>
             <Field label="一句话介绍">
                 <input className="mix-input" value={hook} onChange={(e) => setHook(e.target.value)} placeholder="一句话说清它的特点，会显示在卡片上" />
+            </Field>
+            <Field label="标签" hint={`最多 ${MIX_TAG_MAX} 个`}>
+                <input
+                    className="mix-input"
+                    value={tagsText}
+                    onChange={(e) => setTagsText(e.target.value)}
+                    placeholder="用顿号或逗号隔开，例如：现代都市、暗恋、久别重逢"
+                />
+                {tags.length ? (
+                    <div className="mix-tag-list" style={{ marginTop: 8 }}>
+                        {tags.map((tag) => (
+                            <span className="mix-tag" key={tag}>{tag}</span>
+                        ))}
+                    </div>
+                ) : null}
+                {tagsDropped > 0 ? (
+                    <div className="mix-form-note">超出 {MIX_TAG_MAX} 个的标签不会保存，已多写 {tagsDropped} 个。</div>
+                ) : null}
             </Field>
             {mixKindHasCover(kind) ? (
                 <Field label="封面图" hint={isCharacter ? "对局背景，强烈建议配" : undefined}>

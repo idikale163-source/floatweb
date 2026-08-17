@@ -18,7 +18,7 @@ import {
     UserRound,
 } from "lucide-react";
 import type { MixCharacterCard, MixMaterial, MixMaterialKind } from "@/lib/mixology/types";
-import { MIX_DOCK_LABELS, MIX_KIND_LABELS, mixEncoreRenderHtml, mixKindHasCover, mixKindRunsActiveCode } from "@/lib/mixology/types";
+import { MIX_DOCK_LABELS, MIX_KIND_LABELS, mixEncoreRenderHtml, mixKindHasCover, mixKindRunsActiveCode, normalizeMixTags } from "@/lib/mixology/types";
 import { MixRichText } from "./rich-text";
 
 const KIND_ICONS: Record<MixMaterialKind, typeof UserRound> = {
@@ -59,11 +59,45 @@ export function formatMixTime(ts: number): string {
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+/**
+ * 卡面上的标签：只占一行，装不下的用省略号收掉——完整标签在详情弹窗里看。
+ * 用行内 span 而不是 inline-block，text-overflow 才能在裁到一半的标签上落省略号。
+ */
+function TagLine({ tags, className }: { tags?: string[]; className: string }) {
+    // 规整一遍再渲染：导入的 JSON 里什么都可能有，别让脏数据把卡片渲染搞崩
+    const list = normalizeMixTags(tags);
+    if (!list.length) return null;
+    return (
+        <div className={className}>
+            {list.map((tag) => (
+                <span className="mix-tag" key={tag}>{tag}</span>
+            ))}
+        </div>
+    );
+}
+
+/** 详情弹窗里的完整标签：换行摊开，不省略 */
+export function MixTagList({ tags }: { tags?: string[] }) {
+    const list = normalizeMixTags(tags);
+    if (!list.length) return null;
+    return (
+        <div className="mix-detail-field">
+            <div className="mix-detail-label">标签</div>
+            <div className="mix-tag-list">
+                {list.map((tag) => (
+                    <span className="mix-tag" key={tag}>{tag}</span>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 /** 瀑布卡：本地酒柜与在线酒单共用（stats 行只有在线卡传） */
 export function MatCard({
     kind,
     name,
     hook,
+    tags,
     cover,
     badge,
     author,
@@ -73,6 +107,7 @@ export function MatCard({
     kind: MixMaterialKind;
     name: string;
     hook?: string;
+    tags?: string[];
     cover?: string;
     badge?: string;
     author?: string;
@@ -96,6 +131,7 @@ export function MatCard({
                 <div className="mix-poster-veil">
                     <div className="mix-poster-name">{name}</div>
                     {hook ? <div className="mix-poster-hook">{hook}</div> : null}
+                    <TagLine tags={tags} className="mix-poster-tags" />
                     {stats ? <div className="mix-poster-stats">{stats}</div> : null}
                 </div>
             </div>
@@ -113,6 +149,7 @@ export function MatCard({
                     {mixKindRunsActiveCode(kind) ? <span className="mix-mat-badge" data-tone="code">含可执行逻辑</span> : null}
                 </div>
                 {hook ? <div className="mix-mat-hook">{hook}</div> : null}
+                <TagLine tags={tags} className="mix-mat-tags" />
                 {author || stats ? (
                     <div className="mix-mat-author">{[author ? `@${author}` : null, stats].filter(Boolean).join(" · ")}</div>
                 ) : null}

@@ -73,7 +73,7 @@ import { exportMixMaterial, exportMixMaterialPng, parseMixMaterialsFromJson, par
 import { MixMaterialEditor } from "./mixology-editor";
 import { MixologyGame } from "./mixology-game";
 import { CommentThread, MixologyHall } from "./mixology-hall";
-import { AuthorAvatar, KindGlyph, MatCard, MaterialDetail, MixConfirm, SealedNote, formatMixTime } from "./mixology-shared";
+import { AuthorAvatar, KindGlyph, MatCard, MaterialDetail, MixConfirm, MixTagList, SealedNote, formatMixTime } from "./mixology-shared";
 import { MixSlotEditor } from "./slot-editor";
 import { describeMixCondition } from "@/lib/mixology/state";
 
@@ -765,6 +765,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                         kind={material.kind}
                                         name={material.name}
                                         hook={material.hook}
+                                        tags={material.tags}
                                         cover={material.cover}
                                         badge={isMixBuiltinId(material.id)
                                             ? "官方"
@@ -986,6 +987,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={detail.cover} alt={detail.name} style={{ width: 96, height: 128, objectFit: "cover", borderRadius: 12, margin: "4px 0 12px" }} />
                             ) : null}
+                            <MixTagList tags={detail.tags} />
                             {/* 与酒材页同一套展示：角色卡点开看门面（画布/一句话介绍），设定正文进「编辑」看 */}
                             {detail.kind === "character" ? (
                                 <SealedNote hook={detail.hook} canvas={(detail as MixCharacterCard).canvas} />
@@ -1179,6 +1181,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                             kind={material.kind}
                                             name={material.name}
                                             hook={material.hook}
+                                            tags={material.tags}
                                             cover={material.cover}
                                             badge={isMixBuiltinId(material.id) ? "官方" : undefined}
                                             onClick={() => {

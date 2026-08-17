@@ -48,7 +48,7 @@ import {
     type MixCondition,
     type MixSlotEntry,
 } from "@/lib/mixology/types";
-import { AuthorAvatar, MatCard, MaterialDetail, MixConfirm, SealedNote } from "./mixology-shared";
+import { AuthorAvatar, MatCard, MaterialDetail, MixConfirm, MixTagList, SealedNote } from "./mixology-shared";
 
 type HallMode = "menu" | "hall";
 
@@ -560,6 +560,7 @@ export function MixologyHall({
                 kind={m.kind}
                 name={m.name}
                 hook={m.hook}
+                tags={m.tags}
                 cover={m.cover}
                 badge="官方"
                 onClick={() => setOfficialDetail(m)}
@@ -600,6 +601,7 @@ export function MixologyHall({
                             kind={entry.kind}
                             name={entry.name}
                             hook={entry.hook}
+                            tags={entry.tags}
                             cover={entry.cover}
                             author={entry.authorName}
                             stats={statsLine(entry)}
@@ -661,6 +663,7 @@ export function MixologyHall({
                                 {MIX_KIND_LABELS[officialDetail.kind]} · 官方出厂件 · 吧台槽位里直接可选，无需入柜
                             </div>
                             <div style={{ marginTop: 8 }}>
+                                <MixTagList tags={officialDetail.tags} />
                                 <MaterialDetail material={officialDetail} />
                             </div>
                         </div>
@@ -722,6 +725,7 @@ export function MixologyHall({
                             {detailMaterial.payload ? (
                                 <>
                                     <div style={{ marginTop: 8 }}>
+                                        <MixTagList tags={detailMaterial.tags} />
                                         {detailMaterial.kind === "character"
                                             ? <SealedNote
                                                 hook={detailMaterial.hook}
