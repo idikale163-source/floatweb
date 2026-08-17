@@ -8,6 +8,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { MixState } from "@/lib/mixology/types";
 
 const FRAME_MIN_HEIGHT = 36;
+/**
+ * 小票与尾调也是 scrolling="no"，超出即截断。它们每轮插在对话流里，
+ * 不该像开场画布那样动辄十几屏，所以余量给得小一档：原来 2000（约两屏），
+ * 一个稍微复杂的小剧场就顶到头，放宽到 5000（约五屏半）。
+ */
+const FRAME_MAX_HEIGHT = 5000;
 
 function escapeHtmlText(value: string): string {
     return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -57,7 +63,7 @@ export function MixTicketFrame({ html, raw, state }: { html: string; raw: string
             const data = event.data as Record<string, unknown> | null;
             if (!data || data.source !== "mix-ticket-frame" || data.type !== "resize" || data.id !== frameId) return;
             const next = Number(data.height);
-            if (Number.isFinite(next)) setHeight(Math.min(Math.max(next, FRAME_MIN_HEIGHT), 2000));
+            if (Number.isFinite(next)) setHeight(Math.min(Math.max(next, FRAME_MIN_HEIGHT), FRAME_MAX_HEIGHT));
         };
         window.addEventListener("message", handleMessage);
         return () => window.removeEventListener("message", handleMessage);

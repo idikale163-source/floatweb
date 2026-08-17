@@ -12,6 +12,14 @@ export function mixTextHasHtml(text: string): boolean {
 }
 
 const FRAME_MIN_HEIGHT = 24;
+/**
+ * 高度上限。iframe 是 scrolling="no"，高度必须等于内容高度，超出的部分会被直接切掉，
+ * 所以这个数就是「开场画布最多能有多高」。原来给 2400（约两屏半），复杂的画布——
+ * 多章节、满幅大图、人物关系列表——很容易超过，底下那截在 App 里根本看不到。
+ * 放宽到 12000（约十三屏）。仍然留一个上限：万一画布报了个荒谬的数（脚本写错、
+ * 死循环撑高），别让宿主去布局一个几十万像素高的元素。
+ */
+const FRAME_MAX_HEIGHT = 12000;
 
 function RichFrame({ html, inert }: { html: string; inert?: boolean }) {
     const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -43,7 +51,7 @@ function RichFrame({ html, inert }: { html: string; inert?: boolean }) {
             const data = event.data as Record<string, unknown> | null;
             if (!data || data.source !== "mix-rich-frame" || data.type !== "resize" || data.id !== frameId) return;
             const next = Number(data.height);
-            if (Number.isFinite(next)) setHeight(Math.min(Math.max(next, FRAME_MIN_HEIGHT), 2400));
+            if (Number.isFinite(next)) setHeight(Math.min(Math.max(next, FRAME_MIN_HEIGHT), FRAME_MAX_HEIGHT));
         };
         window.addEventListener("message", handleMessage);
         return () => window.removeEventListener("message", handleMessage);
