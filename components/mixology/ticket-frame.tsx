@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MixState } from "@/lib/mixology/types";
+import { createMixFrameHeightTracker, nextMixFrameHeight } from "@/lib/mixology/frame-height";
 
 const FRAME_MIN_HEIGHT = 36;
 /**
@@ -35,6 +36,7 @@ export function MixTicketFrame({ html, raw, state }: { html: string; raw: string
     const iframeRef = useRef<HTMLIFrameElement | null>(null);
     const [frameId] = useState(() => `mtf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
     const [height, setHeight] = useState(FRAME_MIN_HEIGHT);
+    const trackerRef = useRef(createMixFrameHeightTracker(FRAME_MIN_HEIGHT));
 
     const srcDoc = useMemo(() => {
         const doc = buildSrcDoc(html, raw, state);
@@ -62,8 +64,11 @@ export function MixTicketFrame({ html, raw, state }: { html: string; raw: string
             if (iframeRef.current && event.source !== iframeRef.current.contentWindow) return;
             const data = event.data as Record<string, unknown> | null;
             if (!data || data.source !== "mix-ticket-frame" || data.type !== "resize" || data.id !== frameId) return;
-            const next = Number(data.height);
-            if (Number.isFinite(next)) setHeight(Math.min(Math.max(next, FRAME_MIN_HEIGHT), FRAME_MAX_HEIGHT));
+            const applied = nextMixFrameHeight(trackerRef.current, Number(data.height), {
+                min: FRAME_MIN_HEIGHT,
+                max: FRAME_MAX_HEIGHT,
+            });
+            if (applied !== null) setHeight(applied);
         };
         window.addEventListener("message", handleMessage);
         return () => window.removeEventListener("message", handleMessage);

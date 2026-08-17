@@ -5,6 +5,7 @@
 // 高度自适应桥与小票画布同款；allow-scripts 无 same-origin，碰不到宿主页面与数据。
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createMixFrameHeightTracker, nextMixFrameHeight } from "@/lib/mixology/frame-height";
 
 /** 是否含 HTML 标签：含则按作者排版渲染，纯文本走默认样式 */
 export function mixTextHasHtml(text: string): boolean {
@@ -25,6 +26,7 @@ function RichFrame({ html, inert }: { html: string; inert?: boolean }) {
     const iframeRef = useRef<HTMLIFrameElement | null>(null);
     const [frameId] = useState(() => `mrf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
     const [height, setHeight] = useState(FRAME_MIN_HEIGHT);
+    const trackerRef = useRef(createMixFrameHeightTracker(FRAME_MIN_HEIGHT));
 
     const srcDoc = useMemo(() => {
         // 默认浅色字 + 透明底：内容浮在深色封面蒙版上直接可读，作者可全量覆盖
@@ -50,8 +52,11 @@ function RichFrame({ html, inert }: { html: string; inert?: boolean }) {
             if (iframeRef.current && event.source !== iframeRef.current.contentWindow) return;
             const data = event.data as Record<string, unknown> | null;
             if (!data || data.source !== "mix-rich-frame" || data.type !== "resize" || data.id !== frameId) return;
-            const next = Number(data.height);
-            if (Number.isFinite(next)) setHeight(Math.min(Math.max(next, FRAME_MIN_HEIGHT), FRAME_MAX_HEIGHT));
+            const applied = nextMixFrameHeight(trackerRef.current, Number(data.height), {
+                min: FRAME_MIN_HEIGHT,
+                max: FRAME_MAX_HEIGHT,
+            });
+            if (applied !== null) setHeight(applied);
         };
         window.addEventListener("message", handleMessage);
         return () => window.removeEventListener("message", handleMessage);
