@@ -328,13 +328,19 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
      * - 旧版"随配方连料入柜"的材料线上没有条目，没法引用（blockers）。
      */
     const planShareRecipe = (recipe: MixRecipe) => {
-        const materials = MIX_SLOT_ORDER
+        // 保留「条目 ↔ 材料」的配对：分享出去时顺序与生效条件都要跟着走
+        const pairs = MIX_SLOT_ORDER
             .flatMap((k) => mixSlotEntries(recipe.slots, k)
-                .map((entry) => getMixBuiltin(entry.materialId) ?? cabinet.find((m) => m.id === entry.materialId) ?? null))
-            .filter((m): m is MixMaterial => Boolean(m));
+                .map((entry) => {
+                    const material = getMixBuiltin(entry.materialId) ?? cabinet.find((m) => m.id === entry.materialId) ?? null;
+                    return material ? { entry, material } : null;
+                }))
+            .filter((pair): pair is { entry: MixSlotEntry; material: MixMaterial } => Boolean(pair));
+        const materials = pairs.map((pair) => pair.material);
         const character = materials.find((m) => m.kind === "character");
         const own = materials.filter((m) => !isMixBuiltinId(m.id) && !m.imported);
         return {
+            pairs,
             materials,
             character: character && character.kind === "character" ? character : null,
             toPublish: own.filter((m) => !m.publishedId),
@@ -371,11 +377,15 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
             }
             // 第二步：拿到最新的 publishedId 映射，拼出引用数组
             const fresh = loadMixCabinet();
-            const parts = plan.materials.map((material) => {
-                if (isMixBuiltinId(material.id)) return { id: material.id, kind: material.kind, name: material.name, builtin: true as const };
-                if (material.imported) return { id: material.id, kind: material.kind, name: material.name };
-                const current = fresh.find((m) => m.id === material.id);
-                return { id: current?.publishedId ?? material.publishedId ?? material.id, kind: material.kind, name: material.name };
+            // 顺序 = pairs 的顺序（按槽位、格内自上而下），生效条件随件带上
+            const parts = plan.pairs.map(({ entry, material }) => {
+                const when = entry.when;
+                const base = isMixBuiltinId(material.id)
+                    ? { id: material.id, kind: material.kind, name: material.name, builtin: true as const }
+                    : material.imported
+                        ? { id: material.id, kind: material.kind, name: material.name }
+                        : { id: fresh.find((m) => m.id === material.id)?.publishedId ?? material.publishedId ?? material.id, kind: material.kind, name: material.name };
+                return when ? { ...base, when } : base;
             });
             const character = plan.character;
             const input = {

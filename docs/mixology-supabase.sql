@@ -2,7 +2,10 @@
 -- Run this once in the Supabase SQL editor.
 --
 -- mixology_items    酒单：共享材料（八类，payload 为完整材料 JSON）
--- mixology_recipes  大厅：共享特调配方（materials 内嵌完整材料快照，导入即连料入柜）
+-- mixology_recipes  大厅：共享特调配方（materials 存槽位引用数组，不内嵌材料本体）
+--                   引用形如 {id,kind,name,builtin?,when?}：同一 kind 可出现多条（一格叠多件，
+--                   顺序即数组顺序），when 是这一件的生效条件。materials 是 jsonb，
+--                   加这些字段不需要改表结构。
 -- mixology_likes / mixology_saves / mixology_comments
 --                   点赞 / 入柜(收藏) / 评论（楼中楼），target_type 区分材料与配方
 
