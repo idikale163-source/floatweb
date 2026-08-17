@@ -18,7 +18,7 @@ import {
     UserRound,
 } from "lucide-react";
 import type { MixCharacterCard, MixMaterial, MixMaterialKind } from "@/lib/mixology/types";
-import { MIX_DOCK_LABELS, MIX_KIND_LABELS, mixEncoreRenderHtml, mixKindHasCover } from "@/lib/mixology/types";
+import { MIX_DOCK_LABELS, MIX_KIND_LABELS, mixEncoreRenderHtml, mixKindHasCover, mixKindRunsActiveCode } from "@/lib/mixology/types";
 import { MixRichText } from "./rich-text";
 
 const KIND_ICONS: Record<MixMaterialKind, typeof UserRound> = {
@@ -109,6 +109,8 @@ export function MatCard({
                 <div className="mix-mat-name">
                     <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
                     {badge ? <span className="mix-mat-badge">{badge}</span> : null}
+                    {/* 带可执行逻辑的种类：点开之前就让人看见 */}
+                    {mixKindRunsActiveCode(kind) ? <span className="mix-mat-badge" data-tone="code">含可执行逻辑</span> : null}
                 </div>
                 {hook ? <div className="mix-mat-hook">{hook}</div> : null}
                 {author || stats ? (

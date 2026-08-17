@@ -69,6 +69,31 @@ export function normalizePartCondition(value: unknown): PartCondition | undefine
     return undefined;
 }
 
+/**
+ * 机括是唯一一类「下载下来会在别人设备上按轮执行、还能改写对话」的材料，
+ * 所以除了通用的 payload 体积上限，再单独卡一道：代码写不了那么长，
+ * 停靠位必须是认识的那四个。卡紧一点也让混淆塞大段东西变得更难。
+ */
+const MAX_MECHANISM_SCRIPT = 40_000;
+const MAX_MECHANISM_PANEL = 200_000;
+const MECHANISM_DOCKS: readonly string[] = ["left", "right", "bottom", "float"];
+
+export function validateMechanismPayload(payload: unknown): string | null {
+    if (!payload || typeof payload !== "object") return "missing_payload";
+    const record = payload as Record<string, unknown>;
+    const script = typeof record.script === "string" ? record.script : "";
+    const panel = typeof record.panelHtml === "string" ? record.panelHtml : "";
+    if (script.length > MAX_MECHANISM_SCRIPT) return "机括的逻辑代码太长了。";
+    if (panel.length > MAX_MECHANISM_PANEL) return "机括的界面代码太长了。";
+    if (!script.trim() && !panel.trim()) return "这件机括是空的：逻辑和界面至少要写一样。";
+    if (record.dock !== undefined && record.dock !== null && !MECHANISM_DOCKS.includes(String(record.dock))) {
+        return "invalid_dock";
+    }
+    // 有界面就必须有停靠位，否则下载方不知道该把它挂在哪
+    if (panel.trim() && !record.dock) return "配了界面就要选一个停靠位。";
+    return null;
+}
+
 /** 校验并清洗配方槽位引用；不合法返回错误码 */
 export function normalizeRecipeParts(
     value: unknown,

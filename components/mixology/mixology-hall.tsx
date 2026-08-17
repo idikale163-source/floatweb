@@ -34,6 +34,7 @@ import {
     type MixMaterialKind,
     type MixRecipe,
     MIX_SLOT_MAX,
+    mixKindRunsActiveCode,
     type MixCondition,
     type MixSlotEntry,
 } from "@/lib/mixology/types";
@@ -638,7 +639,21 @@ export function MixologyHall({
                                             />
                                             : <MaterialDetail material={detailMaterial.payload} />}
                                     </div>
-                                    <button type="button" className="mix-brew-btn" onClick={() => void importMaterial(detailMaterial)} disabled={busy}>
+                                    <button
+                                        type="button"
+                                        className="mix-brew-btn"
+                                        onClick={() => {
+                                            if (!mixKindRunsActiveCode(detailMaterial.kind)) { void importMaterial(detailMaterial); return; }
+                                            // 机括会在你的对局里按轮执行——入柜前得让人知道自己在装什么
+                                            setConfirm({
+                                                title: "这件机括会执行代码",
+                                                body: <>「{detailMaterial.name}」带的是<b>会在你的对局里按轮执行的代码</b>：它能改写你发出去的话、改写你看到的正文、以你的身份发言。<br />代码跑在没有网络、碰不到应用本体的沙盒里，但对话内容它看得到。<br />只在你信任作者时入柜。</>,
+                                                confirmText: "我知道，入柜",
+                                                run: () => void importMaterial(detailMaterial),
+                                            });
+                                        }}
+                                        disabled={busy}
+                                    >
                                         {busy ? <Loader2 size={16} className="mix-spin" /> : <CornerDownRight size={16} />}
                                         {busy ? "处理中…" : detailMaterial.savedByMe ? "再次入柜" : "加入酒柜"}
                                     </button>
@@ -697,6 +712,8 @@ export function MixologyHall({
                                 const characterPart = parts.find((p) => p.kind === "character");
                                 const characterOk = Boolean(characterPart && !characterPart.gone && (characterPart.builtin || characterPart.material));
                                 const importable = parts.length - goneCount;
+                                // 配方里夹了几件机括：入柜确认要单独说清楚
+                                const mechanismCount = parts.filter((p) => !p.gone && mixKindRunsActiveCode(p.kind)).length;
                                 return (
                                     <>
                                         <div className="mix-detail-label" style={{ marginTop: 12 }}>这杯里有</div>
@@ -713,8 +730,11 @@ export function MixologyHall({
                                                 body: <>
                                                     会把「{detailRecipe.name}」以及里面的 <b>{importable} 味材料</b>一并放进你的酒柜（官方件直接用本地出厂版），之后在吧台就能开局。
                                                     {goneCount > 0 ? <><br />{goneCount} 味材料已从酒材页下架，这杯会缺味。</> : null}
+                                                    {mechanismCount > 0 ? (
+                                                        <><br /><br />其中 <b>{mechanismCount} 件是机括</b>：会在你的对局里按轮执行代码，能改写你发出去的话、你看到的正文，也能以你的身份发言。只在你信任作者时入柜。</>
+                                                    ) : null}
                                                 </>,
-                                                confirmText: "入柜",
+                                                confirmText: mechanismCount > 0 ? "我知道，入柜" : "入柜",
                                                 run: () => void importRecipe(detailRecipe),
                                             })}
                                             disabled={busy || !characterOk}

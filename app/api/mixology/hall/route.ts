@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentAccount } from "@/lib/server/account-auth";
-import { normalizeRecipeParts as normalizeParts, type RecipePartRef } from "@/lib/mixology/hall-parts";
+import { normalizeRecipeParts as normalizeParts, validateMechanismPayload, type RecipePartRef } from "@/lib/mixology/hall-parts";
 
 // 独家特调 · 酒材/配方 API：材料（mixology_items）与配方（mixology_recipes）共用一套路由，
 // type=material|recipe 区分。全部经 service key 直连 Supabase REST，anon 无直读。
@@ -343,6 +343,10 @@ export async function POST(request: Request) {
       if (JSON.stringify(payload).length > MAX_MATERIAL_PAYLOAD) {
         return NextResponse.json({ ok: false, error: "材料太大了（封面图请压小一点）。" }, { status: 413 });
       }
+      if (kind === "mechanism") {
+        const invalid = validateMechanismPayload(payload);
+        if (invalid) return NextResponse.json({ ok: false, error: invalid }, { status: 400 });
+      }
       const insert = await supabaseFetch<unknown[]>(
         `mixology_items?select=${ITEM_COLUMNS}`,
         {
@@ -427,6 +431,10 @@ export async function PUT(request: Request) {
       }
       if (JSON.stringify(materialPayload).length > MAX_MATERIAL_PAYLOAD) {
         return NextResponse.json({ ok: false, error: "材料太大了（封面图请压小一点）。" }, { status: 413 });
+      }
+      if (kind === "mechanism") {
+        const invalid = validateMechanismPayload(materialPayload);
+        if (invalid) return NextResponse.json({ ok: false, error: invalid }, { status: 400 });
       }
       payload = {
         kind,

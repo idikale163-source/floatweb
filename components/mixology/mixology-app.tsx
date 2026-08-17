@@ -49,6 +49,7 @@ import {
 } from "@/lib/mixology/storage";
 import { runMixSessionStart, startMixSession } from "@/lib/mixology/engine";
 import { disposeMixSandboxesForMaterial } from "@/lib/mixology/mechanism-runtime";
+import { mixKindRunsActiveCode } from "@/lib/mixology/types";
 import {
     createMixId,
     MIX_KIND_LABELS,
@@ -870,8 +871,12 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                             confirmText: "更新",
                                             run: () => { const t = detail; setDetail(null); void handleShareMaterial(t); },
                                         } : {
-                                            title: "分享到酒材页？",
-                                            body: <>「{detail.name}」将出现在酒材页上，<b>其他人能看到它的完整内容</b>，也能加进自己的酒柜。<br />不想公开就先别发。</>,
+                                            title: mixKindRunsActiveCode(detail.kind) ? "把这件机括发出去？" : "分享到酒材页？",
+                                            body: mixKindRunsActiveCode(detail.kind) ? (
+                                                <>「{detail.name}」将出现在酒材页上，别人下载后<b>它的代码会在对方的对局里按轮执行</b>——能改写对方发出去的话、改写看到的正文、以对方的身份发言。<br />请确认这份代码是你自己写的、你清楚它做了什么。</>
+                                            ) : (
+                                                <>「{detail.name}」将出现在酒材页上，<b>其他人能看到它的完整内容</b>，也能加进自己的酒柜。<br />不想公开就先别发。</>
+                                            ),
                                             confirmText: "分享",
                                             run: () => { const t = detail; setDetail(null); void handleShareMaterial(t); },
                                         })}

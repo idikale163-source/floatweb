@@ -81,6 +81,18 @@ export const MIX_SLOT_STACK: Record<MixMaterialKind, "concat" | "first"> = {
 /** 不给设生效条件的格：这两格没了这一局就不成立 */
 export const MIX_NO_CONDITION_KINDS: MixMaterialKind[] = ["character", "persona"];
 
+/**
+ * 会在下载方设备上「按轮执行、且能改写对话」的材料。
+ * 小票与尾调也带 JS，但它们只在沙盒 iframe 里画自己那一块，动不了对话内容；
+ * 机括不一样——它能改你发出去的话、改你看到的正文、以你的身份发言，
+ * 所以上架与入柜两头都要单独说明白，不能混在普通材料里悄悄过。
+ */
+export const MIX_ACTIVE_CODE_KINDS: MixMaterialKind[] = ["mechanism"];
+
+export function mixKindRunsActiveCode(kind: MixMaterialKind): boolean {
+    return MIX_ACTIVE_CODE_KINDS.includes(kind);
+}
+
 export function mixKindAllowsCondition(kind: MixMaterialKind): boolean {
     return !MIX_NO_CONDITION_KINDS.includes(kind);
 }

@@ -2570,3 +2570,9 @@
 .mix-panel[data-dock="right"] ~ .mix-panel[data-dock="right"] { top: 40%; }
 .mix-panel[data-dock="bottom"] ~ .mix-panel[data-dock="bottom"] { bottom: 152px; }
 .mix-panel[data-dock="float"] ~ .mix-panel[data-dock="float"] { bottom: 196px; }
+
+/* 带可执行逻辑的材料（机括）：列表与详情里都要显眼一点 */
+.mix-mat-badge[data-tone="code"] {
+    background: rgba(217, 176, 106, 0.18);
+    color: var(--mix-gold);
+}
