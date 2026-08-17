@@ -77,13 +77,15 @@ function TagLine({ tags, className }: { tags?: string[]; className: string }) {
     );
 }
 
-/** 详情弹窗里的完整标签：换行摊开，不省略 */
+/**
+ * 详情弹窗里的完整标签：换行摊开，不省略。
+ * 不带「标签」小标题——标签自己长得就像标签，再加一行字反而多余。
+ */
 export function MixTagList({ tags }: { tags?: string[] }) {
     const list = normalizeMixTags(tags);
     if (!list.length) return null;
     return (
         <div className="mix-detail-field">
-            <div className="mix-detail-label">标签</div>
             <div className="mix-tag-list">
                 {list.map((tag) => (
                     <span className="mix-tag" key={tag}>{tag}</span>

@@ -5,7 +5,7 @@
 // 装饰材料的 CSS 以 <style> 注入本画面容器（认 .mix-* 官方语义类）。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ChevronLeft, Copy, CornerDownRight, History, Pencil, Plus, RotateCcw, Send, SlidersHorizontal, X } from "lucide-react";
+import { ChevronLeft, Copy, History, MoreHorizontal, Pencil, Plus, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, refreshMixOpening, regenerateMixTail, rerollMixReply, runMixSessionEnd, truncateMixAfterTurn } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession, listMixPickables, resolveMixRecipeMaterials, saveMixSession } from "@/lib/mixology/storage";
 import { applyMixMacros, MIX_DEFAULT_USER_NAME } from "@/lib/mixology/assembler";
@@ -409,7 +409,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                 <button type="button" className="mix-icon-btn" onClick={onBack} aria-label="返回"><ChevronLeft size={20} /></button>
                 <div className="mix-game-title">{session.charName}</div>
                 <button type="button" className="mix-icon-btn" onClick={() => setRecipeOpen(true)} disabled={busy} aria-label="修改方案" title="修改方案">
-                    <SlidersHorizontal size={17} />
+                    <MoreHorizontal size={20} />
                 </button>
             </div>
             <StateBar state={session.state ?? {}} />
@@ -506,7 +506,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                     aria-label="继续生成"
                     title="继续生成"
                 >
-                    <CornerDownRight size={18} />
+                    <Sparkles size={18} />
                 </button>
                 <button type="button" className="mix-send-btn" onClick={handleSend} disabled={busy || !input.trim()} aria-label="发送">
                     <Send size={16} />
