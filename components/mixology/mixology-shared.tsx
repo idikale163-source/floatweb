@@ -258,7 +258,7 @@ export function MaterialDetail({ material }: { material: MixMaterial }) {
         return (
             <>
                 <DetailField label="一句话介绍" value={material.hook} />
-                <DetailField label="装饰 CSS" value={material.css} code />
+                <DetailField label="外观 CSS" value={material.css} code />
             </>
         );
     }
