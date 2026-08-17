@@ -375,6 +375,13 @@ export type MixSession = {
     turns: MixTurn[];
     /** 当前记住的值（小票里勾了「记住」的项，每轮更新） */
     state?: MixState;
+    /**
+     * 每件机括自己的存储桶（materialId → 键值表），退出再进来还在。
+     * 刻意不随轮次做快照：存储桶上限给到 100KB，逐轮留档会把对局撑爆。
+     * 回溯之后机括看到的还是回溯前的私有记忆——数据包里带了 turnCount，
+     * 需要的话机括可以自己发现轮数倒退并复位。
+     */
+    mechanismStore?: Record<string, Record<string, string>>;
     createdAt: number;
     updatedAt: number;
 };

@@ -13,7 +13,8 @@ import type {
     MixTextMaterial,
     MixTicketVar,
 } from "@/lib/mixology/types";
-import { createMixId, MIX_KIND_LABELS, mixKindHasCover } from "@/lib/mixology/types";
+import { createMixId, MIX_DOCK_LABELS, MIX_KIND_LABELS, mixKindHasCover } from "@/lib/mixology/types";
+import type { MixDock } from "@/lib/mixology/types";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
 import { MixPreviewSheet, MixStructureSheet, type MixPreviewTarget } from "./mixology-preview";
 
@@ -161,6 +162,9 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
     const [renderHtml, setRenderHtml] = useState(initial?.kind === "ticket" ? initial.renderHtml : "");
     const [previewRaw, setPreviewRaw] = useState(initial?.kind === "ticket" ? initial.previewRaw ?? "" : "");
     const [vars, setVars] = useState<MixTicketVar[]>(initial?.kind === "ticket" ? initial.vars ?? [] : []);
+    const [script, setScript] = useState(initial?.kind === "mechanism" ? initial.script ?? "" : "");
+    const [dock, setDock] = useState<MixDock | "">(initial?.kind === "mechanism" ? initial.dock ?? "" : "");
+    const [panelHtml, setPanelHtml] = useState(initial?.kind === "mechanism" ? initial.panelHtml ?? "" : "");
 
     /**
      * 从契约正文里认出「字段名：说明」这样的行，做成一排可点的候选。
@@ -267,6 +271,16 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                 .map((v) => ({ name: v.name.trim(), initial: v.initial?.trim() || undefined }))
                 .filter((v, i, all) => v.name && all.findIndex((x) => x.name === v.name) === i);
             onSave({ ...meta, kind: "ticket", contract: contract.trim(), renderHtml, previewRaw: previewRaw.trim() || undefined, vars: cleanVars.length ? cleanVars : undefined });
+            return;
+        }
+        if (kind === "mechanism") {
+            onSave({
+                ...meta,
+                kind: "mechanism",
+                script: script.trim() || undefined,
+                dock: dock || undefined,
+                panelHtml: panelHtml.trim() || undefined,
+            });
             return;
         }
         if (kind === "garnish") {
@@ -572,6 +586,52 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     >
                         <Play size={13} style={{ verticalAlign: "-2px" }} /> 预览小票
                     </button>
+                </>
+            ) : null}
+            {kind === "mechanism" ? (
+                <>
+                    <Field label="钩子逻辑" hint="可留空。定义下面这几个函数，会在对应时机被调用">
+                        <textarea
+                            className="mix-textarea"
+                            data-code="true"
+                            style={{ minHeight: 200 }}
+                            value={script}
+                            onChange={(e) => setScript(e.target.value)}
+                            placeholder={"每个函数收一份 ctx，返回一个对象（不返回就是什么都不改）。\nctx: { turnCount, state, store, charName, userName, text, ticketRaw, encoreRaw }\n可返回: { text, note, state, store }\n\n例：玩家打「/掷骰」时换成一段带结果的指令\nfunction onBeforeSend(ctx) {\n  if (ctx.text !== \"/掷骰\") return;\n  var n = 1 + Math.floor(Math.random() * 20);\n  return { text: \"（我掷出了 \" + n + \" 点）\" };\n}\n\n例：连着三轮好感度上涨就提醒一次\nfunction onAfterReply(ctx) {\n  var up = Number(ctx.store.连涨 || 0);\n  return { store: { 连涨: String(up + 1) } };\n}"}
+                        />
+                    </Field>
+                    <Field label="常驻界面" hint="可留空。选一个停靠位，界面会一直挂在对局画面边上">
+                        <div className="mix-dock-row">
+                            <button type="button" className="mix-dock-chip" data-on={dock === "" ? "true" : undefined} onClick={() => setDock("")}>不要界面</button>
+                            {(Object.keys(MIX_DOCK_LABELS) as MixDock[]).map((value) => (
+                                <button
+                                    type="button"
+                                    className="mix-dock-chip"
+                                    data-on={dock === value ? "true" : undefined}
+                                    key={value}
+                                    onClick={() => setDock(value)}
+                                >
+                                    {MIX_DOCK_LABELS[value]}
+                                </button>
+                            ))}
+                        </div>
+                    </Field>
+                    {dock ? (
+                        <Field label="界面代码" hint="HTML + CSS + JS，在沙盒里跑">
+                            <textarea
+                                className="mix-textarea"
+                                data-code="true"
+                                style={{ minHeight: 160 }}
+                                value={panelHtml}
+                                onChange={(e) => setPanelHtml(e.target.value)}
+                                placeholder={"例：\n<div style=\"padding:10px;color:#d9b06a\">这里是常驻面板</div>"}
+                            />
+                        </Field>
+                    ) : null}
+                    <div className="mix-struct-note" style={{ marginTop: 10 }}>
+                        钩子跑在没有网络、碰不到应用本体的沙盒里，超时会被掐断，那一轮当作没有机括。
+                        存储是这件机括自己的，一个对局一份，退出再进来还在。
+                    </div>
                 </>
             ) : null}
             {kind === "garnish" ? (

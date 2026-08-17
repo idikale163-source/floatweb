@@ -47,7 +47,8 @@ import {
     saveMixRecipe,
     type MixProfile,
 } from "@/lib/mixology/storage";
-import { startMixSession } from "@/lib/mixology/engine";
+import { runMixSessionStart, startMixSession } from "@/lib/mixology/engine";
+import { disposeMixSandboxesForMaterial } from "@/lib/mixology/mechanism-runtime";
 import {
     createMixId,
     MIX_KIND_LABELS,
@@ -265,6 +266,8 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
     const startWithOpening = (recipe: MixRecipe, openingIndex: number) => {
         try {
             const session = startMixSession(recipe, { openingIndex });
+            // 开局钩子在后台补一笔（初始化机括的存储与记住的值），不挡跳转
+            void runMixSessionStart(session.id);
             setOpeningPicker(null);
             refresh();
             setPlaying(session.id);
@@ -1026,6 +1029,8 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     saveMixMaterial(editor.initial?.publishedId
                                         ? { ...material, publishedId: editor.initial.publishedId, publishedAt: editor.initial.publishedAt }
                                         : material);
+                                    // 机括改完，正在跑的沙盒里还是老代码——收掉，下次调用重建
+                                    if (material.kind === "mechanism") disposeMixSandboxesForMaterial(material.id);
                                     setEditor(null);
                                     refresh();
                                     showToast(`「${material.name}」已入柜。`);

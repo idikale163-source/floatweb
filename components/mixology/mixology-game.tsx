@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChevronLeft, Copy, CornerDownRight, History, Pencil, Plus, RotateCcw, Send, SlidersHorizontal, X } from "lucide-react";
-import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, regenerateMixTail, rerollMixReply, truncateMixAfterTurn } from "@/lib/mixology/engine";
+import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, regenerateMixTail, rerollMixReply, runMixSessionEnd, truncateMixAfterTurn } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession, listMixPickables, resolveMixRecipeMaterials, saveMixSession } from "@/lib/mixology/storage";
 import { buildMixConditionContext, pickActiveMixMaterials } from "@/lib/mixology/state";
 import { scopeMixCss } from "@/lib/mixology/css-scope";
@@ -16,6 +16,9 @@ import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
 import { KindGlyph, MixConfirm } from "./mixology-shared";
 import { MixTicketFrame } from "./ticket-frame";
+
+/** 当前真正挂着的对局：严格模式的重复挂载靠它区分「真退出」与「假卸载」 */
+const liveMixGames = new Set<string>();
 
 type GameProps = {
     sessionId: string;
@@ -183,6 +186,19 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     }, [session?.turns.length, busy]);
 
     useEffect(() => () => abortRef.current?.abort(), []);
+
+    // 退出对局：跑一次收摊钩子并收掉这一局的全部沙盒，别让它们挂在页面上。
+    // 延后一拍再判：开发期的严格模式会「挂载 → 立刻卸载 → 再挂载」，
+    // 直接在清理函数里收摊会在刚进对局时就把这一局收掉。
+    useEffect(() => {
+        liveMixGames.add(sessionId);
+        return () => {
+            liveMixGames.delete(sessionId);
+            window.setTimeout(() => {
+                if (!liveMixGames.has(sessionId)) void runMixSessionEnd(sessionId);
+            }, 0);
+        };
+    }, [sessionId]);
 
     if (!session) {
         return (

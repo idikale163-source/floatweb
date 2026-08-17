@@ -2438,3 +2438,27 @@
     color: var(--mix-gold);
     font-variant-numeric: tabular-nums;
 }
+
+/* 机括：停靠位选择 */
+.mix-dock-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.mix-dock-chip {
+    border: 1px solid var(--mix-line);
+    border-radius: 999px;
+    padding: 7px 14px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    background: transparent;
+    color: var(--mix-dim);
+}
+
+.mix-dock-chip[data-on="true"] {
+    border-color: transparent;
+    background: rgba(141, 123, 245, 0.2);
+    color: var(--mix-violet);
+}
