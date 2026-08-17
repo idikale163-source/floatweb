@@ -16,7 +16,8 @@ export type MixMaterialKind =
     | "ticket"    // 小票：状态数据卡（输出契约 + 渲染代码）
     | "garnish"   // 装饰：界面美化 CSS
     | "encore"    // 尾调：随卡互动 HTML 小品
-    | "filter";   // 滤网：正则清洗正文（不进提示词）
+    | "filter"    // 滤网：正则清洗正文（不进提示词）
+    | "mechanism"; // 机括：沙盒里跑的钩子逻辑 + 常驻界面
 
 export const MIX_KIND_LABELS: Record<MixMaterialKind, string> = {
     character: "角色卡",
@@ -29,11 +30,12 @@ export const MIX_KIND_LABELS: Record<MixMaterialKind, string> = {
     garnish: "装饰",
     encore: "尾调",
     filter: "滤网",
+    mechanism: "机括",
 };
 
 /** 吧台槽位顺序（角色卡永远第一槽） */
 export const MIX_SLOT_ORDER: MixMaterialKind[] = [
-    "character", "persona", "base", "flavor", "glass", "strength", "ticket", "garnish", "encore", "filter",
+    "character", "persona", "base", "flavor", "glass", "strength", "ticket", "garnish", "encore", "filter", "mechanism",
 ];
 
 /** 每类材料在提示词里的正规段名（装饰不进提示词，标它的实际职责） */
@@ -48,6 +50,7 @@ export const MIX_KIND_SECTION_LABELS: Record<MixMaterialKind, string> = {
     garnish: "界面样式",
     encore: "小剧场",
     filter: "文本清洗",
+    mechanism: "机括",
 };
 
 /** 必选槽：没配齐不能开局；其余槽可留空 */
@@ -72,6 +75,7 @@ export const MIX_SLOT_STACK: Record<MixMaterialKind, "concat" | "first"> = {
     garnish: "concat",
     encore: "first",
     filter: "concat",
+    mechanism: "concat",
 };
 
 /** 不给设生效条件的格：这两格没了这一局就不成立 */
@@ -229,6 +233,33 @@ export type MixFilterMaterial = MixMaterialMeta & {
     rules: MixFilterRule[];
 };
 
+/** 机括的停靠位：界面挂在对局画面的哪一侧，位置由应用排布，创作者只能选 */
+export type MixDock = "left" | "right" | "bottom" | "float";
+
+export const MIX_DOCK_LABELS: Record<MixDock, string> = {
+    left: "左侧栏",
+    right: "右侧栏",
+    bottom: "底部条",
+    float: "悬浮球",
+};
+
+/**
+ * 机括：两个部分，任一半可留空。
+ * - 钩子：在流水线的固定几个口子上被叫起来跑一下，收数据包、还数据包，
+ *   跑在没有网络、碰不到宿主页面的沙盒里，还带超时熔断。
+ * - 常驻界面：选一个停靠位挂一段 HTML，跨轮活着、有自己的存储。
+ * 两半共用同一个存储桶，天然能互相看见。
+ */
+export type MixMechanismMaterial = MixMaterialMeta & {
+    kind: "mechanism";
+    /** 钩子代码：定义 onSessionStart / onBeforeSend / onAfterReply / onSessionEnd */
+    script?: string;
+    /** 常驻界面的停靠位；不填则这件机括没有界面 */
+    dock?: MixDock;
+    /** 常驻界面的 HTML（含 CSS/JS），在沙盒 iframe 里跑 */
+    panelHtml?: string;
+};
+
 export type MixMaterial =
     | MixCharacterCard
     | MixPersonaMaterial
@@ -236,7 +267,8 @@ export type MixMaterial =
     | MixTicketMaterial
     | MixGarnishMaterial
     | MixEncoreMaterial
-    | MixFilterMaterial;
+    | MixFilterMaterial
+    | MixMechanismMaterial;
 
 /** 条件里的比较符 */
 export type MixCompareOp = ">" | ">=" | "<" | "<=" | "=" | "!=";

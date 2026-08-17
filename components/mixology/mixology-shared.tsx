@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import {
     BookOpen,
     CircleUserRound,
+    Cog,
     Feather,
     Filter,
     Flame,
@@ -17,7 +18,7 @@ import {
     UserRound,
 } from "lucide-react";
 import type { MixCharacterCard, MixMaterial, MixMaterialKind } from "@/lib/mixology/types";
-import { MIX_KIND_LABELS, mixEncoreRenderHtml, mixKindHasCover } from "@/lib/mixology/types";
+import { MIX_DOCK_LABELS, MIX_KIND_LABELS, mixEncoreRenderHtml, mixKindHasCover } from "@/lib/mixology/types";
 import { MixRichText } from "./rich-text";
 
 const KIND_ICONS: Record<MixMaterialKind, typeof UserRound> = {
@@ -31,6 +32,7 @@ const KIND_ICONS: Record<MixMaterialKind, typeof UserRound> = {
     garnish: Sparkles,
     encore: Music4,
     filter: Filter,
+    mechanism: Cog,
 };
 
 export function KindGlyph({ kind, size = 26 }: { kind: MixMaterialKind; size?: number }) {
@@ -241,6 +243,16 @@ export function MaterialDetail({ material }: { material: MixMaterial }) {
                         .join("\n")}
                     code
                 />
+            </>
+        );
+    }
+    if (material.kind === "mechanism") {
+        return (
+            <>
+                <DetailField label="一句话介绍" value={material.hook} />
+                <DetailField label="钩子逻辑" value={material.script} code />
+                {material.dock ? <DetailField label="常驻界面" value={`停靠在${MIX_DOCK_LABELS[material.dock]}`} /> : null}
+                <DetailField label="界面代码" value={material.panelHtml} code />
             </>
         );
     }
