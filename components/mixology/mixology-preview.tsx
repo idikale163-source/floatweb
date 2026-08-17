@@ -7,6 +7,7 @@ import { X } from "lucide-react";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
 import { MixTicketFrame } from "./ticket-frame";
+import { scopeMixCss } from "@/lib/mixology/css-scope";
 
 /** 装饰预览用的样例正文：覆盖五种正文标记，方便作者一眼看全 */
 const GARNISH_SAMPLE = [
@@ -55,8 +56,9 @@ export function MixPreviewSheet({ target, onClose }: { target: MixPreviewTarget;
                     {target.kind === "garnish" ? (
                         <>
                             <div className="mix-detail-label">套在样例正文上的效果</div>
-                            <div className="mix-garnish-stage">
-                                <style>{target.css}</style>
+                            {/* 试穿也走同一套收口，所见即对局里的实际效果 */}
+                            <div className="mix-garnish-stage mix-garnish-scope">
+                                <style>{scopeMixCss(target.css)}</style>
                                 <MixProseView text={GARNISH_SAMPLE} />
                                 <div className="mix-user-turn">
                                     <div className="mix-user-bubble">我把伞递过去，「一起走？」</div>
@@ -74,6 +76,9 @@ export function MixPreviewSheet({ target, onClose }: { target: MixPreviewTarget;
                                     ".mix-narration 叙述",
                                     ".mix-user-bubble 玩家气泡",
                                     ".mix-ticket-wrap 小票外框",
+                                    "",
+                                    "body / html / :root  等同于整个对局画面",
+                                    "样式只在对局画面内生效，改不到应用的其他页面",
                                 ].join("\n")}
                             </div>
                         </>

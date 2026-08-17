@@ -9,6 +9,7 @@ import { ChevronLeft, Copy, CornerDownRight, History, Pencil, Plus, RotateCcw, S
 import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, regenerateMixTail, rerollMixReply, truncateMixAfterTurn } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession, listMixPickables, resolveMixRecipeMaterials, saveMixSession } from "@/lib/mixology/storage";
 import { buildMixConditionContext, pickActiveMixMaterials } from "@/lib/mixology/state";
+import { scopeMixCss } from "@/lib/mixology/css-scope";
 import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, mixSlotEntries, type MixCharacterCard, type MixFilterRule, type MixMaterialKind, type MixSession, type MixSlotEntry, type MixState, type MixTurn } from "@/lib/mixology/types";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
 import { MixProseView } from "./prose-view";
@@ -287,8 +288,9 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const canReroll = !busy && lastTurn?.role === "assistant" && session.turns.length > 1;
 
     return (
-        <div className="mix-game" style={stateCssVars}>
-            {assets.garnishCss ? <style>{assets.garnishCss}</style> : null}
+        <div className="mix-game mix-garnish-scope" style={stateCssVars}>
+            {/* 装饰是可分享材料里唯一直接进主文档的代码，注入前先收口到本画面 */}
+            {assets.garnishCss ? <style>{scopeMixCss(assets.garnishCss)}</style> : null}
             <div className="mix-game-bg" style={assets.cover ? { backgroundImage: `url(${assets.cover})` } : undefined} />
             <div className="mix-game-header">
                 <button type="button" className="mix-icon-btn" onClick={onBack} aria-label="返回"><ChevronLeft size={20} /></button>
