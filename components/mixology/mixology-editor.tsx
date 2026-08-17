@@ -59,7 +59,7 @@ const KIND_GUIDE: Record<MixMaterialKind, { what: string; where: string }> = {
         where: "契约进入提示词「小剧场」段；渲染代码不进提示词，仅在界面中执行。",
     },
     mechanism: {
-        what: "这里写机括：一段在沙盒里跑的逻辑，和一块常驻在对局画面边上的界面，两者可只写其一。逻辑在固定的几个时机被叫起来——开局、发送前、收到回复后、退出对局——每次收到一份数据包，加工完还回去。",
+        what: "这里写机括：一段在沙盒里跑的逻辑，和一块常驻在对局画面边上的界面。两半通常配合着写——它们共用同一份存储，能互相看见（界面上记的东西，钩子发送前能用上）；只写其中一半也可以。逻辑在固定的几个时机被叫起来——开局、发送前、收到回复后、退出对局——每次收到一份数据包，加工完还回去。",
         where: "不进入提示词。跑在没有网络、碰不到应用本体的沙盒里，超时会被掐断，那一轮当作没有机括。",
     },
     filter: {
@@ -590,7 +590,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             ) : null}
             {kind === "mechanism" ? (
                 <>
-                    <Field label="钩子逻辑" hint="可留空。定义下面这几个函数，会在对应时机被调用">
+                    <Field label="钩子逻辑" hint="可留空。定义下面这几个函数，会在对应时机被调用；ctx.store 与下面的界面是同一份">
                         <textarea
                             className="mix-textarea"
                             data-code="true"
@@ -600,7 +600,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             placeholder={"每个函数收一份 ctx，返回一个对象（不返回就是什么都不改）。\nctx: { turnCount, state, store, charName, userName, text, ticketRaw, encoreRaw }\n可返回: { text, note, state, store }\n\n例：玩家打「/掷骰」时换成一段带结果的指令\nfunction onBeforeSend(ctx) {\n  if (ctx.text !== \"/掷骰\") return;\n  var n = 1 + Math.floor(Math.random() * 20);\n  return { text: \"（我掷出了 \" + n + \" 点）\" };\n}\n\n例：连着三轮好感度上涨就提醒一次\nfunction onAfterReply(ctx) {\n  var up = Number(ctx.store.连涨 || 0);\n  return { store: { 连涨: String(up + 1) } };\n}"}
                         />
                     </Field>
-                    <Field label="常驻界面" hint="可留空。选一个停靠位，界面会一直挂在对局画面边上">
+                    <Field label="常驻界面" hint="可留空。选一个停靠位，界面会一直挂在对局画面边上；它写的存储上面的钩子读得到">
                         <div className="mix-dock-row">
                             <button type="button" className="mix-dock-chip" data-on={dock === "" ? "true" : undefined} onClick={() => setDock("")}>不要界面</button>
                             {(Object.keys(MIX_DOCK_LABELS) as MixDock[]).map((value) => (
@@ -630,7 +630,8 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     ) : null}
                     <div className="mix-struct-note" style={{ marginTop: 10 }}>
                         钩子跑在没有网络、碰不到应用本体的沙盒里，超时会被掐断，那一轮当作没有机括。
-                        存储是这件机括自己的，一个对局一份，退出再进来还在。
+                        存储是这件机括自己的，一个对局一份，退出再进来还在——钩子与界面共用这一份，
+                        所以「界面上记一笔、下一轮发送前带进提示词」这类配合是天然成立的。
                     </div>
                 </>
             ) : null}
