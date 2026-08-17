@@ -172,6 +172,19 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
         setSessions(loadMixSessions());
     }, []);
 
+    /**
+     * 从酒材页/大厅点「编辑」进来：那边已经把自己的作品取回本地了，
+     * 这里负责切到酒柜、切到它所在的 TAG，并直接打开编辑页（仍带着云端关联）。
+     */
+    const openLocalEditor = useCallback((materialId: string) => {
+        const material = getMixMaterial(materialId);
+        if (!material) { showToast("没找到这件材料。"); return; }
+        refresh();
+        setTab("cabinet");
+        setCabinetKind(material.kind);
+        setEditor({ kind: material.kind, initial: material });
+    }, [refresh, showToast]);
+
     const cabinetFiltered = useMemo(
         () => cabinet.filter((m) => m.kind === cabinetKind),
         [cabinet, cabinetKind],
@@ -539,11 +552,11 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
 
             <div className="mix-body" data-fill={tab === "bar" && barTab === "create" ? "true" : undefined}>
                 {tab === "menu" ? (
-                    <MixologyHall mode="menu" kind={hallKind} scope={hallScope} onToast={showToast} onImported={refresh} reloadToken={hallReload} onLoadingChange={setHallLoading} />
+                    <MixologyHall mode="menu" kind={hallKind} scope={hallScope} onToast={showToast} onImported={refresh} reloadToken={hallReload} onLoadingChange={setHallLoading} onEditLocal={openLocalEditor} />
                 ) : null}
 
                 {tab === "hall" ? (
-                    <MixologyHall mode="hall" scope={hallScope} onToast={showToast} onImported={refresh} reloadToken={hallReload} onLoadingChange={setHallLoading} />
+                    <MixologyHall mode="hall" scope={hallScope} onToast={showToast} onImported={refresh} reloadToken={hallReload} onLoadingChange={setHallLoading} onEditLocal={openLocalEditor} />
                 ) : null}
 
                 {tab === "bar" ? (
