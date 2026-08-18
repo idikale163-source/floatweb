@@ -125,11 +125,17 @@ function sectionBlock(title: string, lines: (string | null)[]): string | null {
     return `# ${title}\n${kept.join("\n\n")}`;
 }
 
-const PREAMBLE = [
-    "这是一场沉浸式角色扮演。下方依次给出扮演规则、角色资料与输出要求，请全部遵守；",
-    "越靠后的要求优先级越高。",
-    "\n（# 为分段，## 为该段下的具体条目；更深的层级来自创作者自己的分层。）",
-].join("");
+/**
+ * 序言。第一句就把「你演谁」点明——这是整份提示词里最该被看见的一件事，
+ * 放在最顶上比藏在任何一栏资料里都稳。
+ */
+function preamble(charName: string): string {
+    return [
+        `这是一场沉浸式角色扮演，你要扮演的角色是${charName}。`,
+        "下方依次给出扮演规则、角色资料与输出要求，请全部遵守；越靠后的要求优先级越高。",
+        "\n（# 为分段，## 为该段下的具体条目；更深的层级来自创作者自己的分层。）",
+    ].join("");
+}
 
 // 正文标记协议是 App 的渲染协议，内置且常驻——放在段首、用户杯型内容之后接，
 // 不随材料缺失而消失（装饰 CSS 与正文渲染都依赖这四种标记）。
@@ -211,11 +217,13 @@ export function assembleMixPrompt(input: MixAssembleInput): MixAssembledPrompt {
     const glassText = stackBody(m.glass, apply);
     const strengthText = stackBody(m.strength, apply);
 
+    // 角色名与代入名是单值，不是一栏资料：它们各自作为所在段的开头一行，不占标题——
+    // 给一个名字配一个和「性格」「背景」同级的标题，结构上不对等。
     const sections: (string | null)[] = [
-        PREAMBLE,
+        preamble(charName),
         baseText ? `# 扮演总纲\n${baseText}` : null,
         sectionBlock("角色资料", [
-            `## 角色名\n${charName}`,
+            `角色名：${charName}`,
             field("基础信息", card.baseInfo),
             field("性格", card.personality),
             field("外貌", card.appearance),
@@ -224,11 +232,9 @@ export function assembleMixPrompt(input: MixAssembleInput): MixAssembledPrompt {
         // 用户资料：{{user}} 是谁。由面具材料提供，帮模型称呼与理解对面的人
         persona && persona.content.trim()
             ? [
-                "# 用户资料",
-                `${userName}由用户扮演，${charName}对面的人。`,
-                persona.userName?.trim() ? `## 代入名\n${apply(persona.userName.trim())}` : null,
+                `# 用户资料\n${userName}由用户扮演，${charName}对面的人。`,
                 `## 用户人设\n${apply(persona.content.trim())}`,
-            ].filter(Boolean).join("\n\n")
+            ].join("\n\n")
             : null,
         sectionBlock("世界与剧情", [
             field("世界观", card.worldview),
