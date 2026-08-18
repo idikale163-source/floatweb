@@ -202,10 +202,10 @@ export type MixTextMaterial = MixMaterialMeta & {
     content: string;
 };
 
-/** 面具（用户人设）：{{user}} 是谁——代入名 + 人设正文，装配成「用户资料」段 */
+/** 面具（用户人设）：{{user}} 是谁——名字 + 人设正文，装配成「用户资料」段 */
 export type MixPersonaMaterial = MixMaterialMeta & {
     kind: "persona";
-    /** 玩家代入名，替换 {{user}}；留空用默认「你」 */
+    /** 用户的名字，替换 {{user}}；留空用默认「你」 */
     userName?: string;
     content: string;
 };
@@ -412,7 +412,7 @@ export type MixSession = {
     recipe: MixRecipe;
     /** 角色名快照（列表展示用，酒柜里的卡被删也不受影响） */
     charName: string;
-    /** 玩家代入名（{{user}}），空则用默认 */
+    /** 用户的名字（{{user}}），空则用默认 */
     userName?: string;
     /** 选用的开场索引 */
     openingIndex: number;

@@ -27,8 +27,8 @@ const KIND_GUIDE: Record<MixMaterialKind, { what: string; where: string }> = {
         where: "进入「角色资料」「世界与剧情」「示例对话」三段。",
     },
     persona: {
-        what: "这里写用户人设：{{user}} 是谁——身份、性格、外貌，以及与{{char}}关系中用户一侧的设定；可另填一个代入名替换全部 {{user}}。",
-        where: "进入「用户资料」段；代入名替换全部 {{user}}。",
+        what: "这里写用户人设：{{user}} 是谁——身份、性格、外貌，以及与{{char}}之间那段关系里你这一侧的设定。",
+        where: "进入「用户资料」段；填了名字就替换全部 {{user}}。",
     },
     base: {
         what: "这里写扮演总纲：如何入戏、能否代替玩家发言、是否允许冲突与负面情绪。约束态度，不涉及文笔。",
@@ -497,7 +497,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             ) : null}
             {kind === "persona" ? (
                 <>
-                    <Field label="代入名" hint="选填，替换提示词里的 {{user}}；留空则用「你」">
+                    <Field label="你的名字" hint="选填，角色会这么称呼你；留空则用「你」">
                         <input className="mix-input" value={personaUserName} onChange={(e) => setPersonaUserName(e.target.value)} placeholder="例：阿澈" />
                     </Field>
                     <Field label="用户人设" hint="必填，可用 {{char}} / {{user}}">

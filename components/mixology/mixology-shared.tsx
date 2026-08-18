@@ -205,7 +205,7 @@ export function isSealedMaterial(material: { kind: string; imported?: boolean })
  */
 export function SealedNote({ hook, canvas, charName }: { hook?: string; canvas?: string; charName?: string }) {
     if (canvas?.trim()) {
-        // 详情页没有对局，{{user}} 没有代入名可用，退回默认的「你」
+        // 详情页没有对局，{{user}} 没有名字可用，退回默认的「你」
         const filled = applyMixMacros(canvas, charName ?? "", MIX_DEFAULT_USER_NAME, undefined, { escapeHtml: true });
         return <div className="mix-canvas-block"><MixRichText text={filled} /></div>;
     }
@@ -245,7 +245,7 @@ export function MaterialDetail({ material }: { material: MixMaterial }) {
         return (
             <>
                 <DetailField label="一句话介绍" value={material.hook} />
-                <DetailField label="代入名" value={material.userName} />
+                <DetailField label="你的名字" value={material.userName} />
                 <DetailField label="用户人设" value={material.content} />
             </>
         );

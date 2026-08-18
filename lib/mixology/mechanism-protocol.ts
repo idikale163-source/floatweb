@@ -32,7 +32,7 @@ export type MixHookPayload = {
     state: MixState;
     /** 这件机括自己的存储 */
     store: MixMechanismStore;
-    /** 角色名与玩家代入名 */
+    /** 角色名与用户的名字 */
     charName: string;
     userName: string;
     /** 落杯前：玩家这一句；出杯后：模型这一段正文 */

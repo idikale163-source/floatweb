@@ -40,7 +40,7 @@ export type MixAssembleInput = {
      * 累加型的格（基底/风味/杯型/苦精）整叠依次拼接，择一型的格只看第一件。
      */
     materials: Partial<Record<MixMaterialKind, MixMaterial[]>>;
-    /** 玩家代入名，空则用默认 */
+    /** 用户的名字，空则用默认 */
     userName?: string;
     /** 选用的开场索引，越界时回退到 0 */
     openingIndex?: number;
@@ -70,7 +70,7 @@ function escapeForHtml(value: string): string {
 /**
  * 替换 {{char}} / {{user}} / {{状态.X}}。
  * escapeHtml：替换结果要插进 HTML（开场画布就是这种情况）时打开——
- * 只转义被替换进去的那几个值，不动作者自己写的标签。代入名是玩家自己填的，
+ * 只转义被替换进去的那几个值，不动作者自己写的标签。这个名字是用户自己填的，
  * 但一个叫「<b>」的名字照样能把画布的结构改坏，所以插进 HTML 前一律转义。
  */
 export function applyMixMacros(
@@ -204,7 +204,7 @@ export function assembleMixPrompt(input: MixAssembleInput): MixAssembledPrompt {
         return found as T | undefined;
     };
     const persona = firstOf<MixPersonaMaterial>("persona");
-    // 代入名：显式传入 > 面具材料的代入名 > 默认「你」
+    // 用户的名字：显式传入 > 面具材料里填的 > 默认「你」
     const userName = input.userName?.trim() || persona?.userName?.trim() || MIX_DEFAULT_USER_NAME;
     const ticket = firstOf<MixTicketMaterial>("ticket");
     const encore = firstOf<MixEncoreMaterial>("encore");
@@ -230,13 +230,17 @@ export function assembleMixPrompt(input: MixAssembleInput): MixAssembledPrompt {
         // 用户资料：{{user}} 是谁。由面具材料提供，帮模型称呼与理解对面的人
         persona && persona.content.trim()
             ? [
-                `# 用户资料\n${userName}由用户扮演，${charName}对面的人。`,
+                // 标题写「名字」不写「你的名字」：提示词里的「你」指的是模型自己，
+                // 用界面上那个词会指代不清。其余标题一律与界面一致。
+                persona.userName?.trim()
+                    ? `# 用户资料\n## 名字\n${apply(persona.userName.trim())}`
+                    : "# 用户资料",
                 `## 用户人设\n${apply(persona.content.trim())}`,
             ].join("\n\n")
             : null,
         sectionBlock("世界与剧情", [
             field("世界观", card.worldview),
-            // 标题跟编辑器里那个框的标签一字不差；里面的 {{user}} 会在下面统一替换成代入名
+            // 标题跟编辑器里那个框的标签一字不差；里面的 {{user}} 会在下面统一替换成用户的名字
             field("对{{user}}的初始认知", card.cognition),
             field("关系与身份", card.relations),
             field("当前剧情", card.plot),
