@@ -2462,7 +2462,7 @@ export default function MapView({ world, save, onSaveUpdate, onBack }: Props) {
                 <div style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", marginBottom: 8, fontFamily: "monospace", letterSpacing: "0.1em" }}>物品栏</div>
                 {save.director.keyItems.length === 0 ? (
                   <div style={{ fontSize: "calc(12px*var(--app-text-scale,1))", color: "var(--c-adv-text-muted)", textAlign: "center", padding: "20px 0" }}>
-                    暂无内容
+                    空空如也~
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

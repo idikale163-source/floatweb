@@ -585,7 +585,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                             <button type="button" className="mix-icon-btn" onClick={() => setRecipeOpen(false)} aria-label="关闭"><X size={18} /></button>
                         </div>
                         <div className="mix-sheet-body">
-                            <div className="mix-struct-note">仅对本局生效，自下一轮生成起应用，已生成的内容不变；不影响吧台中保存的方案。</div>
+                            <div className="mix-struct-note">只改这一局，下一轮生成时生效，已写出的内容不变；不影响吧台里保存的方案。</div>
                             {panels.length ? (
                                 <div className="mix-panel-ops">
                                     <button type="button" className="mix-dock-chip" data-on={panelsHidden ? "true" : undefined} onClick={() => setPanelsHidden((v) => !v)}>
@@ -704,7 +704,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                             <div className="mix-sheet-body">
                                 {editingTurn?.role === "assistant" ? (
                                     <div className="mix-struct-note">
-                                        此处显示本轮的<b>原始输出</b>，其中包含 [状态栏] / [小剧场] 块。
+                                        这里是这一轮的<b>原始输出</b>——[状态栏]/[小剧场] 块也在里面。
                                         模型输出掉了格式可以在这儿手动修，保存后会重新解析渲染。
                                     </div>
                                 ) : null}

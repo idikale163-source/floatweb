@@ -1173,7 +1173,7 @@ export function MemoryBankPage({ view, selectedCharId, onSelectChar, onNotice }:
                 <div className="mem-picker-body">
                     <p className="mem-picker-prompt">
                         你想查看谁的记忆呢？<br />
-                        <span className="mem-picker-hint">点击角色卡片查看</span>
+                        <span className="mem-picker-hint">点击TA的卡片查看吧</span>
                     </p>
 
                     <div className="mem-picker-chips">

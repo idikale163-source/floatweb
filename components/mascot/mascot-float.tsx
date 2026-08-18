@@ -2221,7 +2221,7 @@ export function MascotFloat() {
                       onClick={handleClearMascotToolHistory}
                       disabled={isThinking || !hasMascotToolHistory}
                     >
-                      清理原生工具调用历史（避免报错）
+                      清理原生tool调用历史——防报错
                     </button>
                   </>
                 )}

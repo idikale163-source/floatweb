@@ -126,7 +126,7 @@ export function CommentThread({
         const hasReplies = comments.some((c) => c.parentId === comment.id);
         requestConfirm({
             title: "删除这条评论？",
-            body: hasReplies ? <>其下方的回复将一并删除。</> : undefined,
+            body: hasReplies ? <>它下面的回复会一起删掉。</> : undefined,
             confirmText: "删除",
             tone: "danger",
             run: () => void handleDelete(comment),
@@ -166,7 +166,7 @@ export function CommentThread({
             {loading ? (
                 <div className="mix-comment-empty mix-loading-inline"><Loader2 size={14} className="mix-spin" />评论加载中…</div>
             ) : topLevel.length === 0 ? (
-                <div className="mix-comment-empty">暂无评论</div>
+                <div className="mix-comment-empty">还没有人评论，坐下聊两句？</div>
             ) : (
                 topLevel.map((comment) => renderComment(comment, 0))
             )}
@@ -417,7 +417,7 @@ export function MixologyHall({
             // 列表项没有 payload，详情才有；点进来的是详情，但补一道保险
             const full = entry.payload ? entry : await fetchHallMaterial(entry.id);
             const localId = pullBackMaterial(full);
-            if (!localId) { onToast("未能取回这件材料的内容。"); return; }
+            if (!localId) { onToast("这件材料的内容没能取回来。"); return; }
             onImported();
             setDetailMaterial(null);
             onEditLocal?.(localId);
@@ -433,7 +433,7 @@ export function MixologyHall({
         if (!entry.parts?.length || busy) return;
         const characterPart = entry.parts.find((p) => p.kind === "character");
         if (!characterPart || characterPart.gone || (!characterPart.builtin && !characterPart.material)) {
-            onToast("角色卡已从酒材页下架，该配方无法入柜。");
+            onToast("角色卡已从酒材页下架，这杯配方没法入柜。");
             return;
         }
         // 自己发布的配方拉回来，同样要还原成「自己的作品」，否则删了本地就再也改不了
@@ -492,8 +492,8 @@ export function MixologyHall({
             onToast(missing > 0
                 ? `「${entry.name}」已${mine ? "回到吧台" : "入柜"}，但 ${missing} 味材料已下架，这杯会缺味。`
                 : mine
-                    ? `「${entry.name}」已回到吧台，可直接修改。`
-                    : `「${entry.name}」已连同材料入柜，可在吧台查看。`);
+                    ? `「${entry.name}」已回到吧台，可以直接改。`
+                    : `「${entry.name}」已连料入柜，去吧台看看。`);
         } catch (error) {
             onToast(error instanceof Error ? error.message : "导入失败");
         } finally {
@@ -549,7 +549,7 @@ export function MixologyHall({
             return (
                 <div className="mix-empty" style={{ paddingTop: 60 }}>
                     <Loader2 size={28} strokeWidth={1.6} className="mix-spin" />
-                    正在加载…
+                    调酒师正在开灯…
                 </div>
             );
         }
@@ -577,7 +577,7 @@ export function MixologyHall({
                         <Wine size={36} strokeWidth={1.4} />
                         {notReady}
                         <br />
-                        本地的吧台与酒柜不受影响，可先自行调配。
+                        本地的吧台和酒柜不受影响，先自己调一杯。
                     </div>
                 </>
             );
@@ -587,9 +587,9 @@ export function MixologyHall({
                 return (
                     <div className="mix-empty">
                         <Inbox size={32} strokeWidth={1.4} />
-                        {scope === "mine" ? `你还没发布过${MIX_KIND_LABELS[kind]}——` : `暂时还没有人分享${MIX_KIND_LABELS[kind]}`}
+                        {scope === "mine" ? `你还没发布过${MIX_KIND_LABELS[kind]}——` : `还没有人分享${MIX_KIND_LABELS[kind]}——`}
                         <br />
-                        可在酒柜中打开自己的材料，点击「分享到酒材页」。
+                        在酒柜里打开自己的材料，点「分享到酒材页」。
                     </div>
                 );
             }
@@ -618,7 +618,7 @@ export function MixologyHall({
                     <Wine size={32} strokeWidth={1.4} />
                     {scope === "mine" ? "你还没分享过配方——" : "还没有人分享配方——"}
                     <br />
-                    可在吧台对自己的特调点击「分享」。
+                    在吧台给自己的特调点「分享」。
                 </div>
             );
         }
@@ -700,7 +700,7 @@ export function MixologyHall({
                                     className="mix-icon-btn"
                                     onClick={() => setConfirm({
                                         title: "从酒材页下架？",
-                                        body: <>「{detailMaterial.name}」将从酒材页撤下，别人看不到也拿不到了。<br />已入柜用户手中的副本不受影响。</>,
+                                        body: <>「{detailMaterial.name}」将从酒材页撤下，别人看不到也拿不到了。<br />已经入柜的人手里那份不受影响。</>,
                                         confirmText: "下架",
                                         tone: "danger",
                                         run: () => void handleRemove("material", detailMaterial.id, detailMaterial.name),
@@ -746,7 +746,7 @@ export function MixologyHall({
                                             // 机括会在你的对局里按轮执行——入柜前得让人知道自己在装什么
                                             setConfirm({
                                                 title: "这件机括会执行代码",
-                                                body: <>「{detailMaterial.name}」带的是<b>将在你的对局中按轮执行的代码</b>：可改写你发出的内容与显示的正文，并以你的身份发言。<br />代码运行在无网络、无法访问应用本体的沙盒中，但可以读取对话内容。<br />请仅在信任作者时入柜。</>,
+                                                body: <>「{detailMaterial.name}」带的是<b>会在你的对局里按轮执行的代码</b>：它能改写你发出去的话、改写你看到的正文、以你的身份发言。<br />代码跑在没有网络、碰不到应用本体的沙盒里，但对话内容它看得到。<br />只在你信任作者时入柜。</>,
                                                 confirmText: "我知道，入柜",
                                                 run: () => void importMaterial(detailMaterial),
                                             });
@@ -790,7 +790,7 @@ export function MixologyHall({
                                     className="mix-icon-btn"
                                     onClick={() => setConfirm({
                                         title: "从配方页下架？",
-                                        body: <>「{detailRecipe.name}」将从配方页撤下，别人看不到也导不了了。<br />已导入用户手中的副本不受影响。</>,
+                                        body: <>「{detailRecipe.name}」将从配方页撤下，别人看不到也导不了了。<br />已经导入的人手里那份不受影响。</>,
                                         confirmText: "下架",
                                         tone: "danger",
                                         run: () => void handleRemove("recipe", detailRecipe.id, detailRecipe.name),
@@ -834,7 +834,7 @@ export function MixologyHall({
                                                     会把「{detailRecipe.name}」以及里面的 <b>{importable} 味材料</b>一并放进你的酒柜（官方件直接用本地出厂版），之后在吧台就能开局。
                                                     {goneCount > 0 ? <><br />{goneCount} 味材料已从酒材页下架，这杯会缺味。</> : null}
                                                     {mechanismCount > 0 ? (
-                                                        <><br /><br />其中 <b>{mechanismCount} 件是机括</b>：会在你的对局里按轮执行代码，能改写你发出去的话、你看到的正文，也能以你的身份发言。请仅在信任作者时入柜。</>
+                                                        <><br /><br />其中 <b>{mechanismCount} 件是机括</b>：会在你的对局里按轮执行代码，能改写你发出去的话、你看到的正文，也能以你的身份发言。只在你信任作者时入柜。</>
                                                     ) : null}
                                                 </>,
                                                 confirmText: mechanismCount > 0 ? "我知道，入柜" : "入柜",

@@ -59,7 +59,7 @@ const KIND_GUIDE: Record<MixMaterialKind, { what: string; where: string }> = {
         where: "契约进提示词；渲染代码只在界面执行。",
     },
     mechanism: {
-        what: "一段在沙盒中运行的逻辑，加一块常驻于对局画面的界面。两者共用同一份存储，也可只写其中一半。",
+        what: "一段在沙盒里跑的逻辑，加一块常驻在对局画面上的界面。两半共用同一份存储，可以只写一半。",
         where: "不进提示词，跑在断网的沙盒里。",
     },
     filter: {
@@ -140,14 +140,12 @@ function MixLayoutPicker({ layout, onChange }: { layout: MixPanelLayout; onChang
     const clamp = useCallback((next: MixPanelLayout): MixPanelLayout => {
         const w = Math.round(Math.min(100, Math.max(MIX_PANEL_MIN_W, next.w)));
         const h = Math.round(Math.min(100, Math.max(MIX_PANEL_MIN_H, next.h)));
-        const keepX = Math.min(MIX_PANEL_KEEP_IN, w);
-        const keepY = Math.min(MIX_PANEL_KEEP_IN, h);
         return {
             ...next,
             w,
             h,
-            x: Math.round(Math.min(100 - keepX, Math.max(keepX - w, next.x))),
-            y: Math.round(Math.min(100 - keepY, Math.max(keepY - h, next.y))),
+            x: Math.round(Math.min(100 - MIX_PANEL_KEEP_IN, Math.max(MIX_PANEL_KEEP_IN - w, next.x))),
+            y: Math.round(Math.min(100 - MIX_PANEL_KEEP_IN, Math.max(MIX_PANEL_KEEP_IN - h, next.y))),
         };
     }, []);
 
@@ -183,15 +181,15 @@ function MixLayoutPicker({ layout, onChange }: { layout: MixPanelLayout; onChang
     }, [dragging, onChange, clamp]);
 
     const toggles: { key: keyof MixPanelLayout; label: string; on: boolean; hint: string }[] = [
-        { key: "drag", label: "玩家可拖动", on: layout.drag !== false, hint: "拖动后的位置仅记录在该对局中" },
+        { key: "drag", label: "玩家可拖动", on: layout.drag !== false, hint: "拖过的位置只记在那一局里" },
         { key: "resize", label: "玩家可缩放", on: layout.resize === true, hint: "右下角出现缩放把手" },
-        { key: "autoHeight", label: "高度随内容", on: layout.autoHeight === true, hint: "上方设定的高度将作为上限" },
-        { key: "chrome", label: "应用画标题条", on: (layout.chrome ?? "bar") === "bar", hint: "含名称与收起箭头的横条" },
+        { key: "autoHeight", label: "高度随内容", on: layout.autoHeight === true, hint: "上面画的高度变成上限" },
+        { key: "chrome", label: "应用画标题条", on: (layout.chrome ?? "bar") === "bar", hint: "带名字和收起箭头的那条" },
         { key: "plate", label: "应用画底板", on: layout.plate !== false, hint: "圆角暗底与描边" },
     ];
 
     return (
-        <Field label="画在哪" hint="拖动方框调整位置，拖动右下角调整大小">
+        <Field label="画在哪" hint="拖框挪位置，拖右下角改大小">
             <div className="mix-layout-pick">
                 <div className="mix-layout-board" ref={boardRef}>
                     <div className="mix-layout-bar">标题栏</div>
@@ -341,14 +339,14 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
         try {
             setCover(await readCoverFile(file));
         } catch {
-            setError("封面图读取失败，请更换图片。");
+            setError("封面图读取失败，请换一张试试。");
         }
     };
 
     const handleSave = () => {
         const trimmedName = name.trim();
         if (!trimmedName) {
-            setError("请先为这件材料命名。");
+            setError("先给这件材料起个名字。");
             return;
         }
         const meta = {
@@ -367,7 +365,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                 .map((o) => o.trim())
                 .filter(Boolean);
             if (!openings.length) {
-                setError("至少填写一段开场白，否则无法开局。");
+                setError("至少写一段开场白，开局才有酒可端。");
                 return;
             }
             const card: MixCharacterCard = {
@@ -417,7 +415,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
         }
         if (kind === "garnish") {
             if (!css.trim()) {
-                setError("外观不能为空，请填写 CSS。");
+                setError("外观不能是空的，写点 CSS 吧。");
                 return;
             }
             onSave({ ...meta, kind: "garnish", css });
@@ -455,7 +453,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             }
             const bad = cleaned.findIndex((r) => { try { new RegExp(r.find, "g"); return false; } catch { return true; } });
             if (bad >= 0) {
-                setError(`第 ${bad + 1} 条规则的正则写法有误，请在下方预览区修正后再保存。`);
+                setError(`第 ${bad + 1} 条规则的正则写法有误，先在下面试跑区改对再保存。`);
                 return;
             }
             onSave({ ...meta, kind: "filter", rules: cleaned });
@@ -478,14 +476,14 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                 {HEADING_NOTE_KINDS.includes(kind) ? <div className="mix-guide-level">{HEADING_NOTE}</div> : null}
                 <button type="button" className="mix-guide-link" onClick={() => setStructureOpen(true)}>
                     <FileText size={12} />
-                    <span>查看完整提示词结构</span>
+                    <span>看看完整提示词结构</span>
                 </button>
             </div>
             <Field label={isCharacter ? "角色名" : "名称"} hint="必填">
-                <input className="mix-input" value={name} onChange={(e) => setName(e.target.value)} placeholder={isCharacter ? "角色叫什么，就是提示词里的 {{char}}" : `给这件${MIX_KIND_LABELS[kind]}命名，便于在吧台中识别`} />
+                <input className="mix-input" value={name} onChange={(e) => setName(e.target.value)} placeholder={isCharacter ? "角色叫什么，就是提示词里的 {{char}}" : `给这件${MIX_KIND_LABELS[kind]}起个名，方便自己在吧台认出来`} />
             </Field>
             <Field label="一句话介绍">
-                <input className="mix-input" value={hook} onChange={(e) => setHook(e.target.value)} placeholder="用一句话说明它的特点，将显示在卡片上" />
+                <input className="mix-input" value={hook} onChange={(e) => setHook(e.target.value)} placeholder="一句话说清它的特点，会显示在卡片上" />
             </Field>
             <Field label="标签" hint={`最多 ${MIX_TAG_MAX} 个`}>
                 <input
@@ -541,7 +539,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     <Field label="关系与身份"><textarea className="mix-textarea" value={relations} onChange={(e) => setRelations(e.target.value)} placeholder="玩家可以代入哪些身份、各自什么关系。例：熟客（微妙的默契）/ 新同事（他带你）" /></Field>
                     <Field label="当前剧情"><textarea className="mix-textarea" value={plot} onChange={(e) => setPlot(e.target.value)} placeholder="故事从哪一刻开始。例：雨夜，打烊前十分钟，店里只剩你们两个" /></Field>
                     <Field label="附加设定"><textarea className="mix-textarea" value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="配角、私设名词、地点等。例：店长老周只在白班出现；「三号柜」是他们之间的暗号" /></Field>
-                    <Field label="开场白" hint="必填，可写多段供玩家开局时选择，用单独一行 --- 分隔">
+                    <Field label="开场白" hint="必填，写多个玩家开局可以挑，用单独一行 --- 分隔">
                         <textarea
                             className="mix-textarea"
                             style={{ minHeight: 130 }}
@@ -595,7 +593,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             </button>
                         </div>
                     </Field>
-                    <Field label="开场画布" hint="选填，HTML。打开卡片时铺在封面蒙版上展示，不计入提示词">
+                    <Field label="开场画布" hint="选填，HTML；点进卡片时铺在封面蒙版上展示，不进提示词">
                         <textarea
                             className="mix-textarea"
                             data-code="true"
@@ -641,7 +639,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             ) : null}
             {kind === "ticket" ? (
                 <>
-                    <Field label="输出契约" hint="必填，用于告知 AI 每轮上报哪些数据、采用何种格式">
+                    <Field label="输出契约" hint="必填，告诉 AI 每轮报哪些数据、按什么格式报">
                         <textarea
                             className="mix-textarea"
                             style={{ minHeight: 130 }}
@@ -650,7 +648,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             placeholder={"例：\n每轮结束后报告下面三行，每行一个字段：\n好感度: 0-100 的整数\n心情: 四个字以内\n此刻在想: 一句话"}
                         />
                     </Field>
-                    <Field label="渲染代码" hint="必填，HTML + CSS + JS，将上方原文渲染为卡片">
+                    <Field label="渲染代码" hint="必填，HTML+CSS+JS，把上面那段原文画成卡片">
                         <textarea
                             className="mix-textarea"
                             data-code="true"
@@ -660,7 +658,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             placeholder={"AI 报的原文用 {{RAW}} 直接插入，或在 JS 里读 window.TICKET_RAW。\n\n例：\n<div style=\"padding:12px;border-radius:10px;background:#1c1c26;color:#d9b06a\">\n  <pre>{{RAW}}</pre>\n</div>"}
                         />
                     </Field>
-                    <Field label="预览示例数据" hint="自行编写一份示例，用于试渲染">
+                    <Field label="预览示例数据" hint="随便编一份，用来试渲染效果">
                         <textarea
                             className="mix-textarea"
                             data-code="true"
@@ -669,7 +667,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             placeholder={"照着上面的契约编一份，例：\n好感度: 62\n心情: 嘴硬\n此刻在想: 想留你再坐一会"}
                         />
                     </Field>
-                    <Field label="要记住的项" hint="记住的值会持续保留，可用于设置材料的「什么时候出现」；未取到时沿用上一轮的值">
+                    <Field label="要记住的项" hint="记住的值会一路留着，可以拿来设材料的「什么时候出现」；抽不到时保留上一轮的值">
                         {contractFieldNames.length ? (
                             <div className="mix-var-suggest">
                                 <span>契约里认出这几项：</span>
@@ -719,7 +717,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                                 ))}
                             </div>
                         ) : (
-                            <div className="mix-var-empty">尚未设置要记住的项。可点击上方契约中的字段，或手动添加。</div>
+                            <div className="mix-var-empty">还没有要记住的项——上面点一下契约里的字段，或手动添加。</div>
                         )}
                         <button type="button" className="mix-stack-add" onClick={() => setVars((prev) => [...prev, { name: "" }])}>
                             <Plus size={15} /> 手动添加一项
@@ -734,7 +732,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             ) : null}
             {kind === "mechanism" ? (
                 <>
-                    <Field label="钩子逻辑" hint="可留空。存储与下方界面共用一份">
+                    <Field label="钩子逻辑" hint="可留空。存储与下面的界面共用一份">
                         <textarea
                             className="mix-textarea"
                             data-code="true"
@@ -762,19 +760,19 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     </Field>
                     {layout ? <MixLayoutPicker layout={layout} onChange={setLayout} /> : null}
                     {layout ? (
-                        <Field label="界面代码" hint="HTML + CSS + JS，在沙盒中运行">
+                        <Field label="界面代码" hint="HTML + CSS + JS，在沙盒里跑">
                             <textarea
                                 className="mix-textarea"
                                 data-code="true"
                                 style={{ minHeight: 160 }}
                                 value={panelHtml}
                                 onChange={(e) => setPanelHtml(e.target.value)}
-                                placeholder={"<div style=\"padding:10px\">常驻面板</div>\n\nwindow.mix\n  setStore(obj) / setState(obj)   写存储 / 写记住的值\n  say(text)                       以玩家身份说一句\n  open() / close()                展开、收起\n  move(x, y) / size(w, h)         挪自己、改大小（百分比）\n  fit(px)                         报内容多高\n  grab()                          在自己画的标题条上按下时调\nwindow.MIX_STATE / window.MIX_STORE  当前的值\nwindow.onMixSync(state, store)       值变了会回调"}
+                                placeholder={"<div style=\"padding:10px\">这里是常驻面板</div>\n\nwindow.mix\n  setStore(obj) / setState(obj)   写存储 / 写记住的值\n  say(text)                       以玩家身份说一句\n  open() / close()                展开、收起\n  move(x, y) / size(w, h)         挪自己、改大小（百分比）\n  fit(px)                         报内容多高\n  grab()                          在自己画的标题条上按下时调\nwindow.MIX_STATE / window.MIX_STORE  当前的值\nwindow.onMixSync(state, store)       值变了会回调"}
                             />
                         </Field>
                     ) : null}
                     <MixPreviewInline
-                        label="预览机括"
+                        label="试摆一下"
                         target={{
                             kind: "mechanism",
                             name,
@@ -785,13 +783,13 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                         disabled={!panelHtml.trim() && !script.trim()}
                     />
                     <div className="mix-struct-note" style={{ marginTop: 10 }}>
-                        沙盒中没有网络，运行超时会被中断。存储按对局保存，退出后再次进入仍然保留。
+                        沙盒里没有网络，跑太久会被掐断。存储一个对局一份，退出再进来还在。
                     </div>
                 </>
             ) : null}
             {kind === "garnish" ? (
                 <>
-                    <Field label="界面 CSS" hint="必填，可在下方「预览外观」中查看完整类名">
+                    <Field label="界面 CSS" hint="必填，点下面「试穿看看」有完整类名速查">
                         <textarea
                             className="mix-textarea"
                             data-code="true"
@@ -802,7 +800,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                         />
                     </Field>
                     <MixPreviewInline
-                        label="预览外观"
+                        label="试穿看看"
                         target={{ kind: "garnish", css }}
                         disabled={!css.trim()}
                     />
@@ -810,7 +808,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             ) : null}
             {kind === "encore" ? (
                 <>
-                    <Field label="输出契约" hint="选填。填写后 AI 才会在对局中输出小剧场，留空则为纯静态小品">
+                    <Field label="输出契约" hint="选填；写了 AI 才会在对局中输出小剧场，留空则为纯静态小品">
                         <textarea
                             className="mix-textarea"
                             style={{ minHeight: 110 }}
@@ -829,11 +827,11 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             placeholder={"例：\n<div style=\"padding:14px;background:#14111c;border-radius:10px;color:#f2f0f7\">\n  <pre style=\"margin:0;white-space:pre-wrap\">{{RAW}}</pre>\n</div>"}
                         />
                     </Field>
-                    <Field label="预览示例数据" hint="选填，模拟 AI 的小剧场输出，用于试渲染">
+                    <Field label="预览示例数据" hint="选填，模拟 AI 的小剧场输出来试渲染">
                         <textarea className="mix-textarea" data-code="true" value={encorePreviewRaw} onChange={(e) => setEncorePreviewRaw(e.target.value)} />
                     </Field>
                     <MixPreviewInline
-                        label="预览尾调"
+                        label="跑一下"
                         target={{ kind: "encore", html, raw: encorePreviewRaw }}
                         disabled={!html.trim()}
                     />
@@ -841,7 +839,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             ) : null}
             {kind === "filter" ? (
                 <>
-                    <Field label="清洗规则" hint="自上而下依次执行。查找为 JS 正则（自动附加 g），替换可用 $1 引用捕获组，留空表示删除">
+                    <Field label="清洗规则" hint="从上到下依次执行；查找是 JS 正则（自动带 g），替换可用 $1 引用捕获组，留空即删除">
                         <div className="mix-example-list">
                             {rules.map((rule, i) => (
                                 <div className="mix-filter-rule" key={i} data-bad={filterTest.badIndexes.includes(i) ? "true" : undefined}>
@@ -860,14 +858,14 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                                             onChange={(e) => setRules((prev) => prev.map((r, idx) => (idx === i ? { ...r, replace: e.target.value } : r)))}
                                             placeholder="替换为（留空=删除）"
                                         />
-                                        {filterTest.badIndexes.includes(i) ? <div className="mix-filter-rule-bad">正则写法有误，该条不会生效</div> : null}
+                                        {filterTest.badIndexes.includes(i) ? <div className="mix-filter-rule-bad">正则写法有误，这条不会生效</div> : null}
                                     </div>
                                     <button
                                         type="button"
                                         className="mix-filter-mode"
                                         data-mode={rule.mode}
                                         onClick={() => setRules((prev) => prev.map((r, idx) => (idx === i ? { ...r, mode: r.mode === "display" ? "context" : "display" } : r)))}
-                                        title="仅显示：保存原文，渲染时替换，对全部历史即时生效；进上下文：入库前清洗，回传模型的历史同样为清洗后的内容，仅对新回复生效"
+                                        title="仅显示：存原文，渲染时替换，全部历史即时生效；进上下文：入库前清洗，发回模型的历史也是洗过的，只对新回复生效"
                                     >
                                         {rule.mode === "display" ? "仅显示" : "进上下文"}
                                     </button>
@@ -890,7 +888,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             </button>
                         </div>
                     </Field>
-                    <Field label="预览清洗结果" hint="粘贴一段样文，实时查看全部规则执行后的结果">
+                    <Field label="试跑" hint="贴一段样文，即时看全部规则跑完的结果">
                         <textarea
                             className="mix-textarea"
                             style={{ minHeight: 90 }}

@@ -3446,7 +3446,7 @@ export function GameHubApp({ onClose, autoOpenLocalId }: { onClose: () => void; 
                 <X size={18} />
               </button>
             </div>
-            <p className="game-delete-copy">至少需要保留一个柜子，无法删除</p>
+            <p className="game-delete-copy">这个柜子不能删除，因为只剩下一个柜子了噢~</p>
             <div className="game-modal-actions">
               <button type="button" className="is-primary" onClick={() => setCollectionDeleteBlockedOpen(false)}>我知道了</button>
             </div>

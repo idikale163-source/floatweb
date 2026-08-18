@@ -1182,7 +1182,7 @@ export function ChatSettingsPanel({
                     <button className="menu-item" onClick={() => setShowConfirmClearTools(true)}>
                         <ChatInfoIcon icon={Code} color="var(--c-danger)" />
                         <div className="menu-label-group">
-                            <span className="menu-label menu-label-danger">清理原生工具调用历史（避免报错）</span>
+                            <span className="menu-label menu-label-danger">清理原生tool调用历史——防报错</span>
                             <span className="menu-desc">切换到文本协议 API 前使用</span>
                         </div>
                     </button>

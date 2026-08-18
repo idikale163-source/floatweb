@@ -937,7 +937,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                 <div className="rh-center-hint">贡献墙暂时读取失败（GitHub 接口限流），稍后再来看看</div>
                             )}
                             {buildWall && buildWall.length === 0 && (
-                                <div className="rh-center-hint">暂无内容，第一个被采纳的改进将显示在此处</div>
+                                <div className="rh-center-hint">虚位以待——第一个被采纳的改进会出现在这里</div>
                             )}
                             {buildWall && buildWall.length > 0 && (
                                 <div className="rh-build-wall">
@@ -1152,7 +1152,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                     </span>
                                 </button>
                             )) : (
-                                <div className="rh-center-hint">暂无聊天联系人，请先在聊天中添加角色</div>
+                                <div className="rh-center-hint">还没有聊天联系人，先去聊天里添加角色吧</div>
                             )}
                         </div>
                     </div>
@@ -1562,10 +1562,10 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         {!entryImport.mode && (
                             <div className="rh-dialog-body rh-dest-list">
                                 <button className="rh-dest" onClick={() => setEntryImport(v => v && { ...v, mode: "insert" })}>
-                                    <span className="rh-dest-label">新增：插入到指定条目之后</span>
+                                    <span className="rh-dest-label">新增 —— 插入到某一条之后</span>
                                 </button>
                                 <button className="rh-dest" onClick={() => setEntryImport(v => v && { ...v, mode: "replace" })}>
-                                    <span className="rh-dest-label">覆盖：替换指定条目</span>
+                                    <span className="rh-dest-label">覆盖 —— 替换掉某一条</span>
                                 </button>
                             </div>
                         )}
@@ -1579,7 +1579,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                                         <span className="rh-dest-label">{preset.name}</span>
                                         <span className="rh-dest-hint">{preset.prompts.length} 条</span>
                                     </button>
-                                )) : <div className="rh-center-hint">暂无预设，请先在设置中创建</div>}
+                                )) : <div className="rh-center-hint">还没有任何预设，先去设置里建一个吧</div>}
                             </div>
                         )}
 
@@ -1616,7 +1616,7 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                         <div className="rh-dialog-body">
                             <span className="rh-dialog-icon">🎨</span>
                             <span>
-                                主题包会<b>整体覆盖当前外观</b>：主题色、壁纸、图标样式、桌面组件与图标位置都会替换为该主题包的设定。
+                                主题包会<b>整体覆盖你当前的外观</b>——主题色、壁纸、图标样式、桌面组件和图标位置都会换成这一套。
                                 想留住现在的样子，可以先去外观页导出一份自己的主题包。已安装的自定义 App 图标会自动排回桌面空位，不会丢。
                             </span>
                         </div>

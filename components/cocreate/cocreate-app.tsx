@@ -1876,7 +1876,7 @@ export function CoCreateApp({ onClose, onNotice }: CoCreateAppProps) {
               <div className="cocreate-empty-state">
                 <span>[ BLANK PAGE ]</span>
                 <strong>还没有正文。</strong>
-                <p>请先选择共创搭档并创建章节，然后与 AI 角色开始沟通与写作。</p>
+                <p>先选择共创搭档，然后创建一个章节，和你的AI角色开始沟通书写吧~</p>
               </div>
             )}
 
@@ -2352,7 +2352,7 @@ export function CoCreateApp({ onClose, onNotice }: CoCreateAppProps) {
 
             <div className="cocreate-chapter-list">
               {session.chapters.length === 0 && (
-                <div className="cocreate-empty">暂无章节目录，请先创建一个章节后开始写作。</div>
+                <div className="cocreate-empty">还没有章节目录，先创建一个章节，然后开始写作吧~</div>
               )}
               {session.chapters.map((chapter) => (
                 <article
@@ -2560,7 +2560,7 @@ export function CoCreateApp({ onClose, onNotice }: CoCreateAppProps) {
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleTextareaKeyDown}
-              placeholder={mode === "write" ? "写正文、续写或提出修改……" : `与${partner?.name || "搭档"}对话…`}
+              placeholder={mode === "write" ? "写正文、续写或提出修改……" : `和${partner?.name || "搭档"}聊聊……`}
               rows={1}
             />
             <button
@@ -2717,7 +2717,7 @@ export function CoCreateApp({ onClose, onNotice }: CoCreateAppProps) {
               disabled={isGenerating || isArchiving || !hasCurrentWorkToolHistory}
               onClick={() => setToolHistoryClearConfirmOpen(true)}
             >
-              <strong>清理原生工具调用历史（避免报错）</strong>
+              <strong>清理原生tool调用历史——防报错</strong>
               <small>只清理当前作品的工具调用、工具结果和原生回放元数据；普通共创内容不会删除。</small>
             </button>
             <div className="cocreate-backend-list">

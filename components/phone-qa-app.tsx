@@ -919,7 +919,7 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
             className="qa-icon-btn"
             onClick={handleClearToolHistory}
             aria-label="清理原生tool调用历史（防报错）"
-            title="清理原生工具调用历史（避免报错）"
+            title="清理原生tool调用历史——防报错"
           >
             <BrushCleaning size={17} strokeWidth={1.75} />
           </button>
@@ -941,7 +941,7 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
             <div className="qa-welcome-sub">
               我是小坊，工坊的驻场工程师。使用问题、报错排查、部署配置，都可以问我。
               <br />
-              也可直接动手：编写小游戏 / APP / 剧场并安装到本机试玩；连接仓库后可查阅源码答疑，配置具备写权限的 PAT 后还可提交代码修改。
+              我还能动手：写小游戏 / APP / 剧场直接装进本机试玩；连接仓库后我会查源码答疑，填了有写权限的 PAT 还能帮你改代码。
               <br />
               想创作角色、世界书或美化桌面，找桌面上的小卷更合适。
             </div>
@@ -1139,7 +1139,7 @@ export function PhoneQaApp({ onClose, onNotice }: PhoneQaAppProps) {
               onChange={(e) => setEditText(e.target.value)}
               spellCheck={false}
               autoFocus
-              placeholder="此处显示消息的原始内容，不经前端渲染，可查看其中的特殊标签。"
+              placeholder="这里显示的是消息的原始内容，不会被前端渲染，可放心查看特殊标签。"
             />
             <div className="qa-edit-actions">
               <button type="button" className="qa-devnotice-btn" onClick={() => setEditingMsg(null)}>

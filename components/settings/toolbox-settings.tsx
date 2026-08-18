@@ -1583,7 +1583,7 @@ export function ToolboxSettings() {
                                     placeholder="例如：麦当劳点餐、查菜单、领券和下单"
                                     onChange={e => setM({ description: e.target.value })}
                                 />
-                                <span className="menu-desc ml-1">这段描述会和 MCP 名称一起发给 AI，具体工具列表不会默认写入上下文。</span>
+                                <span className="menu-desc ml-1">这段描述会和 MCP 名称一起发给 AI，具体工具列表不会默认塞进上下文。</span>
                             </div>
                             <div className="flex flex-col gap-1">
                                 <label className="menu-desc ml-1">访问 Token（可选）</label>

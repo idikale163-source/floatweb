@@ -2797,7 +2797,7 @@ function NpcGeneratorSheet({ characters, onClose, onConfirm }: {
               value={hint}
               onChange={e => setHint(e.target.value)}
             />
-            <p className="wt-paper-hint mt-1">将带上该角色的核心记忆与相关长期记忆；记忆中出现过的人物适合作为配角素材。</p>
+            <p className="wt-paper-hint mt-1">会带上 TA 的核心记忆与相关长期记忆——记忆里提过的人是最好的配角素材。</p>
             {error && <p className="wt-paper-confirm mt-2">{error}</p>}
 
             <div className="wt-paper-actions mt-4">

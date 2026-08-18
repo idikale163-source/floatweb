@@ -277,7 +277,7 @@ function MascotInfoPanel({
                     >
                         <MascotInfoIcon color="var(--c-danger)"><Code size={22} strokeWidth={1.75} /></MascotInfoIcon>
                         <div className="menu-label-group">
-                            <span className="menu-label menu-label-danger">清理原生工具调用历史（避免报错）</span>
+                            <span className="menu-label menu-label-danger">清理原生tool调用历史——防报错</span>
                             <span className="menu-desc">
                                 {chat.isThinking ? "AI助手执行中，完成后再清理" : "切换到文本协议 API 前使用"}
                             </span>

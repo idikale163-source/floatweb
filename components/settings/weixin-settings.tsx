@@ -839,7 +839,7 @@ export function WeixinSettings({ onOpenDataManagement }: { onOpenDataManagement?
                             <span className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-black text-[11px] font-extrabold text-white">4</span>
                             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                                 <span className="text-[13px] font-bold leading-snug text-[var(--c-text)]">验证部署</span>
-                                <span className="menu-desc !mt-0">点下方按钮立刻触发一轮「拉消息 → 生成 → 回复」；提示成功后，可向该 Bot 发送一条消息进行验证。</span>
+                                <span className="menu-desc !mt-0">点下方按钮立刻触发一轮「拉消息 → 生成 → 回复」；提示成功后，给 Bot 的微信发条消息试试。</span>
                                 <span className="menu-desc !mt-0">⏳ 刚部署（或停用较久后重新开启）时，微信恢复 Bot 在线状态需要几分钟：第一条回复可能要等上几分钟，期间 Bot 可能显示「暂无法连接」，都是正常现象。恢复后回复会稳定在 10～60 秒内。</span>
                                 <button
                                     type="button"
@@ -910,7 +910,7 @@ export function WeixinSettings({ onOpenDataManagement }: { onOpenDataManagement?
                             <span className="menu-desc !mt-0">· 对方发来的图片：在 API 设置开启「图像识别」后角色可以看到并回应（遵循聊天信息页的传入图片数），图片也会同步回小手机显示；语音和文件暂以文字占位提示。</span>
                             <span className="menu-desc !mt-0">· 角色发出的媒体：支持生图照片（遵循小手机「图像生成」设置）、表情包与语音（遵循语音配置），与本地助手一致。</span>
                             <span className="menu-desc !mt-0">· 微信 token 过期后仍需回到小手机重新扫码。</span>
-                            <span className="menu-desc !mt-0">· 变更角色、API、预设后，需重新同步运行包。</span>
+                            <span className="menu-desc !mt-0">· 角色、API、预设等变更后，记得重新同步运行包。</span>
                             <span className="menu-desc !mt-0">· 停用：步骤②的「停用」按钮，停用后零配额消耗；也可在 SQL Editor 执行 select cron.unschedule(&apos;{WEIXIN_CLOUD_CRON_JOB_NAME}&apos;);</span>
                         </div>
                     )}

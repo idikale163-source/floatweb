@@ -527,7 +527,7 @@ export function MomentsFeed({ onCloseApp }: MomentsFeedProps) {
                 {/* Posts list */}
                 {posts.length === 0 ? (
                     <div className="feed-empty-state py-10 text-center text-[var(--c-icon)] ts-14">
-                        暂无动态
+                        还没有动态，发一条吧
                     </div>
                 ) : (
                     visiblePosts.map(post => (
