@@ -255,12 +255,26 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     }, [session?.turns.length, busy, applyStick]);
 
     /**
-     * 开场画布是沙盒 iframe，高度由画布自己异步报上来：挂载那一刻它还只有几十像素，
-     * 等它撑到几千像素，下面的内容整体被推下去。Chrome 有 scroll anchoring 会自己补偿，
-     * iOS Safari 没有这个特性，滚动位置原地不动，于是就停在画布中间——既不贴顶也不贴底。
-     * 所以画布报完高度要再落一次。
+     * 滚动区里的沙盒 iframe——开场画布、每轮的小票与小剧场、末尾的静态小品——高度都是
+     * 里面量好再 postMessage 报上来的：挂载那一刻它们只有几十像素，等报上真实高度，
+     * 下面的内容整体被推下去。Chrome 有 scroll anchoring 会自己补偿，iOS Safari 没有，
+     * 滚动位置原地不动，于是就停在中间——既不贴顶也不贴底。
+     *
+     * 这里直接听两种画布的高度消息，比给每个组件挂 onHeight 稳：
+     * 一是小票/小剧场那几个框本来就没有回调，二是 RichFrame 的 onHeight 是在 setHeight
+     * 之后同步调的，那一刻新高度还没提交进 DOM，落点会按旧的 scrollHeight 算，等于白落。
+     * 隔两帧再落，确保 React 提交完、浏览器也重新布局过。
      */
-    const handleCanvasHeight = useCallback(() => { applyStick(); }, [applyStick]);
+    useEffect(() => {
+        const onFrameResize = (event: MessageEvent) => {
+            const data = event.data as Record<string, unknown> | null;
+            if (!data || data.type !== "resize") return;
+            if (data.source !== "mix-rich-frame" && data.source !== "mix-ticket-frame") return;
+            requestAnimationFrame(() => requestAnimationFrame(applyStick));
+        };
+        window.addEventListener("message", onFrameResize);
+        return () => window.removeEventListener("message", onFrameResize);
+    }, [applyStick]);
 
     /** 用户自己翻页了就撒手，别在画布撑高时把他拽回去 */
     const handleScroll = useCallback(() => {
@@ -430,7 +444,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             <div className="mix-game-scroll" ref={scrollRef} onScroll={handleScroll}>
                 {assets.canvasHtml ? (
                     <div className="mix-game-canvas">
-                        <MixRichText text={assets.canvasHtml} onHeight={handleCanvasHeight} />
+                        <MixRichText text={assets.canvasHtml} />
                     </div>
                 ) : null}
                 {session.turns.map((turn, idx) => {
