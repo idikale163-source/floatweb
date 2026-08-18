@@ -70,10 +70,10 @@ const KIND_GUIDE: Record<MixMaterialKind, { what: string; where: string }> = {
 
 /**
  * 作者要在框里再分小标题时该用哪一级。
- * 应用自己占了 ## 与 ###（段标题与框标题），四级往下全留给作者。
+ * 应用自己占了 # 与 ##（段标题与框标题），三级往下全留给作者。
  * 不进提示词的几种材料（外观/机括/滤网）不显示这行。
  */
-const HEADING_NOTE = "要在框里加小标题，用 #### 开头（## 和 ### 已被应用占用）。";
+const HEADING_NOTE = "要在框里加小标题，用 ### 开头（# 和 ## 已被应用占用）。";
 const HEADING_NOTE_KINDS: MixMaterialKind[] = ["character", "persona", "base", "flavor", "glass", "strength", "ticket", "encore"];
 
 /** 文本类材料（基底/风味/杯型/苦精）的字段名与示例 */
@@ -420,7 +420,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     <Field label="外貌"><textarea className="mix-textarea" value={appearance} onChange={(e) => setAppearance(e.target.value)} placeholder="例：高瘦，总把制服外套袖子卷到手肘，左耳有个旧耳洞" /></Field>
                     <Field label="背景"><textarea className="mix-textarea" value={background} onChange={(e) => setBackground(e.target.value)} placeholder="例：三年前从老家搬来，白天在读夜校，夜班是为了付学费" /></Field>
                     <Field label="世界观"><textarea className="mix-textarea" value={worldview} onChange={(e) => setWorldview(e.target.value)} placeholder="故事发生在什么世界。例：普通现代都市，没有超自然设定" /></Field>
-                    <Field label="对用户的初始认知"><textarea className="mix-textarea" value={cognition} onChange={(e) => setCognition(e.target.value)} placeholder="开局时角色对你了解到什么程度。例：只知道你是每周来三次的常客，不知道名字" /></Field>
+                    <Field label={"对{{user}}的初始认知"}><textarea className="mix-textarea" value={cognition} onChange={(e) => setCognition(e.target.value)} placeholder="开局时角色对你了解到什么程度。例：只知道你是每周来三次的常客，不知道名字" /></Field>
                     <Field label="关系与身份"><textarea className="mix-textarea" value={relations} onChange={(e) => setRelations(e.target.value)} placeholder="玩家可以代入哪些身份、各自什么关系。例：熟客（微妙的默契）/ 新同事（他带你）" /></Field>
                     <Field label="当前剧情"><textarea className="mix-textarea" value={plot} onChange={(e) => setPlot(e.target.value)} placeholder="故事从哪一刻开始。例：雨夜，打烊前十分钟，店里只剩你们两个" /></Field>
                     <Field label="附加设定"><textarea className="mix-textarea" value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="配角、私设名词、地点等。例：店长老周只在白班出现；「三号柜」是他们之间的暗号" /></Field>
