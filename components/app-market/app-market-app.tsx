@@ -1174,7 +1174,7 @@ export function AppMarketApp({ onClose, onOpenCustomApp, onInstallToDesktop, onN
             {apps.length === 0 ? (
               <div className="app-market-empty">
                 <HardDrive size={26} />
-                <p>还没有安装应用，去发现页逛逛吧</p>
+                <p>尚未安装应用，可在发现页浏览</p>
               </div>
             ) : (
               <section className="app-market-section">

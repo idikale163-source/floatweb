@@ -323,11 +323,14 @@ export type MixPanelLayout = {
     collapsed?: boolean;
 };
 
-/** 拖丢了捡不回来，所以无论怎么拖都至少留这么多在画面里（百分比） */
+/**
+ * 拖丢了捡不回来，所以无论怎么拖都至少留这么多在画面里（百分比）。
+ * 面板本身比这还小的时候按面板自己的尺寸算，否则一颗小圆点会被挡在边上推不出去。
+ */
 export const MIX_PANEL_KEEP_IN = 8;
-/** 面板最小尺寸：再小就点不中了 */
-export const MIX_PANEL_MIN_W = 8;
-export const MIX_PANEL_MIN_H = 4;
+/** 面板最小尺寸：留到"还点得中"为止，再往下才是无意义的 */
+export const MIX_PANEL_MIN_W = 4;
+export const MIX_PANEL_MIN_H = 3;
 /** 层级上限：再高会压到应用自己的弹窗上面去 */
 export const MIX_PANEL_MAX_Z = 9;
 
@@ -355,8 +358,10 @@ export function normalizeMixPanelLayout(value: unknown): MixPanelLayout | undefi
     const w = clampNum(record.w, MIX_PANEL_MIN_W, 100, 40);
     const h = clampNum(record.h, MIX_PANEL_MIN_H, 100, 30);
     // 允许负数与超过 100：面板可以有一部分在画面外，只要留得下 KEEP_IN 那一块
-    const x = clampNum(record.x, MIX_PANEL_KEEP_IN - w, 100 - MIX_PANEL_KEEP_IN, 4);
-    const y = clampNum(record.y, MIX_PANEL_KEEP_IN - h, 100 - MIX_PANEL_KEEP_IN, 12);
+    const keepX = Math.min(MIX_PANEL_KEEP_IN, w);
+    const keepY = Math.min(MIX_PANEL_KEEP_IN, h);
+    const x = clampNum(record.x, keepX - w, 100 - keepX, 4);
+    const y = clampNum(record.y, keepY - h, 100 - keepY, 12);
     const layout: MixPanelLayout = { x, y, w, h };
     if (record.autoHeight === true) layout.autoHeight = true;
     if (record.drag !== false) layout.drag = true;

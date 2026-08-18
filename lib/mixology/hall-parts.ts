@@ -74,7 +74,9 @@ export function normalizePartCondition(value: unknown): PartCondition | undefine
  * 所以除了通用的 payload 体积上限，再单独卡一道：代码写不了那么长，
  * 界面摆放必须是一份认得出的数据。卡紧一点也让混淆塞大段东西变得更难。
  */
-const MAX_MECHANISM_SCRIPT = 40_000;
+// 逻辑与界面同一个额度：原来逻辑只给 40KB，比界面紧五倍，没有道理——
+// 真正的总闸是整件材料的 MAX_MATERIAL_PAYLOAD。
+const MAX_MECHANISM_SCRIPT = 200_000;
 const MAX_MECHANISM_PANEL = 200_000;
 const MECHANISM_DOCKS: readonly string[] = ["left", "right", "bottom", "float"];
 

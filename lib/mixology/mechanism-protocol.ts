@@ -55,9 +55,14 @@ export type MixHookResult = {
     store?: MixMechanismStore;
 };
 
-/** 单条文本上限：防止机括往正文里灌一大坨把上下文撑爆 */
+/** 单条文本上限：防止机括往正文里灌一大段把上下文撑爆 */
 const MAX_TEXT = 20_000;
-const MAX_NOTE = 2_000;
+/**
+ * 每轮临时提示的上限。原来给 2000，记忆区这类"每轮把档案回喂给模型"的机括
+ * 一上来就顶格，作者只能不断压缩条目，本末倒置。放宽到 4000——仍然远小于
+ * 正文改写的额度，撑不爆上下文，但够写下一份像样的档案。
+ */
+const MAX_NOTE = 4_000;
 /** 存储桶上限：键数与总字节 */
 const MAX_STORE_KEYS = 100;
 const MAX_STORE_BYTES = 100_000;

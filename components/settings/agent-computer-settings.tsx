@@ -188,7 +188,7 @@ export function AgentComputerSettings({ onNotice }: { onNotice?: (msg: string) =
                     <div className="flex items-center gap-3 mt-3">
                         <div className="flex-1 flex flex-col gap-1 min-w-0">
                             <span className="menu-label">小坊（工坊）</span>
-                            <span className="menu-desc !mt-0">给小坊一台工作机：读写文件、执行命令，产出文件交付给你</span>
+                            <span className="menu-desc !mt-0">为小坊配置一台工作机：读写文件、执行命令，并将产出文件交付给你</span>
                         </div>
                         <Toggle checked={workshopOn} onChange={handleWorkshopToggle} />
                     </div>

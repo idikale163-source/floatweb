@@ -239,7 +239,7 @@ function MixMechanismStage({ target }: { target: Extract<MixPreviewTarget, { kin
                     重置
                 </button>
             </div>
-            {!target.script.trim() ? <div className="mix-mech-hint">没写钩子逻辑。</div> : null}
+            {!target.script.trim() ? <div className="mix-mech-hint">未编写钩子逻辑。</div> : null}
             {result ? (
                 <div className="mix-detail-value" data-code="true">
                     {result.lines.join("\n\n")}
@@ -367,8 +367,8 @@ export function MixStructureSheet({ highlight, onClose }: { highlight?: string; 
                 </div>
                 <div className="mix-sheet-body">
                     <div className="mix-struct-note">
-                        <b>编辑器里的框标题，就是提示词里的标题。</b>没填的框整段消失；
-                        文本里的 <code>{"{{char}}"}</code> / <code>{"{{user}}"}</code> 会换成角色名和你填的名字。
+                        <b>编辑器中输入框的标题，即提示词中的标题。</b>未填写的输入框，对应段落不会出现；
+                        文本里的 <code>{"{{char}}"}</code> / <code>{"{{user}}"}</code> 将替换为角色名与你填写的名字。
                     </div>
 
                     <div className="mix-detail-label" style={{ marginTop: 14 }}>系统提示词（对话历史之前）</div>
@@ -386,7 +386,7 @@ export function MixStructureSheet({ highlight, onClose }: { highlight?: string; 
                     <div className="mix-struct-list">
                         <div className="mix-struct-row" data-on={highlight === "strength" ? "true" : undefined}>
                             <div className="mix-struct-section">【最高优先级要求】</div>
-                            <div className="mix-struct-from">← 苦精（唯一放在历史之后的部分，离生成最近、最难被忘）</div>
+                            <div className="mix-struct-from">← 苦精（唯一位于历史之后的部分，最接近生成位置，最不易被忽略）</div>
                         </div>
                     </div>
 
@@ -395,7 +395,7 @@ export function MixStructureSheet({ highlight, onClose }: { highlight?: string; 
                     <div className="mix-detail-label" style={{ marginTop: 16 }}>不进提示词的部分</div>
                     <div className="mix-struct-note" data-on={highlight === "filter" ? "true" : undefined}>
                         <b>外观</b>的 CSS、<b>小票与尾调</b>的渲染代码、<b>开场画布</b>、<b>滤网</b>的规则都只在界面里执行，
-                        写多长都不占上下文。<b>开场白</b>作为对局的第一条角色消息单独送出，也不在系统提示词里。
+                        写多长都不占上下文。<b>开场白</b>作为对局的第一条角色消息单独发送，不计入系统提示词。
                     </div>
                 </div>
             </div>

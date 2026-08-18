@@ -364,7 +364,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                 <div className="dwelling-empty"><span>选择一位角色，探索 ta 的栖所</span></div>
             )}
             {characters.length === 0 && (
-                <div className="dwelling-empty"><span>还没有角色，去创建一个吧</span></div>
+                <div className="dwelling-empty"><span>暂无角色，请先创建</span></div>
             )}
             {cs?.isGenerating && !cs.layout && (
                 <div className="dwelling-loading"><div className="dwelling-spinner" /><span className="dwelling-loading-text">正在窥探房间…</span></div>
@@ -513,7 +513,7 @@ export function DwellingApp({ onClose, visible, onIdle }: DwellingAppProps) {
                     <div className="dw-confirm-shade" onClick={() => setShowDeleteConfirm(false)} />
                     <div className="dw-confirm-card">
                         <div className="dw-confirm-title">要离开这里吗？</div>
-                        <div className="dw-confirm-msg">房间里的一切都会消失不见哦<br />包括已经探索过的物品</div>
+                        <div className="dw-confirm-msg">房间内的全部内容将被删除<br />包括已经探索过的物品</div>
                         <div className="dw-confirm-actions">
                             <button className="dw-confirm-btn dw-confirm-btn-cancel" onClick={() => setShowDeleteConfirm(false)}>再想想</button>
                             <button className="dw-confirm-btn dw-confirm-btn-danger" onClick={() => { setShowDeleteConfirm(false); handleDelete(); }}>挥手告别</button>

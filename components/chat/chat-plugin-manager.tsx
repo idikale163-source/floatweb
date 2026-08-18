@@ -193,7 +193,7 @@ export function ChatPluginManager({ onBack }: { onBack: () => void }) {
                                 <Puzzle size={30} strokeWidth={1.2} />
                                 <div>
                                     <div style={{ color: "var(--c-text-title)" }}>还没有安装插件</div>
-                                    <div style={{ marginTop: 4, opacity: 0.8 }}>插件可以拦截聊天管线、注入提示词、自由渲染界面——玩法由你创造</div>
+                                    <div style={{ marginTop: 4, opacity: 0.8 }}>插件可拦截聊天管线、注入提示词、自由渲染界面，玩法由你定义</div>
                                 </div>
                             </div>
                         </div>

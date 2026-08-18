@@ -685,9 +685,9 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                     ) : recipes.length === 0 ? (
                             <div className="mix-empty" style={{ paddingTop: 70 }}>
                                 <Wine size={32} strokeWidth={1.4} />
-                                还没有保存过特调——
+                                尚未保存过特调
                                 <br />
-                                去「创建配方」配齐材料，按下「调配」。
+                                请在「创建配方」中配齐材料后按「调配」。
                             </div>
                         ) : (
                             recipes.map((recipe) => {
@@ -754,7 +754,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                         {cabinetFiltered.length === 0 ? (
                             <div className="mix-empty">
                                 <Archive size={32} strokeWidth={1.4} />
-                                这一格还空着——
+                                这一格尚未放入材料
                                 <br />
                                 点右下角 ＋ 自建一件{MIX_KIND_LABELS[cabinetKind]}。
                             </div>
@@ -788,9 +788,9 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                         {sessions.length === 0 ? (
                             <div className="mix-empty">
                                 <Martini size={32} strokeWidth={1.4} />
-                                还没开过局——
+                                尚未开始过对局
                                 <br />
-                                去吧台调一杯，按「开始」。
+                                请在吧台调配后按「开始」。
                             </div>
                         ) : (
                             sessions.map((session) => {
@@ -932,15 +932,15 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                         className="mix-icon-btn"
                                         onClick={() => setConfirm(detail.publishedId ? {
                                             title: "更新酒材页上的版本？",
-                                            body: <>会把「{detail.name}」在酒材页上的内容替换成现在这一份。<br />点赞、入柜数与评论都会保留。</>,
+                                            body: <>会把「{detail.name}」在酒材页上的内容替换成现在这一份。<br />点赞数、入柜数与评论将予以保留。</>,
                                             confirmText: "更新",
                                             run: () => { const t = detail; setDetail(null); void handleShareMaterial(t); },
                                         } : {
                                             title: mixKindRunsActiveCode(detail.kind) ? "把这件机括发出去？" : "分享到酒材页？",
                                             body: mixKindRunsActiveCode(detail.kind) ? (
-                                                <>「{detail.name}」将出现在酒材页上，别人下载后<b>它的代码会在对方的对局里按轮执行</b>——能改写对方发出去的话、改写看到的正文、以对方的身份发言。<br />请确认这份代码是你自己写的、你清楚它做了什么。</>
+                                                <>「{detail.name}」将出现在酒材页上，别人下载后<b>其代码将在对方的对局中按轮执行</b>，可改写对方发出的内容与显示的正文，并以对方的身份发言。<br />请确认这份代码由你自己编写，且你了解其行为。</>
                                             ) : (
-                                                <>「{detail.name}」将出现在酒材页上，<b>其他人能看到它的完整内容</b>，也能加进自己的酒柜。<br />不想公开就先别发。</>
+                                                <>「{detail.name}」将出现在酒材页上，<b>其他人能看到它的完整内容</b>，也能加进自己的酒柜。<br />不希望公开时可暂不发布。</>
                                             ),
                                             confirmText: "分享",
                                             run: () => { const t = detail; setDetail(null); void handleShareMaterial(t); },
@@ -1096,7 +1096,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     if (!editor.initial) { editorFileRef.current?.click(); return; }
                                     setConfirm({
                                         title: "用文件替换表单内容？",
-                                        body: <>会把「{editor.initial.name}」现在填的内容整份换成文件里的那一份（JSON 或 PNG 卡都行）。<br />换完还没保存，看一眼不对可以直接关掉不存。<br />已上架的关联不会丢，保存后点更新仍是覆盖同一条。</>,
+                                        body: <>会把「{editor.initial.name}」现在填的内容整份换成文件里的那一份（JSON 或 PNG 卡都行）。<br />更换后尚未保存，如不合适可直接关闭放弃。<br />已上架的关联不会丢失，保存后点击更新仍覆盖同一条目。</>,
                                         confirmText: "选择文件",
                                         run: () => editorFileRef.current?.click(),
                                     });
@@ -1180,7 +1180,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     <Archive size={30} strokeWidth={1.4} />
                                     酒柜里还没有{MIX_KIND_LABELS[slotPicker]}——
                                     <br />
-                                    去酒柜页点 ＋ 自建一件。
+                                    可在酒柜页点击 ＋ 自建一件。
                                 </div>
                             ) : (
                                 <div className={mixKindHasCover(slotPicker) ? "mix-waterfall" : "mix-mat-list"}>
@@ -1273,7 +1273,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 }}
                             >
                                 <SlidersHorizontal size={17} />
-                                <span>装载到吧台<i>把这杯的材料放回槽位，改一改再存</i></span>
+                                <span>装载到吧台<i>把这杯的材料放回槽位，修改后再保存</i></span>
                             </button>
                             {recipeMenu.imported ? null : (
                             <button
@@ -1290,7 +1290,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 }}
                             >
                                 <Copy size={17} />
-                                <span>复制配方<i>生成一杯不关联云端的新配方，基于它继续改</i></span>
+                                <span>复制配方<i>生成一份不关联云端的新配方，在其基础上继续修改</i></span>
                             </button>
                             )}
                             {recipeMenu.imported ? null : (
@@ -1306,7 +1306,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                         return;
                                     }
                                     if (plan.blockers.length > 0) {
-                                        showToast(`「${plan.blockers[0].name}」是旧版随配方导入的材料，云端没有条目，换成酒材页上的版本再分享。`);
+                                        showToast(`「${plan.blockers[0].name}」是旧版随配方导入的材料，云端没有对应条目，请更换为酒材页上的版本后再分享。`);
                                         return;
                                     }
                                     setRecipeMenu(null);
@@ -1322,7 +1322,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     );
                                     setConfirm(target.publishedId ? {
                                         title: "更新配方页上的版本？",
-                                        body: <>会把「{target.name}」在配方页上的搭配替换成现在这一份。<br />点赞、入柜数与评论都会保留。{syncNotes}</>,
+                                        body: <>会把「{target.name}」在配方页上的搭配替换成现在这一份。<br />点赞数、入柜数与评论将予以保留。{syncNotes}</>,
                                         confirmText: "更新",
                                         run: () => void handleShareRecipe(target),
                                     } : {
@@ -1361,7 +1361,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                 }}
                             >
                                 <Trash2 size={17} />
-                                <span>删除这杯<i>材料还在酒柜里，只删配方本身</i></span>
+                                <span>删除这杯<i>材料保留在酒柜中，仅删除配方本身</i></span>
                             </button>
                         </div>
                     </div>

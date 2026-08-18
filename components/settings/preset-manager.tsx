@@ -1214,7 +1214,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                                             <div className="flex flex-col gap-3 p-[10px] rounded-lg bg-[var(--c-input)]">
                                                                 {prompt.marker && (
                                                                     <div className="menu-desc ts-11">
-                                                                        标记条目的位置由排序与「短期记忆」分界决定，Role 固定为 System——以下「注入方式 / Inject Depth / Role」对标记条目不生效
+                                                                        标记条目的位置由排序与「短期记忆」分界决定，Role 固定为 System；以下「注入方式 / Inject Depth / Role」对标记条目不生效
                                                                     </div>
                                                                 )}
                                                                 <div className="grid grid-cols-2 gap-3">

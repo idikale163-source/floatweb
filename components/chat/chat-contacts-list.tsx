@@ -262,7 +262,7 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                 {/* Contacts list grouped by pinyin initial */}
                 {contacts.length === 0 ? (
                     <div className="ui-empty">
-                        <span className="menu-desc">暂无联系人，去消息页右上角添加吧</span>
+                        <span className="menu-desc">暂无联系人，可在消息页右上角添加</span>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-1">

@@ -39,6 +39,8 @@ type PanelCommand =
     | { name: "dragEnd" };
 
 const MAX_SAY_LENGTH = 2_000;
+/** 高度随内容时能报到多高（像素）。与开场画布同一个上限 */
+const MIX_PANEL_MAX_FIT = 12_000;
 
 type Box = { x: number; y: number; w: number; h: number };
 
@@ -53,11 +55,14 @@ function boxOf(layout: MixPanelLayout): Box {
 function clampBox(box: Box): Box {
     const w = Math.min(100, Math.max(MIX_PANEL_MIN_W, box.w));
     const h = Math.min(100, Math.max(MIX_PANEL_MIN_H, box.h));
+    // 面板比"留在画面里的那一块"还小时按它自己算，否则一颗小圆点会被挡在边上推不出去
+    const keepX = Math.min(MIX_PANEL_KEEP_IN, w);
+    const keepY = Math.min(MIX_PANEL_KEEP_IN, h);
     return {
         w,
         h,
-        x: Math.min(100 - MIX_PANEL_KEEP_IN, Math.max(MIX_PANEL_KEEP_IN - w, box.x)),
-        y: Math.min(100 - MIX_PANEL_KEEP_IN, Math.max(MIX_PANEL_KEEP_IN - h, box.y)),
+        x: Math.min(100 - keepX, Math.max(keepX - w, box.x)),
+        y: Math.min(100 - keepY, Math.max(keepY - h, box.y)),
     };
 }
 
@@ -342,8 +347,9 @@ export function MixMechanismPanel({
                 }
                 case "fit": {
                     const px = Number(command.px);
-                    // 上限拦一手：界面里写出高度反馈环时，别让宿主去布局一个几十万像素高的元素
-                    if (Number.isFinite(px) && px >= 0) setFitPx(Math.min(4000, Math.ceil(px)));
+                    // 上限只为兜住"高度反馈环"这一种写错：别让宿主去布局一个几十万像素高的元素。
+                    // 取值与开场画布同一个数，不在这里另立一套。
+                    if (Number.isFinite(px) && px >= 0) setFitPx(Math.min(MIX_PANEL_MAX_FIT, Math.ceil(px)));
                     break;
                 }
                 case "grab": {
