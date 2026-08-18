@@ -35,6 +35,8 @@ type PanelCommand =
     | { name: "box"; box: unknown }
     | { name: "fit"; px: unknown }
     | { name: "design"; px: unknown }
+    | { name: "flag"; key: unknown; on: unknown }
+    | { name: "flag"; key: unknown; on: unknown }
     | { name: "grab"; cx: unknown; cy: unknown }
     | { name: "drag"; cx: unknown; cy: unknown }
     | { name: "dragEnd" };
@@ -93,6 +95,13 @@ function buildPanelDoc(html: string, state: MixState, store: MixMechanismStore, 
     // 改「按多宽排版」：收起成一颗小把手时要按小尺寸排，展开成一整台手机时要按 390 排，
     // 一份摆放写死一个宽度不够用，所以留给界面自己在两种形态之间换
     design: function(px){ send("design", { px: px }); },
+    // 下面几条原来是编辑器上的开关。每件机括的形态都不一样，摆一排开关只会让人
+    // 以为只有那几种搭法，所以一并交给界面自己说。
+    drag: function(on){ send("flag", { key: "drag", on: on !== false }); },
+    resize: function(on){ send("flag", { key: "resize", on: on !== false }); },
+    chrome: function(on){ send("flag", { key: "chrome", on: on !== false }); },
+    plate: function(on){ send("flag", { key: "plate", on: on !== false }); },
+    z: function(n){ send("flag", { key: "z", on: n }); },
     // 从界面内部起拖：在自己画的标题条上 pointerdown 时调一下
     grab: startDrag
   };
@@ -223,6 +232,11 @@ export function MixMechanismPanel({
     const [fitPx, setFitPx] = useState(0);
     /** 界面自己要求的排版宽度；没要求就用摆放里写的那个 */
     const [designPx, setDesignPx] = useState<number | null>(null);
+    /**
+     * 界面自己要求的宿主行为（能不能拖、要不要应用画外壳……）。
+     * 没要求的项沿用摆放里写的——老材料照旧，新材料一律在代码里说。
+     */
+    const [flags, setFlags] = useState<{ drag?: boolean; resize?: boolean; chrome?: boolean; plate?: boolean; z?: number }>({});
     /** 正在拖 / 正在拉大小：拖动期间盖一层透明的捕获层，指针跑出 iframe 也不丢事件 */
     const [grabbing, setGrabbing] = useState<"" | "move" | "size">("");
     /** 正在拖的那一次。from 是起点，坐标都在「对局画面」这一层里算 */
@@ -232,10 +246,12 @@ export function MixMechanismPanel({
     /** 面板此刻的实际像素宽高：按设计宽度缩放要用它 */
     const [size, setSize] = useState({ w: 0, h: 0 });
 
-    const chrome = layout.chrome ?? "bar";
-    const plate = layout.plate !== false;
-    const canDrag = layout.drag !== false;
-    const canResize = layout.resize === true;
+    // 界面说了算，界面没说才看摆放里写的
+    const chrome = (flags.chrome ?? (layout.chrome ?? "bar") === "bar") ? "bar" : "none";
+    const plate = flags.plate ?? layout.plate !== false;
+    const canDrag = flags.drag ?? layout.drag !== false;
+    const canResize = flags.resize ?? layout.resize === true;
+    const zIndex = Math.min(MIX_PANEL_MAX_Z, Math.max(0, flags.z ?? layout.z ?? 0));
 
     // 材料被改过（编辑器里保存）时按新摆放重新落位；玩家在局内拖过的位置由 layout 带进来
     useEffect(() => { setBox(clampBox(boxOf(layout))); }, [layout.x, layout.y, layout.w, layout.h]);
@@ -391,6 +407,18 @@ export function MixMechanismPanel({
                     });
                     break;
                 }
+                case "flag": {
+                    const key = String(command.key ?? "");
+                    if (key === "z") {
+                        const n = Number(command.on);
+                        if (Number.isFinite(n)) setFlags((prev) => ({ ...prev, z: Math.min(MIX_PANEL_MAX_Z, Math.max(0, Math.round(n))) }));
+                        break;
+                    }
+                    if (key !== "drag" && key !== "resize" && key !== "chrome" && key !== "plate") break;
+                    const on = command.on !== false;
+                    setFlags((prev) => (prev[key] === on ? prev : { ...prev, [key]: on }));
+                    break;
+                }
                 case "design": {
                     const px = Number(command.px);
                     // 0 表示"不按固定宽度排，直接跟着面板走"
@@ -470,7 +498,7 @@ export function MixMechanismPanel({
         left: `${box.x}%`,
         top: `${box.y}%`,
         width: `${box.w}%`,
-        zIndex: Math.min(MIX_PANEL_MAX_Z, Math.max(0, layout.z ?? 0)),
+        zIndex,
     };
     if (!open && chrome === "bar") {
         // 收起来就只剩那条把手，高度跟着缩掉——否则原地留一个空盒子，等于没收起来

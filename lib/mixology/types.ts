@@ -377,11 +377,25 @@ export function normalizeMixPanelLayout(value: unknown): MixPanelLayout | undefi
     return layout;
 }
 
-/** 一件机括最终按哪份摆放画：自己写了就用自己的，只有老停靠位就换算过来 */
-export function mixPanelLayoutOf(material: { layout?: MixPanelLayout; dock?: MixDock }): MixPanelLayout | undefined {
+/**
+ * 写了界面代码但没写摆放时用的起始值。
+ * 摆放是界面自己在代码里用 mix.move / mix.size / mix.chrome … 定的，
+ * 这里只是「代码还没跑起来的那一帧」站的地方：应用一笔都不画，位置给个中性的框。
+ */
+export const MIX_PANEL_DEFAULT_LAYOUT: MixPanelLayout = {
+    x: 6, y: 14, w: 88, h: 44, drag: true, chrome: "none", plate: false,
+};
+
+/**
+ * 一件机括最终按哪份摆放画。
+ * 自己写了就用自己的；只有老停靠位就换算过来；两样都没有但写了界面代码，
+ * 就落在中性的起始值上，等界面代码自己挪走——有界面代码就有界面，不再另外声明一次。
+ */
+export function mixPanelLayoutOf(material: { layout?: MixPanelLayout; dock?: MixDock; panelHtml?: string }): MixPanelLayout | undefined {
     const own = normalizeMixPanelLayout(material.layout);
     if (own) return own;
-    return material.dock ? { ...MIX_DOCK_PRESETS[material.dock] } : undefined;
+    if (material.dock) return { ...MIX_DOCK_PRESETS[material.dock] };
+    return material.panelHtml?.trim() ? { ...MIX_PANEL_DEFAULT_LAYOUT } : undefined;
 }
 
 /** 详情页上用一行字说清这份摆放 */

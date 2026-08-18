@@ -3,7 +3,7 @@
 // 独家特调 · 材料编辑器：八类材料的自建/编辑表单（底部弹层里渲染）。
 // Phase ③ 先给够用的表单闭环，创作工坊阶段再上专业编辑体验。
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { FileText, Plus, Trash2 } from "lucide-react";
 import type {
     MixCharacterCard,
@@ -13,8 +13,7 @@ import type {
     MixTextMaterial,
     MixTicketVar,
 } from "@/lib/mixology/types";
-import { createMixId, formatMixTags, MIX_DOCK_LABELS, MIX_DOCK_PRESETS, MIX_KIND_LABELS, MIX_PANEL_KEEP_IN, MIX_PANEL_MIN_H, MIX_PANEL_MIN_W, MIX_TAG_MAX, mixKindHasCover, mixNearestDock, mixPanelLayoutOf, parseMixTags } from "@/lib/mixology/types";
-import type { MixDock, MixPanelLayout } from "@/lib/mixology/types";
+import { createMixId, formatMixTags, MIX_KIND_LABELS, MIX_PANEL_DEFAULT_LAYOUT, MIX_TAG_MAX, mixKindHasCover, mixPanelLayoutOf, parseMixTags } from "@/lib/mixology/types";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
 import { MixPreviewInline, MixStructureSheet } from "./mixology-preview";
 
@@ -127,135 +126,6 @@ type EditorProps = {
     onCancel: () => void;
 };
 
-/**
- * 界面摆放的可视化摆放器：一块按对局画面比例画的板子，里面那个框就是面板。
- * 拖框挪位置、拖右下角改大小，下面几个开关管交互与外壳。
- * 数值也一起显示——照着别人的材料抄坐标时看得见。
- */
-function MixLayoutPicker({ layout, onChange }: { layout: MixPanelLayout; onChange: (next: MixPanelLayout) => void }) {
-    const boardRef = useRef<HTMLDivElement | null>(null);
-    const dragRef = useRef<{ mode: "move" | "size"; from: { x: number; y: number }; box: MixPanelLayout } | null>(null);
-    const [dragging, setDragging] = useState(false);
-
-    const clamp = useCallback((next: MixPanelLayout): MixPanelLayout => {
-        const w = Math.round(Math.min(100, Math.max(MIX_PANEL_MIN_W, next.w)));
-        const h = Math.round(Math.min(100, Math.max(MIX_PANEL_MIN_H, next.h)));
-        return {
-            ...next,
-            w,
-            h,
-            x: Math.round(Math.min(100 - MIX_PANEL_KEEP_IN, Math.max(MIX_PANEL_KEEP_IN - w, next.x))),
-            y: Math.round(Math.min(100 - MIX_PANEL_KEEP_IN, Math.max(MIX_PANEL_KEEP_IN - h, next.y))),
-        };
-    }, []);
-
-    const start = (mode: "move" | "size") => (event: React.PointerEvent) => {
-        if (event.button !== 0) return;
-        event.stopPropagation();
-        dragRef.current = { mode, from: { x: event.clientX, y: event.clientY }, box: layout };
-        setDragging(true);
-    };
-
-    useEffect(() => {
-        if (!dragging) return;
-        const rect = boardRef.current?.getBoundingClientRect();
-        if (!rect?.width || !rect.height) { setDragging(false); return; }
-        const move = (event: PointerEvent) => {
-            const drag = dragRef.current;
-            if (!drag) return;
-            const dx = (event.clientX - drag.from.x) / rect.width * 100;
-            const dy = (event.clientY - drag.from.y) / rect.height * 100;
-            onChange(clamp(drag.mode === "move"
-                ? { ...drag.box, x: drag.box.x + dx, y: drag.box.y + dy }
-                : { ...drag.box, w: drag.box.w + dx, h: drag.box.h + dy }));
-        };
-        const stop = () => { dragRef.current = null; setDragging(false); };
-        window.addEventListener("pointermove", move);
-        window.addEventListener("pointerup", stop);
-        window.addEventListener("pointercancel", stop);
-        return () => {
-            window.removeEventListener("pointermove", move);
-            window.removeEventListener("pointerup", stop);
-            window.removeEventListener("pointercancel", stop);
-        };
-    }, [dragging, onChange, clamp]);
-
-    const toggles: { key: keyof MixPanelLayout; label: string; on: boolean; hint: string }[] = [
-        { key: "drag", label: "玩家可拖动", on: layout.drag !== false, hint: "拖过的位置只记在那一局里" },
-        { key: "resize", label: "玩家可缩放", on: layout.resize === true, hint: "右下角出现缩放把手" },
-        { key: "autoHeight", label: "高度随内容", on: layout.autoHeight === true, hint: "上面画的高度变成上限" },
-        { key: "chrome", label: "应用画标题条", on: (layout.chrome ?? "bar") === "bar", hint: "带名字和收起箭头的那条" },
-        { key: "plate", label: "应用画底板", on: layout.plate !== false, hint: "圆角暗底与描边" },
-    ];
-
-    return (
-        <Field label="画在哪" hint="拖框挪位置，拖右下角改大小">
-            <div className="mix-layout-hint">
-                画一台手机、一张卡片这类固定排版，填「按多宽排版」（例如 390）；应用会按这个宽度排完再整体缩放到面板大小。不填则界面直接按面板的实际像素排版，面板一小字就显得特别大。
-            </div>
-            <div className="mix-layout-pick">
-                <div className="mix-layout-board" ref={boardRef}>
-                    <div className="mix-layout-bar">标题栏</div>
-                    <div className="mix-layout-input">输入栏</div>
-                    <div
-                        className="mix-layout-box"
-                        style={{ left: `${layout.x}%`, top: `${layout.y}%`, width: `${layout.w}%`, height: `${layout.h}%` }}
-                        onPointerDown={start("move")}
-                    >
-                        <span>{layout.w}×{layout.autoHeight ? "自动" : layout.h}</span>
-                        <i className="mix-layout-grip" onPointerDown={start("size")} />
-                    </div>
-                </div>
-                <div className="mix-layout-side">
-                    <div className="mix-layout-nums">左 {layout.x}% · 上 {layout.y}%</div>
-                    {toggles.map((item) => (
-                        <button
-                            type="button"
-                            className="mix-dock-chip"
-                            key={item.key}
-                            data-on={item.on ? "true" : undefined}
-                            title={item.hint}
-                            onClick={() => {
-                                if (item.key === "chrome") onChange({ ...layout, chrome: item.on ? "none" : "bar" });
-                                else if (item.key === "plate") onChange({ ...layout, plate: !item.on });
-                                else onChange({ ...layout, [item.key]: !item.on });
-                            }}
-                        >
-                            {item.label}
-                        </button>
-                    ))}
-                    <label className="mix-layout-z">
-                        按多宽排版
-                        <input
-                            type="number"
-                            min={0}
-                            max={1600}
-                            step={10}
-                            placeholder="不填"
-                            value={layout.designWidth ?? ""}
-                            onChange={(e) => {
-                                const px = Number(e.target.value);
-                                onChange({ ...layout, designWidth: Number.isFinite(px) && px >= 120 ? Math.min(1600, Math.round(px)) : undefined });
-                            }}
-                        />
-                        <i>px</i>
-                    </label>
-                    <label className="mix-layout-z">
-                        叠放次序
-                        <input
-                            type="number"
-                            min={0}
-                            max={9}
-                            value={layout.z ?? 0}
-                            onChange={(e) => onChange({ ...layout, z: Math.min(9, Math.max(0, Number(e.target.value) || 0)) })}
-                        />
-                    </label>
-                </div>
-            </div>
-        </Field>
-    );
-}
-
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
     return (
         <>
@@ -301,9 +171,10 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
     const [previewRaw, setPreviewRaw] = useState(initial?.kind === "ticket" ? initial.previewRaw ?? "" : "");
     const [vars, setVars] = useState<MixTicketVar[]>(initial?.kind === "ticket" ? initial.vars ?? [] : []);
     const [script, setScript] = useState(initial?.kind === "mechanism" ? initial.script ?? "" : "");
-    const [layout, setLayout] = useState<MixPanelLayout | null>(
-        initial?.kind === "mechanism" ? mixPanelLayoutOf(initial) ?? null : null,
-    );
+    // 摆放不进表单：界面代码里用 mix.move / mix.size / mix.chrome … 自己定。
+    // 老材料带着的那份原样保留，免得改一次名字就把人家摆好的位置抹了。
+    const keptLayout = initial?.kind === "mechanism" ? initial.layout : undefined;
+    const keptDock = initial?.kind === "mechanism" ? initial.dock : undefined;
     const [panelHtml, setPanelHtml] = useState(initial?.kind === "mechanism" ? initial.panelHtml ?? "" : "");
 
     /**
@@ -424,10 +295,8 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                 ...meta,
                 kind: "mechanism",
                 script: script.trim() || undefined,
-                layout: layout ?? undefined,
-                // 顺带写上最接近的老停靠位：老版本客户端不认 layout，
-                // 有这一条至少还能把界面挂在个大致对的地方，而不是干脆不显示
-                dock: layout ? mixNearestDock(layout) : undefined,
+                layout: keptLayout,
+                dock: keptDock,
                 panelHtml: panelHtml.trim() || undefined,
             });
             return;
@@ -761,42 +630,23 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             placeholder={"每个函数收一份 ctx，返回一个对象（不返回就是什么都不改）。\nctx: { turnCount, state, store, charName, userName, text, ticketRaw, encoreRaw }\n可返回: { text, note, state, store }\n\n例：玩家打「/掷骰」时换成一段带结果的指令\nfunction onBeforeSend(ctx) {\n  if (ctx.text !== \"/掷骰\") return;\n  var n = 1 + Math.floor(Math.random() * 20);\n  return { text: \"（我掷出了 \" + n + \" 点）\" };\n}\n\n例：连着三轮好感度上涨就提醒一次\nfunction onAfterReply(ctx) {\n  var up = Number(ctx.store.连涨 || 0);\n  return { store: { 连涨: String(up + 1) } };\n}"}
                         />
                     </Field>
-                    <Field label="常驻界面" hint="可留空">
-                        <div className="mix-dock-row">
-                            <button type="button" className="mix-dock-chip" data-on={layout ? undefined : "true"} onClick={() => setLayout(null)}>不要界面</button>
-                            {(Object.keys(MIX_DOCK_LABELS) as MixDock[]).map((value) => (
-                                <button
-                                    type="button"
-                                    className="mix-dock-chip"
-                                    key={value}
-                                    onClick={() => setLayout({ ...MIX_DOCK_PRESETS[value] })}
-                                >
-                                    {MIX_DOCK_LABELS[value]}
-                                </button>
-                            ))}
-                            <button type="button" className="mix-dock-chip" onClick={() => setLayout({ x: 0, y: 0, w: 100, h: 100, drag: false, chrome: "none", plate: false })}>整屏</button>
-                        </div>
+                    <Field label="界面代码" hint="HTML + CSS + JS，在沙盒里跑；画在哪、多大、要不要应用画外壳，都在这里用 window.mix 写">
+                        <textarea
+                            className="mix-textarea"
+                            data-code="true"
+                            style={{ minHeight: 160 }}
+                            value={panelHtml}
+                            onChange={(e) => setPanelHtml(e.target.value)}
+                            placeholder={"<div style=\"padding:10px\">这里是常驻面板</div>\n\nwindow.mix\n  move(x, y) / size(w, h)         挪自己、改大小（占对局画面的百分比）\n  design(px)                      按多宽排版，画完整体缩放到面板大小；0 = 跟着面板走\n  fit(px)                         报内容多高\n  chrome(on) / plate(on)          要不要应用画的标题条 / 底板，默认都不画\n  drag(on) / resize(on)           玩家能不能拖、能不能缩放\n  z(n)                            叠放次序 0–9\n  grab()                          在自己画的标题条上 pointerdown 时调，接着由应用接管拖动\n  setStore(obj) / setState(obj)   写存储 / 写记住的值\n  say(text)                       以玩家身份说一句\nwindow.MIX_STATE / window.MIX_STORE  当前的值\nwindow.onMixSync(state, store)       值变了会回调"}
+                        />
                     </Field>
-                    {layout ? <MixLayoutPicker layout={layout} onChange={setLayout} /> : null}
-                    {layout ? (
-                        <Field label="界面代码" hint="HTML + CSS + JS，在沙盒里跑">
-                            <textarea
-                                className="mix-textarea"
-                                data-code="true"
-                                style={{ minHeight: 160 }}
-                                value={panelHtml}
-                                onChange={(e) => setPanelHtml(e.target.value)}
-                                placeholder={"<div style=\"padding:10px\">这里是常驻面板</div>\n\nwindow.mix\n  setStore(obj) / setState(obj)   写存储 / 写记住的值\n  say(text)                       以玩家身份说一句\n  open() / close()                展开、收起\n  move(x, y) / size(w, h)         挪自己、改大小（百分比）\n  fit(px)                         报内容多高\n  grab()                          在自己画的标题条上按下时调\nwindow.MIX_STATE / window.MIX_STORE  当前的值\nwindow.onMixSync(state, store)       值变了会回调"}
-                            />
-                        </Field>
-                    ) : null}
                     <MixPreviewInline
                         label="试摆一下"
                         target={{
                             kind: "mechanism",
                             name,
                             html: panelHtml,
-                            layout: layout ?? MIX_DOCK_PRESETS.float,
+                            layout: mixPanelLayoutOf({ layout: keptLayout, dock: keptDock, panelHtml }) ?? MIX_PANEL_DEFAULT_LAYOUT,
                             script,
                         }}
                         disabled={!panelHtml.trim() && !script.trim()}
