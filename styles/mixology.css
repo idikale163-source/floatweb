@@ -2763,6 +2763,23 @@
     margin: 8px 0 2px;
 }
 
+/* 正在写的那一段：与落库后的正文同一套排版，只在末尾加一个光标示意还没写完 */
+.mix-live-turn .mix-prose > :last-child::after {
+    content: "";
+    display: inline-block;
+    width: 2px;
+    height: 0.95em;
+    margin-left: 3px;
+    vertical-align: -0.12em;
+    background: var(--mix-violet);
+    animation: mixCaret 1s steps(1, end) infinite;
+}
+
+@keyframes mixCaret {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+
 /* ── 编辑器里的机括试摆：一块按对局画面比例画的舞台，面板真的落在上面 ── */
 .mix-mech-stage {
     position: relative;

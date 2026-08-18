@@ -12,7 +12,7 @@ import { applyMixMacros, MIX_DEFAULT_USER_NAME } from "@/lib/mixology/assembler"
 import { buildMixConditionContext, pickActiveMixMaterials } from "@/lib/mixology/state";
 import { scopeMixCss } from "@/lib/mixology/css-scope";
 import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, mixPanelLayoutOf, mixSlotEntries, type MixCharacterCard, type MixFilterRule, type MixMaterialKind, type MixMechanismMaterial, type MixPanelLayout, type MixSession, type MixSlotEntry, type MixState, type MixTurn } from "@/lib/mixology/types";
-import { applyMixFilterRules } from "@/lib/mixology/prose";
+import { applyMixFilterRules, mixStreamText } from "@/lib/mixology/prose";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
 import { KindGlyph, MixConfirm } from "./mixology-shared";
@@ -116,6 +116,13 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const [session, setSession] = useState<MixSession | null>(() => getMixSession(sessionId));
     const [input, setInput] = useState("");
     const [busy, setBusy] = useState(false);
+    /**
+     * 正在写的那一段。模型每吐一小段就回调一次，一个 token 重渲染一次太浪费，
+     * 所以先攒在 ref 里，按帧合批推给界面。
+     */
+    const [live, setLive] = useState("");
+    const liveRef = useRef("");
+    const liveFrameRef = useRef(0);
     const busyRef = useRef(false);
     const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null);
     const [confirm, setConfirm] = useState<{ type: "rewind" | "edit"; turnId: string } | null>(null);
@@ -283,10 +290,10 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         applyStick();
     }, [sessionId, applyStick]);
 
-    /** 内容长高了（新一轮到达、生成态切换）按当前落点再落一次 */
+    /** 内容长高了（新一轮到达、生成态切换、流式又写出一段）按当前落点再落一次 */
     useEffect(() => {
         applyStick();
-    }, [session?.turns.length, busy, applyStick]);
+    }, [session?.turns.length, busy, live, applyStick]);
 
     /**
      * 滚动区里的沙盒 iframe——开场画布、每轮的小票与小剧场、末尾的静态小品——高度都是
@@ -358,15 +365,25 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         );
     }
 
-    const run = async (action: (signal: AbortSignal, commit: () => void) => Promise<unknown>) => {
+    const run = async (action: (signal: AbortSignal, commit: () => void, onDelta: (chunk: string) => void) => Promise<unknown>) => {
         if (busy) return;
         const controller = new AbortController();
         abortRef.current = controller;
         setBusy(true);
         busyRef.current = true;
+        liveRef.current = "";
+        setLive("");
         const commit = () => setSession(getMixSession(sessionId));
+        const onDelta = (chunk: string) => {
+            liveRef.current += chunk;
+            if (liveFrameRef.current) return;
+            liveFrameRef.current = window.requestAnimationFrame(() => {
+                liveFrameRef.current = 0;
+                setLive(liveRef.current);
+            });
+        };
         try {
-            const pending = action(controller.signal, commit);
+            const pending = action(controller.signal, commit, onDelta);
             // 重说/回溯那几条在第一个 await 之前就落库了，立刻回读让界面先变；
             // 发送那条的落库晚于这一拍（落杯前钩子是异步的），由引擎回调 commit 补上
             commit();
@@ -377,6 +394,12 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             const message = error instanceof Error ? error.message : "生成失败，请重试。";
             if (!controller.signal.aborted) onToast(message);
         } finally {
+            if (liveFrameRef.current) {
+                window.cancelAnimationFrame(liveFrameRef.current);
+                liveFrameRef.current = 0;
+            }
+            liveRef.current = "";
+            setLive("");
             busyRef.current = false;
             setBusy(false);
         }
@@ -389,14 +412,14 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         // 一开口就把落点钉到底：用户那一轮要等落杯前钩子跑完才落库，
         // 这中间界面还是「没人开过口」的样子，不钉住就会被拽回扉页顶上
         stickRef.current = "bottom";
-        void run((signal, commit) => generateMixReply(sessionId, text, signal, commit));
+        void run((signal, commit, onDelta) => generateMixReply(sessionId, text, signal, commit, onDelta));
     };
 
     /** 界面以玩家身份发一句话：走的是和输入框一模一样的路径，不是特权通道 */
     const handlePanelSay = useCallback((text: string) => {
         if (busyRef.current) return;
         stickRef.current = "bottom";
-        void run((signal, commit) => generateMixReply(sessionId, text, signal, commit));
+        void run((signal, commit, onDelta) => generateMixReply(sessionId, text, signal, commit, onDelta));
     }, [sessionId]);
 
     const copyTurn = (turn: MixTurn) => {
@@ -440,7 +463,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         }
         // 编辑的是玩家发言：直接续生成新回复；编辑角色回复则到此为止
         if (target?.role === "user") {
-            void run((signal) => regenerateMixTail(sessionId, signal));
+            void run((signal, _commit, onDelta) => regenerateMixTail(sessionId, signal, onDelta));
         }
     };
 
@@ -506,11 +529,19 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                         </div>
                     );
                 })}
-                {busy ? (
-                    <div className="mix-game-thinking" aria-label="生成中">
-                        <span /><span /><span />
-                    </div>
-                ) : null}
+                {busy ? (() => {
+                    // 流式过程中同样过一遍「仅显示」滤网，写出来的样子和落库后一致
+                    const shown = applyMixFilterRules(mixStreamText(live), assets.filterRules, "display");
+                    return shown ? (
+                        <div className="mix-live-turn">
+                            <MixProseView text={shown} />
+                        </div>
+                    ) : (
+                        <div className="mix-game-thinking" aria-label="生成中">
+                            <span /><span /><span />
+                        </div>
+                    );
+                })() : null}
                 {assets.encoreStaticHtml ? (
                     <div className="mix-encore-inline">
                         <MixRichText text={assets.encoreStaticHtml} />
@@ -540,7 +571,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                 <button
                     type="button"
                     className="mix-icon-btn"
-                    onClick={() => void run((signal) => rerollMixReply(sessionId, signal))}
+                    onClick={() => void run((signal, _commit, onDelta) => rerollMixReply(sessionId, signal, onDelta))}
                     disabled={!canReroll}
                     aria-label="重说"
                     title="重说"
@@ -564,7 +595,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                 <button
                     type="button"
                     className="mix-icon-btn"
-                    onClick={() => void run((signal) => continueMix(sessionId, signal))}
+                    onClick={() => void run((signal, _commit, onDelta) => continueMix(sessionId, signal, onDelta))}
                     disabled={busy}
                     aria-label="继续生成"
                     title="继续生成"
