@@ -11,7 +11,7 @@ import { getMixMaterial, getMixSession, listMixPickables, resolveMixRecipeMateri
 import { applyMixMacros, MIX_DEFAULT_USER_NAME } from "@/lib/mixology/assembler";
 import { buildMixConditionContext, pickActiveMixMaterials } from "@/lib/mixology/state";
 import { scopeMixCss } from "@/lib/mixology/css-scope";
-import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, mixSlotEntries, type MixCharacterCard, type MixFilterRule, type MixMaterialKind, type MixMechanismMaterial, type MixSession, type MixSlotEntry, type MixState, type MixTurn } from "@/lib/mixology/types";
+import { MIX_KIND_LABELS, MIX_SLOT_ORDER, mixEncoreRenderHtml, mixPanelLayoutOf, mixSlotEntries, type MixCharacterCard, type MixFilterRule, type MixMaterialKind, type MixMechanismMaterial, type MixPanelLayout, type MixSession, type MixSlotEntry, type MixState, type MixTurn } from "@/lib/mixology/types";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
@@ -188,17 +188,51 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     }, [session]);
 
     /**
-     * 条件命中、且配了停靠位的机括：这些是要常驻在画面边上的界面。
-     * 上限 3 件——每件一个 iframe，手机上多开吃内存，屏幕也摆不下。
+     * 条件命中、且写了界面的机括：这些是要常驻在对局画面上的界面。
+     * 上限 3 件——每件一个 iframe，手机上多开吃内存。
+     * 摆放取材料自己写的那份；玩家在这一局里拖动过的，以拖过的为准。
      */
     const panels = useMemo(() => {
-        if (!session) return [] as MixMechanismMaterial[];
+        if (!session) return [] as { material: MixMechanismMaterial; layout: MixPanelLayout }[];
         const { entries } = resolveMixRecipeMaterials(session.recipe);
         const active = pickActiveMixMaterials(entries, buildMixConditionContext(session));
         return (active.mechanism ?? [])
-            .filter((m): m is MixMechanismMaterial => m.kind === "mechanism" && Boolean(m.dock) && Boolean(m.panelHtml?.trim()))
+            .filter((m): m is MixMechanismMaterial => m.kind === "mechanism" && Boolean(m.panelHtml?.trim()))
+            .map((material) => {
+                const base = mixPanelLayoutOf(material);
+                if (!base) return null;
+                const moved = session.panelBox?.[material.id];
+                return { material, layout: moved ? { ...base, ...moved } : base };
+            })
+            .filter((item): item is { material: MixMechanismMaterial; layout: MixPanelLayout } => item !== null)
             .slice(0, MIX_PANEL_MAX);
     }, [session]);
+
+    /**
+     * 机括界面的逃生口。摆放完全交给创作者之后，理论上存在"一块面板糊满整个屏幕、
+     * 连输入框都点不到"的材料——不靠限制排版来防，靠这里一键收掉、一键归位。
+     */
+    const [panelsHidden, setPanelsHidden] = useState(false);
+
+    /** 把这一局里拖过的摆放全部丢掉，退回材料自己写的那份 */
+    const resetPanelBoxes = useCallback(() => {
+        const current = getMixSession(sessionId);
+        if (!current?.panelBox) return;
+        const next = { ...current };
+        delete next.panelBox;
+        saveMixSession(next);
+        setSession(getMixSession(sessionId));
+    }, [sessionId]);
+
+    /** 玩家把面板拖过/拉过之后记在这一局里，不回写材料 */
+    const handlePanelBox = useCallback((materialId: string, box: { x: number; y: number; w: number; h: number }) => {
+        const current = getMixSession(sessionId);
+        if (!current) return;
+        const previous = current.panelBox?.[materialId];
+        if (previous && previous.x === box.x && previous.y === box.y && previous.w === box.w && previous.h === box.h) return;
+        saveMixSession({ ...current, panelBox: { ...(current.panelBox ?? {}), [materialId]: { ...(previous ?? {}), ...box } } });
+        setSession(getMixSession(sessionId));
+    }, [sessionId]);
 
     /** 界面写自己的存储 */
     const handlePanelStore = useCallback((materialId: string, store: Record<string, string>) => {
@@ -483,20 +517,21 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                     </div>
                 ) : null}
             </div>
-            {panels.length ? (
+            {panels.length && !panelsHidden ? (
                 <div className="mix-panel-layer">
-                    {panels.map((material) => (
+                    {panels.map(({ material, layout }) => (
                         <MixMechanismPanel
                             key={material.id}
                             materialId={material.id}
                             name={material.name}
-                            dock={material.dock!}
+                            layout={layout}
                             html={material.panelHtml ?? ""}
                             state={session.state ?? {}}
                             store={session.mechanismStore?.[material.id] ?? {}}
                             onStore={handlePanelStore}
                             onState={handlePanelState}
                             onSay={handlePanelSay}
+                            onBox={handlePanelBox}
                         />
                     ))}
                 </div>
@@ -551,6 +586,16 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                         </div>
                         <div className="mix-sheet-body">
                             <div className="mix-struct-note">只改这一局，下一轮生成时生效，已写出的内容不变；不影响吧台里保存的方案。</div>
+                            {panels.length ? (
+                                <div className="mix-panel-ops">
+                                    <button type="button" className="mix-dock-chip" data-on={panelsHidden ? "true" : undefined} onClick={() => setPanelsHidden((v) => !v)}>
+                                        {panelsHidden ? "显示机括界面" : "暂时收起机括界面"}
+                                    </button>
+                                    <button type="button" className="mix-dock-chip" onClick={() => { resetPanelBoxes(); onToast("机括界面已归位。"); }}>
+                                        界面归位
+                                    </button>
+                                </div>
+                            ) : null}
                             <div className="mix-bar-hint">左右滑动切换槽位 · 点击槽位换材料</div>
                             <div className="mix-wheel" ref={wheelRef} onScroll={handleWheelScroll}>
                                 {MIX_SLOT_ORDER.map((kind) => {
