@@ -59,7 +59,7 @@ const KIND_GUIDE: Record<MixMaterialKind, { what: string; where: string }> = {
         where: "契约进提示词；渲染代码只在界面执行。",
     },
     mechanism: {
-        what: "这里写机括：一段在沙盒里跑的逻辑，和一块常驻在对局画面上的界面——界面画在哪、画多大由你定。两半共用同一份存储，可以只写一半。逻辑在开局、发送前、收到回复后、退出对局这几个时机被叫起来。",
+        what: "一段在沙盒里跑的逻辑，加一块常驻在对局画面上的界面。两半共用同一份存储，可以只写一半。",
         where: "不进提示词，跑在断网的沙盒里。",
     },
     filter: {
@@ -184,12 +184,12 @@ function MixLayoutPicker({ layout, onChange }: { layout: MixPanelLayout; onChang
         { key: "drag", label: "玩家可拖动", on: layout.drag !== false, hint: "拖过的位置只记在那一局里" },
         { key: "resize", label: "玩家可缩放", on: layout.resize === true, hint: "右下角出现缩放把手" },
         { key: "autoHeight", label: "高度随内容", on: layout.autoHeight === true, hint: "上面画的高度变成上限" },
-        { key: "chrome", label: "应用画把手", on: (layout.chrome ?? "bar") === "bar", hint: "那条带名字和收起箭头的横条" },
-        { key: "plate", label: "应用画底板", on: layout.plate !== false, hint: "圆角暗底与描边；自己画背景就关掉" },
+        { key: "chrome", label: "应用画标题条", on: (layout.chrome ?? "bar") === "bar", hint: "带名字和收起箭头的那条" },
+        { key: "plate", label: "应用画底板", on: layout.plate !== false, hint: "圆角暗底与描边" },
     ];
 
     return (
-        <Field label="画在哪" hint="拖框挪位置，拖右下角改大小；坐标是占对局画面的百分比，换机型不跑偏">
+        <Field label="画在哪" hint="拖框挪位置，拖右下角改大小">
             <div className="mix-layout-pick">
                 <div className="mix-layout-board" ref={boardRef}>
                     <div className="mix-layout-bar">标题栏</div>
@@ -732,7 +732,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             ) : null}
             {kind === "mechanism" ? (
                 <>
-                    <Field label="钩子逻辑" hint="可留空。定义下面这几个函数，会在对应时机被调用；ctx.store 与下面的界面是同一份">
+                    <Field label="钩子逻辑" hint="可留空。存储与下面的界面共用一份">
                         <textarea
                             className="mix-textarea"
                             data-code="true"
@@ -742,7 +742,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             placeholder={"每个函数收一份 ctx，返回一个对象（不返回就是什么都不改）。\nctx: { turnCount, state, store, charName, userName, text, ticketRaw, encoreRaw }\n可返回: { text, note, state, store }\n\n例：玩家打「/掷骰」时换成一段带结果的指令\nfunction onBeforeSend(ctx) {\n  if (ctx.text !== \"/掷骰\") return;\n  var n = 1 + Math.floor(Math.random() * 20);\n  return { text: \"（我掷出了 \" + n + \" 点）\" };\n}\n\n例：连着三轮好感度上涨就提醒一次\nfunction onAfterReply(ctx) {\n  var up = Number(ctx.store.连涨 || 0);\n  return { store: { 连涨: String(up + 1) } };\n}"}
                         />
                     </Field>
-                    <Field label="常驻界面" hint="可留空。画在哪、多大、能不能拖，全由你定；它写的存储上面的钩子读得到">
+                    <Field label="常驻界面" hint="可留空">
                         <div className="mix-dock-row">
                             <button type="button" className="mix-dock-chip" data-on={layout ? undefined : "true"} onClick={() => setLayout(null)}>不要界面</button>
                             {(Object.keys(MIX_DOCK_LABELS) as MixDock[]).map((value) => (
@@ -760,14 +760,14 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     </Field>
                     {layout ? <MixLayoutPicker layout={layout} onChange={setLayout} /> : null}
                     {layout ? (
-                        <Field label="界面代码" hint="HTML + CSS + JS，在沙盒里跑；window.mix 里有能调的那几件事">
+                        <Field label="界面代码" hint="HTML + CSS + JS，在沙盒里跑">
                             <textarea
                                 className="mix-textarea"
                                 data-code="true"
                                 style={{ minHeight: 160 }}
                                 value={panelHtml}
                                 onChange={(e) => setPanelHtml(e.target.value)}
-                                placeholder={"例：\n<div style=\"padding:10px;color:#d9b06a\">这里是常驻面板</div>\n\n界面里能调的（window.mix）：\n  mix.setStore(obj) / mix.setState(obj)   写自己的存储 / 写记住的值\n  mix.say(text)                          以玩家身份说一句\n  mix.open() / mix.close()               展开、收起自己\n  mix.move(x, y) / mix.size(w, h)        挪自己、改自己大小（百分比）\n  mix.fit(px)                            报一下内容多高（开了「高度随内容」才有用）\n  mix.grab()                             在自己画的标题条上按下时调，接着由应用接管拖动\n读得到：window.MIX_STATE / window.MIX_STORE；值有变化时会回调 window.onMixSync(state, store)"}
+                                placeholder={"<div style=\"padding:10px\">这里是常驻面板</div>\n\nwindow.mix\n  setStore(obj) / setState(obj)   写存储 / 写记住的值\n  say(text)                       以玩家身份说一句\n  open() / close()                展开、收起\n  move(x, y) / size(w, h)         挪自己、改大小（百分比）\n  fit(px)                         报内容多高\n  grab()                          在自己画的标题条上按下时调\nwindow.MIX_STATE / window.MIX_STORE  当前的值\nwindow.onMixSync(state, store)       值变了会回调"}
                             />
                         </Field>
                     ) : null}
@@ -783,9 +783,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                         disabled={!panelHtml.trim() && !script.trim()}
                     />
                     <div className="mix-struct-note" style={{ marginTop: 10 }}>
-                        钩子跑在没有网络、碰不到应用本体的沙盒里，超时会被掐断，那一轮当作没有机括。
-                        存储是这件机括自己的，一个对局一份，退出再进来还在——钩子与界面共用这一份，
-                        所以「界面上记一笔、下一轮发送前带进提示词」这类配合是天然成立的。
+                        沙盒里没有网络，跑太久会被掐断。存储一个对局一份，退出再进来还在。
                     </div>
                 </>
             ) : null}

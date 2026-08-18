@@ -171,15 +171,15 @@ function MixMechanismStage({ target }: { target: Extract<MixPreviewTarget, { kin
         };
         const out = await runMixHook(MECH_SESSION, MECH_MATERIAL, target.script, hook, payload);
         const lines: string[] = [];
-        if (typeof out.text === "string") lines.push(`改写后的正文：\n${short(out.text, 400)}`);
-        if (out.note) lines.push(`这一轮追加的临时提示（${out.note.length} 字）：\n${short(out.note, 600)}`);
-        if (out.state) lines.push(`写了记住的值：${Object.entries(out.state).map(([k, v]) => `${k}=${v}`).join("、")}`);
+        if (typeof out.text === "string") lines.push(`正文改写\n${short(out.text, 400)}`);
+        if (out.note) lines.push(`临时提示 · ${out.note.length} 字\n${short(out.note, 600)}`);
+        if (out.state) lines.push(`记住的值 · ${Object.entries(out.state).map(([k, v]) => `${k}=${v}`).join("、")}`);
         if (out.store) {
-            lines.push(`写了自己的存储：${Object.entries(out.store).map(([k, v]) => `${k}(${v.length} 字)`).join("、") || "（清空）"}`);
+            lines.push(`存储 · ${Object.entries(out.store).map(([k, v]) => `${k}（${v.length} 字）`).join("、") || "已清空"}`);
             setStore(out.store);
         }
         if (out.state) setState((prev) => ({ ...prev, ...out.state }));
-        if (!lines.length) lines.push("什么都没还回来——这个时机没定义对应的函数，或者它返回了空。");
+        if (!lines.length) lines.push("没有返回。");
         setResult({ hook, lines });
         setRunning("");
         if (hook === "afterReply") setTurn((n) => n + 1);
@@ -191,7 +191,7 @@ function MixMechanismStage({ target }: { target: Extract<MixPreviewTarget, { kin
         <>
             {hasPanel ? (
             <>
-            <div className="mix-detail-label">摆在对局画面上的样子（可以拖、可以点）</div>
+            <div className="mix-detail-label">界面</div>
             <div className="mix-mech-stage">
                 <div className="mix-mech-bar">{MECH_CHAR}</div>
                 <div className="mix-mech-prose"><MixProseView text={MECH_SAMPLE} /></div>
@@ -213,14 +213,15 @@ function MixMechanismStage({ target }: { target: Extract<MixPreviewTarget, { kin
                     ) : null}
                 </div>
             </div>
-            <div className="mix-mech-hint">
-                左上角是标题栏、底下那条是输入栏，比例与真对局一致。
-                {box ? <> 已经拖过了，<button type="button" className="mix-mech-reset" onClick={() => setBox(null)}>退回材料写的位置</button>。</> : null}
-            </div>
+            {box ? (
+                <div className="mix-mech-hint">
+                    已拖动过 · <button type="button" className="mix-mech-reset" onClick={() => setBox(null)}>归位</button>
+                </div>
+            ) : null}
             </>
             ) : null}
 
-            <div className="mix-detail-label" style={hasPanel ? { marginTop: 14 } : undefined}>跑一遍钩子（第 {turn} 轮）</div>
+            <div className="mix-detail-label" style={hasPanel ? { marginTop: 14 } : undefined}>钩子 · 第 {turn} 轮</div>
             <div className="mix-dock-row">
                 {(Object.keys(MIX_HOOK_LABELS) as MixHook[]).map((hook) => (
                     <button
@@ -235,30 +236,24 @@ function MixMechanismStage({ target }: { target: Extract<MixPreviewTarget, { kin
                     </button>
                 ))}
                 <button type="button" className="mix-dock-chip" onClick={() => { setStore({}); setState({}); setSaid([]); setTurn(0); setResult(null); }}>
-                    清空重来
+                    重置
                 </button>
             </div>
-            {!target.script.trim() ? (
-                <div className="mix-mech-hint">这件机括没写钩子逻辑，只有界面。</div>
-            ) : (
-                <div className="mix-mech-hint">
-                    落杯前喂的是「{MECH_SAY}」，出杯后喂的是一段带场景的回复；存储与界面共用同一份，钩子写完上面立刻能看见。
-                </div>
-            )}
+            {!target.script.trim() ? <div className="mix-mech-hint">没写钩子逻辑。</div> : null}
             {result ? (
                 <div className="mix-detail-value" data-code="true">
-                    {`〔${MIX_HOOK_LABELS[result.hook]}〕还回来：\n\n` + result.lines.join("\n\n")}
+                    {result.lines.join("\n\n")}
                 </div>
             ) : null}
 
             {Object.keys(store).length || Object.keys(state).length || said.length ? (
                 <>
-                    <div className="mix-detail-label" style={{ marginTop: 14 }}>当前这一份</div>
+                    <div className="mix-detail-label" style={{ marginTop: 14 }}>现在的状态</div>
                     <div className="mix-detail-value" data-code="true">
                         {[
-                            `存储：${Object.keys(store).length ? Object.entries(store).map(([k, v]) => `${k} = ${short(v, 90)}`).join("\n      ") : "（空）"}`,
-                            `记住的值：${Object.keys(state).length ? Object.entries(state).map(([k, v]) => `${k}=${v}`).join("、") : "（空）"}`,
-                            said.length ? `界面以玩家身份说过：\n      ${said.map((t) => short(t, 90)).join("\n      ")}` : "",
+                            `存储 · ${Object.keys(store).length ? Object.entries(store).map(([k, v]) => `${k} = ${short(v, 90)}`).join("\n     ") : "空"}`,
+                            `记住的值 · ${Object.keys(state).length ? Object.entries(state).map(([k, v]) => `${k}=${v}`).join("、") : "空"}`,
+                            said.length ? `界面说过 · ${said.map((t) => short(t, 90)).join("\n     ")}` : "",
                         ].filter(Boolean).join("\n")}
                     </div>
                 </>
