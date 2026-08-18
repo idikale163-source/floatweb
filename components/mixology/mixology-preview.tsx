@@ -139,6 +139,17 @@ function short(value: string, max = 220): string {
  * 存储是同一份——钩子写完界面立刻能看见，这正是机括两半配合的样子。
  */
 function MixMechanismStage({ target }: { target: Extract<MixPreviewTarget, { kind: "mechanism" }> }) {
+    /**
+     * 舞台按对局画面的真实长宽比来画。写死一个比例的话，同一份百分比摆放在这里和在
+     * 对局里落到的位置就不是一回事——「预览和实际不一样」多半出在这。
+     */
+    const shellRef = useRef<HTMLDivElement | null>(null);
+    const [ratio, setRatio] = useState("9 / 19.5");
+    useEffect(() => {
+        const app = shellRef.current?.closest(".mixology-app") ?? (typeof document !== "undefined" ? document.querySelector(".mixology-app") : null);
+        const rect = app?.getBoundingClientRect();
+        if (rect?.width && rect.height) setRatio(`${Math.round(rect.width)} / ${Math.round(rect.height)}`);
+    }, []);
     const [store, setStore] = useState<Record<string, string>>({});
     const [state, setState] = useState<MixState>({});
     const [box, setBox] = useState<Partial<MixPanelLayout> | null>(null);
@@ -192,7 +203,7 @@ function MixMechanismStage({ target }: { target: Extract<MixPreviewTarget, { kin
             {hasPanel ? (
             <>
             <div className="mix-detail-label">界面</div>
-            <div className="mix-mech-stage">
+            <div className="mix-mech-stage" ref={shellRef} style={{ aspectRatio: ratio }}>
                 <div className="mix-mech-bar">{MECH_CHAR}</div>
                 <div className="mix-mech-prose"><MixProseView text={MECH_SAMPLE} /></div>
                 <div className="mix-mech-input" />

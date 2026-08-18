@@ -2699,12 +2699,26 @@
     cursor: pointer;
 }
 
-.mix-panel-frame {
+/*
+ * 界面所在的那一块。iframe 绝对定位铺满它——作者填了「按多宽排版」时，
+ * iframe 会先按那个宽度铺开再整体缩回来，得有个固定的框把它裁住。
+ */
+.mix-panel-stage {
+    position: relative;
     flex: 1;
+    min-height: 0;
     width: 100%;
+    overflow: hidden;
+}
+
+.mix-panel-frame {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
     border: 0;
     background: transparent;
-    min-height: 0;
 }
 
 /* 右下角的缩放把手，只有摆放里开了 resize 才画 */
@@ -2754,8 +2768,8 @@
     position: relative;
     margin-top: 8px;
     width: 100%;
-    aspect-ratio: 9 / 17;
-    max-height: 460px;
+    /* 长宽比在组件里按对局画面实测后写进内联样式，这里只兜个底 */
+    aspect-ratio: 9 / 19.5;
     border-radius: 14px;
     border: 1px solid var(--mix-line);
     background: linear-gradient(160deg, #231d33, #100e18 55%, #0a0910);
@@ -2904,6 +2918,18 @@
     gap: 6px;
     font-size: 11px;
     color: var(--mix-dim);
+}
+
+.mix-layout-z i {
+    font-style: normal;
+    color: var(--mix-faint);
+}
+
+.mix-layout-hint {
+    margin: 2px 0 8px;
+    font-size: 11px;
+    line-height: 1.7;
+    color: var(--mix-faint);
 }
 
 .mix-layout-z input {

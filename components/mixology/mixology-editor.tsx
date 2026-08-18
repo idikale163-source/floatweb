@@ -190,6 +190,9 @@ function MixLayoutPicker({ layout, onChange }: { layout: MixPanelLayout; onChang
 
     return (
         <Field label="画在哪" hint="拖框挪位置，拖右下角改大小">
+            <div className="mix-layout-hint">
+                画一台手机、一张卡片这类固定排版，填「按多宽排版」（例如 390）；应用会按这个宽度排完再整体缩放到面板大小。不填则界面直接按面板的实际像素排版，面板一小字就显得特别大。
+            </div>
             <div className="mix-layout-pick">
                 <div className="mix-layout-board" ref={boardRef}>
                     <div className="mix-layout-bar">标题栏</div>
@@ -221,6 +224,22 @@ function MixLayoutPicker({ layout, onChange }: { layout: MixPanelLayout; onChang
                             {item.label}
                         </button>
                     ))}
+                    <label className="mix-layout-z">
+                        按多宽排版
+                        <input
+                            type="number"
+                            min={0}
+                            max={1600}
+                            step={10}
+                            placeholder="不填"
+                            value={layout.designWidth ?? ""}
+                            onChange={(e) => {
+                                const px = Number(e.target.value);
+                                onChange({ ...layout, designWidth: Number.isFinite(px) && px >= 120 ? Math.min(1600, Math.round(px)) : undefined });
+                            }}
+                        />
+                        <i>px</i>
+                    </label>
                     <label className="mix-layout-z">
                         叠放次序
                         <input

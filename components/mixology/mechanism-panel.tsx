@@ -34,6 +34,7 @@ type PanelCommand =
     | { name: "setOpen"; open: unknown }
     | { name: "box"; box: unknown }
     | { name: "fit"; px: unknown }
+    | { name: "design"; px: unknown }
     | { name: "grab"; cx: unknown; cy: unknown }
     | { name: "drag"; cx: unknown; cy: unknown }
     | { name: "dragEnd" };
@@ -44,6 +45,10 @@ type Box = { x: number; y: number; w: number; h: number };
 
 function boxOf(layout: MixPanelLayout): Box {
     return { x: layout.x, y: layout.y, w: layout.w, h: layout.h };
+}
+
+function sameBox(a: Box | null, b: Box): boolean {
+    return Boolean(a) && a!.x === b.x && a!.y === b.y && a!.w === b.w && a!.h === b.h;
 }
 
 /**
@@ -85,6 +90,9 @@ function buildPanelDoc(html: string, state: MixState, store: MixMechanismStore, 
     size: function(w, h){ send("box", { box: { w: w, h: h } }); },
     // 报一下内容有多高（像素）。摆放里开了 autoHeight 才有用
     fit: function(px){ send("fit", { px: px }); },
+    // 改「按多宽排版」：收起成一颗小把手时要按小尺寸排，展开成一整台手机时要按 390 排，
+    // 一份摆放写死一个宽度不够用，所以留给界面自己在两种形态之间换
+    design: function(px){ send("design", { px: px }); },
     // 从界面内部起拖：在自己画的标题条上 pointerdown 时调一下
     grab: startDrag
   };
@@ -205,16 +213,24 @@ export function MixMechanismPanel({
 }) {
     const frameRef = useRef<HTMLIFrameElement | null>(null);
     const rootRef = useRef<HTMLDivElement | null>(null);
+    /** 真正留给界面的那一块（把手条以下）：缩放按它算，不含应用自己画的外壳 */
+    const stageRef = useRef<HTMLDivElement | null>(null);
     const [open, setOpen] = useState(!layout.collapsed);
     const [box, setBox] = useState<Box>(() => clampBox(boxOf(layout)));
+    /** 最近一次上报给宿主的几何：同一个值不重复上报，免得来回激起重渲染 */
+    const boxRef = useRef<Box | null>(null);
     /** 高度随内容时，界面量出来的像素高 */
     const [fitPx, setFitPx] = useState(0);
+    /** 界面自己要求的排版宽度；没要求就用摆放里写的那个 */
+    const [designPx, setDesignPx] = useState<number | null>(null);
     /** 正在拖 / 正在拉大小：拖动期间盖一层透明的捕获层，指针跑出 iframe 也不丢事件 */
     const [grabbing, setGrabbing] = useState<"" | "move" | "size">("");
     /** 正在拖的那一次。from 是起点，坐标都在「对局画面」这一层里算 */
     const dragRef = useRef<{ mode: "move" | "size"; from: { x: number; y: number } | null; box: Box } | null>(null);
     /** 界面内部起的拖，沙盒那一路：手指拖时事件被锁在 iframe 里，宿主收不到，只能由它报 */
     const frameDragRef = useRef<{ box: Box; layer: DOMRect; from: { x: number; y: number } } | null>(null);
+    /** 面板此刻的实际像素宽高：按设计宽度缩放要用它 */
+    const [size, setSize] = useState({ w: 0, h: 0 });
 
     const chrome = layout.chrome ?? "bar";
     const plate = layout.plate !== false;
@@ -223,6 +239,29 @@ export function MixMechanismPanel({
 
     // 材料被改过（编辑器里保存）时按新摆放重新落位；玩家在局内拖过的位置由 layout 带进来
     useEffect(() => { setBox(clampBox(boxOf(layout))); }, [layout.x, layout.y, layout.w, layout.h]);
+
+    // 面板实际有多大：换机型、拖动、缩放都会变，得一直盯着
+    useEffect(() => {
+        const node = stageRef.current;
+        if (!node || typeof ResizeObserver === "undefined") return;
+        const read = () => {
+            const rect = node.getBoundingClientRect();
+            setSize((prev) => (Math.abs(prev.w - rect.width) < 0.5 && Math.abs(prev.h - rect.height) < 0.5
+                ? prev
+                : { w: rect.width, h: rect.height }));
+        };
+        read();
+        const observer = new ResizeObserver(read);
+        observer.observe(node);
+        return () => observer.disconnect();
+    }, []);
+
+    /**
+     * 界面按多宽排版。作者填了设计宽度就按那个宽度排，再整体缩放到面板实际大小——
+     * 一台 390 宽的手机塞进 180 宽的面板里，靠的是缩小，不是让字挤成一团。
+     */
+    const designWidth = designPx === null ? layout.designWidth ?? 0 : designPx;
+    const scale = designWidth && size.w > 0 ? size.w / designWidth : 1;
 
     // srcDoc 只在界面代码变化时重算：state/store 走消息推送，不能进这里，
     // 否则每次值一变 iframe 就重新加载，等于没有"常驻"
@@ -239,15 +278,23 @@ export function MixMechanismPanel({
         }
     }, []);
 
+    const syncedRef = useRef("");
     useEffect(() => {
+        // 只在内容真的变了才推。宿主每次重渲染都推一次的话，界面在 onMixSync 里
+        // 顺手改一下自己（挪位置、写存储）就会绕回来，转成停不下来的循环。
+        const snapshot = JSON.stringify({ state, store });
+        if (snapshot === syncedRef.current) return;
+        syncedRef.current = snapshot;
         post({ state, store });
     }, [state, store, post]);
 
     /** 把一次几何变化落到面板上；拖完（commit）才写进对局 */
     const applyBox = useCallback((next: Box, commit: boolean) => {
         const clamped = clampBox(next);
-        setBox(clamped);
-        if (commit) onBox(materialId, clamped);
+        setBox((current) => (current.x === clamped.x && current.y === clamped.y
+            && current.w === clamped.w && current.h === clamped.h ? current : clamped));
+        // 值没变就不用惊动宿主——界面反复调 mix.size 求同一个尺寸是常事
+        if (commit && !sameBox(boxRef.current, clamped)) { boxRef.current = clamped; onBox(materialId, clamped); }
     }, [materialId, onBox]);
 
     // ── 拖动与缩放 ──────────────────────────────────────
@@ -279,7 +326,10 @@ export function MixMechanismPanel({
         const stop = () => {
             dragRef.current = null;
             setGrabbing("");
-            setBox((current) => { onBox(materialId, current); return current; });
+            setBox((current) => {
+                if (!sameBox(boxRef.current, current)) { boxRef.current = current; onBox(materialId, current); }
+                return current;
+            });
         };
         window.addEventListener("pointermove", move);
         window.addEventListener("pointerup", stop);
@@ -335,9 +385,17 @@ export function MixMechanismPanel({
                             return Number.isFinite(value) ? value : current[key];
                         };
                         const next = clampBox({ x: pick("x"), y: pick("y"), w: pick("w"), h: pick("h") });
-                        onBox(materialId, next);
+                        if (sameBox(current, next)) return current;
+                        if (!sameBox(boxRef.current, next)) { boxRef.current = next; onBox(materialId, next); }
                         return next;
                     });
+                    break;
+                }
+                case "design": {
+                    const px = Number(command.px);
+                    // 0 表示"不按固定宽度排，直接跟着面板走"
+                    if (!Number.isFinite(px)) break;
+                    setDesignPx(px <= 0 ? 0 : Math.min(1600, Math.max(120, Math.round(px))));
                     break;
                 }
                 case "fit": {
@@ -355,7 +413,7 @@ export function MixMechanismPanel({
                     const cy = Number(command.cy);
                     if (!Number.isFinite(cx) || !Number.isFinite(cy)) break;
                     // 起点换算到「对局画面」这一层：这一格左上角的位置 + 在这一格里的坐标
-                    const from = { x: frame.left - layer.left + cx, y: frame.top - layer.top + cy };
+                    const from = { x: frame.left - layer.left + cx * scale, y: frame.top - layer.top + cy * scale };
                     // 两路一起开：鼠标走宿主那一路（盖一层捕获层把事件收上来），
                     // 手指走沙盒那一路（事件被锁在 iframe 里，只能由它报）。
                     // 两边都用同一个起点、同一份快照，同时到也只会算出同一个位置。
@@ -380,8 +438,8 @@ export function MixMechanismPanel({
                     if (!Number.isFinite(cx) || !Number.isFinite(cy) || !frame) break;
                     // 这一格已经跟着面板挪过了，所以「这一格现在在哪 + 格内坐标」
                     // 得到的就是指针此刻的真实位置，面板挪多少都不会自我追尾
-                    const nowX = frame.left - drag.layer.left + cx;
-                    const nowY = frame.top - drag.layer.top + cy;
+                    const nowX = frame.left - drag.layer.left + cx * scale;
+                    const nowY = frame.top - drag.layer.top + cy * scale;
                     applyBox({
                         ...drag.box,
                         x: drag.box.x + (nowX - drag.from.x) / drag.layer.width * 100,
@@ -394,7 +452,10 @@ export function MixMechanismPanel({
                     frameDragRef.current = null;
                     dragRef.current = null;
                     setGrabbing("");
-                    setBox((current) => { onBox(materialId, current); return current; });
+                    setBox((current) => {
+                        if (!sameBox(boxRef.current, current)) { boxRef.current = current; onBox(materialId, current); }
+                        return current;
+                    });
                     break;
                 default:
                     // 白名单以外一律不理会
@@ -403,7 +464,7 @@ export function MixMechanismPanel({
         };
         window.addEventListener("message", onMessage);
         return () => window.removeEventListener("message", onMessage);
-    }, [materialId, onStore, onState, onSay, onBox, canDrag, applyBox]);
+    }, [materialId, onStore, onState, onSay, onBox, canDrag, applyBox, scale]);
 
     const style: React.CSSProperties = {
         left: `${box.x}%`,
@@ -411,7 +472,10 @@ export function MixMechanismPanel({
         width: `${box.w}%`,
         zIndex: Math.min(MIX_PANEL_MAX_Z, Math.max(0, layout.z ?? 0)),
     };
-    if (layout.autoHeight) {
+    if (!open && chrome === "bar") {
+        // 收起来就只剩那条把手，高度跟着缩掉——否则原地留一个空盒子，等于没收起来
+        style.height = "auto";
+    } else if (layout.autoHeight) {
         // 高度随内容：h 退化成上限，量出来之前先给一点点高度免得闪一大块
         style.height = "auto";
         style.maxHeight = `${box.h}%`;
@@ -450,14 +514,31 @@ export function MixMechanismPanel({
                 </div>
             ) : null}
             {open || chrome === "none" ? (
-                <iframe
-                    ref={frameRef}
-                    className="mix-panel-frame"
-                    title={name}
-                    sandbox="allow-scripts"
-                    srcDoc={srcDoc}
-                    style={layout.autoHeight && fitPx ? { height: fitPx, flex: "0 0 auto" } : undefined}
-                />
+                <div
+                    ref={stageRef}
+                    className="mix-panel-stage"
+                    style={layout.autoHeight && fitPx ? { flex: "0 0 auto", height: fitPx } : undefined}
+                >
+                    <iframe
+                        ref={frameRef}
+                        className="mix-panel-frame"
+                        title={name}
+                        sandbox="allow-scripts"
+                        srcDoc={srcDoc}
+                        style={
+                            scale !== 1
+                                ? {
+                                    // 按设计宽度铺开再整体缩回来：iframe 里的一切都以为自己在
+                                    // designWidth 宽的屏幕上，排版才不会随面板大小走样
+                                    width: designWidth,
+                                    height: size.h > 0 ? size.h / scale : "100%",
+                                    transform: `scale(${scale})`,
+                                    transformOrigin: "top left",
+                                }
+                                : undefined
+                        }
+                    />
+                </div>
             ) : null}
             {canResize && open ? (
                 <div

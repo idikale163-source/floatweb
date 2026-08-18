@@ -317,6 +317,12 @@ export type MixPanelLayout = {
     chrome?: "bar" | "none";
     /** 应用要不要画底板（圆角暗底、描边、投影）。自己画背景的关掉它 */
     plate?: boolean;
+    /**
+     * 按多宽来画（像素）。填了之后界面里的一切按这个宽度排版，应用再整体缩放到面板实际大小——
+     * 画一台 390 宽的手机、一张卡片时必须用它，否则同一份 CSS 在小面板里会挤成一团、
+     * 在大面板里又稀稀拉拉，预览与实际也对不上。不填则界面直接按面板的实际像素排版。
+     */
+    designWidth?: number;
     /** 同屏几件互相压时的次序，0–9 */
     z?: number;
     /** 开局时收起（只有 chrome 为 bar 时才有收起这回事） */
@@ -363,6 +369,8 @@ export function normalizeMixPanelLayout(value: unknown): MixPanelLayout | undefi
     if (record.resize === true) layout.resize = true;
     layout.chrome = record.chrome === "none" ? "none" : "bar";
     layout.plate = record.plate !== false;
+    const design = clampNum(record.designWidth, 120, 1600, 0);
+    if (design) layout.designWidth = Math.round(design);
     const z = clampNum(record.z, 0, MIX_PANEL_MAX_Z, 0);
     if (z) layout.z = z;
     if (record.collapsed === true) layout.collapsed = true;
@@ -382,6 +390,7 @@ export function mixPanelLayoutSummary(layout: MixPanelLayout): string {
         `左 ${layout.x}% · 上 ${layout.y}%`,
         `${layout.w}% × ${layout.autoHeight ? "随内容" : `${layout.h}%`}`,
     ];
+    if (layout.designWidth) parts.push(`按 ${layout.designWidth}px 宽排版`);
     const flags: string[] = [];
     if (layout.drag !== false) flags.push("可拖动");
     if (layout.resize) flags.push("可缩放");
