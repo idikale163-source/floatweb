@@ -217,13 +217,11 @@ export function assembleMixPrompt(input: MixAssembleInput): MixAssembledPrompt {
     const glassText = stackBody(m.glass, apply);
     const strengthText = stackBody(m.strength, apply);
 
-    // 角色名与代入名是单值，不是一栏资料：它们各自作为所在段的开头一行，不占标题——
-    // 给一个名字配一个和「性格」「背景」同级的标题，结构上不对等。
     const sections: (string | null)[] = [
         preamble(charName),
         baseText ? `# 扮演总纲\n${baseText}` : null,
         sectionBlock("角色资料", [
-            `角色名：${charName}`,
+            `## 角色名\n${charName}`,
             field("基础信息", card.baseInfo),
             field("性格", card.personality),
             field("外貌", card.appearance),

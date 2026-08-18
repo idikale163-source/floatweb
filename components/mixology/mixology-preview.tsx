@@ -185,7 +185,7 @@ export function MixPreviewInline({
 const STRUCTURE_ROWS: { section: string; from: string; kind?: string }[] = [
     { section: "（固定开场说明）", from: "系统自带，声明这是角色扮演、越靠后优先级越高" },
     { section: "# 扮演总纲", from: "基底（叠多件时每件一个 ##，标题取材料名）", kind: "base" },
-    { section: "# 角色资料", from: "开头一行「角色名：X」，其余每个框一个 ##：基础信息 / 性格 / 外貌 / 背景", kind: "character" },
+    { section: "# 角色资料", from: "角色卡，每个框一个 ##：角色名 / 基础信息 / 性格 / 外貌 / 背景", kind: "character" },
     { section: "# 用户资料", from: "开头一行交代代入名，用户人设是一个 ##（写了才有这一段）", kind: "persona" },
     { section: "# 世界与剧情", from: "角色卡，每个框一个 ##：世界观 / 对{{user}}的初始认知 / 关系与身份 / 当前剧情 / 附加设定", kind: "character" },
     { section: "# 文风", from: "风味（叠多件时每件一个 ##，标题取材料名）", kind: "flavor" },
@@ -206,14 +206,8 @@ export function MixStructureSheet({ highlight, onClose }: { highlight?: string; 
                 </div>
                 <div className="mix-sheet-body">
                     <div className="mix-struct-note">
-                        <b>你在编辑器里看到的框标题，就是提示词里的标题</b>——分段用一级（<code>#</code>），
-                        每个输入框用二级（<code>##</code>）。应用只占这两级，
-                        <b>想在框里再分层请从三级（<code>###</code>）起</b>。
-                        <b>没填的字段整段消失</b>，不会留空壳标题；
-                        文本里的 <code>{"{{char}}"}</code> / <code>{"{{user}}"}</code> 装配时会换成角色名和玩家代入名。
-                        <br />
-                        另外，<b>吧台上的叫法只给你看</b>——基底、杯型、小票这些比喻词不会出现在提示词里，
-                        发给模型的一律是「扮演总纲」「正文输出要求」「状态栏」这种它一眼能懂的说法。
+                        <b>编辑器里的框标题，就是提示词里的标题。</b>没填的框整段消失；
+                        文本里的 <code>{"{{char}}"}</code> / <code>{"{{user}}"}</code> 会换成角色名和代入名。
                     </div>
 
                     <div className="mix-detail-label" style={{ marginTop: 14 }}>系统提示词（对话历史之前）</div>
@@ -239,10 +233,8 @@ export function MixStructureSheet({ highlight, onClose }: { highlight?: string; 
 
                     <div className="mix-detail-label" style={{ marginTop: 16 }}>不进提示词的部分</div>
                     <div className="mix-struct-note" data-on={highlight === "filter" ? "true" : undefined}>
-                        <b>外观</b>的 CSS、<b>小票与尾调</b>的渲染代码、<b>开场画布</b>都只在界面里执行，
-                        不发给模型，写多长都不占上下文。<b>开场白</b>也不在系统提示词里，它作为对局的第一条角色消息单独送出。
-                        <b>滤网</b>的正则规则在回复拆完状态栏/小剧场之后清洗正文——「仅显示」只影响渲染，
-                        「进上下文」会洗过再入库（发回模型的历史随之变干净），两种都不进提示词。
+                        <b>外观</b>的 CSS、<b>小票与尾调</b>的渲染代码、<b>开场画布</b>、<b>滤网</b>的规则都只在界面里执行，
+                        写多长都不占上下文。<b>开场白</b>作为对局的第一条角色消息单独送出，也不在系统提示词里。
                     </div>
                 </div>
             </div>
