@@ -1,14 +1,19 @@
 "use client";
 
-// 独家特调 · 创作工坊预览：小票 / 装饰 / 尾调 三类"要眼见为实"的材料，
-// 在编辑器里就地试穿——小票喂示例数据渲染，装饰套在样例正文上，尾调进沙盒跑。
+// 独家特调 · 创作工坊预览：那几类"要眼见为实"的材料，在编辑器里就地试穿——
+// 小票喂示例数据渲染，装饰套在样例正文上，尾调进沙盒跑，
+// 机括摆进一块假的对局画面里，界面能拖能点、钩子能当场跑一遍看它还回来什么。
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Play, X } from "lucide-react";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
 import { MixTicketFrame } from "./ticket-frame";
+import { MixMechanismPanel } from "./mechanism-panel";
 import { scopeMixCss } from "@/lib/mixology/css-scope";
+import { MIX_HOOK_LABELS, type MixHook } from "@/lib/mixology/mechanism-protocol";
+import { disposeMixSandboxesForMaterial, runMixHook } from "@/lib/mixology/mechanism-runtime";
+import type { MixPanelLayout, MixState } from "@/lib/mixology/types";
 
 /** 装饰预览用的样例正文：覆盖五种正文标记，方便作者一眼看全 */
 const GARNISH_SAMPLE = [
@@ -22,7 +27,8 @@ export type MixPreviewTarget =
     | { kind: "ticket"; html: string; raw: string }
     | { kind: "garnish"; css: string }
     | { kind: "encore"; html: string; raw?: string }
-    | { kind: "canvas"; html: string; cover?: string };
+    | { kind: "canvas"; html: string; cover?: string }
+    | { kind: "mechanism"; name: string; html: string; layout: MixPanelLayout; script: string };
 
 /** 预览内容本体：四类材料各自的"眼见为实" */
 function MixPreviewBody({ target }: { target: MixPreviewTarget }) {
@@ -90,6 +96,8 @@ function MixPreviewBody({ target }: { target: MixPreviewTarget }) {
             </>
         ) : null}
 
+        {target.kind === "mechanism" ? <MixMechanismStage target={target} /> : null}
+
         {target.kind === "encore" ? (
             <>
                 <div className="mix-detail-label">{target.raw?.trim() ? "用「预览示例数据」渲染的效果" : "静态小品的运行效果"}</div>
@@ -102,6 +110,163 @@ function MixPreviewBody({ target }: { target: MixPreviewTarget }) {
     );
 }
 
+
+/** 机括试摆用的假对局：正文与角色名都写死，只是给面板一个真实比例的舞台 */
+const MECH_SAMPLE = [
+    "【打烊后的吧台】",
+    "他把最后一只杯子倒扣在架上，没有回头。",
+    "「你今天话很少。」",
+].join("\n");
+const MECH_CHAR = "程既白";
+const MECH_USER = "阿澜";
+/** 试跑钩子时喂进去的示例文本 */
+const MECH_SAY = "我把杯子推回去，「今天不想说话。」";
+const MECH_REPLY = "【吧台】\n他没接话，只是把灯调暗了两档。\n「那就坐着。」";
+/** 试摆用的假对局 id：与真对局的沙盒互不相干 */
+const MECH_SESSION = "mixpreview";
+const MECH_MATERIAL = "mixpreview-mech";
+
+function short(value: string, max = 220): string {
+    const text = value.replace(/\s+/g, " ").trim();
+    return text.length > max ? text.slice(0, max) + "…" : text;
+}
+
+/**
+ * 机括试摆。
+ * 上半是一块按对局画面比例画的舞台，面板就按它自己写的摆放落在上面——能拖、能点、
+ * 界面调 mix.setStore / mix.say 都当真处理，作者看得见它到底落在哪、有多大。
+ * 下半是钩子试跑：喂一份示例数据进沙盒跑一遍，把还回来的东西原样摊开。
+ * 存储是同一份——钩子写完界面立刻能看见，这正是机括两半配合的样子。
+ */
+function MixMechanismStage({ target }: { target: Extract<MixPreviewTarget, { kind: "mechanism" }> }) {
+    const [store, setStore] = useState<Record<string, string>>({});
+    const [state, setState] = useState<MixState>({});
+    const [box, setBox] = useState<Partial<MixPanelLayout> | null>(null);
+    const [said, setSaid] = useState<string[]>([]);
+    const [turn, setTurn] = useState(0);
+    const [running, setRunning] = useState<MixHook | "">("");
+    const [result, setResult] = useState<{ hook: MixHook; lines: string[] } | null>(null);
+
+    // 代码改了就把旧沙盒收掉，否则跑的还是上一版
+    useEffect(() => {
+        disposeMixSandboxesForMaterial(MECH_MATERIAL);
+        return () => disposeMixSandboxesForMaterial(MECH_MATERIAL);
+    }, [target.script]);
+
+    const layout = useMemo(() => ({ ...target.layout, ...(box ?? {}) }), [target.layout, box]);
+
+    const fire = useCallback(async (hook: MixHook) => {
+        if (!target.script.trim()) return;
+        setRunning(hook);
+        const payload = {
+            hook,
+            turnCount: turn,
+            state,
+            store,
+            charName: MECH_CHAR,
+            userName: MECH_USER,
+            text: hook === "beforeSend" ? MECH_SAY : hook === "afterReply" ? MECH_REPLY : undefined,
+            ticketRaw: hook === "afterReply" ? "好感度：61\n地点：吧台" : undefined,
+            encoreRaw: undefined,
+        };
+        const out = await runMixHook(MECH_SESSION, MECH_MATERIAL, target.script, hook, payload);
+        const lines: string[] = [];
+        if (typeof out.text === "string") lines.push(`改写后的正文：\n${short(out.text, 400)}`);
+        if (out.note) lines.push(`这一轮追加的临时提示（${out.note.length} 字）：\n${short(out.note, 600)}`);
+        if (out.state) lines.push(`写了记住的值：${Object.entries(out.state).map(([k, v]) => `${k}=${v}`).join("、")}`);
+        if (out.store) {
+            lines.push(`写了自己的存储：${Object.entries(out.store).map(([k, v]) => `${k}(${v.length} 字)`).join("、") || "（清空）"}`);
+            setStore(out.store);
+        }
+        if (out.state) setState((prev) => ({ ...prev, ...out.state }));
+        if (!lines.length) lines.push("什么都没还回来——这个时机没定义对应的函数，或者它返回了空。");
+        setResult({ hook, lines });
+        setRunning("");
+        if (hook === "afterReply") setTurn((n) => n + 1);
+    }, [target.script, turn, state, store]);
+
+    const hasPanel = target.html.trim().length > 0;
+
+    return (
+        <>
+            {hasPanel ? (
+            <>
+            <div className="mix-detail-label">摆在对局画面上的样子（可以拖、可以点）</div>
+            <div className="mix-mech-stage">
+                <div className="mix-mech-bar">{MECH_CHAR}</div>
+                <div className="mix-mech-prose"><MixProseView text={MECH_SAMPLE} /></div>
+                <div className="mix-mech-input" />
+                <div className="mix-panel-layer">
+                    {target.html.trim() ? (
+                        <MixMechanismPanel
+                            materialId={MECH_MATERIAL}
+                            name={target.name || "机括"}
+                            layout={layout}
+                            html={target.html}
+                            state={state}
+                            store={store}
+                            onStore={(_id, next) => setStore(next)}
+                            onState={(patch) => setState((prev) => ({ ...prev, ...patch }))}
+                            onSay={(text) => setSaid((prev) => [...prev.slice(-2), text])}
+                            onBox={(_id, next) => setBox(next)}
+                        />
+                    ) : null}
+                </div>
+            </div>
+            <div className="mix-mech-hint">
+                左上角是标题栏、底下那条是输入栏，比例与真对局一致。
+                {box ? <> 已经拖过了，<button type="button" className="mix-mech-reset" onClick={() => setBox(null)}>退回材料写的位置</button>。</> : null}
+            </div>
+            </>
+            ) : null}
+
+            <div className="mix-detail-label" style={hasPanel ? { marginTop: 14 } : undefined}>跑一遍钩子（第 {turn} 轮）</div>
+            <div className="mix-dock-row">
+                {(Object.keys(MIX_HOOK_LABELS) as MixHook[]).map((hook) => (
+                    <button
+                        type="button"
+                        className="mix-dock-chip"
+                        key={hook}
+                        disabled={!target.script.trim() || Boolean(running)}
+                        data-on={result?.hook === hook ? "true" : undefined}
+                        onClick={() => void fire(hook)}
+                    >
+                        {running === hook ? "跑…" : MIX_HOOK_LABELS[hook]}
+                    </button>
+                ))}
+                <button type="button" className="mix-dock-chip" onClick={() => { setStore({}); setState({}); setSaid([]); setTurn(0); setResult(null); }}>
+                    清空重来
+                </button>
+            </div>
+            {!target.script.trim() ? (
+                <div className="mix-mech-hint">这件机括没写钩子逻辑，只有界面。</div>
+            ) : (
+                <div className="mix-mech-hint">
+                    落杯前喂的是「{MECH_SAY}」，出杯后喂的是一段带场景的回复；存储与界面共用同一份，钩子写完上面立刻能看见。
+                </div>
+            )}
+            {result ? (
+                <div className="mix-detail-value" data-code="true">
+                    {`〔${MIX_HOOK_LABELS[result.hook]}〕还回来：\n\n` + result.lines.join("\n\n")}
+                </div>
+            ) : null}
+
+            {Object.keys(store).length || Object.keys(state).length || said.length ? (
+                <>
+                    <div className="mix-detail-label" style={{ marginTop: 14 }}>当前这一份</div>
+                    <div className="mix-detail-value" data-code="true">
+                        {[
+                            `存储：${Object.keys(store).length ? Object.entries(store).map(([k, v]) => `${k} = ${short(v, 90)}`).join("\n      ") : "（空）"}`,
+                            `记住的值：${Object.keys(state).length ? Object.entries(state).map(([k, v]) => `${k}=${v}`).join("、") : "（空）"}`,
+                            said.length ? `界面以玩家身份说过：\n      ${said.map((t) => short(t, 90)).join("\n      ")}` : "",
+                        ].filter(Boolean).join("\n")}
+                    </div>
+                </>
+            ) : null}
+        </>
+    );
+}
+
 /** 取一个能代表"内容变了"的键：用来给刷新做去抖，避免每敲一个字就重建沙盒 */
 function previewKey(target: MixPreviewTarget): string {
     switch (target.kind) {
@@ -109,6 +274,7 @@ function previewKey(target: MixPreviewTarget): string {
         case "garnish": return `g${target.css}`;
         case "encore": return `e${target.html}${target.raw ?? ""}`;
         case "canvas": return `c${target.html}${target.cover ?? ""}`;
+        case "mechanism": return `m${target.html}${target.script}${JSON.stringify(target.layout)}`;
     }
 }
 

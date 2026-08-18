@@ -771,6 +771,17 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             />
                         </Field>
                     ) : null}
+                    <MixPreviewInline
+                        label="试摆一下"
+                        target={{
+                            kind: "mechanism",
+                            name,
+                            html: panelHtml,
+                            layout: layout ?? MIX_DOCK_PRESETS.float,
+                            script,
+                        }}
+                        disabled={!panelHtml.trim() && !script.trim()}
+                    />
                     <div className="mix-struct-note" style={{ marginTop: 10 }}>
                         钩子跑在没有网络、碰不到应用本体的沙盒里，超时会被掐断，那一轮当作没有机括。
                         存储是这件机括自己的，一个对局一份，退出再进来还在——钩子与界面共用这一份，
