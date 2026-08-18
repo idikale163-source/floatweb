@@ -68,6 +68,22 @@ const KIND_GUIDE: Record<MixMaterialKind, { what: string; where: string }> = {
     },
 };
 
+/**
+ * 每一格在提示词里占到第几级标题。
+ * 作者在编辑器里看到的框标题，和提示词里的标题是同一个词——这行小字把这件事说明白，
+ * 并告诉作者想在框里再分层该从哪一级起，免得和应用自己的层级打架。
+ */
+const KIND_HEADING_NOTE: Partial<Record<MixMaterialKind, string>> = {
+    character: "提示词里每个框都带一个与上面一模一样的标题：分段用 ##，每个框用 ###。想在框里再分层，请从 #### 起。",
+    persona: "「代入名」「用户人设」在提示词里各是 ## 用户资料 下的一个 ### 条目，标题与上面一致。想再分层，请从 #### 起。",
+    base: "只叠一件时，## 扮演总纲 这个段标题就是它的标题；叠多件时每件一个 ###，标题取材料名。想再分层，请从 #### 起。",
+    flavor: "只叠一件时，## 文风 这个段标题就是它的标题；叠多件时每件一个 ###，标题取材料名。想再分层，请从 #### 起。",
+    glass: "内置的正文标记规则与你写的内容，在 ## 正文输出要求 下各是一个 ### 条目。想再分层，请从 #### 起。",
+    strength: "整段以【最高优先级要求】开头；叠多件时每件一个 ###，标题取材料名。想再分层，请从 #### 起。",
+    ticket: "「输出契约」是 ## 状态栏 下的一个 ### 条目，标题与上面一致。想再分层，请从 #### 起。",
+    encore: "「输出契约」是 ## 小剧场 下的一个 ### 条目，标题与上面一致。想再分层，请从 #### 起。",
+};
+
 /** 文本类材料（基底/风味/杯型/苦精）的字段名与示例 */
 const TEXT_FIELD_COPY: Record<"base" | "flavor" | "glass" | "strength", { label: string; placeholder: string }> = {
     base: {
@@ -350,6 +366,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             <div className="mix-guide">
                 <div className="mix-guide-what">{guide.what}</div>
                 <div className="mix-guide-where">{guide.where}</div>
+                {KIND_HEADING_NOTE[kind] ? <div className="mix-guide-level">{KIND_HEADING_NOTE[kind]}</div> : null}
                 <button type="button" className="mix-guide-link" onClick={() => setStructureOpen(true)}>
                     <FileText size={12} />
                     <span>看看完整提示词结构</span>

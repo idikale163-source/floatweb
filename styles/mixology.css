@@ -1649,6 +1649,15 @@
     color: var(--mix-dim);
 }
 
+.mix-guide-level {
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px dashed rgba(141, 123, 245, 0.22);
+    font-size: 10.5px;
+    line-height: 1.7;
+    color: var(--mix-faint);
+}
+
 .mix-guide-link {
     margin-top: 9px;
     /*
