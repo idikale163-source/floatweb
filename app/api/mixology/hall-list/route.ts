@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 
 import { getCurrentAccount } from "@/lib/server/account-auth";
 import {
-  encodeSupabaseFilter,
-  formatSupabaseRestError,
-  getSupabaseServerConfig,
-  supabaseRestFetch,
-} from "@/lib/server/supabase-rest";
+  encodeMixologyFilter,
+  formatMixologyError,
+  getMixologySupabaseConfig,
+  mixologyRestFetch,
+} from "@/lib/server/mixology-supabase";
 
 const MATERIAL_KINDS = ["character", "persona", "base", "flavor", "glass", "strength", "ticket", "garnish", "encore", "filter", "mechanism"] as const;
 type HallType = "material" | "recipe";
@@ -28,21 +28,21 @@ function normalizeEntry(type: HallType, row: HallListRow, optimized: boolean): R
 }
 async function loadRows(type: HallType, authorId: string | null, kind: string | null) {
   const rpcPath = type === "material" ? "rpc/mixology_item_list" : "rpc/mixology_recipe_list"; const body = type === "material" ? { p_author_id: authorId, p_kind: kind } : { p_author_id: authorId };
-  const rpc = await supabaseRestFetch<HallListRow[]>(rpcPath, { method: "POST", body: JSON.stringify(body) });
+  const rpc = await mixologyRestFetch<HallListRow[]>(rpcPath, { method: "POST", body: JSON.stringify(body) });
   if (rpc.ok) return { ok: true as const, data: rpc.data, optimized: true }; if (!isMissingRpcError(rpc.error)) return { ok: false as const, error: rpc.error, status: rpc.status };
   const table = type === "material" ? "mixology_items" : "mixology_recipes";
   const columns = type === "material" ? "id,kind,name,hook,cover,tags,author_id,author_name,author_avatar,like_count,save_count,view_count,comment_count,created_at,updated_at" : "id,name,intro,cover,char_name,part_names,author_id,author_name,author_avatar,like_count,save_count,view_count,comment_count,created_at,updated_at";
-  const filters = ["deleted_at=is.null", `select=${columns}`, "order=updated_at.desc", "limit=100"]; if (authorId) filters.unshift(`author_id=eq.${encodeSupabaseFilter(authorId)}`); if (type === "material" && kind) filters.unshift(`kind=eq.${encodeSupabaseFilter(kind)}`);
-  const fallback = await supabaseRestFetch<HallListRow[]>(`${table}?${filters.join("&")}`); if (!fallback.ok) return { ok: false as const, error: fallback.error, status: fallback.status }; return { ok: true as const, data: fallback.data, optimized: false };
+  const filters = ["deleted_at=is.null", `select=${columns}`, "order=updated_at.desc", "limit=100"]; if (authorId) filters.unshift(`author_id=eq.${encodeMixologyFilter(authorId)}`); if (type === "material" && kind) filters.unshift(`kind=eq.${encodeMixologyFilter(kind)}`);
+  const fallback = await mixologyRestFetch<HallListRow[]>(`${table}?${filters.join("&")}`); if (!fallback.ok) return { ok: false as const, error: fallback.error, status: fallback.status }; return { ok: true as const, data: fallback.data, optimized: false };
 }
 export async function GET(request: Request) {
   try {
-    if (!getSupabaseServerConfig()) return NextResponse.json({ ok: true, entries: [], setupRequired: true });
+    if (!getMixologySupabaseConfig()) return NextResponse.json({ ok: true, entries: [], setupRequired: true });
     const url = new URL(request.url); const type = parseType(url.searchParams.get("type")); if (!type) return NextResponse.json({ ok: false, error: "missing_type", entries: [] }, { status: 400 });
     const mine = url.searchParams.get("mine") === "1"; const account = mine ? await getCurrentAccount(request) : null; if (mine && !account) return NextResponse.json({ ok: true, entries: [] });
     const rawKind = type === "material" ? cleanText(url.searchParams.get("kind"), 20) : ""; const kind = rawKind && (MATERIAL_KINDS as readonly string[]).includes(rawKind) ? rawKind : null;
     const result = await loadRows(type, mine ? account!.id : null, kind); if (!result.ok) { if (isMissingTableError(result.error)) return NextResponse.json({ ok: true, entries: [], setupRequired: true, error: result.error }); return NextResponse.json({ ok: false, entries: [], error: result.error }, { status: result.status }); }
     const entries = result.data.map(row => normalizeEntry(type, row, result.optimized)).filter((entry): entry is Record<string, unknown> => Boolean(entry));
     return NextResponse.json({ ok: true, entries }, mine ? undefined : { headers: PUBLIC_CACHE_HEADERS });
-  } catch (err) { return NextResponse.json({ ok: false, entries: [], error: formatSupabaseRestError(err) }, { status: 500 }); }
+  } catch (err) { return NextResponse.json({ ok: false, entries: [], error: formatMixologyError(err) }, { status: 500 }); }
 }
