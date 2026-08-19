@@ -337,7 +337,7 @@ export const MIX_PANEL_MIN_H = 4;
 /** 层级上限：再高会压到应用自己的弹窗上面去 */
 export const MIX_PANEL_MAX_Z = 9;
 
-/** 四个老停靠位对应的摆放，同时也是编辑器里的起手式 */
+/** 四个老停靠位对应的摆放：只用来把老材料换算过来，编辑器里不再提供选择 */
 export const MIX_DOCK_PRESETS: Record<MixDock, MixPanelLayout> = {
     left: { x: 2, y: 12, w: 38, h: 52, drag: true, chrome: "bar", plate: true },
     right: { x: 60, y: 12, w: 38, h: 52, drag: true, chrome: "bar", plate: true },
@@ -415,7 +415,7 @@ export function mixPanelLayoutSummary(layout: MixPanelLayout): string {
 }
 
 /**
- * 自由摆放换算回最接近的老停靠位。发布时一起写上去，
+ * 自由摆放换算回最接近的老停靠位。老材料改存时一起写上去，
  * 老版本客户端拿到这件机括时还能把它挂在个大致对的地方，而不是直接不显示。
  */
 export function mixNearestDock(layout: MixPanelLayout): MixDock {
@@ -437,7 +437,10 @@ export type MixMechanismMaterial = MixMaterialMeta & {
     script?: string;
     /** @deprecated 第一版的四个停靠位，只为认得出老材料而保留；新材料写 layout */
     dock?: MixDock;
-    /** 常驻界面画在哪、多大、能不能拖；不填也没有 dock 则这件机括没有界面 */
+    /**
+     * 常驻界面的起始摆放。新材料一般没有这个字段——画在哪、多大、要不要应用画外壳，
+     * 都在界面代码里用 mix.move / mix.size / mix.chrome … 写。有没有界面看 panelHtml。
+     */
     layout?: MixPanelLayout;
     /** 常驻界面的 HTML（含 CSS/JS），在沙盒 iframe 里跑 */
     panelHtml?: string;

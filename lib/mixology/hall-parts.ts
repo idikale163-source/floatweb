@@ -109,8 +109,9 @@ export function validateMechanismPayload(payload: unknown): string | null {
     if (record.layout !== undefined && record.layout !== null && !isPanelLayout(record.layout)) {
         return "invalid_layout";
     }
-    // 有界面就得说清画在哪：新材料写 layout，老材料写 dock，两样都没有就没法摆
-    if (panel.trim() && !record.dock && !record.layout) return "配了界面就要说清画在哪。";
+    // 不再要求"配了界面就得声明画在哪"。摆放已经收进界面代码里（mix.move / mix.size /
+    // mix.chrome …），新材料本来就没有 layout 与 dock 字段；下载方拿到后给一个中性起始值，
+    // 第一帧之后由界面代码自己挪走。这里再拦一道，等于把新写法全挡在门外。
     return null;
 }
 
