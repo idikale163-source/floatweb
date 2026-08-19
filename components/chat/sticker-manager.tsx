@@ -13,8 +13,9 @@ import {
     addStickersToPack,
     addStickerByUrlToPack,
     checkStickerBlob,
-    renameStickerPack,
-    updateStickerPackNote,
+    updateStickerPackInfo,
+    STICKER_PACK_NAME_MAX,
+    STICKER_PACK_NOTE_MAX,
     renameStickerInPack,
     removeStickerFromPack,
     getPackAssignments,
@@ -88,7 +89,7 @@ export function StickerManager({ onBack }: { onBack: () => void }) {
                                     <span className="ts-16 text-[var(--c-text-title)] font-bold truncate max-w-full leading-tight">{pack.name}</span>
                                     <span className="ts-12 text-[var(--c-text)] opacity-70">{pack.stickers.length === 0 ? "空相册" : `${pack.stickers.length} 个表情`}</span>
                                     {pack.note?.trim() && (
-                                        <span className="ts-11 text-[var(--c-text)] opacity-50 truncate mt-1">{pack.note}</span>
+                                        <span className="ts-11 text-[var(--c-text)] opacity-50 truncate mt-1">{pack.note.trim()}</span>
                                     )}
                                 </div>
 
@@ -212,6 +213,7 @@ function CreatePackDialog({
                                 onChange={e => setNote(e.target.value)}
                                 placeholder="例如：由某某老师整理分享，目前还差 20 个表情待整理"
                                 className="ui-input min-h-[88px] resize-y"
+                                maxLength={STICKER_PACK_NOTE_MAX}
                                 rows={3}
                             />
                         </div>
@@ -421,10 +423,10 @@ function PackEditor({ pack, onBack }: { pack: StickerPack; onBack: () => void })
     const handleSavePackInfo = () => {
         const trimmedName = packNameDraft.trim();
         if (!trimmedName) return;
-        renameStickerPack(pack.id, trimmedName);
-        updateStickerPackNote(pack.id, packNoteDraft.trim());
+        const trimmedNote = packNoteDraft.trim();
+        updateStickerPackInfo(pack.id, { name: trimmedName, note: trimmedNote });
         setPackNameDraft(trimmedName);
-        setPackNoteDraft(packNoteDraft.trim());
+        setPackNoteDraft(trimmedNote);
         refreshPack();
     };
 
@@ -444,12 +446,14 @@ function PackEditor({ pack, onBack }: { pack: StickerPack; onBack: () => void })
                             onChange={e => setPackNameDraft(e.target.value)}
                             placeholder="图集名称"
                             className="ui-input"
+                            maxLength={STICKER_PACK_NAME_MAX}
                         />
                         <textarea
                             value={packNoteDraft}
                             onChange={e => setPackNoteDraft(e.target.value)}
                             placeholder="备注这套表情包的来源、整理进度等（可选）"
                             className="ui-input min-h-[72px] resize-y"
+                            maxLength={STICKER_PACK_NOTE_MAX}
                             rows={2}
                         />
                         <button
