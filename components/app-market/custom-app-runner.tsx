@@ -172,10 +172,23 @@ html, body { min-height: 100%; }
     var line = String(text).slice(0, 300);
     if (bootErrors.length < 8 && bootErrors.indexOf(line) < 0) bootErrors.push(line);
   }
+  // 诊断信息是要粘给别人看的：包内资源都被改写成了 data: URL，原样打出来就是
+  // 一长串 base64 把整段诊断淹掉；外链则可能把 query 里的 token 一起带出去。
+  function briefUrl(raw){
+    var url = String(raw || '');
+    if (url.slice(0, 5) === 'data:') {
+      var meta = url.slice(5);
+      var stop = meta.search(/[;,]/);
+      return 'data:' + (stop > 0 ? meta.slice(0, stop) : meta.slice(0, 24)) + '（包内资源）';
+    }
+    var cut = url.indexOf('?');
+    if (cut > 0) url = url.slice(0, cut);
+    return url.length > 120 ? url.slice(0, 120) + '…' : url;
+  }
   window.addEventListener('error', function(event){
     var target = event && event.target;
     if (target && target !== window && target.tagName) {
-      reportError('资源加载失败：' + String(target.src || target.href || target.tagName).slice(0, 160));
+      reportError('资源加载失败：' + briefUrl(target.src || target.href || target.tagName));
       return;
     }
     var err = event && event.error;
