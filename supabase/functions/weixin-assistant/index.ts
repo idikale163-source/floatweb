@@ -507,7 +507,7 @@ function clampVisionImagePromptLimit(value) {
   return Math.min(10, n);
 }
 
-function buildRuntimePromptMessages(runtime, cloudHistory, pendingMessages, imageAttachments = new Map()) {
+export function buildRuntimePromptMessages(runtime, cloudHistory, pendingMessages, imageAttachments = new Map()) {
   const template = runtime.promptContext?.promptTemplate;
   if (!template || !Array.isArray(template.beforeMessages) || !Array.isArray(template.afterMessages)) {
     throw new Error("runtime_missing_prompt_template: 运行包缺少轻量提示词模板，请先在小手机内重新同步运行包。");
@@ -532,24 +532,31 @@ function buildRuntimePromptMessages(runtime, cloudHistory, pendingMessages, imag
   const historyMessages = renderHistoryPromptMessages(collected);
 
   // v2 运行包：深度注入（世界书 position=4 / 预设 injection_position≠0）不再钉死在
-  // 模板顶部，而是按当前新消息条数重新定位到「倒数第 depth 条」之前——与小手机
-  // 每次生成都重算深度的行为一致。老运行包（v1）没有这些字段，走原来的拼接。
-  const usesDepthTemplate = Array.isArray(template.structuralMessages) && Array.isArray(template.depthSegments);
+  // 模板顶部，而是按「已烘焙历史 + 新微信消息」这条完整历史重新定位到「倒数第 depth
+  // 条」之前——与小手机每次生成都重算深度的行为一致。
+  // 必须把 bakedHistoryMessages 一起算进去：只拿新消息定位的话，新消息条数少于 depth
+  // 时注入块插不回旧历史内部，只能贴在它下面。
+  // 老运行包（v1，以及没有 bakedHistoryMessages 的过渡版本）自动退回旧拼接。
+  const usesDepthTemplate = Array.isArray(template.structuralMessages)
+    && Array.isArray(template.bakedHistoryMessages)
+    && Array.isArray(template.depthSegments);
   if (!usesDepthTemplate) {
     return [...template.beforeMessages, ...historyMessages, ...template.afterMessages];
   }
+  const fullHistory = [...template.bakedHistoryMessages, ...historyMessages];
   return [
     ...template.structuralMessages,
-    ...interleaveDepthSegments(template.depthSegments, historyMessages),
+    ...interleaveDepthSegments(template.depthSegments, fullHistory),
     ...template.afterMessages,
   ];
 }
 
 /**
  * 把 depth 段插回历史：depth = d 表示「距离底部第 d 条」，即插在下标 total - d 之前。
- * d 超过当前历史长度时贴到历史最上方（能给到的最接近位置）。
+ * d 超过历史长度时贴到历史最上方（能给到的最接近位置）。
+ * 与小手机 lib/weixin-cloud-sync.ts 的同名函数是同一套规则，改一处要一起改。
  */
-function interleaveDepthSegments(segments, history) {
+export function interleaveDepthSegments(segments, history) {
   const total = history.length;
   const buckets = new Map();
   const ordered = (Array.isArray(segments) ? segments : [])
@@ -574,7 +581,7 @@ function interleaveDepthSegments(segments, history) {
 }
 
 /** 与小手机 llm-prompt-assembler 收尾的合并规则对齐：相邻同 role 的纯文本消息并成一条 */
-function mergeAdjacentSameRoleMessages(messages) {
+export function mergeAdjacentSameRoleMessages(messages) {
   const out = [];
   for (const message of messages) {
     const prev = out[out.length - 1];
@@ -601,7 +608,7 @@ function mergeAdjacentSameRoleMessages(messages) {
  * （对齐小手机 pushChronologicalShortTermBlocks 的 showTs 规则）——不然合并之后
  * 一段里会连着出现好几行一模一样的时间。
  */
-function renderHistoryPromptMessages(collected) {
+export function renderHistoryPromptMessages(collected) {
   const out = [];
   let prevTimestamp = "";
   let prevRole = "";
@@ -649,7 +656,7 @@ function cloudStoredMessageToPromptMessage(runtime, message, imageAttachments = 
 // 云函数跑在 UTC，必须按运行包下发的 promptTimeZone（用户设备时区）格式化，
 // 否则新微信消息的时间戳会和运行包里烘焙的历史时间戳差几个时区。
 // 老运行包没有该字段时退回运行环境本地时区，行为与改动前一致。
-function formatPromptTimestamp(value, promptContext) {
+export function formatPromptTimestamp(value, promptContext) {
   const date = new Date(value || "");
   if (Number.isNaN(date.getTime())) return "";
   const timeZone = typeof promptContext?.promptTimeZone === "string" ? promptContext.promptTimeZone.trim() : "";
@@ -745,7 +752,7 @@ function buildChatCompletionsUrl(baseUrl) {
   return baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
 }
 
-function normalizeLlmMessages(messages) {
+export function normalizeLlmMessages(messages) {
   return messages
     .map(message => {
       const role = message?.role === "assistant" ? "assistant" : message?.role === "system" ? "system" : "user";
@@ -794,7 +801,7 @@ function extractOpenAiCompatibleText(data) {
 // 括号内以完整日期时间开头的一律剥掉，兼容带秒、带时区/星期尾巴与全角括号。
 // 旧版只认半角、不带尾巴的 (YYYY-MM-DD HH:MM)，而运行包烘焙的历史时间戳在
 // 角色时区与系统时区不同时带时区名，模型照抄后一条都拦不住。
-function cleanReplyText(text) {
+export function cleanReplyText(text) {
   return String(text || "")
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .replace(/[（(]\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?(?:\s+[^)）]*)?[)）]\s*/g, "")
