@@ -5346,9 +5346,8 @@
     justify-content: center;
     font-size: calc(19.8px*var(--app-text-scale,1));
     font-weight: 700;
-    color: #5B6ADF;
-    background: linear-gradient(150deg, #CFE3FF 0%, #DED6FF 55%, #F0DAF2 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+    color: #fff;
+    background: linear-gradient(135deg, #8fa3c8, #5e79a8);
 }
 .settings-account-copy {
     flex: 1;
@@ -5374,45 +5373,6 @@
 .settings-account-chevron {
     color: var(--c-icon);
     flex: none;
-}
-
-/* ===== 设置页主菜单 · 字级与组标题 =====
-   .card-label / .menu-label / .settings-menu-section-title 这些类还有 30 多个页面在用，
-   所以全部挂在 .settings-main-menu 下，只改设置主页，别的页面维持原样。 */
-
-/* 组标题：原来是「彩色竖条 + 黑色斜体 18px」，色条一走，那套按 nth-of-type
-   轮换强调色的规则也就不起作用了；改成左对齐的灰色小字母，让位给内容。 */
-.settings-main-menu .settings-menu-section-title {
-    margin-left: 4px;
-    margin-right: 4px;
-    color: var(--c-icon);
-    font-size: calc(11.7px*var(--app-text-scale,1));
-    font-style: normal;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-}
-
-.settings-main-menu .settings-menu-section-title::before {
-    display: none;
-}
-
-/* 双列卡 / 整行卡 / 工具行三种标题统一到同一号字同一字重
-   （原来分别是 14.4px/700、14.4px/700、12.6px/400，混在一页里粗细对不齐） */
-.settings-main-menu .card-label,
-.settings-main-menu .card-featured-label,
-.settings-main-menu .menu-label {
-    font-size: calc(15.3px*var(--app-text-scale,1));
-    font-weight: 700;
-}
-
-/* 说明小字：层级靠与标题的字重差拉开，自己不要跟着加粗 */
-.settings-main-menu .card-desc,
-.settings-main-menu .card-featured-desc,
-.settings-main-menu .menu-desc {
-    font-size: calc(10.8px*var(--app-text-scale,1));
-    font-weight: 400;
-    color: var(--c-icon);
 }
 
 /* 记忆库时间线：分批加载按钮 */
