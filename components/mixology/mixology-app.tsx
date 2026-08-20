@@ -36,6 +36,7 @@ import {
     getMixMaterial,
     isMixBuiltinId,
     listMixPickables,
+    MIX_CABINET_UPDATED_EVENT,
     loadMixCabinet,
     loadMixProfile,
     loadMixRecipes,
@@ -171,6 +172,14 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
         setRecipes(loadMixRecipes());
         setSessions(loadMixSessions());
     }, []);
+
+    // 小卷工具直写酒柜/配方后广播这个事件——不监听的话，App 开着时
+    // 助手替用户建好的材料要等下一次自发操作才会出现在列表里
+    useEffect(() => {
+        const onExternalUpdate = () => refresh();
+        window.addEventListener(MIX_CABINET_UPDATED_EVENT, onExternalUpdate);
+        return () => window.removeEventListener(MIX_CABINET_UPDATED_EVENT, onExternalUpdate);
+    }, [refresh]);
 
     /**
      * 从酒材页/大厅点「编辑」进来：那边已经把自己的作品取回本地了，

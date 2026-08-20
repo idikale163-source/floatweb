@@ -23,6 +23,7 @@ import {
     type MixTicketVar,
 } from "./types";
 import {
+    MIX_CABINET_UPDATED_EVENT,
     getMixMaterial,
     isMixBuiltinId,
     listMixBuiltins,
@@ -31,8 +32,14 @@ import {
     saveMixMaterial,
     saveMixRecipe,
 } from "./storage";
+
 import { buildMixCraftSpec } from "./crafting-guides";
 import { normalizePartCondition } from "./hall-parts";
+
+/** 写库成功后通知已打开的特调 App 重读列表，否则界面要等用户自己操作才刷新 */
+function broadcastCabinetUpdated(): void {
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(MIX_CABINET_UPDATED_EVENT));
+}
 
 /** 是否封存：与酒柜界面的 isSealedMaterial（mixology-shared.tsx）同一条规矩——
  *  只有「从酒材页拿来的别人的角色卡」藏正文。不从组件层 import，免得把 UI 拖进 lib。 */
@@ -342,6 +349,7 @@ export function mixToolCreateMaterial(args: Record<string, unknown>): ToolResult
     if (invalid) return { name: NAME, success: false, error: invalid };
 
     saveMixMaterial(material as unknown as MixMaterial);
+    broadcastCabinetUpdated();
     return {
         name: NAME, success: true,
         data: `已把${MIX_KIND_LABELS[kind]}「${name}」放进酒柜（id: ${material.id}）。用户可在独家特调 App 的酒柜里查看详情与效果预览，然后去吧台配成特调开局。`,
@@ -386,6 +394,7 @@ export function mixToolUpdateMaterial(args: Record<string, unknown>): ToolResult
     if (invalid) return { name: NAME, success: false, error: invalid };
 
     saveMixMaterial(next as unknown as MixMaterial);
+    broadcastCabinetUpdated();
     return { name: NAME, success: true, data: `已更新${MIX_KIND_LABELS[existing.kind]}「${next.name}」的：${[...new Set(changed)].join("、")}。` };
 }
 
@@ -442,6 +451,7 @@ export function mixToolSaveRecipe(args: Record<string, unknown>): ToolResult {
         slots,
         imported: undefined,
     });
+    broadcastCabinetUpdated();
     return {
         name: NAME, success: true,
         data: `${existing ? "已更新" : "已调好"}特调「${name}」：${picked.join(" + ")}。用户在独家特调 App 的吧台就能选它开局。`,
