@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChevronLeft, Copy, History, MoreHorizontal, Pencil, Plus, RotateCcw, Send, WandSparkles, X } from "lucide-react";
 import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, refreshMixOpening, regenerateMixTail, rerollMixReply, runMixSessionEnd, truncateMixAfterTurn } from "@/lib/mixology/engine";
-import { getMixMaterial, getMixSession, listMixPickables, resolveMixRecipeMaterials, saveMixSession } from "@/lib/mixology/storage";
+import { getMixMaterial, getMixSession, listMixPickables, MIX_CABINET_UPDATED_EVENT, resolveMixRecipeMaterials, saveMixSession } from "@/lib/mixology/storage";
 import { applyMixMacros, MIX_DEFAULT_USER_NAME } from "@/lib/mixology/assembler";
 import { buildMixConditionContext, pickActiveMixMaterials } from "@/lib/mixology/state";
 import { scopeMixCss } from "@/lib/mixology/css-scope";
@@ -129,6 +129,17 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const [recipeOpen, setRecipeOpen] = useState(false);
     const [slotPick, setSlotPick] = useState<MixMaterialKind | null>(null);
     const [wheelIndex, setWheelIndex] = useState(0);
+    /**
+     * 酒柜外部变更计数：小卷（吉祥物工具）改完材料会广播这个事件，对局里的
+     * 画布/小票/装饰都是渲染时从酒柜现取的，靠它促使下面两个 useMemo 重取——
+     * 否则开着的对局要退出重进才能看到小卷刚写的开场画布。
+     */
+    const [cabinetTick, setCabinetTick] = useState(0);
+    useEffect(() => {
+        const bump = () => setCabinetTick((t) => t + 1);
+        window.addEventListener(MIX_CABINET_UPDATED_EVENT, bump);
+        return () => window.removeEventListener(MIX_CABINET_UPDATED_EVENT, bump);
+    }, []);
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const abortRef = useRef<AbortController | null>(null);
     const wheelRef = useRef<HTMLDivElement | null>(null);
@@ -192,7 +203,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                 )
                 : "",
         };
-    }, [session]);
+    }, [session, cabinetTick]);
 
     /**
      * 条件命中、且写了界面的机括：这些是要常驻在对局画面上的界面。
@@ -213,7 +224,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             })
             .filter((item): item is { material: MixMechanismMaterial; layout: MixPanelLayout } => item !== null)
             .slice(0, MIX_PANEL_MAX);
-    }, [session]);
+    }, [session, cabinetTick]);
 
     /**
      * 机括界面的逃生口。摆放完全交给创作者之后，理论上存在"一块面板糊满整个屏幕、

@@ -313,6 +313,10 @@ function qualityHints(material: Record<string, unknown>, kind: MixMaterialKind):
     const len = (key: string) => (typeof material[key] === "string" ? (material[key] as string).trim().length : 0);
     const openings = Array.isArray(material.openings) ? material.openings.length : 0;
     if (openings < 2) hints.push("开场白只有一条，按规格写 2~3 条不同切入供玩家挑选");
+    if (Array.isArray(material.openings)) {
+        const thin = (material.openings as unknown[]).filter((o) => typeof o === "string" && o.trim().length > 0 && o.trim().length < 150).length;
+        if (thin > 0) hints.push(`有 ${thin} 条开场白不足 150 字——每条两三百字起步，把场景、动作、内心铺开`);
+    }
     const examples = Array.isArray(material.examples) ? material.examples.length : 0;
     if (examples < 6) hints.push(`示例对话只有 ${Math.floor(examples / 2)} 轮，建议补到 3~5 轮锚定文风`);
     const canvas = len("canvas");
