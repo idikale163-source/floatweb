@@ -235,3 +235,62 @@ ctx 字段：turnCount 已发生轮数；state 记住的值；store 本机括自
 
 【我的想法】：（想实现什么玩法，例如骰子面板、好感度进度条、随机事件抽卡）`,
 };
+
+// ── 小卷工具版规格 ─────────────────────────────────────
+// 桌面助手小卷通过工具直写酒柜，不走"复制发给外部 AI"的流程——
+// 分段输出清单、JSON 口令、【我的想法】这些外发专用段对它没有意义，
+// 字段以工具参数直接传。这里从同一份委托词派生出工具版规格：
+// 机制与质量约束一字不差地共享，外发格式段剥掉，再补一份字段对照。
+// 改约束只改上面的委托词，两边同时生效。
+
+/** 每类材料的工具字段对照（工具版规格专用，委托词不含） */
+const MIX_CRAFT_FIELD_NOTES: Record<MixMaterialKind, string> = {
+    character: `—— 工具字段对照 ——
+name＝角色名（同时是卡名）；hook＝一句话介绍；tags＝字符串数组（3~8 个短词）；
+baseInfo/personality/appearance/background/worldview/cognition/relations/plot/extra 对应基础信息/性格/外貌/背景/世界观/初始认知/关系与身份/当前剧情/附加设定；
+openings＝字符串数组，每个元素是一条完整开场白，至少一条（不需要 --- 分隔符）；
+examples＝数组 [{"role":"user"|"char","text":"…"}]；canvas＝开场画布完整 HTML 字符串。`,
+    persona: `—— 工具字段对照 ——
+name＝材料名；hook＝一句话介绍；tags＝字符串数组；userName＝你的名字；content＝人设正文。`,
+    base: `—— 工具字段对照 ——
+name＝材料名；hook＝一句话介绍；tags＝字符串数组；content＝扮演总纲正文。`,
+    flavor: `—— 工具字段对照 ——
+name＝材料名；hook＝一句话介绍；tags＝字符串数组；content＝文风正文。`,
+    glass: `—— 工具字段对照 ——
+name＝材料名；hook＝一句话介绍；tags＝字符串数组；content＝正文输出要求。`,
+    strength: `—— 工具字段对照 ——
+name＝材料名；hook＝一句话介绍；tags＝字符串数组；content＝最高优先级要求（一到两条）。`,
+    ticket: `—— 工具字段对照 ——
+name＝材料名；hook＝一句话介绍；tags＝字符串数组；contract＝输出契约；renderHtml＝渲染代码完整 HTML；
+previewRaw＝预览示例数据：壳内原文本身，只有契约定义的内容，不带 [状态栏] 标记、不带正文；
+vars＝要跨轮记住的变量，数组 [{"name":"好感度","initial":"50"}]，键名不带引号反引号。`,
+    garnish: `—— 工具字段对照 ——
+name＝材料名；hook＝一句话介绍；tags＝字符串数组；css＝完整 CSS。`,
+    encore: `—— 工具字段对照 ——
+name＝材料名；hook＝一句话介绍；tags＝字符串数组；contract＝输出契约（纯静态小品不传）；
+renderHtml＝渲染代码完整 HTML；previewRaw＝壳内原文本身，不带 [小剧场] 标记、不带正文（纯静态不传）。`,
+    filter: `—— 工具字段对照 ——
+name＝材料名；hook＝一句话介绍；tags＝字符串数组；
+rules＝数组 [{"find":"正则本体（不带斜杠定界符）","replace":"替换文本（删除传空串）","mode":"display"|"context"}]。`,
+    mechanism: `—— 工具字段对照 ——
+name＝材料名；hook＝一句话介绍；tags＝字符串数组；script＝钩子逻辑纯 JS（可不传）；
+panelHtml＝常驻界面完整 HTML（可不传）；script 与 panelHtml 至少传一个。`,
+};
+
+/**
+ * 工具版规格：委托词剥掉外发专用段（分段输出清单、JSON 口令、【我的想法】），
+ * 保留机制与质量约束原文，末尾附字段对照。
+ */
+export function buildMixCraftSpec(kind: MixMaterialKind): string {
+    let text = MIX_CRAFT_PROMPTS[kind];
+    // ① 掐掉 JSON 口令段到结尾（含【我的想法】）
+    const jsonAt = text.indexOf("（若我在想法里注明「要 JSON」");
+    if (jsonAt >= 0) text = text.slice(0, jsonAt);
+    // ② 掐掉分段输出块：从「请…输出：」标记行到其后的第一个空行
+    const marker = text.match(/^请(按下面的框逐段|分段|分四段)输出[^\n]*$/m);
+    if (marker && marker.index !== undefined) {
+        const after = text.indexOf("\n\n", marker.index);
+        text = after >= 0 ? text.slice(0, marker.index) + text.slice(after + 2) : text.slice(0, marker.index);
+    }
+    return `${text.trim()}\n\n${MIX_CRAFT_FIELD_NOTES[kind]}`;
+}
