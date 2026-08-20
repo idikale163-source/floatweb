@@ -308,6 +308,12 @@ function normalizeCover(value: unknown): string | { err: string } {
  * 使用指南要求小卷看到质量提示必须跟进补足，这是防偷懒的软引导侧。
  */
 function qualityHints(material: Record<string, unknown>, kind: MixMaterialKind): string {
+    if (kind === "ticket") {
+        const contract = typeof material.contract === "string" ? material.contract.trim().length : 0;
+        if (contract > 0 && contract < 300)
+            return `\n质量提示（建议用 更新材料 补足）：\n- 输出契约只有 ${contract} 字，撑不起有血肉的状态栏——整卡通常 6~10 项、描述项要求带细节的完整句、配一两个长文小节（见制作说明的信息量要求）`;
+        return "";
+    }
     if (kind !== "character") return "";
     const hints: string[] = [];
     const len = (key: string) => (typeof material[key] === "string" ? (material[key] as string).trim().length : 0);
