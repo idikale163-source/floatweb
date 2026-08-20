@@ -5,7 +5,7 @@
 // 机括摆进一块假的对局画面里，界面能拖能点、钩子能当场跑一遍看它还回来什么。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Play, X } from "lucide-react";
+import { Check, ChevronDown, Copy, Play, X } from "lucide-react";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
 import { MixTicketFrame } from "./ticket-frame";
@@ -14,7 +14,8 @@ import { scopeMixCss } from "@/lib/mixology/css-scope";
 import { MIX_HOOK_LABELS, type MixHook } from "@/lib/mixology/mechanism-protocol";
 import { disposeMixSandboxesForMaterial, runMixHook } from "@/lib/mixology/mechanism-runtime";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
-import type { MixFilterRule, MixPanelLayout, MixState } from "@/lib/mixology/types";
+import { MIX_CRAFT_PROMPTS } from "@/lib/mixology/crafting-guides";
+import { MIX_KIND_LABELS, type MixFilterRule, type MixMaterialKind, type MixPanelLayout, type MixState } from "@/lib/mixology/types";
 
 /** 装饰预览用的样例正文：覆盖五种正文标记，方便作者一眼看全 */
 const GARNISH_SAMPLE = [
@@ -451,6 +452,54 @@ export function MixStructureSheet({ highlight, onClose }: { highlight?: string; 
                         <b>外观</b>的 CSS、<b>小票与尾调</b>的渲染代码、<b>开场画布</b>、<b>滤网</b>的规则都只在界面里执行，
                         写多长都不占上下文。<b>开场白</b>作为对局的第一条角色消息单独送出，也不在系统提示词里。
                     </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── 制作说明 ──
+// 每类材料一份写好的委托词：复制发给任意 AI，末尾补一句自己的想法，
+// 拿回来的内容按【框名】逐段贴回编辑器。文案本体在 lib/mixology/crafting-guides.ts。
+
+export function MixCraftSheet({ kind, onClose }: { kind: MixMaterialKind; onClose: () => void }) {
+    const prompt = MIX_CRAFT_PROMPTS[kind];
+    const [copied, setCopied] = useState(false);
+
+    const copy = useCallback(async () => {
+        try {
+            await navigator.clipboard.writeText(prompt);
+        } catch {
+            // 剪贴板 API 不可用（旧内核 / 非安全上下文）：退回选区复制
+            const box = document.createElement("textarea");
+            box.value = prompt;
+            box.style.position = "fixed";
+            box.style.opacity = "0";
+            document.body.appendChild(box);
+            box.select();
+            try { document.execCommand("copy"); } finally { box.remove(); }
+        }
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1600);
+    }, [prompt]);
+
+    return (
+        <div className="mix-sheet-mask" onClick={onClose}>
+            <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
+                <div className="mix-sheet-head">
+                    <div className="mix-sheet-title">制作说明 · {MIX_KIND_LABELS[kind]}</div>
+                    <button type="button" className="mix-icon-btn" onClick={onClose} aria-label="关闭"><X size={18} /></button>
+                </div>
+                <div className="mix-sheet-body">
+                    <div className="mix-struct-note">
+                        下面是一份写好的<b>委托词</b>：整段复制发给任意 AI（豆包、DeepSeek、ChatGPT 都行），
+                        在末尾<b>【我的想法】</b>处补上你的点子，AI 就会按编辑器的框逐段产出内容，逐框贴回来即可。
+                    </div>
+                    <button type="button" className="mix-craft-copy" data-done={copied ? "true" : undefined} onClick={() => void copy()}>
+                        {copied ? <Check size={14} /> : <Copy size={14} />}
+                        {copied ? "已复制，去发给 AI 吧" : "复制委托词"}
+                    </button>
+                    <div className="mix-craft-text">{prompt}</div>
                 </div>
             </div>
         </div>

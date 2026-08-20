@@ -4,7 +4,7 @@
 // Phase ③ 先给够用的表单闭环，创作工坊阶段再上专业编辑体验。
 
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { FileText, Plus, Trash2 } from "lucide-react";
+import { BookOpen, FileText, Plus, Trash2 } from "lucide-react";
 import type {
     MixCharacterCard,
     MixFilterRule,
@@ -15,7 +15,7 @@ import type {
 } from "@/lib/mixology/types";
 import { createMixId, formatMixTags, MIX_KIND_LABELS, MIX_PANEL_DEFAULT_LAYOUT, MIX_TAG_MAX, mixKindHasCover, mixPanelLayoutOf, parseMixTags } from "@/lib/mixology/types";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
-import { MixPreviewInline, MixStructureSheet } from "./mixology-preview";
+import { MixCraftSheet, MixPreviewInline, MixStructureSheet } from "./mixology-preview";
 
 const OPENING_SEPARATOR = "\n---\n";
 
@@ -215,6 +215,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
     }, [rules, filterSample]);
     const [error, setError] = useState("");
     const [structureOpen, setStructureOpen] = useState(false);
+    const [craftOpen, setCraftOpen] = useState(false);
     const fileRef = useRef<HTMLInputElement | null>(null);
 
     // 标签：输入的时候就按最终口径拆好给作者看，免得存下来才发现被掐了
@@ -362,10 +363,17 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                 <div className="mix-guide-what">{guide.what}</div>
                 <div className="mix-guide-where">{guide.where}</div>
                 {HEADING_NOTE_KINDS.includes(kind) ? <div className="mix-guide-level">{HEADING_NOTE}</div> : null}
-                <button type="button" className="mix-guide-link" onClick={() => setStructureOpen(true)}>
-                    <FileText size={12} />
-                    <span>看看完整提示词结构</span>
-                </button>
+                {/* 两个等宽按钮占满一排：左边看结构（写的东西落在哪），右边看做法（怎么让 AI 代工） */}
+                <div className="mix-guide-actions">
+                    <button type="button" className="mix-guide-btn" onClick={() => setStructureOpen(true)}>
+                        <FileText size={14} />
+                        <span>提示词结构</span>
+                    </button>
+                    <button type="button" className="mix-guide-btn" onClick={() => setCraftOpen(true)}>
+                        <BookOpen size={14} />
+                        <span>制作说明</span>
+                    </button>
+                </div>
             </div>
             <Field label={isCharacter ? "角色名" : "名称"} hint="必填">
                 <input className="mix-input" value={name} onChange={(e) => setName(e.target.value)} placeholder={isCharacter ? "角色叫什么，就是提示词里的 {{char}}" : `给这件${MIX_KIND_LABELS[kind]}起个名，方便自己在吧台认出来`} />
@@ -772,6 +780,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                 </>
             ) : null}
             {structureOpen ? <MixStructureSheet highlight={kind} onClose={() => setStructureOpen(false)} /> : null}
+            {craftOpen ? <MixCraftSheet kind={kind} onClose={() => setCraftOpen(false)} /> : null}
             {error ? <div style={{ color: "#e2a3a3", fontSize: 12, marginTop: 12 }}>{error}</div> : null}
             <div className="mix-form-footer">
                 <button type="button" className="mix-ghost-btn" onClick={onCancel}>取消</button>

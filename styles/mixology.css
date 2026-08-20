@@ -1658,31 +1658,84 @@
     color: var(--mix-faint);
 }
 
-.mix-guide-link {
-    margin-top: 9px;
-    /*
-     * 图标和文字必须待在同一行：按 <button> 的默认排版，图标是行内元素，
-     * 一旦壳的默认样式（iOS Safari 的原生按钮外观）掺一脚就可能把它挤到上一行去。
-     * 用 inline-flex 把这一行的排布自己接管过来，间距交给 gap，再关掉原生外观。
-     */
+/* 指引卡底部的一排两个动作：等宽、占满整行 */
+.mix-guide-actions {
+    margin-top: 11px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.mix-guide-btn {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    gap: 6px;
     white-space: nowrap;
     -webkit-appearance: none;
     appearance: none;
-    border: none;
-    background: none;
-    padding: 0;
+    padding: 9px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(141, 123, 245, 0.32);
+    background: linear-gradient(180deg, rgba(141, 123, 245, 0.16), rgba(141, 123, 245, 0.08));
     color: var(--mix-violet);
-    font-size: 11.5px;
-    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
     cursor: pointer;
+    transition: background 0.18s, border-color 0.18s, transform 0.1s;
 }
 
-/* 图标不参与压缩：行宽不够时也不许它被挤扁 */
-.mix-guide-link svg {
+.mix-guide-btn:active {
+    transform: scale(0.97);
+    background: rgba(141, 123, 245, 0.24);
+    border-color: rgba(141, 123, 245, 0.5);
+}
+
+.mix-guide-btn svg {
     flex: 0 0 auto;
+}
+
+/* 制作说明弹层：复制按钮 + 委托词原文 */
+.mix-craft-copy {
+    margin-top: 12px;
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(141, 123, 245, 0.4);
+    background: rgba(141, 123, 245, 0.2);
+    color: var(--mix-violet);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.18s, color 0.18s;
+}
+
+.mix-craft-copy[data-done="true"] {
+    background: rgba(126, 217, 154, 0.16);
+    border-color: rgba(126, 217, 154, 0.4);
+    color: #7ed99a;
+}
+
+.mix-craft-text {
+    margin-top: 12px;
+    padding: 12px 13px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--mix-dim);
+    white-space: pre-wrap;
+    word-break: break-word;
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 .mix-struct-note {
