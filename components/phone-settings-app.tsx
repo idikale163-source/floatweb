@@ -362,7 +362,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                     <div className="page-menu settings-main-menu">
                         {!selfHostedMode && (
                             <button type="button" className="settings-account-card" onClick={() => setAccountSheetOpen(true)}>
-                                <span className="settings-account-avatar">{account.username.slice(0, 1).toUpperCase()}</span>
+                                <span className="settings-account-avatar"><GlassIcon name="account" /></span>
                                 <span className="settings-account-copy">
                                     <span className="settings-account-name">{account.displayName || account.username}</span>
                                     <span className="settings-account-sub">账号、密码与登录</span>
