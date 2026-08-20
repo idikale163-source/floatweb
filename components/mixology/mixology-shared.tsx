@@ -103,6 +103,7 @@ export function MatCard({
     hook,
     tags,
     cover,
+    preview,
     badge,
     author,
     stats,
@@ -113,6 +114,8 @@ export function MatCard({
     hook?: string;
     tags?: string[];
     cover?: string;
+    /** 没配封面时压在占位纹上的自动封面（材料自己的渲染缩样）；渲染不出内容就露出占位纹 */
+    preview?: ReactNode;
     badge?: string;
     author?: string;
     stats?: string;
@@ -128,7 +131,14 @@ export function MatCard({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img className="mix-mat-cover" src={cover} alt={name} />
                 ) : (
-                    <div className="mix-poster-blank"><KindGlyph kind={kind} size={42} /></div>
+                    <>
+                        <div className="mix-poster-blank"><KindGlyph kind={kind} size={42} /></div>
+                        {preview ? (
+                            <div className="mix-poster-live" aria-hidden="true">
+                                <div className="mix-poster-live-inner">{preview}</div>
+                            </div>
+                        ) : null}
+                    </>
                 )}
                 {author ? <div className="mix-poster-author">@{author}</div> : null}
                 {badge ? <div className="mix-poster-badge">{badge}</div> : null}

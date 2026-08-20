@@ -1624,6 +1624,10 @@
     border-radius: 14px;
     background: linear-gradient(180deg, rgba(11, 11, 16, 0.55), rgba(11, 11, 16, 0.94)), var(--mix-panel-2);
     border: 1px solid var(--mix-line);
+    /* 保命护栏会往作用域根钉 display:flex（对局根 .mix-game 是 flex column）；
+       舞台不写方向会落到默认 row，整台内容被挤成一字一列——跟对局根保持同构 */
+    display: flex;
+    flex-direction: column;
 }
 
 .mix-garnish-stage .mix-prose {
@@ -2192,6 +2196,21 @@
 }
 
 /* 角色卡缺图时的占位面：和封面同尺寸，保证同一类卡片等高 */
+/* 自动封面：没配封面的小票/装饰/尾调用自己的渲染缩样当海报——
+   半宽缩到 0.5 约等于手机全宽下的实际比例；压在占位纹上，渲染不出内容时露出底纹 */
+.mix-poster-live {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.mix-poster-live-inner {
+    width: 200%;
+    transform: scale(0.5);
+    transform-origin: 0 0;
+}
+
 .mix-poster-blank {
     position: absolute;
     inset: 0;

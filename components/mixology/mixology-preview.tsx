@@ -15,7 +15,7 @@ import { MIX_HOOK_LABELS, type MixHook } from "@/lib/mixology/mechanism-protocol
 import { disposeMixSandboxesForMaterial, runMixHook } from "@/lib/mixology/mechanism-runtime";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
 import { MIX_CRAFT_PROMPTS } from "@/lib/mixology/crafting-guides";
-import { MIX_KIND_LABELS, type MixFilterRule, type MixMaterialKind, type MixPanelLayout, type MixState } from "@/lib/mixology/types";
+import { MIX_KIND_LABELS, mixEncoreRenderHtml, type MixFilterRule, type MixMaterial, type MixMaterialKind, type MixPanelLayout, type MixState } from "@/lib/mixology/types";
 
 /** 装饰预览用的样例正文：覆盖五种正文标记，方便作者一眼看全 */
 const GARNISH_SAMPLE = [
@@ -530,4 +530,37 @@ export function MixCraftSheet({ kind, onClose }: { kind: MixMaterialKind; onClos
             </div>
         </div>
     );
+}
+
+/**
+ * 瀑布卡的自动封面：没配封面的小票/装饰/尾调，用自己的渲染效果缩样当海报——
+ * 这几类材料"长什么样"本来就该由渲染代码说话，不必再让作者传一张图。
+ * 渲染不出来（缺示例数据、缺代码）时返回 null，卡片露出底下的占位纹。
+ * 角色卡除外：它的封面是人物立绘，画布缩样代替不了。
+ */
+export function MixMatAutoCover({ material }: { material: MixMaterial }) {
+    if (material.kind === "ticket") {
+        const html = material.renderHtml?.trim() ?? "";
+        const raw = material.previewRaw?.trim() ?? "";
+        if (!html || !raw) return null;
+        return <MixTicketFrame html={html} raw={raw} />;
+    }
+    if (material.kind === "encore") {
+        const html = mixEncoreRenderHtml(material).trim();
+        if (!html) return null;
+        const raw = material.previewRaw?.trim() ?? "";
+        // AI 供稿型没留示例数据就渲染不出内容，别摆一张空壳
+        if (material.contract?.trim() && !raw) return null;
+        return <MixTicketFrame html={html} raw={raw} />;
+    }
+    if (material.kind === "garnish") {
+        if (!material.css.trim()) return null;
+        return (
+            <div className="mix-garnish-stage mix-garnish-scope" style={{ margin: 0, border: "none", borderRadius: 0, minHeight: "100%" }}>
+                <style>{scopeMixCss(material.css)}</style>
+                <MixProseView text={GARNISH_SAMPLE} />
+            </div>
+        );
+    }
+    return null;
 }

@@ -72,6 +72,7 @@ import { fetchCurrentAccount } from "@/lib/account-client";
 import { MixHallGoneError, shareHallMaterial, shareHallRecipe, updateHallMaterial, updateHallRecipe } from "@/lib/mixology/hall-client";
 import { exportMixMaterial, exportMixMaterialPng, parseMixMaterialsFromJson, parseMixMaterialsFromPng } from "@/lib/mixology/transfer";
 import { MixMaterialEditor } from "./mixology-editor";
+import { MixMatAutoCover } from "./mixology-preview";
 import { MixologyGame } from "./mixology-game";
 import { CommentThread, MixologyHall } from "./mixology-hall";
 import { AuthorAvatar, KindGlyph, MatCard, MaterialDetail, MixConfirm, MixTagList, SealedNote, formatMixTime } from "./mixology-shared";
@@ -776,6 +777,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                         hook={material.hook}
                                         tags={material.tags}
                                         cover={material.cover}
+                                        preview={<MixMatAutoCover material={material} />}
                                         badge={isMixBuiltinId(material.id)
                                             ? "官方"
                                             : material.imported || mixCloudState(material) === "local"
@@ -1200,6 +1202,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                             hook={material.hook}
                                             tags={material.tags}
                                             cover={material.cover}
+                                            preview={<MixMatAutoCover material={material} />}
                                             badge={isMixBuiltinId(material.id) ? "官方" : undefined}
                                             onClick={() => {
                                                 setBarSlots((prev) => {
