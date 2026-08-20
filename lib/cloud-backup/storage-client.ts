@@ -65,13 +65,20 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   }
 }
 
+/** Progress callback for downloads: received bytes so far and the total from
+ *  Content-Length (null when the server didn't send one). */
+export type DownloadProgress = (receivedBytes: number, totalBytes: number | null) => void;
+
 /** Read a response body with an inactivity timeout: a stalled connection aborts
  *  instead of hanging the restore forever. */
-async function responseToBlob(res: Response): Promise<Blob> {
+async function responseToBlob(res: Response, onBytes?: DownloadProgress): Promise<Blob> {
   const contentType = res.headers.get("Content-Type") ?? "";
+  const lengthHeader = res.headers.get("Content-Length");
+  const totalBytes = lengthHeader && /^\d+$/.test(lengthHeader) ? Number(lengthHeader) : null;
   if (!res.body) return await res.blob();
   const reader = res.body.getReader();
   const chunks: BlobPart[] = [];
+  let received = 0;
   try {
     while (true) {
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -81,7 +88,11 @@ async function responseToBlob(res: Response): Promise<Blob> {
       try {
         const { done, value } = await Promise.race([reader.read(), timeout]);
         if (done) break;
-        if (value) chunks.push(value as unknown as BlobPart);
+        if (value) {
+          chunks.push(value as unknown as BlobPart);
+          received += value.byteLength;
+          onBytes?.(received, totalBytes);
+        }
       } finally {
         clearTimeout(timer);
       }
@@ -114,7 +125,7 @@ export async function putObject(config: CloudBackupConfig, path: string, body: B
 /** Download an object's bytes. Returns null if the object doesn't exist.
  *  Supabase Storage 对不存在的对象返回 400 "Object not found" 而不是 404，
  *  与 removeObject 相同，两种都视为不存在。 */
-export async function getObject(config: CloudBackupConfig, path: string): Promise<Blob | null> {
+export async function getObject(config: CloudBackupConfig, path: string, onBytes?: DownloadProgress): Promise<Blob | null> {
   const creds = resolveCreds(config);
   if (!creds) throw new Error("未配置 Supabase 地址或 key。");
   return withRetries(async () => {
@@ -130,7 +141,7 @@ export async function getObject(config: CloudBackupConfig, path: string): Promis
       if (res.status === 400 && /object not found|not found/i.test(error)) return null;
       throw new Error(error);
     }
-    return await responseToBlob(res);
+    return await responseToBlob(res, onBytes);
   });
 }
 
