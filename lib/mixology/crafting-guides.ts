@@ -147,10 +147,13 @@ export const MIX_CRAFT_PROMPTS: Record<MixMaterialKind, string> = {
 
 【我的想法】：（想跟踪哪些状态、卡片什么风格）`,
 
-    garnish: `请帮我写一份 AI 角色扮演对局界面的美化 CSS（只能是 CSS，会被限定在对局画面内生效）。可用的官方语义类名：
-.mix-prose 正文容器 / .mix-para 普通段落（默认首行缩进 2em）/ .mix-scene 场景过场行 / .mix-dialogue 对白 / .mix-thought 心声 / .mix-accent 强调 / .mix-narration 叙述 / .mix-user-bubble 玩家气泡 / .mix-ticket-wrap 状态栏外框；写 body、html、:root 等同于整个对局画面。
+    garnish: `请帮我写一份 AI 角色扮演对局界面的美化 CSS（只能是 CSS，会被限定在对局画面内生效）。整个对局画面都归你管，可用的官方类名分两组：
 
-不要外链字体或图片；注意文字在深色界面上的可读性。
+正文语义类：.mix-prose 正文容器 / .mix-para 普通段落（默认首行缩进 2em）/ .mix-scene 场景过场行 / .mix-dialogue 对白 / .mix-thought 心声 / .mix-accent 强调 / .mix-narration 叙述
+
+界面部件类：.mix-game 对局画面根（写 body、html、:root 也等同于它）/ .mix-game-bg 封面背景层 / .mix-game-header 顶部标题栏 / .mix-game-title 标题文字 / .mix-icon-btn 图标按钮（标题栏与输入栏两侧）/ .mix-game-scroll 对话滚动区 / .mix-user-turn 玩家轮容器 / .mix-user-bubble 玩家气泡 / .mix-assistant-turn AI 轮容器 / .mix-turn-act 消息角落的复制回溯编辑小按钮 / .mix-game-inputbar 底部输入栏 / .mix-game-input 输入框 / .mix-send-btn 发送按钮 / .mix-state-bar 记住值状态条 / .mix-state-chip 状态小芯片 / .mix-ticket-wrap 状态栏卡片外框 / .mix-encore-inline 小剧场容器 / .mix-game-thinking 生成中指示
+
+注意：标题栏可以换装但不能藏（返回按钮在里面，应用会强制它可见可点）；输入栏别挤出屏幕；不要外链字体或图片；注意文字在深色界面上的可读性。一套好外观通常正文与部件一起做——气泡、输入栏、标题栏与正文同一个气质。
 
 请分段输出：
 【材料名】给这套外观起个名

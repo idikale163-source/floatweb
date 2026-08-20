@@ -5,7 +5,7 @@
 // 机括摆进一块假的对局画面里，界面能拖能点、钩子能当场跑一遍看它还回来什么。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Copy, Play, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, Copy, Play, X } from "lucide-react";
 import { MixProseView } from "./prose-view";
 import { MixRichText } from "./rich-text";
 import { MixTicketFrame } from "./ticket-frame";
@@ -62,19 +62,30 @@ function MixPreviewBody({ target, guide = true }: { target: MixPreviewTarget; gu
 
         {target.kind === "garnish" ? (
             <>
-                <div className="mix-detail-label">套在样例正文上的效果</div>
-                {/* 试穿也走同一套收口，所见即对局里的实际效果 */}
+                <div className="mix-detail-label">套在样例对局上的效果</div>
+                {/* 试穿也走同一套收口，所见即对局里的实际效果。舞台带标题栏与输入栏——
+                    外观管的是整个对局画面，只摆正文会让人以为部件类不生效 */}
                 <div className="mix-garnish-stage mix-garnish-scope">
                     <style>{scopeMixCss(target.css)}</style>
+                    <div className="mix-game-header" style={{ marginTop: 0 }}>
+                        <span className="mix-icon-btn" aria-hidden="true"><ChevronLeft size={18} /></span>
+                        <div className="mix-game-title">试穿舞台</div>
+                        <span className="mix-icon-btn" aria-hidden="true"><Play size={14} /></span>
+                    </div>
                     <MixProseView text={GARNISH_SAMPLE} />
                     <div className="mix-user-turn">
                         <div className="mix-user-bubble">我把伞递过去，「一起走？」</div>
+                    </div>
+                    <div className="mix-game-inputbar" style={{ pointerEvents: "none" }}>
+                        <div className="mix-game-input" style={{ opacity: 0.75 }}>发送消息…</div>
+                        <span className="mix-send-btn"><Play size={14} /></span>
                     </div>
                 </div>
                 {guide ? <>
                 <div className="mix-detail-label" style={{ marginTop: 14 }}>可用的官方类名</div>
                 <div className="mix-detail-value" data-code="true">
                     {[
+                        "── 正文语义类 ──",
                         ".mix-prose    正文容器（默认 14px / 行高 1.75）",
                         ".mix-para     普通段落（默认首行缩进 2em，不想缩写 text-indent: 0）",
                         ".mix-scene    场景过场行（【】）",
@@ -82,10 +93,25 @@ function MixPreviewBody({ target, guide = true }: { target: MixPreviewTarget; gu
                         ".mix-thought  心声（* *）",
                         ".mix-accent   强调（~ ~）",
                         ".mix-narration 叙述",
-                        ".mix-user-bubble 玩家气泡",
-                        ".mix-ticket-wrap 小票外框",
                         "",
-                        "body / html / :root  等同于整个对局画面",
+                        "── 界面部件类 ──",
+                        ".mix-game        对局画面根（body / html / :root 也等同于它）",
+                        ".mix-game-bg     封面背景层",
+                        ".mix-game-header 顶部标题栏（可换装不可藏：返回按钮在里面）",
+                        ".mix-game-title  标题文字",
+                        ".mix-icon-btn    图标按钮（标题栏与输入栏两侧）",
+                        ".mix-game-scroll 对话滚动区",
+                        ".mix-user-turn / .mix-user-bubble  玩家轮 / 玩家气泡",
+                        ".mix-assistant-turn 每轮 AI 回复的容器",
+                        ".mix-turn-act    消息角落的复制/回溯/编辑小按钮",
+                        ".mix-game-inputbar 底部输入栏",
+                        ".mix-game-input  输入框",
+                        ".mix-send-btn    发送按钮",
+                        ".mix-state-bar / .mix-state-chip  记住值状态条 / 小芯片",
+                        ".mix-ticket-wrap 状态栏卡片外框",
+                        ".mix-encore-inline 小剧场容器",
+                        ".mix-game-thinking 生成中指示",
+                        "",
                         "样式只在对局画面内生效，改不到应用的其他页面",
                     ].join("\n")}
                 </div>
