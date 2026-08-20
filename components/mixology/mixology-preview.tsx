@@ -1,7 +1,7 @@
 "use client";
 
-// 独家特调 · 创作工坊预览：那几类"要眼见为实"的材料，在编辑器里就地试穿——
-// 小票喂示例数据渲染，装饰套在样例正文上，尾调进沙盒跑，
+// 独家特调 · 材料预览：那几类"要眼见为实"的材料，编辑器与详情页共用同一套试穿——
+// 小票喂示例数据渲染，装饰套在样例正文上，尾调进沙盒跑，滤网拿样文试洗，
 // 机括摆进一块假的对局画面里，界面能拖能点、钩子能当场跑一遍看它还回来什么。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -13,7 +13,8 @@ import { MixMechanismPanel } from "./mechanism-panel";
 import { scopeMixCss } from "@/lib/mixology/css-scope";
 import { MIX_HOOK_LABELS, type MixHook } from "@/lib/mixology/mechanism-protocol";
 import { disposeMixSandboxesForMaterial, runMixHook } from "@/lib/mixology/mechanism-runtime";
-import type { MixPanelLayout, MixState } from "@/lib/mixology/types";
+import { applyMixFilterRules } from "@/lib/mixology/prose";
+import type { MixFilterRule, MixPanelLayout, MixState } from "@/lib/mixology/types";
 
 /** 装饰预览用的样例正文：覆盖五种正文标记，方便作者一眼看全 */
 const GARNISH_SAMPLE = [
@@ -28,10 +29,15 @@ export type MixPreviewTarget =
     | { kind: "garnish"; css: string }
     | { kind: "encore"; html: string; raw?: string }
     | { kind: "canvas"; html: string; cover?: string }
+    | { kind: "filter"; rules: MixFilterRule[] }
     | { kind: "mechanism"; name: string; html: string; layout: MixPanelLayout; script: string };
 
-/** 预览内容本体：四类材料各自的"眼见为实" */
-function MixPreviewBody({ target }: { target: MixPreviewTarget }) {
+/**
+ * 预览内容本体：各类材料的"眼见为实"。
+ * guide=false 是详情页（看别人的作品）：收掉「先去某个框里写」这类写作指引——
+ * 看的人手边没有编辑器，那些话只会让人摸不着头脑。
+ */
+function MixPreviewBody({ target, guide = true }: { target: MixPreviewTarget; guide?: boolean }) {
     return (
         <>
         {target.kind === "ticket" ? (
@@ -42,12 +48,14 @@ function MixPreviewBody({ target }: { target: MixPreviewTarget }) {
                         <MixTicketFrame html={target.html} raw={target.raw} />
                     </div>
                 </>
-            ) : (
+            ) : guide ? (
                 <div className="mix-comment-empty">
                     先在「预览示例数据」里写几行示例，
                     <br />
                     这里就能看到小票渲染成什么样。
                 </div>
+            ) : (
+                <div className="mix-comment-empty">作者没留预览示例数据，这张小票要进对局才看得到效果。</div>
             )
         ) : null}
 
@@ -62,6 +70,7 @@ function MixPreviewBody({ target }: { target: MixPreviewTarget }) {
                         <div className="mix-user-bubble">我把伞递过去，「一起走？」</div>
                     </div>
                 </div>
+                {guide ? <>
                 <div className="mix-detail-label" style={{ marginTop: 14 }}>可用的官方类名</div>
                 <div className="mix-detail-value" data-code="true">
                     {[
@@ -79,8 +88,11 @@ function MixPreviewBody({ target }: { target: MixPreviewTarget }) {
                         "样式只在对局画面内生效，改不到应用的其他页面",
                     ].join("\n")}
                 </div>
+                </> : null}
             </>
         ) : null}
+
+        {target.kind === "filter" ? <MixFilterStage rules={target.rules} /> : null}
 
         {target.kind === "canvas" ? (
             <>
@@ -110,6 +122,33 @@ function MixPreviewBody({ target }: { target: MixPreviewTarget }) {
     );
 }
 
+
+/** 滤网试洗的默认样文：星号加长破折号，最常见的两类清洗对象 */
+const FILTER_SAMPLE = "**他顿了顿**——「嗯……今天也加班？」";
+
+/**
+ * 滤网试洗：贴一段样文，即时看全部规则跑完的结果。
+ * 与编辑器里的「试跑」同口径：不分模式、按顺序全部跑一遍，写错的正则自动作废。
+ */
+function MixFilterStage({ rules }: { rules: MixFilterRule[] }) {
+    const [sample, setSample] = useState(FILTER_SAMPLE);
+    const result = useMemo(
+        () => applyMixFilterRules(applyMixFilterRules(sample, rules, "context"), rules, "display"),
+        [sample, rules],
+    );
+    return (
+        <>
+            <div className="mix-detail-label">贴一段样文，看规则跑完的结果</div>
+            <textarea
+                className="mix-textarea"
+                style={{ minHeight: 72, marginTop: 8 }}
+                value={sample}
+                onChange={(e) => setSample(e.target.value)}
+            />
+            {sample ? <div className="mix-filter-result">{result || "（全部被清空了）"}</div> : null}
+        </>
+    );
+}
 
 /** 机括试摆用的假对局：正文与角色名都写死，只是给面板一个真实比例的舞台 */
 const MECH_SAMPLE = [
@@ -280,6 +319,7 @@ function previewKey(target: MixPreviewTarget): string {
         case "garnish": return `g${target.css}`;
         case "encore": return `e${target.html}${target.raw ?? ""}`;
         case "canvas": return `c${target.html}${target.cover ?? ""}`;
+        case "filter": return `f${JSON.stringify(target.rules)}`;
         case "mechanism": return `m${target.html}${target.script}${JSON.stringify(target.layout)}`;
     }
 }
@@ -292,10 +332,13 @@ export function MixPreviewInline({
     label,
     target,
     disabled,
+    guide,
 }: {
     label: string;
     target: MixPreviewTarget;
     disabled?: boolean;
+    /** false = 详情页语境：预览里不出现"先去某个框里写"这类编辑器指引 */
+    guide?: boolean;
 }) {
     const [open, setOpen] = useState(false);
     // 展开后是一直看得见的，若每次按键都重建 srcDoc，iframe 会不停闪。
@@ -344,7 +387,7 @@ export function MixPreviewInline({
             </button>
             {open && shown ? (
                 <div className="mix-preview-panel" ref={panelRef}>
-                    <MixPreviewBody target={shown} />
+                    <MixPreviewBody target={shown} guide={guide} />
                 </div>
             ) : null}
         </div>
