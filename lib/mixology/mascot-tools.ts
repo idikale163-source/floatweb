@@ -314,6 +314,12 @@ function qualityHints(material: Record<string, unknown>, kind: MixMaterialKind):
             return `\n质量提示（建议用 更新材料 补足）：\n- 输出契约只有 ${contract} 字，撑不起有血肉的状态栏——整卡通常 6~10 项、描述项要求带细节的完整句、配一两个长文小节（见制作说明的信息量要求）`;
         return "";
     }
+    if (kind === "encore") {
+        const contract = typeof material.contract === "string" ? material.contract.trim().length : 0;
+        if (contract > 0 && contract < 200)
+            return `\n质量提示（建议用 更新材料 补足）：\n- 输出契约只有 ${contract} 字——契约要把每次加演的内容量逼出来（几行成块的内容，见制作说明），一句话的加演等于没演`;
+        return "";
+    }
     if (kind !== "character") return "";
     const hints: string[] = [];
     const len = (key: string) => (typeof material[key] === "string" ? (material[key] as string).trim().length : 0);
