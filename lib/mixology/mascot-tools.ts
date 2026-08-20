@@ -316,8 +316,8 @@ function qualityHints(material: Record<string, unknown>, kind: MixMaterialKind):
     }
     if (kind === "encore") {
         const contract = typeof material.contract === "string" ? material.contract.trim().length : 0;
-        if (contract > 0 && contract < 200)
-            return `\n质量提示（建议用 更新材料 补足）：\n- 输出契约只有 ${contract} 字——契约要把每次加演的内容量逼出来（几行成块的内容，见制作说明），一句话的加演等于没演`;
+        if (contract > 0 && contract < 300)
+            return `\n质量提示（建议用 更新材料 补足）：\n- 输出契约只有 ${contract} 字——小剧场是玩家等生成时读的加餐，契约要把每轮的内容量逼到微型作品级（成篇的社交帖楼层/完整一幕短剧，十来行两三百字起步，见制作说明），三五行的加演等于没演`;
         return "";
     }
     if (kind !== "character") return "";
