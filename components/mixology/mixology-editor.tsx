@@ -14,7 +14,7 @@ import type {
     MixTextMaterial,
     MixTicketVar,
 } from "@/lib/mixology/types";
-import { createMixId, formatMixTags, MIX_KIND_LABELS, MIX_PANEL_DEFAULT_LAYOUT, MIX_TAG_MAX, mixKindHasCover, mixPanelLayoutOf, parseMixTags } from "@/lib/mixology/types";
+import { createMixId, formatMixTags, MIX_KIND_LABELS, MIX_PANEL_DEFAULT_LAYOUT, MIX_TAG_MAX, mixPanelLayoutOf, parseMixTags } from "@/lib/mixology/types";
 import { applyMixFilterRules } from "@/lib/mixology/prose";
 import { MixCraftSheet, MixPreviewInline, MixStructureSheet } from "./mixology-preview";
 
@@ -406,8 +406,10 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     <div className="mix-form-note">超出 {MIX_TAG_MAX} 个的标签不会保存，已多写 {tagsDropped} 个。</div>
                 ) : null}
             </Field>
-            {mixKindHasCover(kind) ? (
-                <Field label="封面图" hint={isCharacter ? "对局背景，强烈建议配" : undefined}>
+            {/* 封面只有角色卡收：小票/装饰/尾调的列表封面由渲染效果自动生成，
+                材料长什么样让代码自己说，也省一趟图片上传 */}
+            {isCharacter ? (
+                <Field label="封面图" hint="对局背景，强烈建议配">
                     <div className="mix-cover-picker">
                         {cover ? (
                             // eslint-disable-next-line @next/next/no-img-element

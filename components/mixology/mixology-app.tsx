@@ -645,7 +645,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                         <div className="mix-slot-body">
                                             {chosen ? (
                                                 <>
-                                                    {chosen.cover ? (
+                                                    {chosen.kind === "character" && chosen.cover ? (
                                                         // eslint-disable-next-line @next/next/no-img-element
                                                         <img className="mix-slot-cover" src={chosen.cover} alt={chosen.name} />
                                                     ) : (
@@ -776,7 +776,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                         name={material.name}
                                         hook={material.hook}
                                         tags={material.tags}
-                                        cover={material.cover}
+                                        cover={material.kind === "character" ? material.cover : undefined}
                                         preview={<MixMatAutoCover material={material} />}
                                         badge={isMixBuiltinId(material.id)
                                             ? "官方"
@@ -1002,10 +1002,6 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                     </>
                                 )}
                             </div>
-                            {detail.cover && detail.kind !== "character" ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={detail.cover} alt={detail.name} style={{ width: 96, height: 128, objectFit: "cover", borderRadius: 12, margin: "4px 0 12px" }} />
-                            ) : null}
                             <MixTagList tags={detail.tags} />
                             {/* 与酒材页同一套展示：角色卡点开看门面（画布/一句话介绍），设定正文进「编辑」看 */}
                             {detail.kind === "character" ? (
@@ -1201,7 +1197,7 @@ export function MixologyApp({ onClose }: { onClose: () => void }) {
                                             name={material.name}
                                             hook={material.hook}
                                             tags={material.tags}
-                                            cover={material.cover}
+                                            cover={material.kind === "character" ? material.cover : undefined}
                                             preview={<MixMatAutoCover material={material} />}
                                             badge={isMixBuiltinId(material.id) ? "官方" : undefined}
                                             onClick={() => {

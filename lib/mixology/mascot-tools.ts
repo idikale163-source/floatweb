@@ -388,6 +388,8 @@ export function mixToolCreateMaterial(args: Record<string, unknown>): ToolResult
     const tags = normalizeMixTags(args.tags);
     if (tags.length) material.tags = tags;
     if (args.cover !== undefined) {
+        // 封面只有角色卡收：其余种类的列表封面由渲染效果自动生成，不落库、也不上传
+        if (kind !== "character") return { name: NAME, success: false, error: "只有角色卡需要 cover——小票/装饰/尾调的列表封面由渲染效果自动生成，不接受封面图。" };
         const cover = normalizeCover(args.cover);
         if (typeof cover !== "string") return { name: NAME, success: false, error: cover.err };
         material.cover = cover;
@@ -431,6 +433,7 @@ export function mixToolUpdateMaterial(args: Record<string, unknown>): ToolResult
     if (args.hook !== undefined) { next.hook = text(args.hook).trim(); changed.push("hook"); }
     if (args.tags !== undefined) { next.tags = normalizeMixTags(args.tags); changed.push("tags"); }
     if (args.cover !== undefined) {
+        if (existing.kind !== "character") return { name: NAME, success: false, error: "只有角色卡需要 cover——小票/装饰/尾调的列表封面由渲染效果自动生成，不接受封面图。" };
         const cover = normalizeCover(args.cover);
         if (typeof cover !== "string") return { name: NAME, success: false, error: cover.err };
         next.cover = cover;
