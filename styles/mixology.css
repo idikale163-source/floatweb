@@ -846,6 +846,9 @@
 /* ── 就地预览：按钮下方直接铺开，不弹窗 ── */
 .mix-preview-inline {
     margin-top: 10px;
+    /* 详情页里它插在字段之间：字段的间距都靠各自的 margin-bottom 拉开，
+       这里不补一份，按钮就会贴住下一个字段的标题 */
+    margin-bottom: 12px;
 }
 
 .mix-preview-inline > .mix-pill-btn[data-open="true"] {
@@ -1670,11 +1673,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 5px;
     white-space: nowrap;
+    /* 两列等宽，右边那颗字多：允许收缩、少给内边距，窄屏上才不溢出 */
+    min-width: 0;
     -webkit-appearance: none;
     appearance: none;
-    padding: 9px 10px;
+    padding: 9px 6px;
     border-radius: 10px;
     border: 1px solid rgba(141, 123, 245, 0.32);
     background: linear-gradient(180deg, rgba(141, 123, 245, 0.16), rgba(141, 123, 245, 0.08));

@@ -371,7 +371,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     </button>
                     <button type="button" className="mix-guide-btn" onClick={() => setCraftOpen(true)}>
                         <BookOpen size={14} />
-                        <span>制作说明</span>
+                        <span>发给 AI 的制作说明</span>
                     </button>
                 </div>
             </div>

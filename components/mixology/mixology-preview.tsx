@@ -487,7 +487,7 @@ export function MixCraftSheet({ kind, onClose }: { kind: MixMaterialKind; onClos
         <div className="mix-sheet-mask" onClick={onClose}>
             <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
                 <div className="mix-sheet-head">
-                    <div className="mix-sheet-title">制作说明 · {MIX_KIND_LABELS[kind]}</div>
+                    <div className="mix-sheet-title">发给 AI 的制作说明 · {MIX_KIND_LABELS[kind]}</div>
                     <button type="button" className="mix-icon-btn" onClick={onClose} aria-label="关闭"><X size={18} /></button>
                 </div>
                 <div className="mix-sheet-body">
