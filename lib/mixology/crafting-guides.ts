@@ -105,7 +105,7 @@ export const MIX_CRAFT_PROMPTS: Record<MixMaterialKind, string> = {
 
 ① 输出契约：写给扮演 AI 的指令，要求它每轮回复的最开头，在 [状态栏] 与 [/状态栏] 之间用固定的键值行格式报告状态（例如「好感度：62」一行一项）。请定义清楚有哪些项、取值范围与变化规则；键名保持稳定，不要每轮换词。
 
-② 渲染代码：一份完整 HTML（可含 CSS/JS），把壳内原文渲染成好看的卡片。原文的注入方式：{{RAW}} 会被替换成转义后的原文（适合直接排版）；window.TICKET_RAW 是原文字符串（适合 JS 解析后自由绘制）；window.MIX_STATE 是被「记住」的值组成的对象。代码跑在无网络的沙盒 iframe 里：不要外链字体/图片/任何请求；高度由内容自然撑开（应用会量内容高度自适应），禁止给 body 或任何容器写 height:100vh、min-height:100vh、height:100% 这类撑满写法。
+② 渲染代码：一份完整 HTML（可含 CSS/JS），把壳内原文渲染成好看的卡片。原文的注入方式：{{RAW}} 会被替换成转义后的原文（适合直接排版）；window.TICKET_RAW 是原文字符串（适合 JS 解析后自由绘制）；window.MIX_STATE 是被「记住」的值组成的对象。注意：注入的就是壳内原文本身、不含 [状态栏] 标记，解析时不要去找壳标记；JS 里如需内置示例文本，字符串必须用 \\n 转义换行，绝不能把字符串字面量写成多行（会直接语法错误）。代码跑在无网络的沙盒 iframe 里：不要外链字体/图片/任何请求；高度由内容自然撑开（应用会量内容高度自适应），禁止给 body 或任何容器写 height:100vh、min-height:100vh、height:100% 这类撑满写法。
 
 请分段输出：
 【材料名】给这张状态栏起个名
@@ -139,7 +139,7 @@ export const MIX_CRAFT_PROMPTS: Record<MixMaterialKind, string> = {
 
 ① 输出契约（可选）：写给扮演 AI 的指令——什么条件下加演、壳内按什么格式写。壳标记（[小剧场]…[/小剧场]）与"不满足条件就不输出"由应用统一向模型说明，契约只写时机与内容格式；不要发明占位协议（比如"没有内容时输出空 JSON / noop"），不满足条件时什么都不输出就是正确行为。若做不需要 AI 每轮供稿的纯静态小品，契约留空。
 
-② 渲染代码：完整 HTML（可含 CSS/JS）。AI 的加演原文经 {{RAW}}（已转义直插）或 window.ENCORE_RAW（JS 取用）注入；window.MIX_STATE 是被记住的值。跑在无网络的沙盒 iframe 里：不要外链字体/图片/任何请求；高度由内容自然撑开，禁止给 body 或任何容器写 height:100vh、min-height:100vh、height:100% 这类撑满写法。
+② 渲染代码：完整 HTML（可含 CSS/JS）。AI 的加演原文经 {{RAW}}（已转义直插）或 window.ENCORE_RAW（JS 取用）注入；window.MIX_STATE 是被记住的值。注意：注入的就是壳内原文本身、不含 [小剧场] 标记，解析时不要去找壳标记；JS 里如需内置示例文本，字符串必须用 \\n 转义换行，绝不能写成多行字面量。跑在无网络的沙盒 iframe 里：不要外链字体/图片/任何请求；高度由内容自然撑开，禁止给 body 或任何容器写 height:100vh、min-height:100vh、height:100% 这类撑满写法。
 
 请分段输出：
 【材料名】给这出小剧场起个名
@@ -176,7 +176,7 @@ ctx 字段：turnCount 已发生轮数；state 记住的值；store 本机括自
 返回一个普通对象（各项都可省略）：{ text: 改写后的 text, note: 只在这一轮生效的临时提示（≤2000字）, state: 要写入的记住值, store: 覆盖自己的存储 }。
 限制：单次执行 2 秒超时；无网络、碰不到页面；存储上限 100KB。
 
-② 常驻界面（完整 HTML，可选）：跑在沙盒 iframe 里。用 window.MIX_STATE / window.MIX_STORE 读数据，定义 window.onMixSync(state, store) 接收更新；通过 window.mix 请求动作：setStore(obj)、setState(obj)、say(text) 以玩家身份发言、move(x,y) 与 size(w,h)（占对局画面的百分比）、fit(px) 报内容高度、design(px) 设排版基准宽度、drag(bool)/resize(bool)/chrome(bool)/plate(bool)、z(n)、grab() 在自绘标题条上起拖。界面初始无外壳无底板，位置与尺寸请在代码里用 mix.move / mix.size 自己定好。
+② 常驻界面（完整 HTML，可选）：跑在沙盒 iframe 里。用 window.MIX_STATE / window.MIX_STORE 读数据，定义 window.onMixSync(state, store) 接收更新；通过 window.mix 请求动作：setStore(obj)、setState(obj)、say(text) 以玩家身份发言、move(x,y) 与 size(w,h)（占对局画面的百分比）、fit(px) 报内容高度、design(px) 设排版基准宽度、drag(bool)/resize(bool)/chrome(bool)/plate(bool)、z(n)、grab() 在自绘标题条上起拖。界面初始无外壳无底板，位置与尺寸请在代码里用 mix.move / mix.size 自己定好。界面里可用的数据只有 MIX_STATE 与 MIX_STORE 两个对象——没有角色名、玩家名这类现成变量，需要就让钩子写进 store 再读；写完自查一遍：用到的每个变量都必须已声明。
 
 请分段输出：
 【材料名】给这件机括起个名
