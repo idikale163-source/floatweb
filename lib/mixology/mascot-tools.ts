@@ -317,7 +317,7 @@ function qualityHints(material: Record<string, unknown>, kind: MixMaterialKind):
     if (examples < 6) hints.push(`示例对话只有 ${Math.floor(examples / 2)} 轮，建议补到 3~5 轮锚定文风`);
     const canvas = len("canvas");
     if (!canvas) hints.push("没有开场画布——按「画布制作规格」补一份完整门面页");
-    else if (canvas < 2500) hints.push(`开场画布只有 ${canvas} 字符，偏简陋——按规格做足设计概念与版式手法，别缩水成一张信息卡`);
+    else if (canvas < 6000) hints.push(`开场画布只有 ${canvas} 字符，体量不够——画布是一整页 5~9 个模块、好几屏长的门面长页，按规格把模块做齐做厚，别缩水成一张信息卡`);
     for (const [key, label] of [["personality", "性格"], ["background", "背景"], ["worldview", "世界观"], ["relations", "关系与身份"]] as const) {
         if (len(key) === 0) hints.push(`${label}还空着`);
         else if (len(key) < 60) hints.push(`${label}偏薄（${len(key)} 字），用具体行为细节撑起来`);
