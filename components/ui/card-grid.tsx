@@ -11,7 +11,7 @@ export type CardItem = {
   label: string;
   desc?: string;
   iconColor: string;
-  /** 传了就用 public/glass-icons/<glassIcon>.svg 那张玻璃图标，替代上面的线性 icon */
+  /** 传了就用 <GlassIcon name={glassIcon}> 那张玻璃图标，替代上面的线性 icon */
   glassIcon?: string;
   onClick: () => void;
 };

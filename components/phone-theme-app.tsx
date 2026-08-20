@@ -139,7 +139,7 @@ function IconReset() {
 const MENU_ITEMS: Array<{
   section: ThemeMenuItemSection;
   icon: () => React.JSX.Element;
-  /** public/glass-icons/<glass>.svg —— 菜单里用的玻璃图标 */
+  /** 菜单里用的玻璃图标名，见 assets/glass-icons/ */
   glass: string;
   label: string;
   desc?: string;

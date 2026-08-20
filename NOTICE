@@ -43,7 +43,7 @@ Bundled artwork:
   界面素材使用，禁止单独提取、二次分发或用于其他项目。）
 - public/models/ 3D assets: generated with Tripo AI under a paid plan
   (outputs owned by the project author).
-- public/glass-icons/*.svg: glass-style icons © Nucleo (https://nucleoapp.com),
+- assets/glass-icons/*.svg (inlined into the app bundle): glass-style icons © Nucleo (https://nucleoapp.com),
   used under the Nucleo license, which permits up to 100 icons in open source
   projects provided this copyright notice is included. Colors were adjusted to
   match this app's palette. These icon files are NOT covered by this project's
