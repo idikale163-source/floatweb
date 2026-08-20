@@ -1647,6 +1647,19 @@
   bottom: 8px;
 }
 
+/* 生图失败弹窗：一次性提示，关掉就没了，不在气泡下留红字 */
+.chat-generated-image-error-dialog {
+  width: 82%;
+  max-width: 320px;
+}
+
+.chat-generated-image-error-text {
+  color: var(--c-text);
+  font-size: calc(13px*var(--app-text-scale,1));
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .chat-generated-image-prompt-dialog,
 .feed-post-photo-prompt-dialog,
 .feed-post-edit-dialog {

@@ -20,6 +20,7 @@ import remarkBreaks from "remark-breaks";
 import { createPortal } from "react-dom";
 import { Blocks, Maximize2, ReceiptText } from "lucide-react";
 import { retryChatGeneratedImage } from "@/lib/generated-image-retry";
+import { GeneratedImageErrorDialog } from "./generated-image-error-dialog";
 import { ScanPayCard } from "@/components/chat/scan-pay-card";
 import { payWithWalletBalance } from "@/lib/wallet-storage";
 import { formatShoppingPaymentRequestHistory } from "@/lib/shopping-payment-request";
@@ -1208,7 +1209,7 @@ function GeneratedImagePromptDialog({
                         placeholder="输入图片提示词"
                         disabled={busy}
                     />
-                    {error && <div className="chat-generated-image-retry-error">生成失败：{error}</div>}
+                    {error && <div className="chat-generated-image-retry-error">{error}</div>}
                 </div>
                 <div className="modal-footer" data-ui="modal-footer">
                     <button className="ui-btn ui-btn-ghost" onClick={onCancel}>取消</button>
@@ -1244,7 +1245,9 @@ function ImageBubble({
     const [showPromptEditor, setShowPromptEditor] = useState(false);
     const [promptDraft, setPromptDraft] = useState("");
     const [regenerating, setRegenerating] = useState(false);
+    // retryError 只用于提示词弹窗内的即时校验；生成失败改用一次性弹窗，不再挂红字
     const [retryError, setRetryError] = useState("");
+    const [failureNotice, setFailureNotice] = useState("");
     const isPending = d?.imageGenerationStatus === "pending";
     const canRegenerate = !isPending && Boolean(d?.label?.trim());
     const [showPreview, setShowPreview] = useState(false);
@@ -1283,7 +1286,7 @@ function ImageBubble({
                 onUpdate?.(updated);
             })
             .catch(error => {
-                setRetryError(error instanceof Error ? error.message : String(error));
+                setFailureNotice(error instanceof Error ? error.message : String(error));
             })
             .finally(() => {
                 setRegenerating(false);
@@ -1313,6 +1316,9 @@ function ImageBubble({
                     error={retryError}
                 />,
                 document.body,
+            )}
+            {failureNotice && (
+                <GeneratedImageErrorDialog message={failureNotice} onClose={() => setFailureNotice("")} />
             )}
         </>
     );
@@ -1363,7 +1369,6 @@ function ImageBubble({
                     <div className="chat-photo-card-text">{label}</div>
                 </div>
             </div>
-            {retryError && <div className="chat-generated-image-retry-error">生成失败：{retryError}</div>}
             {previewAndDialog}
         </div>
     );
@@ -1877,7 +1882,9 @@ function MediaFileBubble({
     const [showImagePromptEditor, setShowImagePromptEditor] = useState(false);
     const [imagePromptDraft, setImagePromptDraft] = useState("");
     const [imageRegenerating, setImageRegenerating] = useState(false);
+    // 同 ImageBubble：弹窗内校验用 imageRetryError，生成失败走一次性弹窗
     const [imageRetryError, setImageRetryError] = useState("");
+    const [imageFailureNotice, setImageFailureNotice] = useState("");
 
     useEffect(() => {
         if (!isMediaStoreRef(rawUrl)) {
@@ -1930,7 +1937,7 @@ function MediaFileBubble({
                 onUpdate?.(updated);
             })
             .catch(error => {
-                setImageRetryError(error instanceof Error ? error.message : String(error));
+                setImageFailureNotice(error instanceof Error ? error.message : String(error));
             })
             .finally(() => {
                 setImageRegenerating(false);
@@ -2030,7 +2037,6 @@ function MediaFileBubble({
                     onRegenerate={canRegenerateImage ? openImagePromptEditor : undefined}
                     regenerating={imageRegenerating}
                 />
-                {imageRetryError && <div className="chat-generated-image-retry-error">生成失败：{imageRetryError}</div>}
                 {showImagePromptEditor && typeof document !== "undefined" && createPortal(
                     <GeneratedImagePromptDialog
                         value={imagePromptDraft}
@@ -2041,6 +2047,12 @@ function MediaFileBubble({
                         error={imageRetryError}
                     />,
                     document.body,
+                )}
+                {imageFailureNotice && (
+                    <GeneratedImageErrorDialog
+                        message={imageFailureNotice}
+                        onClose={() => setImageFailureNotice("")}
+                    />
                 )}
             </div>
         );
