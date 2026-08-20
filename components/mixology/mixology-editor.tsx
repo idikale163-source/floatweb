@@ -3,7 +3,8 @@
 // 独家特调 · 材料编辑器：八类材料的自建/编辑表单（底部弹层里渲染）。
 // Phase ③ 先给够用的表单闭环，创作工坊阶段再上专业编辑体验。
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { BookOpen, FileText, Plus, Trash2 } from "lucide-react";
 import type {
     MixCharacterCard,
@@ -216,6 +217,12 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
     const [error, setError] = useState("");
     const [structureOpen, setStructureOpen] = useState(false);
     const [craftOpen, setCraftOpen] = useState(false);
+    // 弹层宿主：编辑器自己就在一个可滚动的底部弹层里，mask 的 absolute/inset:0
+    // 若就地渲染会锚到滚动内容上——往下拉能把编辑器的输入栏一起拉出来。
+    // 与大厅同一个做法：portal 到应用根层去铺满整个画面。
+    const [overlayHost, setOverlayHost] = useState<HTMLElement | null>(null);
+    useEffect(() => { setOverlayHost(document.querySelector<HTMLElement>(".mixology-app")); }, []);
+    const inOverlay = (node: ReactNode) => (overlayHost ? createPortal(node, overlayHost) : null);
     const fileRef = useRef<HTMLInputElement | null>(null);
 
     // 标签：输入的时候就按最终口径拆好给作者看，免得存下来才发现被掐了
@@ -779,8 +786,8 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     </Field>
                 </>
             ) : null}
-            {structureOpen ? <MixStructureSheet highlight={kind} onClose={() => setStructureOpen(false)} /> : null}
-            {craftOpen ? <MixCraftSheet kind={kind} onClose={() => setCraftOpen(false)} /> : null}
+            {structureOpen ? inOverlay(<MixStructureSheet highlight={kind} onClose={() => setStructureOpen(false)} />) : null}
+            {craftOpen ? inOverlay(<MixCraftSheet kind={kind} onClose={() => setCraftOpen(false)} />) : null}
             {error ? <div style={{ color: "#e2a3a3", fontSize: 12, marginTop: 12 }}>{error}</div> : null}
             <div className="mix-form-footer">
                 <button type="button" className="mix-ghost-btn" onClick={onCancel}>取消</button>
