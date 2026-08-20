@@ -679,7 +679,14 @@ async function restoreFromCloudManifestInternal(
   manifestName: string,
   options: { overwrite?: boolean; moduleIds?: DataModuleId[]; onProgress?: (p: CloudProgress) => void },
 ): Promise<{ added: number; skipped: number; overwritten: number; errors: string[] }> {
-  const onProgress = options.onProgress ?? (() => {});
+  const rawOnProgress = options.onProgress ?? (() => {});
+  // Remember the last percent so out-of-band events (media downloads inside the
+  // import phase) can refresh the detail text without jumping the bar around.
+  let lastPercent = 1;
+  const onProgress = (p: CloudProgress) => {
+    lastPercent = p.percent;
+    rawOnProgress(p);
+  };
   onProgress({ percent: 1, detail: "读取备份清单…" });
   const manifest = await loadManifest(config, manifestName);
   if (!manifest) throw new Error("找不到该备份清单。");
@@ -691,10 +698,36 @@ async function restoreFromCloudManifestInternal(
   // Pull each media binary on demand, one at a time (low peak memory). Old cloud
   // backups have no media map, so they fall back to media/<ref>.bin.
   const invalidMedia = new Set<string>();
+  // 成功下载的媒体也要缓存（LRU，按字节封顶）：同一媒体被 N 条记录引用时，
+  // 以前每遇到一次就重新下载 + 重新 sha256 校验一次——大量重复引用（头像、
+  // 表情、主题图）直接把恢复拖成小时级，看起来就是「进度条卡住」。
+  const MEDIA_CACHE_MAX_BYTES = 96 * 1024 * 1024;
+  const mediaCache = new Map<string, Blob>();
+  let mediaCacheBytes = 0;
+  const cacheMedia = (ref: string, blob: Blob) => {
+    if (blob.size > MEDIA_CACHE_MAX_BYTES) return;
+    while (mediaCacheBytes + blob.size > MEDIA_CACHE_MAX_BYTES && mediaCache.size > 0) {
+      const oldest = mediaCache.entries().next().value as [string, Blob];
+      mediaCache.delete(oldest[0]);
+      mediaCacheBytes -= oldest[1].size;
+    }
+    mediaCache.set(ref, blob);
+    mediaCacheBytes += blob.size;
+  };
+  let mediaFetched = 0;
   const resolver: MediaResolver = async (ref) => {
     if (invalidMedia.has(ref)) return null;
+    const cached = mediaCache.get(ref);
+    if (cached) {
+      // refresh LRU position
+      mediaCache.delete(ref);
+      mediaCache.set(ref, cached);
+      return cached;
+    }
     const media = mediaByRef.get(ref);
     const paths = media?.parts && media.parts.length > 0 ? media.parts : [legacyMediaPath(ref)];
+    mediaFetched += 1;
+    onProgress({ percent: lastPercent, detail: `下载媒体文件 ${mediaFetched}…` });
     const blobs: Blob[] = [];
     for (const path of paths) {
       const part = await getObject(config, path);
@@ -709,6 +742,7 @@ async function restoreFromCloudManifestInternal(
       invalidMedia.add(ref);
       return null;
     }
+    cacheMedia(ref, combined);
     return combined;
   };
 
@@ -759,11 +793,30 @@ async function restoreFromCloudManifestInternal(
       }
       for (let sourceIndex = 0; sourceIndex < payload.sources.length; sourceIndex += 1) {
         onProgress({ percent: restorePercent(unit.bytes * (0.7 + 0.3 * (sourceIndex / payload.sources.length))), detail: `写入 ${unit.label}…` });
-        const result = await importSource(payload.sources[sourceIndex], Boolean(options.overwrite), resolver);
-        total.added += result.added;
-        total.skipped += result.skipped;
-        total.overwritten += result.overwritten;
-        total.errors.push(...result.errors);
+        // 写入是恢复里最慢的阶段（逐条 IndexedDB 事务 + 按需拉媒体），云端 v2
+        // 的 payload 恒只有 1 个 source——以前这里整个阶段进度都定在同一个值，
+        // 用户看到的就是「进度条卡住不动」。现在按记录数推进（限流避免刷屏）。
+        let lastTickAt = 0;
+        const importProgress = (done: number, totalRecords: number) => {
+          const now = Date.now();
+          if (done < totalRecords && now - lastTickAt < 150) return;
+          lastTickAt = now;
+          const fraction = totalRecords > 0 ? done / totalRecords : 1;
+          onProgress({
+            percent: restorePercent(unit.bytes * (0.7 + 0.3 * ((sourceIndex + fraction) / payload.sources.length))),
+            detail: `写入 ${unit.label}（${done}/${totalRecords}）…`,
+          });
+        };
+        try {
+          const result = await importSource(payload.sources[sourceIndex], Boolean(options.overwrite), resolver, importProgress);
+          total.added += result.added;
+          total.skipped += result.skipped;
+          total.overwritten += result.overwritten;
+          total.errors.push(...result.errors);
+        } catch (error) {
+          // 一个数据源写崩不该中断整场恢复（否则后面的模块全部丢失）。
+          total.errors.push(`${unit.label}: 写入失败：${error instanceof Error ? error.message : String(error)}`);
+        }
       }
       restoreDoneBytes += unit.bytes;
     }
