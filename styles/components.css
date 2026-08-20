@@ -1219,22 +1219,19 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 8px 8px 0;
-  color: #000;
-  font-size: calc(18px*var(--app-text-scale,1));
-  font-style: italic;
+  margin: 8px 4px 0;
+  color: var(--c-icon);
+  font-size: calc(11.7px*var(--app-text-scale,1));
+  font-style: normal;
   font-weight: 700;
-  line-height: 1;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .settings-menu-section-title::before,
 .appearance-menu-section-title::before {
-  content: "";
-  width: 4px;
-  height: 22px;
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--section-title-accent) 80%, white), var(--section-title-accent));
+  display: none;
 }
 
 .page-menu .settings-menu-section-title,
@@ -1362,6 +1359,24 @@
   line-height: 0;
 }
 
+/* 玻璃图标（public/glass-icons）：自带体积和投影，套淡色圆底会变成"贴纸贴盘子" */
+.card-icon.card-icon-glass {
+  background: transparent;
+  box-shadow: none;
+}
+
+.glass-icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.menu-item .glass-icon {
+  width: 26px;
+  height: 26px;
+}
+
 .card-icon {
   width: 48px;
   height: 48px;
@@ -1383,6 +1398,7 @@
 
 .card-desc {
   font-size: calc(9.9px*var(--app-text-scale,1));
+  font-weight: 500;
   color: var(--c-text);
   line-height: 1.3;
 }
@@ -1417,6 +1433,7 @@
 }
 .card-featured-desc {
   font-size: calc(10.8px*var(--app-text-scale,1));
+  font-weight: 500;
   color: var(--c-text);
   line-height: 1.4;
   margin-top: 3px;
@@ -3585,6 +3602,7 @@
 
 .menu-desc {
   font-size: calc(10.8px*var(--app-text-scale,1));
+  font-weight: 500;
   color: var(--c-text);
   line-height: 1.4;
   margin-top: 2px;
@@ -5346,8 +5364,9 @@
     justify-content: center;
     font-size: calc(19.8px*var(--app-text-scale,1));
     font-weight: 700;
-    color: #fff;
-    background: linear-gradient(135deg, #8fa3c8, #5e79a8);
+    color: #5B6ADF;
+    background: linear-gradient(150deg, #CFE3FF 0%, #DED6FF 55%, #F0DAF2 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 .settings-account-copy {
     flex: 1;
