@@ -792,6 +792,7 @@ const MIX_READ_CRAFT_SPEC_SCHEMA = {
 /** 创建/更新共用的字段说明（按 kind 取用，执行器会校验字段归属） */
 const MIX_MATERIAL_FIELDS = {
     hook: { type: "string", description: "一句话介绍（列表卡片上的钩子文案）" },
+    cover: { type: "string", description: "封面图地址：http(s) URL（用户发图时可经图像处理套件「导入用户图片为素材→上传图床」取得）或 data:image/ dataURL" },
     tags: { type: "array", items: { type: "string" }, description: "标签数组，最多 8 个短词" },
     charName: { type: "string", description: "character：角色名，不传默认与 name 相同" },
     content: { type: "string", description: "persona/base/flavor/glass/strength：正文" },

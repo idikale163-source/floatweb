@@ -248,8 +248,10 @@ const MIX_CRAFT_FIELD_NOTES: Record<MixMaterialKind, string> = {
     character: `—— 工具字段对照 ——
 name＝角色名（同时是卡名）；hook＝一句话介绍；tags＝字符串数组（3~8 个短词）；
 baseInfo/personality/appearance/background/worldview/cognition/relations/plot/extra 对应基础信息/性格/外貌/背景/世界观/初始认知/关系与身份/当前剧情/附加设定；
-openings＝字符串数组，每个元素是一条完整开场白，至少一条（不需要 --- 分隔符）；
-examples＝数组 [{"role":"user"|"char","text":"…"}]；canvas＝开场画布完整 HTML 字符串。`,
+openings＝字符串数组，每个元素是一条完整开场白，至少两条供玩家挑选（不需要 --- 分隔符）；
+examples＝数组 [{"role":"user"|"char","text":"…"}]，至少 2 轮（4 条），3~5 轮更好；canvas＝开场画布完整 HTML 字符串；cover＝封面图地址（https URL 或 dataURL，可用图床上传取得）。
+质量要求：开场白写满 2~3 条、示例对话写满 3~5 轮；画布按上方规格完整制作，不要缩水成一张简单信息卡交差。
+图片细则：画布里禁止编造图片外链；经图床上传得到的真实 URL 可以用，没有图床就留可替换占位框。`,
     persona: `—— 工具字段对照 ——
 name＝材料名；hook＝一句话介绍；tags＝字符串数组；userName＝你的名字；content＝人设正文。`,
     base: `—— 工具字段对照 ——
@@ -263,18 +265,21 @@ name＝材料名；hook＝一句话介绍；tags＝字符串数组；content＝�
     ticket: `—— 工具字段对照 ——
 name＝材料名；hook＝一句话介绍；tags＝字符串数组；contract＝输出契约；renderHtml＝渲染代码完整 HTML；
 previewRaw＝预览示例数据：壳内原文本身，只有契约定义的内容，不带 [状态栏] 标记、不带正文；
-vars＝要跨轮记住的变量，数组 [{"name":"好感度","initial":"50"}]，键名不带引号反引号。`,
+vars＝要跨轮记住的变量，数组 [{"name":"好感度","initial":"50"}]，键名不带引号反引号；cover＝封面图地址（可选）。
+图片细则：渲染代码里禁止编造图片外链；经图床上传得到的真实 URL 可以用。`,
     garnish: `—— 工具字段对照 ——
 name＝材料名；hook＝一句话介绍；tags＝字符串数组；css＝完整 CSS。`,
     encore: `—— 工具字段对照 ——
 name＝材料名；hook＝一句话介绍；tags＝字符串数组；contract＝输出契约（纯静态小品不传）；
-renderHtml＝渲染代码完整 HTML；previewRaw＝壳内原文本身，不带 [小剧场] 标记、不带正文（纯静态不传）。`,
+renderHtml＝渲染代码完整 HTML；previewRaw＝壳内原文本身，不带 [小剧场] 标记、不带正文（纯静态不传）；cover＝封面图地址（可选）。
+图片细则：渲染代码里禁止编造图片外链；经图床上传得到的真实 URL 可以用。`,
     filter: `—— 工具字段对照 ——
 name＝材料名；hook＝一句话介绍；tags＝字符串数组；
 rules＝数组 [{"find":"正则本体（不带斜杠定界符）","replace":"替换文本（删除传空串）","mode":"display"|"context"}]。`,
     mechanism: `—— 工具字段对照 ——
 name＝材料名；hook＝一句话介绍；tags＝字符串数组；script＝钩子逻辑纯 JS（可不传）；
-panelHtml＝常驻界面完整 HTML（可不传）；script 与 panelHtml 至少传一个。`,
+panelHtml＝常驻界面完整 HTML（可不传）；script 与 panelHtml 至少传一个。
+图片细则：机括沙盒完全断网（CSP default-src 'none'），任何外链（含图床 URL）都加载不了，界面素材只能内联。`,
 };
 
 /**

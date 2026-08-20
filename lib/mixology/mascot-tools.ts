@@ -296,6 +296,35 @@ function applyContentFields(target: Record<string, unknown>, kind: MixMaterialKi
     return null;
 }
 
+/** 封面来源校验：图床/远端 URL 或 dataURL，别的（本地路径、编造的短串）拒收 */
+function normalizeCover(value: unknown): string | { err: string } {
+    const cover = text(value).trim();
+    if (/^https?:\/\//.test(cover) || cover.startsWith("data:image/")) return cover;
+    return { err: "cover 必须是 http(s) 图片地址（可用图像处理套件上传图床取得）或 data:image/ 开头的 dataURL。" };
+}
+
+/**
+ * 质量提示：不拦保存，但把偏薄的地方点出来写进成功返回——
+ * 使用指南要求小卷看到质量提示必须跟进补足，这是防偷懒的软引导侧。
+ */
+function qualityHints(material: Record<string, unknown>, kind: MixMaterialKind): string {
+    if (kind !== "character") return "";
+    const hints: string[] = [];
+    const len = (key: string) => (typeof material[key] === "string" ? (material[key] as string).trim().length : 0);
+    const openings = Array.isArray(material.openings) ? material.openings.length : 0;
+    if (openings < 2) hints.push("开场白只有一条，按规格写 2~3 条不同切入供玩家挑选");
+    const examples = Array.isArray(material.examples) ? material.examples.length : 0;
+    if (examples < 6) hints.push(`示例对话只有 ${Math.floor(examples / 2)} 轮，建议补到 3~5 轮锚定文风`);
+    const canvas = len("canvas");
+    if (!canvas) hints.push("没有开场画布——按「画布制作规格」补一份完整门面页");
+    else if (canvas < 2500) hints.push(`开场画布只有 ${canvas} 字符，偏简陋——按规格做足设计概念与版式手法，别缩水成一张信息卡`);
+    for (const [key, label] of [["personality", "性格"], ["background", "背景"], ["worldview", "世界观"], ["relations", "关系与身份"]] as const) {
+        if (len(key) === 0) hints.push(`${label}还空着`);
+        else if (len(key) < 60) hints.push(`${label}偏薄（${len(key)} 字），用具体行为细节撑起来`);
+    }
+    return hints.length ? `\n质量提示（建议用 更新材料 补足）：\n- ${hints.join("\n- ")}` : "";
+}
+
 /** 成品校验：与导入器/编辑器同口径，缺什么说什么 */
 function validateMaterial(material: Record<string, unknown>, kind: MixMaterialKind): string | null {
     const has = (key: string) => typeof material[key] === "string" && (material[key] as string).trim().length > 0;
@@ -342,6 +371,11 @@ export function mixToolCreateMaterial(args: Record<string, unknown>): ToolResult
     if (hook) material.hook = hook;
     const tags = normalizeMixTags(args.tags);
     if (tags.length) material.tags = tags;
+    if (args.cover !== undefined) {
+        const cover = normalizeCover(args.cover);
+        if (typeof cover !== "string") return { name: NAME, success: false, error: cover.err };
+        material.cover = cover;
+    }
 
     const fieldErr = applyContentFields(material, kind, args);
     if (fieldErr) return { name: NAME, success: false, error: fieldErr };
@@ -352,7 +386,7 @@ export function mixToolCreateMaterial(args: Record<string, unknown>): ToolResult
     broadcastCabinetUpdated();
     return {
         name: NAME, success: true,
-        data: `已把${MIX_KIND_LABELS[kind]}「${name}」放进酒柜（id: ${material.id}）。用户可在独家特调 App 的酒柜里查看详情与效果预览，然后去吧台配成特调开局。`,
+        data: `已把${MIX_KIND_LABELS[kind]}「${name}」放进酒柜（id: ${material.id}）。用户可在独家特调 App 的酒柜里查看详情与效果预览，然后去吧台配成特调开局。${qualityHints(material, kind)}`,
     };
 }
 
@@ -380,6 +414,12 @@ export function mixToolUpdateMaterial(args: Record<string, unknown>): ToolResult
     }
     if (args.hook !== undefined) { next.hook = text(args.hook).trim(); changed.push("hook"); }
     if (args.tags !== undefined) { next.tags = normalizeMixTags(args.tags); changed.push("tags"); }
+    if (args.cover !== undefined) {
+        const cover = normalizeCover(args.cover);
+        if (typeof cover !== "string") return { name: NAME, success: false, error: cover.err };
+        next.cover = cover;
+        changed.push("cover");
+    }
 
     const before = JSON.stringify(next);
     const fieldErr = applyContentFields(next, existing.kind, args);
@@ -395,7 +435,7 @@ export function mixToolUpdateMaterial(args: Record<string, unknown>): ToolResult
 
     saveMixMaterial(next as unknown as MixMaterial);
     broadcastCabinetUpdated();
-    return { name: NAME, success: true, data: `已更新${MIX_KIND_LABELS[existing.kind]}「${next.name}」的：${[...new Set(changed)].join("、")}。` };
+    return { name: NAME, success: true, data: `已更新${MIX_KIND_LABELS[existing.kind]}「${next.name}」的：${[...new Set(changed)].join("、")}。${qualityHints(next, existing.kind)}` };
 }
 
 // ── 保存配方 ─────────────────────────────────────────
