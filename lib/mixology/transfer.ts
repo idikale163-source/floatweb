@@ -204,6 +204,40 @@ function isMixKind(value: unknown): value is MixMaterialKind {
 }
 
 /**
+ * AI 代写的 JSON 有两类高频毛病，直接 JSON.parse 会挂，导入前先救一把：
+ * ① 包了 ``` 代码围栏、或前后带了说明文字——掐出首个 { 到最后一个 } 之间的部分；
+ * ② 字符串值里混进了真实换行/制表符（JSON 不允许控制字符）——就地转义。
+ * 修不动的结构错误（少括号、缺逗号）照旧报"不是有效的 JSON"，不做魔改猜测。
+ */
+function repairJsonText(text: string): string | null {
+    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    let body = fenced ? fenced[1] : text;
+    const objStart = body.indexOf("{");
+    const arrStart = body.indexOf("[");
+    const start = objStart < 0 ? arrStart : arrStart < 0 ? objStart : Math.min(objStart, arrStart);
+    const end = Math.max(body.lastIndexOf("}"), body.lastIndexOf("]"));
+    if (start < 0 || end <= start) return null;
+    body = body.slice(start, end + 1);
+    let out = "";
+    let inStr = false;
+    for (let i = 0; i < body.length; i++) {
+        const ch = body[i];
+        if (!inStr) {
+            if (ch === '"') inStr = true;
+            out += ch;
+            continue;
+        }
+        if (ch === "\\") { out += ch + (body[i + 1] ?? ""); i++; continue; }
+        if (ch === '"') { inStr = false; out += ch; continue; }
+        if (ch === "\n") { out += "\\n"; continue; }
+        if (ch === "\r") continue;
+        if (ch === "\t") { out += "\\t"; continue; }
+        out += ch;
+    }
+    return out;
+}
+
+/**
  * 解析导入的 JSON 文本。
  * 兼容三种写法：本工具导出的带壳文件、裸材料对象、以及一次多件的数组。
  * 导入一律换新 id，避免覆盖酒柜里的同名旧件。
@@ -213,7 +247,12 @@ export function parseMixMaterialsFromJson(text: string): MixMaterial[] {
     try {
         parsed = JSON.parse(text);
     } catch {
-        throw new Error("这不是一个有效的 JSON 文件。");
+        const repaired = repairJsonText(text);
+        try {
+            parsed = JSON.parse(repaired ?? "");
+        } catch {
+            throw new Error("这不是一个有效的 JSON 文件。");
+        }
     }
 
     const candidates: unknown[] = [];
