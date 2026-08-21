@@ -61,8 +61,9 @@ export const MIX_SLOT_MAX = 3;
 
 /**
  * 叠放语义：
- * concat = 这一格里条件满足的全部生效，按顺序依次拼接（多段文风叠加、主装饰 + 补丁装饰）；
- * first  = 只用第一件条件满足的（状态卡只能有一张、小剧场一轮只演一出）。
+ * concat = 这一格里条件满足的全部生效，按顺序依次拼接（多段文风叠加、主装饰 + 补丁装饰；
+ *          小票/尾调是"多块并行"——每件各自成块，一轮可同时带多个状态栏与小剧场）；
+ * first  = 只用第一件条件满足的（一局只有一张角色卡、一副面具）。
  */
 export const MIX_SLOT_STACK: Record<MixMaterialKind, "concat" | "first"> = {
     character: "first",
@@ -71,9 +72,9 @@ export const MIX_SLOT_STACK: Record<MixMaterialKind, "concat" | "first"> = {
     flavor: "concat",
     glass: "concat",
     strength: "concat",
-    ticket: "first",
+    ticket: "concat",
     garnish: "concat",
-    encore: "first",
+    encore: "concat",
     filter: "concat",
     mechanism: "concat",
 };
@@ -537,20 +538,38 @@ export type MixRecipe = {
     updatedAt: number;
 };
 
+/**
+ * 一轮里的一块壳内原文（状态栏或小剧场）。
+ * id = 供稿材料：渲染时按它找皮（现役件 → 退役快照 → 酒柜同 id 件）；
+ * 抽不到归属（旧格式输出、契约外的多余块）时缺省，渲染退回这一格的第一件。
+ */
+export type MixTurnBlock = {
+    id?: string;
+    raw: string;
+};
+
 /** 对局消息 */
 export type MixTurn = {
     id: string;
     role: "user" | "assistant";
     /** 正文（assistant 侧已剥离小票块） */
     text: string;
-    /** 该轮小票壳内原文（有小票材料且 AI 按契约输出时才有） */
+    /** 该轮小票壳内原文（有小票材料且 AI 按契约输出时才有）；多块时为第一块，全量见 ticketRaws */
     ticketRaw?: string;
-    /** 该轮小剧场壳内原文（尾调写了契约且 AI 输出时才有） */
+    /** 该轮小剧场壳内原文（尾调写了契约且 AI 输出时才有）；多块时为第一块，全量见 encoreRaws */
     encoreRaw?: string;
+    /**
+     * 多块并行（一轮多个状态栏/小剧场）时的全量块序列，按输出顺序排列。
+     * 老数据没有这两个字段——读取一律走 mixTurnTicketBlocks / mixTurnEncoreBlocks，
+     * 它们会把旧的单块字段包装成一块返回。
+     */
+    ticketRaws?: MixTurnBlock[];
+    encoreRaws?: MixTurnBlock[];
     /**
      * 供稿材料戳（可选）：平时不写——历史轮跟着当前件的渲染代码走（整体换皮）。
      * 只在局中换小票/尾调那一刻，由旧件给已有的轮盖上自己的 id；
      * 渲染时有戳的轮用戳指向的皮（见 MixSession.retiredRender），新轮用新件。
+     * 多块格式的轮不用戳——每块自带供稿材料 id。
      */
     ticketId?: string;
     encoreId?: string;
@@ -603,6 +622,23 @@ export type MixSession = {
     createdAt: number;
     updatedAt: number;
 };
+
+/**
+ * 读一轮的状态栏块序列：新格式（ticketRaws）直接用；老数据把单块字段包装成一块，
+ * 块的归属沿用换装时盖的戳（没盖过就是缺省 = 跟当前件走）。
+ */
+export function mixTurnTicketBlocks(turn: MixTurn): MixTurnBlock[] {
+    if (turn.ticketRaws?.length) return turn.ticketRaws;
+    if (turn.ticketRaw) return [{ id: turn.ticketId, raw: turn.ticketRaw }];
+    return [];
+}
+
+/** 读一轮的小剧场块序列（同 mixTurnTicketBlocks） */
+export function mixTurnEncoreBlocks(turn: MixTurn): MixTurnBlock[] {
+    if (turn.encoreRaws?.length) return turn.encoreRaws;
+    if (turn.encoreRaw) return [{ id: turn.encoreId, raw: turn.encoreRaw }];
+    return [];
+}
 
 /**
  * 与云端的关联状态（参考应用市场的显式同步模型）：
