@@ -435,11 +435,20 @@
     transform: scale(0.92);
 }
 
-/* ── 双列瀑布（CSS columns） ── */
+/* ── 双列卡墙 ──
+   曾用 CSS columns 做瀑布：卡片高度一变（缩样 iframe 量高）columns 就重排，
+   WebKit 里元素跨列搬家会把 iframe 整个重载→高度归零→再量高→再搬家，
+   列数肉眼可见地来回闪。改成两列 grid：元素永远不跨列移动，iframe 稳定。 */
 .mix-waterfall {
-    column-count: 2;
-    column-gap: 10px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-items: start;
     padding-top: 10px;
+}
+
+.mix-waterfall .mix-mat-card {
+    margin-bottom: 0;
 }
 
 .mix-mat-card {
