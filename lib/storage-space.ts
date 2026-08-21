@@ -2,7 +2,6 @@
 
 import { chatDb } from "./chat-db";
 import { updateChatMessage, type ChatMessage } from "./chat-storage";
-import { clearSource, inspectSource } from "./data-management/idb";
 import { estimateValueBytes } from "./data-management/serializers";
 import { collectRoomImageRefs, listDwellingLayouts, saveDwellingLayout } from "./dwelling-storage";
 import {
@@ -24,6 +23,7 @@ import {
 import { momentsDb } from "./moments-db";
 import { hydrateMomentsStorage, updateMomentPost } from "./moments-storage";
 import { deleteTrack, getAudioBlob, loadAllTracks } from "./music-storage";
+import { deleteRawFile, hydrateReadingStorage, listRawFileSummaries, loadBooks } from "./reading-storage";
 import { loadXiaohongshuState, saveXiaohongshuState } from "./xiaohongshu-storage";
 
 /**
@@ -65,7 +65,6 @@ export type StorageClearResult = {
   freedBytes: number;
 };
 
-const READING_RAW_FILES_DB = "reading-raw-files";
 const MEDIA_CACHE_DB = "AiPhoneMediaCacheDB";
 // 刚写入还没被引用方保存的媒体（如生成中的图片）不能当孤儿删掉。
 const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
@@ -113,7 +112,7 @@ const CATEGORY_META: Record<StorageCategoryId, { label: string; description: str
   },
   reading_raw_files: {
     label: "阅读原始文件",
-    description: "导入书籍时的原始文件。书架和章节已单独入库，删除原件不影响阅读。",
+    description: "TXT/EPUB 导入后的原始文件（章节已单独入库，删除不影响阅读）。PDF 需要原文才能阅读，会自动保留。",
     supportsKeepDays: false,
   },
   orphan_media: {
@@ -275,9 +274,12 @@ export async function scanStorageSpace(onProgress?: (detail: string) => void): P
   stats.push(makeStat("dwelling_images", dwellingBytes, dwellingCount));
 
   onProgress?.("统计阅读原始文件…");
-  const readingStats = await inspectSource({ type: "indexeddb", dbName: READING_RAW_FILES_DB, label: "阅读原始文件" })
-    .catch(() => ({ records: 0, bytes: 0 }));
-  stats.push(makeStat("reading_raw_files", readingStats.bytes, readingStats.records));
+  const deletableRawFiles = await listDeletableRawFiles();
+  stats.push(makeStat(
+    "reading_raw_files",
+    deletableRawFiles.reduce((sum, item) => sum + item.bytes, 0),
+    deletableRawFiles.length,
+  ));
 
   onProgress?.("扫描残留媒体（全库引用检查，需要一点时间）…");
   const orphans = await collectOrphanMedia().catch(() => []);
@@ -451,11 +453,32 @@ async function clearDwellingImages(): Promise<StorageClearResult> {
   return { cleared, freedBytes };
 }
 
+/** 可删除的原始文件 = 非 PDF 书的原件（TXT/EPUB 章节已入库）+ 书已删除的孤儿原件。
+ *  PDF 的正文渲染和章节懒解析都要现读原文件，删了书就打不开了，必须保留。 */
+async function listDeletableRawFiles(): Promise<Array<{ bookId: string; bytes: number }>> {
+  const [summaries] = await Promise.all([
+    listRawFileSummaries(),
+    hydrateReadingStorage().catch(() => undefined),
+  ]);
+  if (summaries.length === 0) return [];
+  const pdfBookIds = new Set(loadBooks().filter((book) => book.format === "pdf").map((book) => book.id));
+  return summaries.filter((item) => !pdfBookIds.has(item.bookId));
+}
+
 async function clearReadingRawFiles(): Promise<StorageClearResult> {
-  const source = { type: "indexeddb" as const, dbName: READING_RAW_FILES_DB, label: "阅读原始文件" };
-  const stats = await inspectSource(source).catch(() => ({ records: 0, bytes: 0 }));
-  const result = await clearSource(source);
-  return { cleared: result.removed, freedBytes: stats.bytes };
+  const deletable = await listDeletableRawFiles();
+  let cleared = 0;
+  let freedBytes = 0;
+  for (const item of deletable) {
+    try {
+      await deleteRawFile(item.bookId);
+    } catch {
+      continue;
+    }
+    cleared += 1;
+    freedBytes += item.bytes;
+  }
+  return { cleared, freedBytes };
 }
 
 async function clearOrphanMedia(): Promise<StorageClearResult> {

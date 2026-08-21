@@ -1963,6 +1963,15 @@ function MediaFileBubble({
         );
     }
 
+    // 存储空间清理会置空 mediaUrl 并打上 mediaCleanedAt：占位说明而不是一张点不动的文件卡。
+    if (!rawUrl && msg.mediaData?.mediaCleanedAt) {
+        return (
+            <div className="chat-media-file-card chat-media-file-generic">
+                <span className="chat-media-file-title" style={{ opacity: 0.5 }}>{title ? `${title} · 已清理` : "文件已清理"}</span>
+            </div>
+        );
+    }
+
     if (!url && isMediaStoreRef(rawUrl)) {
         return (
             <div className="chat-media-file-card chat-media-file-generic">
