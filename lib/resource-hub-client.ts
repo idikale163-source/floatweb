@@ -26,7 +26,6 @@ import { readThemeProfile, writeThemeProfile } from "./theme-storage";
 import { loadGameDrafts, saveGameDrafts } from "./game-storage";
 import type { GameTemplateDraft } from "./game-types";
 import type { Prompt } from "./settings-types";
-import type { MixMaterial } from "./mixology/types";
 
 const SOURCE_KEY = "ai_phone_resource_hub_source_v1";
 registerKvMigration(SOURCE_KEY);
@@ -370,50 +369,6 @@ export async function fetchPresetEntry(source: ResourceHubSource, path: string):
     throw new Error("解析失败，请确认这是预设条目左滑「导出」生成的 JSON");
 }
 
-/**
- * 取一份特调材料文件并解析（集市「特调」流程用）。一份文件可能装着多件材料，
- * 单独暴露是因为要先让用户选导入哪件，不能一步到底。
- */
-export async function fetchResourceHubMixMaterials(source: ResourceHubSource, path: string): Promise<MixMaterial[]> {
-    const { hydrateKvDb } = await import("./kv-db");
-    await hydrateKvDb();
-    const { parseMixMaterialsFromJson, parseMixMaterialsFromPng } = await import("./mixology/transfer");
-    const materials = path.toLowerCase().endsWith(".png")
-        ? parseMixMaterialsFromPng(await fetchResourceHubBinary(source, path))
-        : parseMixMaterialsFromJson(await fetchResourceHubText(source, path));
-    if (!materials.length) throw new Error("没有解析到特调材料，请确认文件是独家特调导出的 JSON 或 PNG");
-    return materials;
-}
-
-/**
- * 把一件特调材料入柜。集市来源打 imported 标记，与酒材大厅入柜同一套规矩：
- * 不能发布、不能编辑，角色卡正文封存，小卷工具同样拒改。
- * 同名同类的旧导入件就地更新（作者更新了资源再导，不至于堆一柜副本）；
- * 自己的原件 id 不同，永远不会被动到。
- */
-export async function importResourceHubMixMaterial(material: MixMaterial, author?: string): Promise<string> {
-    const { hydrateKvDb } = await import("./kv-db");
-    await hydrateKvDb();
-    const { loadMixCabinet, saveMixMaterial, MIX_CABINET_UPDATED_EVENT } = await import("./mixology/storage");
-    const { MIX_KIND_LABELS } = await import("./mixology/types");
-    const prior = loadMixCabinet().find(
-        (m) => m.imported && m.kind === material.kind && m.name.trim() === material.name.trim(),
-    );
-    saveMixMaterial({
-        ...material,
-        id: prior?.id ?? material.id,
-        imported: true,
-        author: author?.trim() || material.author,
-        createdAt: prior?.createdAt ?? material.createdAt,
-    });
-    dispatch(MIX_CABINET_UPDATED_EVENT);
-    const label = MIX_KIND_LABELS[material.kind];
-    const sealNote = material.kind === "character" ? "，角色卡正文封存不可编辑" : "";
-    return prior
-        ? `${label}「${material.name}」已更新柜中导入件（集市来的作品不能发布${sealNote}）`
-        : `${label}「${material.name}」已入柜（集市来的作品不能发布${sealNote}）`;
-}
-
 /** 把取到的条目插入/覆盖进指定预设，落盘并返回给用户看的说明。 */
 export async function applyPresetEntry(
     prompt: Prompt,
@@ -478,7 +433,7 @@ export async function importResourceHubFile(
     source: ResourceHubSource,
     path: string,
     destination: ImportDestination,
-    options?: { contactId?: string },
+    options?: { contactId?: string; authorName?: string },
 ): Promise<string> {
     // 下面全是"读出来 → 加一条 → 整份写回"。kv 的 kvSet 是无条件覆盖、kvGet 在
     // 水合前一律返回 null，抢在加载完成前写会把整份旧数据（角色库/主题/草稿/插件）
@@ -671,10 +626,38 @@ export async function importResourceHubFile(
             // 这条目的地要先选预设和位置，走 fetchPresetEntry + applyPresetEntry 两步，
             // 不经过这里。留个明确的兜底，免得以后有人直接调进来静默什么都不做。
             throw new Error("预设条目需要先选择目标预设与位置");
-        case "mixology":
-            // 同为两步流程：fetchResourceHubMixMaterials 解析出材料清单，
-            // 用户选一件后走 importResourceHubMixMaterial，不经过这里。
-            throw new Error("特调需要先选择导入哪件材料");
+        case "mixology": {
+            const { parseMixMaterialsFromJson, parseMixMaterialsFromPng } = await import("./mixology/transfer");
+            const { loadMixCabinet, saveMixMaterial, MIX_CABINET_UPDATED_EVENT } = await import("./mixology/storage");
+            const { MIX_KIND_LABELS } = await import("./mixology/types");
+            const materials = lower.endsWith(".png")
+                ? parseMixMaterialsFromPng(await fetchResourceHubBinary(source, path))
+                : parseMixMaterialsFromJson(await fetchResourceHubText(source, path));
+            if (!materials.length) throw new Error("没有解析到特调材料，请确认文件是独家特调导出的 JSON 或 PNG");
+            // 种类与件数文件自带，全部自动入柜，用户不用选。集市来源打 imported 标记，
+            // 与酒材大厅入柜同一套规矩：不能发布、不能编辑，角色卡正文封存，小卷工具拒改。
+            // 同名同类的旧导入件就地更新（作者更新资源再导，不堆一柜副本）；
+            // 自己的原件 id 不同，永远不会被动到。
+            let updated = 0;
+            for (const material of materials) {
+                const prior = loadMixCabinet().find(
+                    (m) => m.imported && m.kind === material.kind && m.name.trim() === material.name.trim(),
+                );
+                if (prior) updated += 1;
+                saveMixMaterial({
+                    ...material,
+                    id: prior?.id ?? material.id,
+                    imported: true,
+                    author: options?.authorName?.trim() || material.author,
+                    createdAt: prior?.createdAt ?? material.createdAt,
+                });
+            }
+            dispatch(MIX_CABINET_UPDATED_EVENT);
+            const listed = materials.slice(0, 4).map((m) => `${MIX_KIND_LABELS[m.kind]}「${m.name}」`).join("、");
+            const more = materials.length > 4 ? ` 等 ${materials.length} 件` : "";
+            const updatedNote = updated ? `，其中 ${updated} 件是柜中导入件的更新` : "";
+            return `${listed}${more}已入柜${updatedNote}（集市来的作品不能发布，角色卡不可编辑）`;
+        }
         case "plugin": {
             const code = await fetchResourceHubText(source, path);
             const { installChatPluginFromCode } = await import("./chat-plugin-loader");
