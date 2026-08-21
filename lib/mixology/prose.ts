@@ -35,9 +35,18 @@ export function applyMixFilterRules(
     return out;
 }
 
+/** 对白/心声内部的强调子段：~强调~ 可以嵌在「」与 *…* 里面 */
+export type MixProseInner = {
+    type: "plain" | "accent";
+    text: string;
+};
+
 export type MixProseSegment = {
     type: MixProseSegmentType;
+    /** 原文（对白含「」引号本体），无嵌套时直接整段渲染 */
     text: string;
+    /** 对白/心声里嵌了 ~强调~ 时的子段序列（不含对白引号）；没嵌套则缺省 */
+    inner?: MixProseInner[];
 };
 
 export type MixProseParagraph =
@@ -130,7 +139,25 @@ export function extractMixTicket(raw: string): { text: string; ticketRaw?: strin
     return { text: result.text, ticketRaw: result.ticketRaw };
 }
 
-const INLINE_RE = /「([^」]*)」|\*([^*\n]+)\*|~([^~\n]+)~/g;
+// 强调认全半角波浪号（模型两种都写）；对白/心声先整段匹配，强调再进去嵌套解析
+const INLINE_RE = /「([^」]*)」|\*([^*\n]+)\*|[~～]([^~～\n]+)[~～]/g;
+const ACCENT_RE = /[~～]([^~～\n]+)[~～]/g;
+
+/** 把一段文字按 ~强调~ 拆成子段；没有强调返回 undefined（走整段渲染的旧路） */
+function parseAccentRuns(text: string): MixProseInner[] | undefined {
+    ACCENT_RE.lastIndex = 0;
+    if (!ACCENT_RE.test(text)) return undefined;
+    const runs: MixProseInner[] = [];
+    let cursor = 0;
+    ACCENT_RE.lastIndex = 0;
+    for (let match = ACCENT_RE.exec(text); match; match = ACCENT_RE.exec(text)) {
+        if (match.index > cursor) runs.push({ type: "plain", text: text.slice(cursor, match.index) });
+        runs.push({ type: "accent", text: match[1] });
+        cursor = match.index + match[0].length;
+    }
+    if (cursor < text.length) runs.push({ type: "plain", text: text.slice(cursor) });
+    return runs;
+}
 
 function parseInline(line: string): MixProseSegment[] {
     const segments: MixProseSegment[] = [];
@@ -140,8 +167,8 @@ function parseInline(line: string): MixProseSegment[] {
         if (match.index > cursor) {
             segments.push({ type: "narration", text: line.slice(cursor, match.index) });
         }
-        if (match[1] !== undefined) segments.push({ type: "dialogue", text: `「${match[1]}」` });
-        else if (match[2] !== undefined) segments.push({ type: "thought", text: match[2] });
+        if (match[1] !== undefined) segments.push({ type: "dialogue", text: `「${match[1]}」`, inner: parseAccentRuns(match[1]) });
+        else if (match[2] !== undefined) segments.push({ type: "thought", text: match[2], inner: parseAccentRuns(match[2]) });
         else segments.push({ type: "accent", text: match[3] });
         cursor = match.index + match[0].length;
     }
