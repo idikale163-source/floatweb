@@ -7,6 +7,7 @@ import {
   Brain,
   Database,
   Download,
+  HardDrive,
   Loader2,
   MessageCircle,
   Palette,
@@ -59,6 +60,7 @@ import {
   type MediaMaintenanceConfig,
   type MediaMaintenanceState,
 } from "@/lib/media-maintenance";
+import { clearStorageCategory, scanStorageSpace, type StorageCategoryId, type StorageCategoryStat } from "@/lib/storage-space";
 import { isAndroidBrowser, isIOSBrowser } from "@/lib/download-utils";
 import type { BackupManifest, DataModuleId, DataSnapshot, ImportResult, ModuleStats } from "@/lib/data-management/types";
 
@@ -81,7 +83,8 @@ type ConfirmRequest =
   | { type: "import"; moduleIds: DataModuleId[]; labels: string; overwrite: boolean }
   | { type: "clear"; moduleIds: DataModuleId[]; labels: string }
   | { type: "media-maintenance" }
-  | { type: "orphan-theme" };
+  | { type: "orphan-theme" }
+  | { type: "storage-clear"; categoryId: StorageCategoryId; label: string; description: string; keepDays?: number };
 
 type DataManagementProps = {
   onNotice?: (message: string) => void;
@@ -304,6 +307,10 @@ export function DataManagement({ onNotice }: DataManagementProps) {
   const [restorePending, setRestorePending] = useState<PendingCloudRestore | null>(null);
   const [mediaConfig, setMediaConfig] = useState<MediaMaintenanceConfig>(DEFAULT_MEDIA_MAINTENANCE_CONFIG);
   const [mediaState, setMediaState] = useState<MediaMaintenanceState>({});
+  const [spaceStats, setSpaceStats] = useState<StorageCategoryStat[] | null>(null);
+  const [spaceScanning, setSpaceScanning] = useState(false);
+  const [spaceScanDetail, setSpaceScanDetail] = useState<string | null>(null);
+  const [spaceKeepDays, setSpaceKeepDays] = useState<Partial<Record<StorageCategoryId, number>>>({});
 
   useEffect(() => {
     setCloudConfig(loadCloudBackupConfig());
@@ -572,6 +579,28 @@ export function DataManagement({ onNotice }: DataManagementProps) {
     return formatMediaMaintenanceResult(result);
   });
 
+  const rescanStorageSpace = async (silent = false) => {
+    if (spaceScanning) return;
+    setSpaceScanning(true);
+    if (!silent) setSpaceStats(null);
+    try {
+      const stats = await scanStorageSpace((detail) => setSpaceScanDetail(detail));
+      setSpaceStats(stats);
+    } catch (error) {
+      onNotice?.(error instanceof Error ? error.message : "扫描存储占用失败。");
+    } finally {
+      setSpaceScanning(false);
+      setSpaceScanDetail(null);
+    }
+  };
+
+  const executeStorageClear = (categoryId: StorageCategoryId, label: string, keepDays?: number) => runAction("空间清理中", async () => {
+    const result = await clearStorageCategory(categoryId, { keepDays });
+    // 清理完成后自动重扫，让列表反映真实占用（不清空已展示的列表，避免闪烁）
+    void rescanStorageSpace(true);
+    return `已清理「${label}」${result.cleared} 项，释放约 ${formatBytes(result.freedBytes)}。`;
+  });
+
   const executeOrphanThemeCleanup = () => runAction("孤儿素材清理中", async () => {
     const result = await cleanupOrphanThemeAssets();
     setMediaState(loadMediaMaintenanceState());
@@ -597,6 +626,10 @@ export function DataManagement({ onNotice }: DataManagementProps) {
     }
     if (request.type === "orphan-theme") {
       void executeOrphanThemeCleanup();
+      return;
+    }
+    if (request.type === "storage-clear") {
+      void executeStorageClear(request.categoryId, request.label, request.keepDays);
       return;
     }
     void executeClearSelected(request.moduleIds);
@@ -680,6 +713,76 @@ export function DataManagement({ onNotice }: DataManagementProps) {
               {busy === "孤儿素材清理中" ? <><Loader2 size={16} className="animate-spin" /> 清理中…</> : <><Trash2 size={16} /> 清理未引用主题素材</>}
             </button>
           </div>
+        </div>
+      </div>
+
+      <div className="data-section">
+        <DataSectionTitle>Storage Space</DataSectionTitle>
+        <div className="menu-group">
+          <div className="menu-item data-readonly-item">
+            <DataSettingsIcon icon={HardDrive} color={BINDING_ACCENTS.api} />
+            <div className="menu-label-group">
+              <span className="menu-label">存储空间占用</span>
+              <span className="menu-desc">
+                {spaceScanning
+                  ? (spaceScanDetail ?? "扫描中…")
+                  : spaceStats
+                    ? `共约 ${formatBytes(spaceStats.reduce((sum, item) => sum + item.bytes, 0))}，按内容类别列出，可单独清理`
+                    : "按图片、语音、音乐等内容类别统计占用，看得懂再清理"}
+              </span>
+            </div>
+            <div className="menu-right data-inline-actions">
+              <button
+                type="button"
+                className="ui-btn ui-btn-outline py-1 px-3 ts-12"
+                onClick={() => void rescanStorageSpace()}
+                disabled={spaceScanning || Boolean(busy)}
+              >
+                {spaceScanning ? <Loader2 size={14} className="animate-spin" /> : spaceStats ? "重新扫描" : "扫描占用"}
+              </button>
+            </div>
+          </div>
+          {spaceStats?.map((stat) => (
+            <div key={stat.id} className="menu-item data-readonly-item">
+              <div className="menu-label-group">
+                <span className="menu-label">
+                  {stat.label} · {formatBytes(stat.bytes)}{stat.count > 0 ? `（${stat.count} 项）` : ""}
+                </span>
+                <span className="menu-desc">{stat.description}</span>
+              </div>
+              <div className="menu-right data-inline-actions">
+                {stat.supportsKeepDays && (
+                  <Select
+                    className="py-1 ts-12"
+                    value={String(spaceKeepDays[stat.id] ?? 30)}
+                    onChange={(event) => {
+                      const next = Number(event.target.value);
+                      setSpaceKeepDays((prev) => ({ ...prev, [stat.id]: next }));
+                    }}
+                    disabled={Boolean(busy)}
+                  >
+                    <option value="30">保留最近 30 天</option>
+                    <option value="7">保留最近 7 天</option>
+                    <option value="0">全部清理</option>
+                  </Select>
+                )}
+                <button
+                  type="button"
+                  className="ui-btn ui-btn-outline py-1 px-3 ts-12"
+                  onClick={() => setConfirmRequest({
+                    type: "storage-clear",
+                    categoryId: stat.id,
+                    label: stat.label,
+                    description: stat.description,
+                    keepDays: stat.supportsKeepDays ? (spaceKeepDays[stat.id] ?? 30) : undefined,
+                  })}
+                  disabled={Boolean(busy) || spaceScanning || (stat.bytes === 0 && stat.count === 0)}
+                >
+                  清理
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1020,7 +1123,24 @@ export function DataManagement({ onNotice }: DataManagementProps) {
         </div>
       </div>
 
-      {confirmRequest && (
+      {confirmRequest?.type === "storage-clear" && (
+        <ConfirmDialog
+          title={`确认清理${confirmRequest.label}？`}
+          message={
+            `${confirmRequest.description}\n\n`
+            + (confirmRequest.keepDays && confirmRequest.keepDays > 0
+              ? `本次只清理 ${confirmRequest.keepDays} 天前的内容，最近 ${confirmRequest.keepDays} 天的会保留。`
+              : "本次将清理该类别的全部内容。")
+            + "建议先做一次备份。是否继续？"
+          }
+          icon={Trash2}
+          variant="danger"
+          confirmLabel="确认清理"
+          onConfirm={handleConfirmRequest}
+          onCancel={() => setConfirmRequest(null)}
+        />
+      )}
+      {confirmRequest && confirmRequest.type !== "storage-clear" && (
         <ConfirmDialog
           title={
             confirmRequest.type === "export"
