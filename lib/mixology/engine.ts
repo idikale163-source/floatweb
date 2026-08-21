@@ -111,21 +111,25 @@ export function mixTurnRawText(turn: MixTurn): string {
 }
 
 /** 历史回传裁决：这一块的壳内原文要不要回传给模型（按块的供稿材料各自定） */
-type MixFeedResolver = (kind: "ticket" | "encore", materialId: string | undefined) => "latest" | "all";
+type MixFeedResolver = (kind: "ticket" | "encore", materialId: string | undefined) => "latest" | "all" | "none";
 
 /**
  * 历史回放：默认只有最近一条 assistant 轮补回状态栏/小剧场块。
  * 模型需要的只有两样——最新状态的接续（契约的变化规则只依赖上一轮的值）
  * 和一份格式示范（防掉格式），最后一块两者都够；更旧的块随轮数线性膨胀，
  * 是纯 token 负担（按信息量基准每轮各两三百字，长局能省上万字符）。
- * 材料把历史回传设为 all 的，它自己的往期块才逐轮回传（按块裁决，多块互不牵连）。
- * 存储不动：块原文原样留着，界面回放与编辑不受影响。
+ * 材料自己可改档（按块裁决，多块互不牵连）：all = 它的往期块逐轮回传；
+ * none = 连最近一轮都不回传，一个字不占。存储不动：块原文原样留着，
+ * 界面回放与编辑不受影响。
  */
 function turnToHistoryContent(turn: MixTurn, isLast: boolean, feedOf?: MixFeedResolver): string {
     if (turn.role !== "assistant") return turn.text;
     const tickets = mixTurnTicketBlocks(turn);
     const encores = mixTurnEncoreBlocks(turn);
-    const keep = (kind: "ticket" | "encore") => (b: MixTurnBlock) => isLast || feedOf?.(kind, b.id) === "all";
+    const keep = (kind: "ticket" | "encore") => (b: MixTurnBlock) => {
+        const feed = feedOf?.(kind, b.id) ?? "latest";
+        return feed === "all" || (isLast && feed !== "none");
+    };
     return [
         ...tickets.filter(keep("ticket")).map((b) => blockText(MIX_TICKET_OPEN, MIX_TICKET_CLOSE, b, tickets.length > 1)),
         turn.text,
@@ -428,14 +432,14 @@ function advanceMixStateWithBlocks(
  * 它的设置照样要认。没归属的块跟第一件生效材料走（老格式单块的老行为）。
  */
 function buildFeedResolver(session: MixSession, tickets: MixTicketMaterial[], encores: MixEncoreMaterial[]): MixFeedResolver {
-    const byId = new Map<string, "latest" | "all">();
+    const byId = new Map<string, "latest" | "all" | "none">();
     for (const kind of ["ticket", "encore"] as const) {
         for (const entry of mixSlotEntries(session.recipe.slots, kind)) {
             const mat = getMixMaterial(entry.materialId);
-            if (mat?.kind === kind && mat.historyFeed === "all") byId.set(mat.id, "all");
+            if (mat?.kind === kind && mat.historyFeed && mat.historyFeed !== "latest") byId.set(mat.id, mat.historyFeed);
         }
     }
-    const fallback: Record<"ticket" | "encore", "latest" | "all"> = {
+    const fallback: Record<"ticket" | "encore", "latest" | "all" | "none"> = {
         ticket: tickets[0]?.historyFeed ?? "latest",
         encore: encores.find((e) => e.contract?.trim())?.historyFeed ?? "latest",
     };

@@ -236,9 +236,10 @@ export type MixTicketMaterial = MixMaterialMeta & {
     /**
      * 历史回传策略：往期轮次的壳内原文要不要回传给模型。
      * latest（默认）= 只回传最近一轮——状态接续与格式示范都够用，token 不随轮数涨；
-     * all = 全部回传——契约需要引用往期内容时用，token 随轮数线性增长。
+     * all = 全部回传——契约需要引用往期内容时用，token 随轮数线性增长；
+     * none = 完全不回传——纯展示、不需要接续也不怕掉格式时最省 token。
      */
-    historyFeed?: "latest" | "all";
+    historyFeed?: "latest" | "all" | "none";
 };
 
 /** 外观：对局界面美化（官方语义类 + 界面定位符的 CSS） */
@@ -258,8 +259,8 @@ export type MixEncoreMaterial = MixMaterialMeta & {
     html?: string;
     /** 编辑器预览用示例数据 */
     previewRaw?: string;
-    /** 历史回传策略（同小票）：latest（默认）只回传最近一轮，all 全部回传 */
-    historyFeed?: "latest" | "all";
+    /** 历史回传策略（同小票）：latest（默认）只回传最近一轮，all 全部回传，none 完全不回传 */
+    historyFeed?: "latest" | "all" | "none";
 };
 
 /** 尾调渲染代码：新旧字段统一出口 */

@@ -131,7 +131,7 @@ function describeMaterial(material: MixMaterial): string {
         case "ticket":
             field("输出契约", material.contract); field("渲染代码", material.renderHtml);
             field("预览示例数据", material.previewRaw);
-            field("历史回传", material.historyFeed === "all" ? "all（全部轮次回传）" : undefined);
+            field("历史回传", material.historyFeed === "all" ? "all（全部轮次回传）" : material.historyFeed === "none" ? "none（完全不回传）" : undefined);
             if (material.vars?.length) field("记住的变量", material.vars.map((v) => `${v.name}${v.initial ? `＝${v.initial}` : ""}`).join("、"));
             break;
         case "garnish":
@@ -140,7 +140,7 @@ function describeMaterial(material: MixMaterial): string {
         case "encore":
             field("输出契约", material.contract); field("渲染代码", material.renderHtml ?? material.html);
             field("预览示例数据", material.previewRaw);
-            field("历史回传", material.historyFeed === "all" ? "all（全部轮次回传）" : undefined);
+            field("历史回传", material.historyFeed === "all" ? "all（全部轮次回传）" : material.historyFeed === "none" ? "none（完全不回传）" : undefined);
             break;
         case "filter":
             field("清洗规则", material.rules.map((r, i) => `${i + 1}. /${r.find}/ → ${r.replace || "（删除）"}（${r.mode === "display" ? "仅显示" : "进上下文"}）`).join("\n"));
@@ -291,9 +291,9 @@ function applyContentFields(target: Record<string, unknown>, kind: MixMaterialKi
             }
             case "historyFeed": {
                 const v = args[spec.key];
-                if (v !== "latest" && v !== "all") return 'historyFeed 只能是 "latest"（只回传最近一轮，默认）或 "all"（全部轮次回传）。';
-                if (v === "all") target.historyFeed = "all";
-                else delete target.historyFeed;
+                if (v !== "latest" && v !== "all" && v !== "none") return 'historyFeed 只能是 "latest"（只回传最近一轮，默认）、"all"（全部轮次回传）或 "none"（完全不回传）。';
+                if (v === "latest") delete target.historyFeed;
+                else target.historyFeed = v;
                 break;
             }
             default: {

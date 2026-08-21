@@ -172,7 +172,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
     const [previewRaw, setPreviewRaw] = useState(initial?.kind === "ticket" ? initial.previewRaw ?? "" : "");
     const [vars, setVars] = useState<MixTicketVar[]>(initial?.kind === "ticket" ? initial.vars ?? [] : []);
     // 历史回传（小票/尾调共用）：往期轮次的壳内原文要不要回传给模型
-    const [historyFeed, setHistoryFeed] = useState<"latest" | "all">(
+    const [historyFeed, setHistoryFeed] = useState<"latest" | "all" | "none">(
         (initial?.kind === "ticket" || initial?.kind === "encore") ? initial.historyFeed ?? "latest" : "latest",
     );
     const [script, setScript] = useState(initial?.kind === "mechanism" ? initial.script ?? "" : "");
@@ -299,7 +299,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             const cleanVars = vars
                 .map((v) => ({ name: v.name.trim(), initial: v.initial?.trim() || undefined }))
                 .filter((v, i, all) => v.name && all.findIndex((x) => x.name === v.name) === i);
-            onSave({ ...meta, kind: "ticket", contract: contract.trim(), renderHtml, previewRaw: previewRaw.trim() || undefined, vars: cleanVars.length ? cleanVars : undefined, historyFeed: historyFeed === "all" ? "all" : undefined });
+            onSave({ ...meta, kind: "ticket", contract: contract.trim(), renderHtml, previewRaw: previewRaw.trim() || undefined, vars: cleanVars.length ? cleanVars : undefined, historyFeed: historyFeed !== "latest" ? historyFeed : undefined });
             return;
         }
         if (kind === "mechanism") {
@@ -332,7 +332,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                 contract: encoreContract.trim() || undefined,
                 renderHtml: html,
                 previewRaw: encorePreviewRaw.trim() || undefined,
-                historyFeed: historyFeed === "all" ? "all" : undefined,
+                historyFeed: historyFeed !== "latest" ? historyFeed : undefined,
             });
             return;
         }
@@ -579,6 +579,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     </Field>
                     <Field label="历史回传" hint="往期轮次的壳内原文要不要回传给 AI；默认只回传最近一轮——状态接续和格式示范都够用，长局不费 token">
                         <div className="mix-feed-seg">
+                            <button type="button" data-on={historyFeed === "none" ? "true" : undefined} onClick={() => setHistoryFeed("none")}>不回传</button>
                             <button type="button" data-on={historyFeed === "latest" ? "true" : undefined} onClick={() => setHistoryFeed("latest")}>只最近一轮（默认）</button>
                             <button type="button" data-on={historyFeed === "all" ? "true" : undefined} onClick={() => setHistoryFeed("all")}>全部轮次</button>
                         </div>
@@ -716,6 +717,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                     </Field>
                     <Field label="历史回传" hint="往期轮次的壳内原文要不要回传给 AI；默认只回传最近一轮——格式示范够用，长局不费 token">
                         <div className="mix-feed-seg">
+                            <button type="button" data-on={historyFeed === "none" ? "true" : undefined} onClick={() => setHistoryFeed("none")}>不回传</button>
                             <button type="button" data-on={historyFeed === "latest" ? "true" : undefined} onClick={() => setHistoryFeed("latest")}>只最近一轮（默认）</button>
                             <button type="button" data-on={historyFeed === "all" ? "true" : undefined} onClick={() => setHistoryFeed("all")}>全部轮次</button>
                         </div>
