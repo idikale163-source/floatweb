@@ -312,6 +312,29 @@
     color: var(--mix-gold);
 }
 
+.mix-feed-seg {
+    display: flex;
+    gap: 6px;
+}
+
+.mix-feed-seg button {
+    border: 1px solid var(--mix-line);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--mix-faint);
+}
+
+.mix-feed-seg button[data-on="true"] {
+    border-color: rgba(141, 123, 245, 0.55);
+    background: rgba(141, 123, 245, 0.2);
+    color: var(--mix-violet);
+}
+
 .mix-filter-rule-bad {
     font-size: 10.5px;
     color: #e2a3a3;

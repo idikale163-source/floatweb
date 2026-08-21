@@ -102,14 +102,20 @@ export function mixTurnRawText(turn: MixTurn): string {
  * 是纯 token 负担（按信息量基准每轮各两三百字，长局能省上万字符）。
  * 存储不动：turn.ticketRaw/encoreRaw 原样留着，界面回放与编辑不受影响。
  */
-function turnToHistoryContent(turn: MixTurn, withBlocks: boolean): string {
-    return withBlocks ? mixTurnRawText(turn) : turn.text;
+function turnToHistoryContent(turn: MixTurn, feed: { ticket: boolean; encore: boolean }): string {
+    if (turn.role !== "assistant") return turn.text;
+    const parts = [];
+    if (turn.ticketRaw && feed.ticket) parts.push(`${MIX_TICKET_OPEN}\n${turn.ticketRaw}\n${MIX_TICKET_CLOSE}`);
+    parts.push(turn.text);
+    if (turn.encoreRaw && feed.encore) parts.push(`${MIX_ENCORE_OPEN}\n${turn.encoreRaw}\n${MIX_ENCORE_CLOSE}`);
+    return parts.filter(Boolean).join("\n\n");
 }
 
 function buildMixMessages(
     session: MixSession,
     assembled: MixAssembledPrompt,
     extraUserNudge?: string,
+    historyFeed?: { ticket: "latest" | "all"; encore: "latest" | "all" },
 ): LLMMessage[] {
     const messages: LLMMessage[] = [
         { role: "system", content: assembled.system, _debugMeta: { marker: "mixology_system" } },
@@ -119,9 +125,13 @@ function buildMixMessages(
         if (session.turns[i].role === "assistant") { lastAssistantIdx = i; break; }
     }
     for (const [i, turn] of session.turns.entries()) {
+        const isLast = i === lastAssistantIdx;
         messages.push({
             role: turn.role,
-            content: turnToHistoryContent(turn, i === lastAssistantIdx),
+            content: turnToHistoryContent(turn, {
+                ticket: isLast || historyFeed?.ticket === "all",
+                encore: isLast || historyFeed?.encore === "all",
+            }),
             _debugMeta: { marker: "mixology_history", _fromHistory: true },
         });
     }
@@ -363,7 +373,11 @@ async function runMixGeneration(
     }
     const combinedNudge = [nudge, extraNote].filter(Boolean).join("\n\n") || undefined;
     const { prompt: assembled, ticket, active } = assembleFromSession(working);
-    const messages = buildMixMessages(working, assembled, combinedNudge);
+    const encoreMat = active.encore?.[0];
+    const messages = buildMixMessages(working, assembled, combinedNudge, {
+        ticket: ticket?.historyFeed ?? "latest",
+        encore: (encoreMat?.kind === "encore" ? encoreMat.historyFeed : undefined) ?? "latest",
+    });
     const meta = { characterName: working.charName, userName: working.userName || "你" };
     const llmOptions = { appId: MIX_PROMPT_APP_ID, appTags: MIX_PROMPT_TAGS, skipOutputRegex: true, signal };
     let raw: string;

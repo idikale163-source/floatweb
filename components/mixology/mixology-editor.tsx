@@ -171,6 +171,10 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
     const [renderHtml, setRenderHtml] = useState(initial?.kind === "ticket" ? initial.renderHtml : "");
     const [previewRaw, setPreviewRaw] = useState(initial?.kind === "ticket" ? initial.previewRaw ?? "" : "");
     const [vars, setVars] = useState<MixTicketVar[]>(initial?.kind === "ticket" ? initial.vars ?? [] : []);
+    // 历史回传（小票/尾调共用）：往期轮次的壳内原文要不要回传给模型
+    const [historyFeed, setHistoryFeed] = useState<"latest" | "all">(
+        (initial?.kind === "ticket" || initial?.kind === "encore") ? initial.historyFeed ?? "latest" : "latest",
+    );
     const [script, setScript] = useState(initial?.kind === "mechanism" ? initial.script ?? "" : "");
     // 摆放不进表单：界面代码里用 mix.move / mix.size / mix.chrome … 自己定。
     // 老材料带着的那份原样保留，免得改一次名字就把人家摆好的位置抹了。
@@ -295,7 +299,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             const cleanVars = vars
                 .map((v) => ({ name: v.name.trim(), initial: v.initial?.trim() || undefined }))
                 .filter((v, i, all) => v.name && all.findIndex((x) => x.name === v.name) === i);
-            onSave({ ...meta, kind: "ticket", contract: contract.trim(), renderHtml, previewRaw: previewRaw.trim() || undefined, vars: cleanVars.length ? cleanVars : undefined });
+            onSave({ ...meta, kind: "ticket", contract: contract.trim(), renderHtml, previewRaw: previewRaw.trim() || undefined, vars: cleanVars.length ? cleanVars : undefined, historyFeed: historyFeed === "all" ? "all" : undefined });
             return;
         }
         if (kind === "mechanism") {
@@ -328,6 +332,7 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                 contract: encoreContract.trim() || undefined,
                 renderHtml: html,
                 previewRaw: encorePreviewRaw.trim() || undefined,
+                historyFeed: historyFeed === "all" ? "all" : undefined,
             });
             return;
         }
@@ -572,6 +577,12 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             placeholder={"照着上面的契约编一份，例：\n好感度: 62\n心情: 嘴硬\n此刻在想: 想留你再坐一会"}
                         />
                     </Field>
+                    <Field label="历史回传" hint="往期轮次的壳内原文要不要回传给 AI；默认只回传最近一轮——状态接续和格式示范都够用，长局不费 token">
+                        <div className="mix-feed-seg">
+                            <button type="button" data-on={historyFeed === "latest" ? "true" : undefined} onClick={() => setHistoryFeed("latest")}>只最近一轮（默认）</button>
+                            <button type="button" data-on={historyFeed === "all" ? "true" : undefined} onClick={() => setHistoryFeed("all")}>全部轮次</button>
+                        </div>
+                    </Field>
                     <Field label="要记住的项" hint="记住的值会一路留着，可以拿来设材料的「什么时候出现」；抽不到时保留上一轮的值">
                         {contractFieldNames.length ? (
                             <div className="mix-var-suggest">
@@ -702,6 +713,12 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
                             onChange={(e) => setEncoreContract(e.target.value)}
                             placeholder={"告诉 AI 何时输出、写什么。例：\n仅在剧情出现明显进展或情绪转折时输出：以旁观视角（助理、监控、朋友圈动态等）写一段不超过 80 字的小剧场，第一行标注视角。平淡回合整段省略。"}
                         />
+                    </Field>
+                    <Field label="历史回传" hint="往期轮次的壳内原文要不要回传给 AI；默认只回传最近一轮——格式示范够用，长局不费 token">
+                        <div className="mix-feed-seg">
+                            <button type="button" data-on={historyFeed === "latest" ? "true" : undefined} onClick={() => setHistoryFeed("latest")}>只最近一轮（默认）</button>
+                            <button type="button" data-on={historyFeed === "all" ? "true" : undefined} onClick={() => setHistoryFeed("all")}>全部轮次</button>
+                        </div>
                     </Field>
                     <Field label="渲染代码" hint="必填，HTML/JS；AI 输出经 {{RAW}} 或 window.ENCORE_RAW 注入，静态小品则直接展示">
                         <textarea

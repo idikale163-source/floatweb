@@ -232,6 +232,12 @@ export type MixTicketMaterial = MixMaterialMeta & {
     previewRaw?: string;
     /** 这张小票里哪几项要记住（记住的值可被条件判断、可被 {{状态.X}} 取用） */
     vars?: MixTicketVar[];
+    /**
+     * 历史回传策略：往期轮次的壳内原文要不要回传给模型。
+     * latest（默认）= 只回传最近一轮——状态接续与格式示范都够用，token 不随轮数涨；
+     * all = 全部回传——契约需要引用往期内容时用，token 随轮数线性增长。
+     */
+    historyFeed?: "latest" | "all";
 };
 
 /** 外观：对局界面美化（官方语义类 + 界面定位符的 CSS） */
@@ -251,6 +257,8 @@ export type MixEncoreMaterial = MixMaterialMeta & {
     html?: string;
     /** 编辑器预览用示例数据 */
     previewRaw?: string;
+    /** 历史回传策略（同小票）：latest（默认）只回传最近一轮，all 全部回传 */
+    historyFeed?: "latest" | "all";
 };
 
 /** 尾调渲染代码：新旧字段统一出口 */
