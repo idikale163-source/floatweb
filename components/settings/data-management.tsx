@@ -83,8 +83,7 @@ type ConfirmRequest =
   | { type: "import"; moduleIds: DataModuleId[]; labels: string; overwrite: boolean }
   | { type: "clear"; moduleIds: DataModuleId[]; labels: string }
   | { type: "media-maintenance" }
-  | { type: "orphan-theme" }
-  | { type: "storage-clear"; categoryId: StorageCategoryId; label: string; description: string; keepDays?: number };
+  | { type: "orphan-theme" };
 
 type DataManagementProps = {
   onNotice?: (message: string) => void;
@@ -310,7 +309,8 @@ export function DataManagement({ onNotice }: DataManagementProps) {
   const [spaceStats, setSpaceStats] = useState<StorageCategoryStat[] | null>(null);
   const [spaceScanning, setSpaceScanning] = useState(false);
   const [spaceScanDetail, setSpaceScanDetail] = useState<string | null>(null);
-  const [spaceKeepDays, setSpaceKeepDays] = useState<Partial<Record<StorageCategoryId, number>>>({});
+  const [spaceClearPending, setSpaceClearPending] = useState<StorageCategoryStat | null>(null);
+  const [spaceClearRange, setSpaceClearRange] = useState<number>(30);
 
   useEffect(() => {
     setCloudConfig(loadCloudBackupConfig());
@@ -628,10 +628,6 @@ export function DataManagement({ onNotice }: DataManagementProps) {
       void executeOrphanThemeCleanup();
       return;
     }
-    if (request.type === "storage-clear") {
-      void executeStorageClear(request.categoryId, request.label, request.keepDays);
-      return;
-    }
     void executeClearSelected(request.moduleIds);
   };
 
@@ -751,31 +747,13 @@ export function DataManagement({ onNotice }: DataManagementProps) {
                 <span className="menu-desc">{stat.description}</span>
               </div>
               <div className="menu-right data-inline-actions">
-                {stat.supportsKeepDays && (
-                  <Select
-                    className="py-1 ts-12"
-                    value={String(spaceKeepDays[stat.id] ?? 30)}
-                    onChange={(event) => {
-                      const next = Number(event.target.value);
-                      setSpaceKeepDays((prev) => ({ ...prev, [stat.id]: next }));
-                    }}
-                    disabled={Boolean(busy)}
-                  >
-                    <option value="30">保留最近 30 天</option>
-                    <option value="7">保留最近 7 天</option>
-                    <option value="0">全部清理</option>
-                  </Select>
-                )}
                 <button
                   type="button"
                   className="ui-btn ui-btn-outline py-1 px-3 ts-12"
-                  onClick={() => setConfirmRequest({
-                    type: "storage-clear",
-                    categoryId: stat.id,
-                    label: stat.label,
-                    description: stat.description,
-                    keepDays: stat.supportsKeepDays ? (spaceKeepDays[stat.id] ?? 30) : undefined,
-                  })}
+                  onClick={() => {
+                    setSpaceClearRange(30);
+                    setSpaceClearPending(stat);
+                  }}
                   disabled={Boolean(busy) || spaceScanning || (stat.bytes === 0 && stat.count === 0)}
                 >
                   清理
@@ -1014,6 +992,59 @@ export function DataManagement({ onNotice }: DataManagementProps) {
         </div>
       </div>
 
+      {spaceClearPending && (
+        <div className="modal-overlay" data-ui="modal" onClick={() => { if (!busy) setSpaceClearPending(null); }}>
+          <div className="modal-dialog data-import-modal" data-ui="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header" data-ui="modal-header">
+              <h3 className="modal-title">清理{spaceClearPending.label}</h3>
+            </div>
+            <div className="modal-body" data-ui="modal-body" style={{ textAlign: "left", width: "100%" }}>
+              <p className="menu-desc" style={{ marginBottom: 12 }}>
+                当前占用 {formatBytes(spaceClearPending.bytes)}（{spaceClearPending.count} 项）。{spaceClearPending.description}
+              </p>
+              {spaceClearPending.supportsKeepDays ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[
+                    { value: 30, label: "清理 30 天前的内容", note: "最近 30 天的保留" },
+                    { value: 7, label: "清理 7 天前的内容", note: "最近 7 天的保留" },
+                    { value: 0, label: "全部清理", note: "该类内容全部删除" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`ui-btn ${spaceClearRange === option.value ? "ui-btn-primary" : "ui-btn-outline"}`}
+                      style={{ width: "100%", justifyContent: "space-between", whiteSpace: "nowrap" }}
+                      onClick={() => setSpaceClearRange(option.value)}
+                    >
+                      <span>{option.label}</span>
+                      <span className="ts-12" style={{ opacity: 0.7 }}>{option.note}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="menu-desc">该类别将整体清理。建议先做一次备份。</p>
+              )}
+            </div>
+            <div className="modal-footer" data-ui="modal-footer" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button
+                type="button"
+                className="ui-btn ui-btn-danger"
+                style={{ width: "100%", whiteSpace: "nowrap" }}
+                onClick={() => {
+                  const stat = spaceClearPending;
+                  setSpaceClearPending(null);
+                  void executeStorageClear(stat.id, stat.label, stat.supportsKeepDays ? spaceClearRange : undefined);
+                }}
+                disabled={Boolean(busy)}
+              >
+                <Trash2 size={16} /> 确认清理
+              </button>
+              <button type="button" className="ui-btn ui-btn-outline" style={{ width: "100%", whiteSpace: "nowrap" }} onClick={() => setSpaceClearPending(null)} disabled={Boolean(busy)}>取消</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {pendingExport && (
         <div className="modal-overlay" data-ui="modal" onClick={() => { if (!exportSaving) setPendingExport(null); }}>
           <div className="modal-dialog data-import-modal" data-ui="modal-dialog" onClick={(e) => e.stopPropagation()}>
@@ -1123,24 +1154,7 @@ export function DataManagement({ onNotice }: DataManagementProps) {
         </div>
       </div>
 
-      {confirmRequest?.type === "storage-clear" && (
-        <ConfirmDialog
-          title={`确认清理${confirmRequest.label}？`}
-          message={
-            `${confirmRequest.description}\n\n`
-            + (confirmRequest.keepDays && confirmRequest.keepDays > 0
-              ? `本次只清理 ${confirmRequest.keepDays} 天前的内容，最近 ${confirmRequest.keepDays} 天的会保留。`
-              : "本次将清理该类别的全部内容。")
-            + "建议先做一次备份。是否继续？"
-          }
-          icon={Trash2}
-          variant="danger"
-          confirmLabel="确认清理"
-          onConfirm={handleConfirmRequest}
-          onCancel={() => setConfirmRequest(null)}
-        />
-      )}
-      {confirmRequest && confirmRequest.type !== "storage-clear" && (
+      {confirmRequest && (
         <ConfirmDialog
           title={
             confirmRequest.type === "export"
