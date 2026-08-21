@@ -2197,18 +2197,17 @@
 
 /* 角色卡缺图时的占位面：和封面同尺寸，保证同一类卡片等高 */
 /* 自动封面：没配封面的小票/装饰/尾调用自己的渲染缩样当海报——
-   半宽缩到 0.5 约等于手机全宽下的实际比例；压在占位纹上，渲染不出内容时露出底纹 */
-.mix-poster-live {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
+   缩样走文档流（HalfScale 已把高度量成实际渲染高度的一半），
+   卡片高度跟着内容走；pointer-events 关掉免得 iframe 抢卡片的点击 */
+.mix-poster-flow {
+    position: relative;
     pointer-events: none;
 }
 
-.mix-poster-live-inner {
-    width: 200%;
-    transform: scale(0.5);
-    transform-origin: 0 0;
+/* 有缩样的海报卡：放开固定比例，高度由缩样决定；给个下限护住底部文案区 */
+.mix-mat-card[data-poster="true"][data-live="true"] {
+    aspect-ratio: auto;
+    min-height: 96px;
 }
 
 .mix-poster-blank {
