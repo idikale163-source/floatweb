@@ -23,7 +23,6 @@ import { saveScheme } from "./css-scheme-storage";
 import { STATUS_REGION_SCHEME_TARGET } from "./chat-status-region";
 import { createOrGetSession, loadChatSessions, saveChatSessions } from "./chat-storage";
 import { readThemeProfile, writeThemeProfile } from "./theme-storage";
-import { loadGameDrafts, saveGameDrafts } from "./game-storage";
 import type { GameTemplateDraft } from "./game-types";
 import type { Prompt } from "./settings-types";
 
@@ -572,45 +571,96 @@ export async function importResourceHubFile(
             if (payload?.type !== "ai-phone-game-draft" || !payload.draft || typeof payload.draft !== "object") {
                 throw new Error("不是有效的游戏草稿文件（需要游戏草稿箱「导出文件」生成）");
             }
+            // 别人的作品直接进「我的柜子」当成品玩，不进草稿箱——草稿是可编辑
+            // 可发布的，落草稿等于开了二次编辑与转发布的口子。
+            const draft = payload.draft as GameTemplateDraft;
+            const { parseGameRoleSlots, upsertLocalTestGame } = await import("./game-storage");
+            const { GAME_EMPTY_PICKER_HTML } = await import("./game-creator-guide");
+            const title = (typeof payload.title === "string" && payload.title.trim()) || draft.title?.trim() || displayName;
+            const roleSlots = parseGameRoleSlots(draft.roleSlotsText ?? "");
             const now = new Date().toISOString();
-            const title = (typeof payload.title === "string" && payload.title.trim()) || displayName;
-            saveGameDrafts([
-                {
-                    id: `draft_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                    title,
-                    draft: payload.draft as GameTemplateDraft,
-                    // 别人的作品：本机可试玩，不能发布到共享大厅
-                    importedFrom: path,
-                    createdAt: now,
-                    updatedAt: now,
-                },
-                ...loadGameDrafts(),
-            ]);
-            return `游戏草稿「${title}」已导入草稿箱，可在游戏工作室试玩（集市来的作品不能发布到大厅）`;
+            // 稳定 key 来自集市路径：作者更新资源后重复导入，原地更新同一件
+            const hubSlug = `hub_${path.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(-80)}`;
+            const gameResult = upsertLocalTestGame(hubSlug, {
+                id: hubSlug,
+                title,
+                codeName: draft.codeName?.trim() || "",
+                subtitle: draft.subtitle ?? "",
+                synopsis: draft.synopsis ?? "",
+                playNote: draft.playNote ?? "",
+                coverImage: draft.coverImage ?? "",
+                tags: (draft.tagsText ?? "").split(/[\s,，、]+/).filter(Boolean).slice(0, 8),
+                authorId: "resource_hub",
+                authorName: draft.authorName?.trim() || options?.authorName?.trim() || "集市投稿人",
+                authorAvatar: "",
+                source: "local",
+                version: 1,
+                roleSlots,
+                pickerHtml: roleSlots.length > 0 ? draft.pickerHtml ?? "" : GAME_EMPTY_PICKER_HTML,
+                gameHtml: draft.gameHtml ?? "",
+                allowExternalControl: draft.allowExternalControl === true,
+                purchaseCount: 0,
+                rating: 0,
+                likeCount: 0,
+                favoriteCount: 0,
+                commentCount: 0,
+                createdAt: now,
+                updatedAt: now,
+            });
+            if (!gameResult.ok) throw new Error(gameResult.error || "游戏包无效");
+            return `游戏「${title}」已进我的柜子，直接可玩（集市来的作品不能编辑，也不能发布到大厅）`;
         }
         case "theater": {
             const payload = JSON.parse(await fetchResourceHubText(source, path)) as { type?: string; title?: string; draft?: unknown };
             if (payload?.type !== "ai-phone-theater-draft" || !payload.draft || typeof payload.draft !== "object") {
                 throw new Error("不是有效的剧场草稿文件（需要剧场草稿箱「导出文件」生成）");
             }
-            const now = new Date().toISOString();
-            const title = (typeof payload.title === "string" && payload.title.trim()) || displayName;
-            // 与黑市工作室共用同一 kv 键与记录形状（black-market-app / qa-content-tools 同款）
-            const key = "ai_phone_black_market_studio_drafts_v1";
-            let drafts: unknown[] = [];
-            try { drafts = JSON.parse(kvGet(key) || "[]") as unknown[]; } catch { drafts = []; }
-            if (!Array.isArray(drafts)) drafts = [];
-            drafts.unshift({
-                id: `bmdraft_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                title,
-                draft: payload.draft,
-                // 别人的作品：本机可用，不能上架到黑市
-                importedFrom: path,
-                createdAt: now,
-                updatedAt: now,
+            // 别人的作品直接进「本地暗柜」当成品演，不进草稿箱——理由同游戏：
+            // 草稿可编辑可上架，落草稿等于开了二次编辑与转发布的口子。
+            const theaterDraft = payload.draft as Record<string, unknown>;
+            const str = (key: string): string => (typeof theaterDraft[key] === "string" ? (theaterDraft[key] as string).trim() : "");
+            const theaterTitle = (typeof payload.title === "string" && payload.title.trim()) || str("title") || displayName;
+            const aiInstruction = str("aiInstruction");
+            const openingHtml = str("openingHtml");
+            if (!aiInstruction || !openingHtml) throw new Error("剧场草稿缺少演出指令或开场画面");
+            let renderRules: unknown[] = [];
+            try {
+                const parsedRules = JSON.parse(str("renderRulesText") || "[]");
+                if (Array.isArray(parsedRules)) renderRules = parsedRules;
+            } catch { renderRules = []; }
+            const { upsertLocalTestTheater } = await import("./black-market-storage");
+            const theaterNow = new Date().toISOString();
+            const theaterSlug = `hub_${path.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(-80)}`;
+            const theaterResult = upsertLocalTestTheater(theaterSlug, {
+                id: theaterSlug,
+                title: theaterTitle,
+                codeName: str("codeName"),
+                subtitle: str("subtitle"),
+                synopsis: str("synopsis"),
+                storyText: str("storyText"),
+                tags: str("tagsText").split(/[\s,，、]+/).filter(Boolean).slice(0, 8),
+                rarity: "common",
+                glyph: "◆",
+                price: 0,
+                authorId: "resource_hub",
+                authorName: str("authorName") || options?.authorName?.trim() || "集市投稿人",
+                source: "local",
+                version: 1,
+                durationTurns: 8,
+                allowExternalControl: theaterDraft.allowExternalControl === true,
+                openingHtml,
+                aiInstruction,
+                outputContract: str("outputContract"),
+                renderRules: renderRules as never,
+                renderCss: str("renderCss"),
+                memorySummaryPrompt: str("memorySummaryPrompt"),
+                purchaseCount: 0,
+                rating: 0,
+                createdAt: theaterNow,
+                updatedAt: theaterNow,
             });
-            kvSet(key, JSON.stringify(drafts.slice(0, 80)));
-            return `剧场草稿「${title}」已导入草稿箱，可在黑市工作室查看（集市来的作品不能上架）`;
+            if (!theaterResult.ok) throw new Error(theaterResult.error || "夜间档案无效");
+            return `剧场「${theaterTitle}」已进本地暗柜，可直接开演（集市来的作品不能编辑，也不能上架）`;
         }
         case "theme": {
             const buffer = await fetchResourceHubBinary(source, path);
