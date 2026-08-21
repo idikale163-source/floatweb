@@ -125,7 +125,7 @@ import type { DIYWidgetTemplate } from "@/lib/widget-types";
 import { DebugPromptPanel } from "@/components/debug-prompt-panel";
 import { QuickActionFloat } from "@/components/quick-action-float";
 import { CHAT_MESSAGE_PUSHED_EVENT, CHAT_REQUEST_REPLY_EVENT, hydrateChatStorage, loadChatSessions, loadChatMessages, pushChatMessage, type ChatMessage, type ChatSession } from "@/lib/chat-storage";
-import { resolveUserIdentity } from "@/lib/settings-storage";
+import { ensureGlobalBindingDefaults, resolveUserIdentity } from "@/lib/settings-storage";
 import { loadCharacters } from "@/lib/character-storage";
 import { generateChatCompletion, flattenCompletionResult } from "@/lib/chat-engine";
 import { parseAIResponse } from "@/lib/rich-message-parser";
@@ -1745,6 +1745,10 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       // Clear stale generating flags from previous browser session
       // (if the user closed the browser while AI was generating, the flag would be stuck forever)
       kvKeysWithPrefix("chat-generating:").forEach(k => kvRemove(k));
+
+      // 全局绑定「所见即所得」归一化：API/预设/身份未设置或悬空时落位为实际兜底值，
+      // 绑定界面显示的即实际生效的，消灭静默兜底
+      ensureGlobalBindingDefaults();
 
       // One-time cleanup of the orphaned folder-backup handle DB. The removed
       // auto-backup feature opened (and thus created) AiPhoneBackupHandleDB on
