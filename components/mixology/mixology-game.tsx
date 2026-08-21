@@ -5,7 +5,7 @@
 // 装饰材料的 CSS 以 <style> 注入本画面容器（认 .mix-* 官方语义类）。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ChevronLeft, Copy, History, MoreHorizontal, Pencil, Plus, RotateCcw, Send, WandSparkles, X } from "lucide-react";
+import { ChevronLeft, Copy, History, MoreHorizontal, Pencil, Plus, RotateCcw, Send, Sun, WandSparkles, X } from "lucide-react";
 import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, refreshMixOpening, regenerateMixTail, rerollMixReply, runMixSessionEnd, truncateMixAfterTurn } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession, listMixPickables, MIX_CABINET_UPDATED_EVENT, resolveMixRecipeMaterials, saveMixSession } from "@/lib/mixology/storage";
 import { applyMixMacros, MIX_DEFAULT_USER_NAME } from "@/lib/mixology/assembler";
@@ -583,18 +583,65 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const lastTurn = session.turns[session.turns.length - 1];
     const canReroll = !busy && lastTurn?.role === "assistant" && session.turns.length > 1;
 
+    /** 背景观感微调：蒙版提亮（0=原样，100=无蒙版）与封面模糊，按局保存 */
+    const [bgTuneOpen, setBgTuneOpen] = useState(false);
+    const bgTune = session.bgTune ?? { mask: 0, blur: 0 };
+    const setBgTune = (next: { mask: number; blur: number }) => {
+        const updated: MixSession = { ...session, bgTune: next };
+        saveMixSession(updated);
+        setSession(updated);
+    };
+    const bgStyle: CSSProperties & Record<string, string> = {
+        ...(assets.cover ? { backgroundImage: `url(${assets.cover})` } : {}),
+        "--mix-bg-mask": String(Math.max(0, 1 - bgTune.mask / 100)),
+        "--mix-bg-blur": `${bgTune.blur}px`,
+    };
+
     return (
         <div className="mix-game mix-garnish-scope" style={stateCssVars}>
             {/* 装饰是可分享材料里唯一直接进主文档的代码，注入前先收口到本画面 */}
             {assets.garnishCss ? <style>{scopeMixCss(assets.garnishCss)}</style> : null}
-            <div className="mix-game-bg" style={assets.cover ? { backgroundImage: `url(${assets.cover})` } : undefined} />
+            <div className="mix-game-bg" style={bgStyle} />
             <div className="mix-game-header">
                 <button type="button" className="mix-icon-btn" onClick={onBack} aria-label="返回"><ChevronLeft size={20} /></button>
                 <div className="mix-game-title">{session.charName}</div>
+                <button type="button" className="mix-icon-btn" onClick={() => setBgTuneOpen((v) => !v)} aria-label="背景观感" title="背景观感">
+                    <Sun size={19} />
+                </button>
                 <button type="button" className="mix-icon-btn" onClick={() => setRecipeOpen(true)} disabled={busy} aria-label="修改方案" title="修改方案">
                     <MoreHorizontal size={20} />
                 </button>
             </div>
+            {bgTuneOpen ? (
+                <>
+                    <div className="mix-bgtune-mask" onClick={() => setBgTuneOpen(false)} />
+                    <div className="mix-bgtune">
+                        <label className="mix-bgtune-row">
+                            <span>蒙版亮度</span>
+                            <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={1}
+                                value={bgTune.mask}
+                                onChange={(e) => setBgTune({ ...bgTune, mask: Number(e.target.value) })}
+                            />
+                        </label>
+                        <label className="mix-bgtune-row">
+                            <span>背景模糊</span>
+                            <input
+                                type="range"
+                                min={0}
+                                max={20}
+                                step={1}
+                                value={bgTune.blur}
+                                onChange={(e) => setBgTune({ ...bgTune, blur: Number(e.target.value) })}
+                            />
+                        </label>
+                        <button type="button" className="mix-bgtune-reset" onClick={() => setBgTune({ mask: 0, blur: 0 })}>恢复默认</button>
+                    </div>
+                </>
+            ) : null}
             <StateBar state={session.state ?? {}} />
             <div className="mix-game-scroll" ref={scrollRef} onScroll={handleScroll}>
                 {assets.canvasHtml ? (
