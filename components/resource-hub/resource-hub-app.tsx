@@ -14,6 +14,8 @@ import {
     fetchShareIndex,
     importResourceHubFile,
     fetchPresetEntry,
+    fetchResourceHubMixMaterials,
+    importResourceHubMixMaterial,
     applyPresetEntry,
     loadResourceHubSource,
     purgeShareIndexCache,
@@ -54,6 +56,7 @@ import { DestPixelIcon, FileTypePixelIcon, fileExtension } from "@/components/re
 import { loadPresets } from "@/lib/settings-storage";
 import { displayOrderPrompts } from "@/lib/preset-entry-import";
 import type { Prompt, PresetConfig } from "@/lib/settings-types";
+import { MIX_KIND_LABELS, type MixMaterial } from "@/lib/mixology/types";
 // 标题栏图标用 lucide 矢量图：⚙/⟳ 这些字符在 iOS 上会被当彩色 emoji 画、
 // 或者字形本身偏小，各设备长相不一；矢量图标则处处一致且小尺寸清晰。
 import { RotateCw, Settings, X } from "lucide-react";
@@ -177,6 +180,8 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
     // 导入流程：选文件 → 选目的地 →（聊天室CSS再选角色）
     const [importFile, setImportFile] = useState<string | null>(null);
     const [pickCharacterFor, setPickCharacterFor] = useState<string | null>(null);
+    // 特调：一份文件可能装着多件材料，解析后先让用户选导入哪件
+    const [mixPick, setMixPick] = useState<{ materials: MixMaterial[]; author?: string } | null>(null);
     const [showSourceEditor, setShowSourceEditor] = useState(false);
     const [sourceDraft, setSourceDraft] = useState<ResourceHubSource>(source);
     // 上传（分类下拉：CUSTOM_FOLDER 表示自定义新分类，配合手动输入框）
@@ -453,6 +458,24 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             setImportFile(null);
             return;
         }
+        // 特调：先解析出材料清单——只有一件就直接入柜，多件让用户选
+        if (destination === "mixology") {
+            const target = importFile;
+            const author = activeEntry?.author?.trim() || undefined;
+            setImportingTo(destination);
+            void fetchResourceHubMixMaterials(source, target)
+                .then(async materials => {
+                    setImportFile(null);
+                    if (materials.length === 1) {
+                        onNotice?.(await importResourceHubMixMaterial(materials[0], author));
+                    } else {
+                        setMixPick({ materials, author });
+                    }
+                })
+                .catch(err => onNotice?.(`导入失败：${err instanceof Error ? err.message : String(err)}`))
+                .finally(() => setImportingTo(null));
+            return;
+        }
         // 预设条目：先把条目取下来（顺便校验是不是单条），再走选预设/选位置
         if (destination === "preset_entry") {
             const target = importFile;
@@ -467,7 +490,19 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
             return;
         }
         void runImport(importFile, destination);
-    }, [importFile, onNotice, runImport]);
+    }, [activeEntry, importFile, onNotice, runImport, source]);
+
+    /** 特调材料选择列表里的单件入柜：转圈落在刚点的那一行上，柜里同名导入件就地更新 */
+    const runMixImport = useCallback(async (material: MixMaterial, author?: string) => {
+        setImportingTo(material.id);
+        try {
+            onNotice?.(await importResourceHubMixMaterial(material, author));
+        } catch (err) {
+            onNotice?.(`导入失败：${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setImportingTo(null);
+        }
+    }, [onNotice]);
 
     const openEdit = useCallback((entry: ShareIndexEntry) => {
         const record = myRecordFor(entry.path);
@@ -1154,6 +1189,40 @@ export function ResourceHubApp({ onClose, onNotice }: { onClose: () => void; onN
                             )) : (
                                 <div className="rh-center-hint">还没有聊天联系人，先去聊天里添加角色吧</div>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 特调：这份文件装着多件材料，选择导入哪件 */}
+            {mixPick && (
+                <div className="rh-dialog-overlay" onClick={importingTo ? undefined : () => setMixPick(null)}>
+                    <div className="rh-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="rh-titlebar">
+                            <span className="rh-titlebar-text">导入特调的哪件材料？</span>
+                            <span className="rh-titlebar-controls">
+                                <button className="rh-tb-btn" disabled={!!importingTo} onClick={() => setMixPick(null)}>✕</button>
+                            </span>
+                        </div>
+                        <div className="rh-dialog-body rh-dest-list">
+                            {mixPick.materials.map(material => (
+                                <button key={material.id} className="rh-dest" disabled={!!importingTo}
+                                    onClick={() => void runMixImport(material, mixPick.author)}>
+                                    <span className="rh-dest-label">
+                                        {importingTo === material.id && <><PixelHourglass size={13} /> </>}
+                                        {MIX_KIND_LABELS[material.kind]} · {material.name}
+                                    </span>
+                                </button>
+                            ))}
+                            <button className="rh-dest" disabled={!!importingTo}
+                                onClick={() => {
+                                    void (async () => {
+                                        for (const material of mixPick.materials) await runMixImport(material, mixPick.author);
+                                        setMixPick(null);
+                                    })();
+                                }}>
+                                <span className="rh-dest-label">全部入柜（{mixPick.materials.length} 件）</span>
+                            </button>
                         </div>
                     </div>
                 </div>
