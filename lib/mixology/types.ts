@@ -587,9 +587,9 @@ export type MixSession = {
      */
     retiredRender?: Record<string, string>;
     /**
-     * 背景观感微调（对局页右上角亮度按钮）：mask = 蒙版提亮 0~100（0 为默认
-     * 三段蒙版原样，100 为完全无蒙版）；blur = 封面模糊 0~20px。按局保存——
-     * 不同封面的明暗各不相同，各局各调。
+     * 背景观感微调（对局页右上角亮度按钮）：mask = 蒙版亮度 -40~100（0 为默认
+     * 三段蒙版原样，负值在蒙版外再压一层匀黑更暗，100 为完全无蒙版）；
+     * blur = 封面模糊 0~20px。按局保存——不同封面的明暗各不相同，各局各调。
      */
     bgTune?: { mask: number; blur: number };
     createdAt: number;

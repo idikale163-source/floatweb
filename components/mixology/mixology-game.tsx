@@ -594,6 +594,8 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const bgStyle: CSSProperties & Record<string, string> = {
         ...(assets.cover ? { backgroundImage: `url(${assets.cover})` } : {}),
         "--mix-bg-mask": String(Math.max(0, 1 - bgTune.mask / 100)),
+        // 负亮度 = 蒙版全开之外再压一层匀黑（-40 → 0.4），比默认三段蒙版更暗
+        "--mix-bg-dim": String(Math.max(0, -bgTune.mask) / 100),
         "--mix-bg-blur": `${bgTune.blur}px`,
     };
 
@@ -620,7 +622,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                             <span>蒙版亮度</span>
                             <input
                                 type="range"
-                                min={0}
+                                min={-40}
                                 max={100}
                                 step={1}
                                 value={bgTune.mask}

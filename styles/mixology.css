@@ -1149,6 +1149,16 @@
     transform: scale(1.03);
 }
 
+/* 负亮度的追加压暗层：蒙版全开之外再匀压一层黑（--mix-bg-dim 0~0.4），
+   给"默认还不够暗"的亮封面用；在 ::after 之下叠加，互不干扰 */
+.mix-game-bg::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgb(11, 11, 16);
+    opacity: var(--mix-bg-dim, 0);
+}
+
 /* 三段蒙版：顶部压暗保标题、中段轻纱、底部沉底保正文；
    --mix-bg-mask 是提亮系数（1=原样，0=无蒙版），来自观感微调 */
 .mix-game-bg::after {
