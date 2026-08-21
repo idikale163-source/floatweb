@@ -119,5 +119,5 @@ export const IMPORT_DESTINATIONS: Array<{ key: ImportDestination; label: string;
     { key: "theme", label: "主题包", hint: "外观页导出的主题包 zip" },
     { key: "preset_entry", label: "预设条目", hint: "单条预设条目，插入或覆盖到已有预设" },
     { key: "status_bar", label: "状态栏", hint: "聊天信息页导出的自定义状态栏 JSON，导入后进方案库" },
-    { key: "mixology", label: "特调", hint: "独家特调导出的材料 JSON 或 PNG，文件里的材料全部自动入柜" },
+    { key: "mixology", label: "特调", hint: "独家特调导出的材料或配方文件（JSON/PNG），内容全部自动入柜" },
 ];

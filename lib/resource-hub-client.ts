@@ -627,12 +627,19 @@ export async function importResourceHubFile(
             // 不经过这里。留个明确的兜底，免得以后有人直接调进来静默什么都不做。
             throw new Error("预设条目需要先选择目标预设与位置");
         case "mixology": {
-            const { parseMixMaterialsFromJson, parseMixMaterialsFromPng } = await import("./mixology/transfer");
+            const { importMixRecipePack, parseMixMaterialsFromJson, parseMixMaterialsFromPng, parseMixRecipeFile } = await import("./mixology/transfer");
             const { loadMixCabinet, saveMixMaterial, MIX_CABINET_UPDATED_EVENT } = await import("./mixology/storage");
             const { MIX_KIND_LABELS } = await import("./mixology/types");
-            const materials = lower.endsWith(".png")
-                ? parseMixMaterialsFromPng(await fetchResourceHubBinary(source, path))
-                : parseMixMaterialsFromJson(await fetchResourceHubText(source, path));
+            let materials;
+            if (lower.endsWith(".png")) {
+                materials = parseMixMaterialsFromPng(await fetchResourceHubBinary(source, path));
+            } else {
+                const text = await fetchResourceHubText(source, path);
+                // 配方文件（整杯打包）：配方与材料一起落库，规矩同下
+                const pack = parseMixRecipeFile(text);
+                if (pack) return importMixRecipePack(pack, options?.authorName);
+                materials = parseMixMaterialsFromJson(text);
+            }
             if (!materials.length) throw new Error("没有解析到特调材料，请确认文件是独家特调导出的 JSON 或 PNG");
             // 种类与件数文件自带，全部自动入柜，用户不用选。集市来源打 imported 标记，
             // 与酒材大厅入柜同一套规矩：不能发布、不能编辑，角色卡正文封存，小卷工具拒改。
