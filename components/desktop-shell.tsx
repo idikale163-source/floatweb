@@ -1569,7 +1569,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
 
   // 其他模块（如工坊 agent 装应用）请求把已安装应用的图标摆上桌面
   const handleInstallCustomAppToDesktopRef = useRef<((app: InstalledCustomApp) => void) | null>(null);
-  const handleThemeDesktopChangeRef = useRef<((next: { widgets: WidgetInstance[]; iconLayout: DesktopLayout; dock?: DesktopIconId[] }) => void) | null>(null);
+  const handleThemeDesktopChangeRef = useRef<((next: { widgets: WidgetInstance[]; iconLayout: DesktopLayout; dock?: DesktopIconId[]; folders?: DesktopFolderMap }) => void) | null>(null);
   const applyThemeRef = useRef<((next: ThemeProfile) => Promise<void>) | null>(null);
   useEffect(() => {
     const placeHandler = (e: Event) => {
@@ -1587,10 +1587,10 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   useEffect(() => {
     const onThemePackage = (e: Event) => {
       const detail = (e as CustomEvent).detail as
-        | { themeProfile?: ThemeProfile; iconLayout?: DesktopLayout; widgets?: WidgetInstance[]; dock?: DesktopIconId[] }
+        | { themeProfile?: ThemeProfile; iconLayout?: DesktopLayout; widgets?: WidgetInstance[]; dock?: DesktopIconId[]; folders?: DesktopFolderMap }
         | undefined;
       if (!detail?.themeProfile || !detail.iconLayout || !detail.widgets) return;
-      handleThemeDesktopChangeRef.current?.({ widgets: detail.widgets, iconLayout: detail.iconLayout, dock: detail.dock });
+      handleThemeDesktopChangeRef.current?.({ widgets: detail.widgets, iconLayout: detail.iconLayout, dock: detail.dock, folders: detail.folders });
       void applyThemeRef.current?.(detail.themeProfile);
     };
     window.addEventListener(THEME_PACKAGE_INSTALLED_EVENT, onThemePackage);
@@ -3141,7 +3141,13 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     const isMergeDrop = Boolean(drag.active && drag.itemType === "icon"
       && drag.mergeArmed && drag.mergeTargetIconId && drag.mergeTargetPage);
     const hasTarget = drag.active && (drag.targetPage || isMergeDrop);
-    if (isMergeDrop && commitMergeDrop(drag)) {
+    // 入组落库若抛异常，绝不能让拖拽预览态（dock 已被摘掉图标）成为终局——
+    // 按取消处理整体还原，图标回到原位而不是凭空消失
+    let mergeCommitted = false;
+    if (isMergeDrop) {
+      try { mergeCommitted = commitMergeDrop(drag); } catch { mergeCommitted = false; }
+    }
+    if (mergeCommitted) {
       // 已合并入组 — 状态在 commitMergeDrop 里整体写好
     } else if (!hasTarget || isMergeDrop) {
       // 无落点，或合并目标中途失效 → 全部还原（含文件夹成员）
@@ -3375,27 +3381,49 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     setCurrentPageIndex((index) => Math.min(index, Math.max(0, trimmedPageCount - 1)));
   }
 
-  function handleThemeDesktopChange(next: { widgets: WidgetInstance[]; iconLayout: DesktopLayout; dock?: DesktopIconId[] }): void {
+  function handleThemeDesktopChange(next: { widgets: WidgetInstance[]; iconLayout: DesktopLayout; dock?: DesktopIconId[]; folders?: DesktopFolderMap }): void {
     const normalizedWidgets = sanitizeWidgetsForLayout(next.iconLayout, next.widgets);
-    // dock：恢复默认时传入出厂 dock；主题包导入不含 dock 时保留当前。
-    // 新布局里明确摆放的图标从 dock 去重（一个图标只能存在于一处）。
+    // 对账快照：用户此刻拥有的全部图标（页面 ∪ dock ∪ 文件夹成员）。
+    // 导入/恢复默认是整桌替换，替换完谁没了着落就补回页面——
+    // 图标只许挪位置，不许凭空消失（曾经的坑：包里没带 dock/文件夹，
+    // 被拖出 dock 的图标和折进文件夹的成员一导入就没了）。
+    const ownedBefore = new Set<DesktopIconId>([
+      ...getDesktopIconLayoutItems(layoutRef.current).map(ic => ic.id).filter(id => !isFolderIconId(id)),
+      ...dockRef.current,
+      ...Object.values(foldersRef.current).flatMap(f => f.icons),
+    ]);
+    // 新主题带文件夹表就用它（成员已按本机安装过滤）；旧包没有 = 无文件夹
+    const nextFolders: DesktopFolderMap = next.folders ?? {};
+    const folderMemberIds = new Set<DesktopIconId>(Object.values(nextFolders).flatMap(f => f.icons));
+    // dock：恢复默认/新包传入的优先；旧包保留当前。新布局里明确摆放的
+    // 和收进文件夹的图标从 dock 去重（一个图标只能存在于一处）。
     const placedIds = new Set<DesktopIconId>(getDesktopIconLayoutItems(next.iconLayout).map(ic => ic.id));
-    const nextDock = normalizeDock(next.dock ?? dockRef.current).filter(id => !placedIds.has(id));
+    const nextDock = normalizeDock(next.dock ?? dockRef.current).filter(id => !placedIds.has(id) && !folderMemberIds.has(id));
+    const normalizedLayout = normalizeLayout(next.iconLayout, normalizedWidgets, new Set(nextDock), nextFolders);
+    // 文件夹一致性收拾（空夹解散、成员与页面/dock 去重、无 tile 的夹补 tile）
+    const sane = sanitizeDesktopFolders(nextFolders, normalizedLayout, nextDock, normalizedWidgets);
+    // 损失对账：导入前拥有、导入后哪儿都不在的已知图标，就近铺回页面
+    const customIconIds = getInstalledCustomIconIds();
+    const placedAfter = new Set<DesktopIconId>([
+      ...getDesktopIconLayoutItems(sane.layout).map(ic => ic.id),
+      ...nextDock,
+      ...Object.values(sane.folders).flatMap(f => f.icons),
+    ]);
+    for (const id of ownedBefore) {
+      if (placedAfter.has(id)) continue;
+      if (!(id in ICONS) && !customIconIds.has(id)) continue;
+      placeIconOnAvailablePage(sane.layout, normalizedWidgets, { id, row: 1, col: 1 }, 1);
+    }
     dockRef.current = nextDock;
     setDock(nextDock);
     writeDockLayout(nextDock);
-    const normalizedLayout = normalizeLayout(next.iconLayout, normalizedWidgets, new Set(nextDock));
-    // 主题包定义的是一张完整桌面，旧文件夹全部解散；成员图标由
-    // normalizeLayout 的默认兜底 + appendMissingCustomAppIcons 重新铺回页面。
-    if (Object.keys(foldersRef.current).length > 0) {
-      setFolders({});
-      writeDesktopFolders({});
-    }
+    setFolders(sane.folders);
+    writeDesktopFolders(sane.folders);
     setOpenFolderId(null);
     setWidgets(normalizedWidgets);
-    setLayout(normalizedLayout);
+    setLayout(sane.layout);
     saveWidgets(normalizedWidgets);
-    kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(normalizedLayout));
+    kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(sane.layout));
   }
 
   handleThemeDesktopChangeRef.current = handleThemeDesktopChange;
