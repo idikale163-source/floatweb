@@ -95,9 +95,15 @@ export function mixTurnRawText(turn: MixTurn): string {
     return parts.filter(Boolean).join("\n\n");
 }
 
-/** 历史回放时给 assistant 消息补回状态栏/小剧场块，让模型看得到自己之前的输出习惯 */
-function turnToHistoryContent(turn: MixTurn): string {
-    return mixTurnRawText(turn);
+/**
+ * 历史回放：只有最近一条 assistant 轮补回状态栏/小剧场块。
+ * 模型需要的只有两样——最新状态的接续（契约的变化规则只依赖上一轮的值）
+ * 和一份格式示范（防掉格式），最后一块两者都够；更旧的块随轮数线性膨胀，
+ * 是纯 token 负担（按信息量基准每轮各两三百字，长局能省上万字符）。
+ * 存储不动：turn.ticketRaw/encoreRaw 原样留着，界面回放与编辑不受影响。
+ */
+function turnToHistoryContent(turn: MixTurn, withBlocks: boolean): string {
+    return withBlocks ? mixTurnRawText(turn) : turn.text;
 }
 
 function buildMixMessages(
@@ -108,10 +114,14 @@ function buildMixMessages(
     const messages: LLMMessage[] = [
         { role: "system", content: assembled.system, _debugMeta: { marker: "mixology_system" } },
     ];
-    for (const turn of session.turns) {
+    let lastAssistantIdx = -1;
+    for (let i = session.turns.length - 1; i >= 0; i -= 1) {
+        if (session.turns[i].role === "assistant") { lastAssistantIdx = i; break; }
+    }
+    for (const [i, turn] of session.turns.entries()) {
         messages.push({
             role: turn.role,
-            content: turnToHistoryContent(turn),
+            content: turnToHistoryContent(turn, i === lastAssistantIdx),
             _debugMeta: { marker: "mixology_history", _fromHistory: true },
         });
     }
