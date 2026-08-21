@@ -16,6 +16,10 @@ export function CallVolumeControl() {
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // 音量记忆为 0 时在进通话这一刻重置回满档：控件默认折叠、会自动隐藏，
+    // 上次通话拖到 0 的用户下次通话找不到原因，就成了「通话永远无声」。
+    // 通话中拖到 0 仍即时生效，只是静音不跨通话记忆。
+    if (getTtsVolume() <= 0.001) setTtsVolume(1);
     setVolume(getTtsVolume());
   }, []);
 
