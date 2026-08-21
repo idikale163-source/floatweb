@@ -8,7 +8,6 @@ import {
   Download,
   LayoutGrid,
   PaintBucket,
-  MonitorSmartphone,
   Plus,
   RotateCcw,
   Smartphone,
@@ -359,9 +358,7 @@ export function PhoneThemeApp({
                   type="button"
                   onClick={() => { setShellMode(readShellModeOverride()); setShowShellMode(true); }}
                 >
-                  <span className="card-icon" style={menuIconStyle(BINDING_ACCENTS.memory)}>
-                    <MonitorSmartphone />
-                  </span>
+                  <span className="card-icon card-icon-glass"><GlassIcon name="agent-computer" /></span>
                   <span className="menu-label appearance-menu-item-label">{"显示形态"}</span>
                 </button>
                 {MENU_ITEMS.filter(item => ["text"].includes(item.section)).map((item) => (
