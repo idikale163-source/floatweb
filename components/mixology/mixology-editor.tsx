@@ -257,7 +257,8 @@ export function MixMaterialEditor({ kind, initial, onSave, onCancel }: EditorPro
             hook: hook.trim() || undefined,
             author: initial?.author,
             tags: tags.length ? tags : undefined,
-            cover: cover || undefined,
+            // 只有角色卡收封面：其余种类连老材料残留的 cover 也在这一步洗掉
+            cover: isCharacter ? cover || undefined : undefined,
             createdAt: initial?.createdAt ?? Date.now(),
             updatedAt: Date.now(),
         };
