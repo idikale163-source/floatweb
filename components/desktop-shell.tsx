@@ -516,21 +516,11 @@ function normalizeLayout(raw: unknown, widgets: WidgetInstance[], dockIds: Set<D
   for (const id of allDefaults) {
     if (allPlaced.has(id) || dockIds.has(id)) continue;
     const primaryPage = PAGE_1_DEFAULT.includes(id) ? 1 : PAGE_2_DEFAULT.includes(id) ? 2 : PAGE_3_DEFAULT.includes(id) ? 3 : 1;
-    const fallbackPages = getDesktopPageKeysForState(layout, widgets)
-      .map(getDesktopPageNumber)
-      .filter((page) => page !== primaryPage);
-    for (const page of [primaryPage, ...fallbackPages]) {
-      const pageKey = getDesktopPageKey(page);
-      ensureDesktopPage(layout, pageKey);
-      const widgetOcc = buildWidgetOccupancy(widgets.filter(w => w.page === page));
-      const usedCells = new Set(layout[pageKey].map(ic => `${ic.row},${ic.col}`));
-      const free = findNearestFreeCell(1, 1, widgetOcc, usedCells);
-      if (free) {
-        layout[pageKey] = [...layout[pageKey], { id, row: free.row, col: free.col }];
-        allPlaced.add(id);
-        break;
-      }
-    }
+    // placeIconOnAvailablePage 页满会顺延到下一页乃至新开一页——
+    // 曾经这里只在现有页里找空格，页面被图标和组件占满时就静默放弃，
+    // 图标（如外观）从此永久丢失且每次重启都救不回
+    placeIconOnAvailablePage(layout, widgets, { id, row: 1, col: 1 }, primaryPage);
+    allPlaced.add(id);
   }
 
   return trimEmptyTrailingPages(layout, widgets);
