@@ -23,7 +23,6 @@ import { saveScheme } from "./css-scheme-storage";
 import { STATUS_REGION_SCHEME_TARGET } from "./chat-status-region";
 import { createOrGetSession, loadChatSessions, saveChatSessions } from "./chat-storage";
 import { readThemeProfile, writeThemeProfile } from "./theme-storage";
-import type { GameTemplateDraft } from "./game-types";
 import type { Prompt } from "./settings-types";
 
 const SOURCE_KEY = "ai_phone_resource_hub_source_v1";
@@ -573,32 +572,34 @@ export async function importResourceHubFile(
             }
             // 别人的作品直接进「我的柜子」当成品玩，不进草稿箱——草稿是可编辑
             // 可发布的，落草稿等于开了二次编辑与转发布的口子。
-            const draft = payload.draft as GameTemplateDraft;
+            // 字段逐个安全取值：文件是外来的，任何字段都可能不是字符串
+            const gameDraft = payload.draft as Record<string, unknown>;
+            const gstr = (key: string): string => (typeof gameDraft[key] === "string" ? (gameDraft[key] as string).trim() : "");
             const { parseGameRoleSlots, upsertLocalTestGame } = await import("./game-storage");
             const { GAME_EMPTY_PICKER_HTML } = await import("./game-creator-guide");
-            const title = (typeof payload.title === "string" && payload.title.trim()) || draft.title?.trim() || displayName;
-            const roleSlots = parseGameRoleSlots(draft.roleSlotsText ?? "");
+            const title = (typeof payload.title === "string" && payload.title.trim()) || gstr("title") || displayName;
+            const roleSlots = parseGameRoleSlots(gstr("roleSlotsText"));
             const now = new Date().toISOString();
             // 稳定 key 来自集市路径：作者更新资源后重复导入，原地更新同一件
             const hubSlug = `hub_${path.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(-80)}`;
             const gameResult = upsertLocalTestGame(hubSlug, {
                 id: hubSlug,
                 title,
-                codeName: draft.codeName?.trim() || "",
-                subtitle: draft.subtitle ?? "",
-                synopsis: draft.synopsis ?? "",
-                playNote: draft.playNote ?? "",
-                coverImage: draft.coverImage ?? "",
-                tags: (draft.tagsText ?? "").split(/[\s,，、]+/).filter(Boolean).slice(0, 8),
+                codeName: gstr("codeName"),
+                subtitle: gstr("subtitle"),
+                synopsis: gstr("synopsis"),
+                playNote: gstr("playNote"),
+                coverImage: gstr("coverImage"),
+                tags: gstr("tagsText").split(/[\s,，、]+/).filter(Boolean).slice(0, 8),
                 authorId: "resource_hub",
-                authorName: draft.authorName?.trim() || options?.authorName?.trim() || "集市投稿人",
+                authorName: gstr("authorName") || options?.authorName?.trim() || "集市投稿人",
                 authorAvatar: "",
                 source: "local",
                 version: 1,
                 roleSlots,
-                pickerHtml: roleSlots.length > 0 ? draft.pickerHtml ?? "" : GAME_EMPTY_PICKER_HTML,
-                gameHtml: draft.gameHtml ?? "",
-                allowExternalControl: draft.allowExternalControl === true,
+                pickerHtml: roleSlots.length > 0 ? gstr("pickerHtml") : GAME_EMPTY_PICKER_HTML,
+                gameHtml: gstr("gameHtml"),
+                allowExternalControl: gameDraft.allowExternalControl === true,
                 purchaseCount: 0,
                 rating: 0,
                 likeCount: 0,
