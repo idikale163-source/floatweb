@@ -126,6 +126,38 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const liveFrameRef = useRef(0);
     const busyRef = useRef(false);
     const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null);
+    /**
+     * 编辑弹层的键盘适配（iOS）：弹层高、输入框更高，键盘一出 WebKit 会滚动整页
+     * 去追光标，把弹层标题顶出屏幕（偶发，取决于光标位置与时序）。两手处理：
+     * ① 给遮罩垫 padding-bottom = 键盘高度，弹层整体抬到键盘上方（78% 上限
+     *    按剩余高度算，整个弹层都在可视区里，iOS 就没有追光标的理由）；
+     * ② 页面还是被蹭走的话（visualViewport 偏移/window 滚动），立刻拉回。
+     */
+    const editMaskRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+        if (!editing || typeof window === "undefined") return;
+        const vv = window.visualViewport;
+        let raf = 0;
+        const sync = () => {
+            raf = 0;
+            const inset = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+            const mask = editMaskRef.current;
+            if (mask) mask.style.paddingBottom = inset > 40 ? `${inset}px` : "";
+            if (window.scrollY || (vv && vv.offsetTop > 1)) window.scrollTo(0, 0);
+        };
+        const request = () => { if (!raf) raf = requestAnimationFrame(sync); };
+        sync();
+        vv?.addEventListener("resize", request);
+        vv?.addEventListener("scroll", request);
+        window.addEventListener("scroll", request);
+        return () => {
+            if (raf) cancelAnimationFrame(raf);
+            vv?.removeEventListener("resize", request);
+            vv?.removeEventListener("scroll", request);
+            window.removeEventListener("scroll", request);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- 只关心开/关，别在每次敲字时重挂监听
+    }, [Boolean(editing)]);
     const [confirm, setConfirm] = useState<{ type: "rewind" | "edit"; turnId: string } | null>(null);
     const [recipeOpen, setRecipeOpen] = useState(false);
     const [slotPick, setSlotPick] = useState<MixMaterialKind | null>(null);
@@ -963,7 +995,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             {editing ? (() => {
                 const editingTurn = session.turns.find((t) => t.id === editing.id);
                 return (
-                    <div className="mix-sheet-mask" onClick={() => setEditing(null)}>
+                    <div className="mix-sheet-mask" ref={editMaskRef} onClick={() => setEditing(null)}>
                         <div className="mix-sheet" onClick={(e) => e.stopPropagation()}>
                             <div className="mix-sheet-head">
                                 <div className="mix-sheet-title">编辑消息</div>
