@@ -4,7 +4,7 @@
 // 玩家右侧气泡、小票全宽卡；全程无任何标签徽章，保沉浸。
 // 装饰材料的 CSS 以 <style> 注入本画面容器（认 .mix-* 官方语义类）。
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChevronLeft, Copy, History, MoreHorizontal, Pencil, Plus, RotateCcw, Send, Sun, WandSparkles, X } from "lucide-react";
 import { continueMix, editMixTurn, generateMixReply, mixTurnRawText, refreshMixOpening, regenerateMixTail, rerollMixReply, runMixSessionEnd, truncateMixAfterTurn } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession, listMixPickables, MIX_CABINET_UPDATED_EVENT, resolveMixRecipeMaterials, saveMixSession } from "@/lib/mixology/storage";
@@ -304,11 +304,23 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
      * 只认 sessionId——定完就撒手，后面翻页（free）和发言（bottom）都能改它，这里不再回头覆盖。
      * 以前这个 effect 还挂着 busy 和 turns.length：一发言 busy 先翻 true，而用户那一轮要等
      * 落杯前钩子跑完才落库，这一拍读到的还是「没人开过口」，于是把人拽回了扉页顶上。
+     *
+     * 用 useLayoutEffect 在首帧绘制前就把落点钉好，配合入场幕布（entering）：
+     * 滚动区里的小票/小剧场/画布 iframe 都是异步量高的，头几百毫秒内容会连着长高几次，
+     * 当着用户的面就是「点进去闪好几下」。幕布期间不可见、每次报高都在幕后重新落位，
+     * 揭幕那一刻已经停在正确位置。
      */
-    useEffect(() => {
+    const [entering, setEntering] = useState(true);
+    useLayoutEffect(() => {
+        setEntering(true);
         const entered = getMixSession(sessionId);
         stickRef.current = (entered?.turns ?? []).some((turn) => turn.role === "user") ? "bottom" : "top";
         applyStick();
+        const timer = window.setTimeout(() => {
+            applyStick();
+            setEntering(false);
+        }, 400);
+        return () => window.clearTimeout(timer);
     }, [sessionId, applyStick]);
 
     /** 内容长高了（新一轮到达、生成态切换、流式又写出一段）按当前落点再落一次 */
@@ -338,15 +350,26 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         return () => window.removeEventListener("message", onFrameResize);
     }, [applyStick]);
 
-    /** 用户自己翻页了就撒手，别在画布撑高时把他拽回去 */
+    /**
+     * 用户自己翻页了就撒手，别在画布撑高时把他拽回去。
+     * 「翻页」只认真实手势（滚轮/触摸/按压），不认 scroll 事件本身——
+     * iframe 报高会让 scrollHeight 在钉底之后又变大，等 scroll 回调执行时
+     * gapBottom 已经是新长出来的那截，按距离判定会把这误当成用户翻走，
+     * 从此不再跟底，人就停在半路。没有手势的偏离一律视为内容重排，立刻拉回。
+     */
+    const gestureAtRef = useRef(0);
+    const markGesture = useCallback(() => { gestureAtRef.current = Date.now(); }, []);
     const handleScroll = useCallback(() => {
         const el = scrollRef.current;
         if (!el || stickRef.current === "free") return;
         const gapTop = el.scrollTop;
         const gapBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
         const stuck = stickRef.current === "top" ? gapTop <= 8 : gapBottom <= 8;
-        if (!stuck) stickRef.current = "free";
-    }, []);
+        if (stuck) return;
+        // 1.6s 覆盖触摸惯性滚动的尾巴：手指离屏后 scroll 事件还会飘一阵
+        if (Date.now() - gestureAtRef.current < 1600) stickRef.current = "free";
+        else applyStick();
+    }, [applyStick]);
 
     useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -682,7 +705,16 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                 </>
             ) : null}
             <StateBar state={session.state ?? {}} />
-            <div className="mix-game-scroll" ref={scrollRef} onScroll={handleScroll}>
+            <div
+                className="mix-game-scroll"
+                ref={scrollRef}
+                data-entering={entering ? "true" : undefined}
+                onScroll={handleScroll}
+                onWheel={markGesture}
+                onTouchStart={markGesture}
+                onTouchMove={markGesture}
+                onPointerDown={markGesture}
+            >
                 {assets.canvasHtml ? (
                     <div className="mix-game-canvas">
                         <MixRichText text={assets.canvasHtml} />
