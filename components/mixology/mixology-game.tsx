@@ -292,11 +292,15 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         return vars as CSSProperties;
     }, [session?.state]);
 
+    /** 上一次 scroll 事件时的位置：撒手判定靠它识别滚动方向 */
+    const lastTopRef = useRef(0);
+
     /** 按当前落点滚一次 */
     const applyStick = useCallback(() => {
         const el = scrollRef.current;
         if (!el || stickRef.current === "free") return;
         el.scrollTop = stickRef.current === "top" ? 0 : el.scrollHeight;
+        lastTopRef.current = el.scrollTop;
     }, []);
 
     /**
@@ -361,13 +365,23 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     const markGesture = useCallback(() => { gestureAtRef.current = Date.now(); }, []);
     const handleScroll = useCallback(() => {
         const el = scrollRef.current;
-        if (!el || stickRef.current === "free") return;
+        if (!el) return;
+        const prevTop = lastTopRef.current;
+        lastTopRef.current = el.scrollTop;
+        if (stickRef.current === "free") return;
         const gapTop = el.scrollTop;
         const gapBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
         const stuck = stickRef.current === "top" ? gapTop <= 8 : gapBottom <= 8;
         if (stuck) return;
-        // 1.6s 覆盖触摸惯性滚动的尾巴：手指离屏后 scroll 事件还会飘一阵
-        if (Date.now() - gestureAtRef.current < 1600) stickRef.current = "free";
+        // 用户意图两条通路缺一不可：
+        // ① 手势（滚轮/触摸/按压，1.6s 覆盖惯性尾巴）——但手指落在小票/小剧场/画布的
+        //    iframe 上时触摸事件被沙盒吃掉、不冒泡，外层什么都收不到；
+        // ② 方向启发兜住 ① 的盲区：贴底时 scrollTop 变小（在往上挪）、贴顶时变大，
+        //    只有用户滚动才会朝"背离锚点"的方向动——内容重排只会把落点甩远，不会反向。
+        const movedAway = stickRef.current === "bottom"
+            ? el.scrollTop < prevTop - 1
+            : el.scrollTop > prevTop + 1;
+        if (movedAway || Date.now() - gestureAtRef.current < 1600) stickRef.current = "free";
         else applyStick();
     }, [applyStick]);
 
