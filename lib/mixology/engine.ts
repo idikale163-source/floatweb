@@ -517,7 +517,9 @@ async function runMixGeneration(
     const { prompt: assembled, tickets, encores, active } = assembleFromSession(working);
     const messages = buildMixMessages(working, assembled, combinedNudge, buildFeedResolver(working, tickets, encores));
     const meta = { characterName: working.charName, userName: working.userName || "你" };
-    const llmOptions = { appId: MIX_PROMPT_APP_ID, appTags: MIX_PROMPT_TAGS, skipOutputRegex: true, signal };
+    // skipTimestampStrip：特调是"所见即模型所写"，不走聊天那套幻觉时间戳剥离——
+    // 那个剥离器在流式时会扣住尾部 64 字等括号闭合，机括的末尾标记行会整行压在里面不出来
+    const llmOptions = { appId: MIX_PROMPT_APP_ID, appTags: MIX_PROMPT_TAGS, skipOutputRegex: true, skipTimestampStrip: true, signal };
     let raw: string;
     if (onDelta) {
         let got = false;
