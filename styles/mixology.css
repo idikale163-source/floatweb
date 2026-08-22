@@ -1452,6 +1452,65 @@
 }
 
 /* 输入区 */
+/* ── 机括挂点 ──
+   按钮位：宿主画的图标按钮（标题栏/输入栏），点击开合下方的停靠面板；
+   流内位：嵌进滚动流的内嵌卡。按钮与容器都是宿主的，沙盒只画格子里的内容 */
+.mix-slot-btn {
+    font-size: 15px;
+    line-height: 1;
+}
+
+.mix-slot-btn[data-on="true"] {
+    background: rgba(141, 123, 245, 0.22);
+    color: var(--mix-violet);
+}
+
+.mix-dock-drop {
+    flex: 0 0 auto;
+    max-height: 46%;
+    overflow-y: auto;
+    padding: 8px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: rgba(10, 9, 16, 0.72);
+    backdrop-filter: blur(10px);
+    animation: mixFadeIn 0.16s ease;
+}
+
+.mix-dock-drop[data-from="header"] {
+    border-bottom: 1px solid var(--mix-line);
+}
+
+.mix-dock-drop[data-from="input"] {
+    border-top: 1px solid var(--mix-line);
+}
+
+.mix-flow-panel {
+    margin: 10px 0;
+}
+
+.mix-inline-panel[data-plate="true"] {
+    background: rgba(14, 12, 22, 0.66);
+    border: 1px solid var(--mix-line);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.mix-inline-stage {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+}
+
+.mix-inline-stage .mix-panel-frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: transparent;
+}
+
 .mix-game-inputbar {
     position: relative;
     flex: 0 0 auto;
