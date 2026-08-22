@@ -28,6 +28,7 @@ import { normalizeMechanismStore, type MixMechanismStore } from "@/lib/mixology/
 
 /** 界面能请求的动作，就这几条 */
 type PanelCommand =
+    | { name: "boot" }
     | { name: "setStore"; store: unknown }
     | { name: "setState"; state: unknown }
     | { name: "say"; text: unknown }
@@ -68,7 +69,7 @@ function clampBox(box: Box): Box {
     };
 }
 
-function buildPanelDoc(html: string, state: MixState, store: MixMechanismStore, autoHeight: boolean): string {
+export function buildPanelDoc(html: string, state: MixState, store: MixMechanismStore, autoHeight: boolean): string {
     const bridge = `
 <script>
 (function(){
@@ -159,6 +160,10 @@ function buildPanelDoc(html: string, state: MixState, store: MixMechanismStore, 
       try { window.onMixSync(window.MIX_STATE, window.MIX_STORE); } catch (e) {}
     }
   });
+  // 启动握手：上面烘进文档的 MIX_STATE/MIX_STORE 是宿主生成这份文档时的快照。
+  // 手机浏览器退后台会回收沙盒 iframe 的进程，回前台时 iframe 拿这份旧文档重启，
+  // 快照就成了旧账——喊一声让宿主把当前值无条件补推一份，界面永远从最新值起步。
+  send("boot", {});
   ${autoHeight ? `
   // 开了「高度随内容」就自动量，作者不用自己调 mix.fit
   var last = -1;
@@ -304,6 +309,10 @@ export function MixMechanismPanel({
         post({ state, store });
     }, [state, store, post]);
 
+    /** 最新的 state/store：boot 补推发生在消息回调里，闭包里的是旧引用，得走 ref */
+    const latestSyncRef = useRef({ state, store });
+    latestSyncRef.current = { state, store };
+
     /** 把一次几何变化落到面板上；拖完（commit）才写进对局 */
     const applyBox = useCallback((next: Box, commit: boolean) => {
         const clamped = clampBox(next);
@@ -364,6 +373,14 @@ export function MixMechanismPanel({
             if (!data || data.source !== "mix-panel") return;
             const command = data as unknown as PanelCommand;
             switch (command.name) {
+                case "boot": {
+                    // iframe（重）启动完成。退后台被系统回收的面板回前台时会拿旧文档重启，
+                    // 文档里烘的快照已经过期——这里无条件把当前值补推一份，别管变没变。
+                    const fresh = latestSyncRef.current;
+                    syncedRef.current = JSON.stringify(fresh);
+                    post({ ...fresh });
+                    break;
+                }
                 case "setStore":
                     onStore(materialId, normalizeMechanismStore(command.store));
                     break;
@@ -492,7 +509,7 @@ export function MixMechanismPanel({
         };
         window.addEventListener("message", onMessage);
         return () => window.removeEventListener("message", onMessage);
-    }, [materialId, onStore, onState, onSay, onBox, canDrag, applyBox, scale]);
+    }, [materialId, onStore, onState, onSay, onBox, canDrag, applyBox, scale, post]);
 
     const style: React.CSSProperties = {
         left: `${box.x}%`,
@@ -658,6 +675,10 @@ export function MixMechanismInline({
         post({ state, store });
     }, [state, store, post]);
 
+    /** 最新的 state/store：boot 补推发生在消息回调里，闭包里的是旧引用，得走 ref */
+    const latestSyncRef = useRef({ state, store });
+    latestSyncRef.current = { state, store };
+
     useEffect(() => {
         const onMessage = (event: MessageEvent) => {
             if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
@@ -665,6 +686,13 @@ export function MixMechanismInline({
             if (!data || data.source !== "mix-panel") return;
             const command = data as unknown as PanelCommand;
             switch (command.name) {
+                case "boot": {
+                    // 同悬浮面板：iframe 重启后拿的是旧文档快照，无条件补推当前值
+                    const fresh = latestSyncRef.current;
+                    syncedRef.current = JSON.stringify(fresh);
+                    post({ ...fresh });
+                    break;
+                }
                 case "setStore":
                     onStore(materialId, normalizeMechanismStore(command.store));
                     break;
@@ -710,7 +738,7 @@ export function MixMechanismInline({
         };
         window.addEventListener("message", onMessage);
         return () => window.removeEventListener("message", onMessage);
-    }, [materialId, onStore, onState, onSay]);
+    }, [materialId, onStore, onState, onSay, post]);
 
     const designWidth = designPx === null ? 0 : designPx;
     const scale = designWidth && width > 0 ? width / designWidth : 1;
