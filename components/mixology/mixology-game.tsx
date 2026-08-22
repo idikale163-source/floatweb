@@ -301,6 +301,21 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         return groups;
     }, [panels]);
 
+    /**
+     * 回传轮数：默认不限（全部历史都发给模型），玩家在修改方案弹窗里调了才裁。
+     * 只裁请求内容，存储与界面回放完整；随对局保存。
+     */
+    const [histOpen, setHistOpen] = useState(false);
+    const setHistoryLimit = useCallback((limit: number | undefined) => {
+        const current = getMixSession(sessionId);
+        if (!current) return;
+        const next: MixSession = { ...current };
+        if (limit && limit > 0) next.historyLimit = Math.floor(limit);
+        else delete next.historyLimit;
+        saveMixSession(next);
+        setSession(getMixSession(sessionId));
+    }, [sessionId]);
+
     /** 按钮位面板的开合，按局记忆；关着的不渲染（要留住的状态放机括存储桶） */
     const dockOpen = session?.panelOpen ?? {};
     const toggleDock = useCallback((materialId: string) => {
@@ -1034,14 +1049,39 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                         </div>
                         <div className="mix-sheet-body">
                             <div className="mix-struct-note">只改这一局，下一轮生成时生效，已写出的内容不变；不影响吧台里保存的方案。</div>
-                            {panels.length ? (
-                                <div className="mix-panel-ops">
-                                    <button type="button" className="mix-dock-chip" data-on={panelsHidden ? "true" : undefined} onClick={() => setPanelsHidden((v) => !v)}>
-                                        {panelsHidden ? "显示机括界面" : "暂时收起机括界面"}
-                                    </button>
-                                    <button type="button" className="mix-dock-chip" onClick={() => { resetPanelBoxes(); onToast("机括界面已归位。"); }}>
-                                        界面归位
-                                    </button>
+                            <div className="mix-panel-ops">
+                                {panels.length ? (
+                                    <>
+                                        <button type="button" className="mix-dock-chip" data-on={panelsHidden ? "true" : undefined} onClick={() => setPanelsHidden((v) => !v)}>
+                                            {panelsHidden ? "显示机括界面" : "暂时收起机括界面"}
+                                        </button>
+                                        <button type="button" className="mix-dock-chip" onClick={() => { resetPanelBoxes(); onToast("机括界面已归位。"); }}>
+                                            界面归位
+                                        </button>
+                                    </>
+                                ) : null}
+                                <button
+                                    type="button"
+                                    className="mix-dock-chip"
+                                    data-on={session.historyLimit || histOpen ? "true" : undefined}
+                                    onClick={() => setHistOpen((v) => !v)}
+                                >
+                                    {session.historyLimit ? `回传近 ${session.historyLimit} 轮` : "回传全部历史"}
+                                </button>
+                            </div>
+                            {histOpen ? (
+                                <div className="mix-histlimit">
+                                    <span>回传轮数</span>
+                                    <input
+                                        type="range"
+                                        min={2}
+                                        max={60}
+                                        step={1}
+                                        value={session.historyLimit ?? 60}
+                                        onChange={(e) => setHistoryLimit(Number(e.target.value))}
+                                    />
+                                    <b>{session.historyLimit ?? "不限"}</b>
+                                    <button type="button" className="mix-dock-chip" onClick={() => setHistoryLimit(undefined)}>不限</button>
                                 </div>
                             ) : null}
                             <div className="mix-bar-hint">左右滑动切换槽位 · 点击槽位换材料</div>

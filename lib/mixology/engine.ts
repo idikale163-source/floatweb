@@ -149,6 +149,22 @@ function turnToHistoryContent(turn: MixTurn, isLast: boolean, feedOf?: MixFeedRe
     ].filter(Boolean).join("\n\n");
 }
 
+/**
+ * 回传轮数上限：只保留最近 limit 轮（一轮 = 一条 assistant 回复，连同它前面的
+ * 玩家发言）。默认不裁——玩家在对局设置里调了才生效；只裁发给模型的消息，
+ * 存储与界面回放永远完整。
+ */
+export function limitMixTurns(turns: MixTurn[], limit: number | undefined): MixTurn[] {
+    if (!limit || limit <= 0) return turns;
+    let count = 0;
+    for (let i = turns.length - 1; i >= 0; i -= 1) {
+        if (turns[i].role !== "assistant") continue;
+        count += 1;
+        if (count > limit) return turns.slice(i + 1);
+    }
+    return turns;
+}
+
 function buildMixMessages(
     session: MixSession,
     assembled: MixAssembledPrompt,
@@ -158,11 +174,12 @@ function buildMixMessages(
     const messages: LLMMessage[] = [
         { role: "system", content: assembled.system, _debugMeta: { marker: "mixology_system" } },
     ];
+    const turns = limitMixTurns(session.turns, session.historyLimit);
     let lastAssistantIdx = -1;
-    for (let i = session.turns.length - 1; i >= 0; i -= 1) {
-        if (session.turns[i].role === "assistant") { lastAssistantIdx = i; break; }
+    for (let i = turns.length - 1; i >= 0; i -= 1) {
+        if (turns[i].role === "assistant") { lastAssistantIdx = i; break; }
     }
-    for (const [i, turn] of session.turns.entries()) {
+    for (const [i, turn] of turns.entries()) {
         messages.push({
             role: turn.role,
             content: turnToHistoryContent(turn, i === lastAssistantIdx, feedOf),

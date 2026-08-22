@@ -2883,6 +2883,45 @@
     gap: 8px;
 }
 
+/* 修改方案弹窗里的操作行：几颗 chip 平分撑满一排（容器本体定义在机括段落） */
+.mix-panel-ops .mix-dock-chip {
+    flex: 1;
+    text-align: center;
+    white-space: nowrap;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+/* 回传轮数调节行 */
+.mix-histlimit {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: -2px 0 10px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 12px;
+    color: var(--mix-dim);
+}
+
+.mix-histlimit input[type="range"] {
+    flex: 1;
+    min-width: 0;
+    accent-color: var(--mix-violet);
+}
+
+.mix-histlimit b {
+    min-width: 30px;
+    text-align: center;
+    color: var(--mix-violet);
+}
+
+.mix-histlimit .mix-dock-chip {
+    flex: 0 0 auto;
+    padding: 5px 12px;
+}
+
 .mix-dock-chip {
     border: 1px solid var(--mix-line);
     border-radius: 999px;
