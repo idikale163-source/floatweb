@@ -104,21 +104,15 @@ function pullFamily(text: string, tags: TagFamily): { text: string; blocks: MixE
 }
 
 /**
- * 流式过程中显示的内容：原文照流，不再扣块。
- * 以前状态栏/小剧场块在流式里被整段扣住，模型写块的那几秒到十几秒界面一动不动，
- * 用户以为卡死了（结尾写小剧场时最明显：正文流得好好的突然定住）。现在 raw
- * 原样当正文流出来——先看到状态栏的键值行长出来、再是正文、最后小剧场逐行盖楼，
- * 和模型的真实输出顺序一致；整轮落库那一刻各块自然换成正式的壳渲染。
- * 只有机括的标记行（〔记〕这类，出杯后才被摘掉）仍在末尾行扣一下，免得闪现又消失。
+ * 流式过程中显示的内容：原文一字不扣，照流。
+ * 状态栏/小剧场块、机括的标记行（〔选项〕〔记〕这类）全都原样流出来——
+ * 模型写到哪用户看到哪，任何扣留都会让画面在那几秒定格、看起来像卡死
+ * （机括标记行通常是回复最后一行，扣末尾行等于把整段收尾都藏了）。
+ * 落库那一刻块换成正式壳渲染、标记行被钩子摘走变成面板内容，
+ * 短暂的"变身"就是流式与成品之间该有的交接，不必藏。
  */
 export function mixStreamText(partial: string): string {
-    const lines = String(partial ?? "").split("\n");
-    while (lines.length) {
-        const tail = lines[lines.length - 1].trim();
-        if (tail === "" || tail.startsWith("〔")) { lines.pop(); continue; }
-        break;
-    }
-    return lines.join("\n");
+    return String(partial ?? "");
 }
 
 export function extractMixBlocks(rawInput: string): {
