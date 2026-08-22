@@ -47,6 +47,18 @@ import { disposeMixSandboxes, runMixHook } from "./mechanism-runtime";
 export const MIX_PROMPT_APP_ID = "mixology";
 const MIX_PROMPT_TAGS = ["mixology"];
 
+/**
+ * 状态栏补写进行中的广播：补写是一次额外的模型往返，流式已经结束、
+ * 界面上没有任何东西在动，不喊一声用户会以为卡死。对局页听这个事件挂 toast。
+ */
+export const MIX_REPAIR_EVENT = "mixology-ticket-repair";
+export type MixRepairEventDetail = { sessionId: string; name?: string; done?: boolean };
+
+function emitMixRepair(detail: MixRepairEventDetail): void {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent(MIX_REPAIR_EVENT, { detail }));
+}
+
 /** 对局用的 API 配置：全局默认接口 */
 export function resolveMixApiConfig(): ApiConfig | null {
     const binding = loadBindingConfig();
@@ -510,11 +522,20 @@ async function runMixGeneration(
     }
     // 状态栏补写：逐张核对，漏了哪张就单独把哪张要回来
     if (text) {
-        for (const ticket of contractTickets) {
-            if (!ticket.renderHtml.trim()) continue;
-            if (ticketBlocks.some((b) => b.id === ticket.id)) continue;
-            const repaired = await repairMixTicket(apiConfig, working, ticket, text, signal);
-            if (repaired) ticketBlocks.push({ id: ticket.id, raw: repaired });
+        const missing = contractTickets.filter(
+            (ticket) => ticket.renderHtml.trim() && !ticketBlocks.some((b) => b.id === ticket.id),
+        );
+        if (missing.length) {
+            try {
+                for (const ticket of missing) {
+                    emitMixRepair({ sessionId: working.id, name: ticket.name });
+                    const repaired = await repairMixTicket(apiConfig, working, ticket, text, signal);
+                    if (repaired) ticketBlocks.push({ id: ticket.id, raw: repaired });
+                }
+            } finally {
+                // 无论补成没补成都要收 toast，别让它挂在屏幕上过夜
+                emitMixRepair({ sessionId: working.id, done: true });
+            }
         }
     }
     ticketBlocks = orderMixBlocks(ticketBlocks, contractTickets);
