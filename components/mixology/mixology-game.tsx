@@ -18,6 +18,7 @@ import { MixRichText } from "./rich-text";
 import { KindGlyph, MixConfirm } from "./mixology-shared";
 import { MixTicketFrame } from "./ticket-frame";
 import { MixMechanismInline, MixMechanismPanel } from "./mechanism-panel";
+import { MixSlotEditor } from "./slot-editor";
 
 /** 当前真正挂着的对局：严格模式的重复挂载靠它区分「真退出」与「假卸载」 */
 const liveMixGames = new Set<string>();
@@ -160,6 +161,8 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
     }, [Boolean(editing)]);
     const [confirm, setConfirm] = useState<{ type: "rewind" | "edit"; turnId: string } | null>(null);
     const [recipeOpen, setRecipeOpen] = useState(false);
+    /** 局内的叠层编辑：排序 / 生效条件 / 移除，和吧台同一套编辑器 */
+    const [slotEdit, setSlotEdit] = useState<MixMaterialKind | null>(null);
     const [slotPick, setSlotPick] = useState<MixMaterialKind | null>(null);
     const [wheelIndex, setWheelIndex] = useState(0);
     /**
@@ -708,6 +711,18 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         onToast("已清空这一格，下一轮生效。");
     };
 
+    // 本局小票里勾了「记住」的项：叠层编辑器里变量条件的可选项。
+    // 每次渲染现算——小票就几件，比为它多背一个 memo 依赖划算
+    const slotVarNames: string[] = [];
+    for (const entry of mixSlotEntries(session.recipe.slots, "ticket")) {
+        const mat = getMixMaterial(entry.materialId);
+        if (mat?.kind !== "ticket") continue;
+        for (const item of mat.vars ?? []) {
+            const name = item.name.trim();
+            if (name && !slotVarNames.includes(name)) slotVarNames.push(name);
+        }
+    }
+
     /**
      * 按块取皮：块的供稿材料还在场就用它现在的皮（原地改版全局换皮的特性保留）；
      * 不在场了优先用对局档案里的退役快照，档案缺失（老数据）再找酒柜里同 id 的
@@ -1084,7 +1099,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                                     <button type="button" className="mix-dock-chip" onClick={() => setHistoryLimit(undefined)}>不限</button>
                                 </div>
                             ) : null}
-                            <div className="mix-bar-hint">左右滑动切换槽位 · 点击槽位换材料</div>
+                            <div className="mix-bar-hint">左右滑动切换槽位 · 点击槽位整理材料、顺序与生效条件</div>
                             <div className="mix-wheel" ref={wheelRef} onScroll={handleWheelScroll}>
                                 {MIX_SLOT_ORDER.map((kind) => {
                                     const stack = mixSlotEntries(session.recipe.slots, kind);
@@ -1097,7 +1112,7 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                                             data-filled={mat ? "true" : undefined}
                                             data-locked={locked ? "true" : undefined}
                                             key={kind}
-                                            onClick={() => { if (!locked) setSlotPick(kind); }}
+                                            onClick={() => { if (!locked) setSlotEdit(kind); }}
                                         >
                                             <div className="mix-slot-kind">
                                                 <b>{MIX_KIND_LABELS[kind]}</b>
@@ -1139,6 +1154,19 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                         </div>
                     </div>
                 </div>
+            ) : null}
+
+            {/* 局内叠层编辑：与吧台同一套（排序 / 生效条件 / 移除），改动即存、下一轮生效 */}
+            {slotEdit ? (
+                <MixSlotEditor
+                    kind={slotEdit}
+                    entries={mixSlotEntries(session.recipe.slots, slotEdit)}
+                    resolve={(id) => getMixMaterial(id)}
+                    varNames={slotVarNames}
+                    onChange={(next) => writeSlot(slotEdit, next)}
+                    onPickMore={() => setSlotPick(slotEdit)}
+                    onClose={() => setSlotEdit(null)}
+                />
             ) : null}
 
             {slotPick ? (
