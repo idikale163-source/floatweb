@@ -627,15 +627,24 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
             void run((signal, _commit, onDelta) => regenerateMixTail(sessionId, signal, onDelta));
             return;
         }
-        // 编辑的是角色回复且本局带钩子机括：问一声要不要把新原文交给机括重新收数
-        // （机括的标记行只有它自己的钩子认得，不重跑的话补写的标记行会留在正文里裸奔）
+        // 编辑的是角色回复且本局带钩子机括：把新原文交给机括重新收数
+        // （机括的标记行只有它自己的钩子认得，不重跑的话补写的标记行会留在正文里裸奔）。
+        // 常规情形直接静默替换；只有替换有代价（面板手改过会被滚掉）或做不到
+        // （不是最后生成的那一轮，底稿失效）时才弹窗问。
         if (target?.role === "assistant") {
             const hasHooked = mixSlotEntries(session.recipe.slots, "mechanism")
                 .some((e) => {
                     const m = getMixMaterial(e.materialId);
                     return m?.kind === "mechanism" && Boolean(m.script?.trim());
                 });
-            if (hasHooked) setEditSyncId(editing.id);
+            if (hasHooked) {
+                const fresh = getMixSession(sessionId) ?? session;
+                const canReplace = fresh.mechanismStorePrevTurn === editing.id && Boolean(fresh.mechanismStorePrev);
+                const untouched = canReplace
+                    && JSON.stringify(fresh.mechanismStore ?? {}) === JSON.stringify(fresh.mechanismStorePost ?? {});
+                if (untouched) doEditSync(editing.id, "replace");
+                else setEditSyncId(editing.id);
+            }
         }
     };
 

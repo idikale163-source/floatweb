@@ -608,9 +608,11 @@ async function runMixGeneration(
         turns: [...working.turns, turn],
         state: nextState,
         mechanismStore: afterHook.store,
-        // 记账前底稿：编辑这一轮原文后「替换重跑」的回滚基准
+        // 记账前底稿：编辑这一轮原文后「替换重跑」的回滚基准；
+        // 记账后快照：对比出"出杯之后面板里有没有手改过"，没改过就能静默替换
         mechanismStorePrev: working.mechanismStore ?? {},
         mechanismStorePrevTurn: turn.id,
+        mechanismStorePost: afterHook.store,
     };
     saveMixSession(updated);
     return { session: updated, turn };
@@ -844,6 +846,8 @@ export async function runMixEditSync(sessionId: string, turnId: string, mode: "r
         // 对局的当前值跟最后一轮的快照走；补跑的不是最后一轮就别动全局
         state: at === turns.length - 1 ? nextState : latest.state,
         mechanismStore: result.store,
+        // 记账后快照同步刷新：再次编辑同一轮时"没手改过"的判断继续成立
+        mechanismStorePost: result.store,
     });
     return true;
 }
