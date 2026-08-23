@@ -355,12 +355,19 @@ async function runMechanismHooks(
     session: MixSession,
     hook: MixHook,
     input: { text?: string; ticketRaws?: string[]; encoreRaws?: string[] },
-): Promise<{ text?: string; notes: string[]; state: MixState; store: Record<string, Record<string, string>> }> {
-    const { entries } = resolveMixRecipeMaterials(session.recipe);
-    const active = pickActiveMixMaterials(entries, buildMixConditionContext(session));
-    const mechanisms = (active.mechanism ?? []).filter((m): m is MixMechanismMaterial => m.kind === "mechanism");
+    roster?: MixMechanismMaterial[],
+): Promise<{ text?: string; notes: string[]; state: MixState; store: Record<string, Record<string, string>>; roster: MixMechanismMaterial[] }> {
+    // roster：这一轮的机括名单。生效条件一轮只判一次（落杯前那次），之后
+    // 由调用方原封传回来——否则小票一更新记住的值，条件在同一轮里翻脸，
+    // 落杯前注入的标记行就没人回收，原样漏进正文。
+    let mechanisms = roster;
+    if (!mechanisms) {
+        const { entries } = resolveMixRecipeMaterials(session.recipe);
+        const active = pickActiveMixMaterials(entries, buildMixConditionContext(session));
+        mechanisms = (active.mechanism ?? []).filter((m): m is MixMechanismMaterial => m.kind === "mechanism");
+    }
     const store = { ...(session.mechanismStore ?? {}) };
-    const out = { text: input.text, notes: [] as string[], state: {} as MixState, store };
+    const out = { text: input.text, notes: [] as string[], state: {} as MixState, store, roster: mechanisms };
     if (!mechanisms.length) return out;
     for (const material of mechanisms) {
         const script = material.script?.trim();
@@ -389,15 +396,15 @@ async function runMechanismHooks(
     return out;
 }
 
-/** 落杯前：给机括一次改写玩家发言、追加临时提示的机会 */
-async function runBeforeSendHooks(session: MixSession, text?: string): Promise<{ session: MixSession; text?: string; note?: string }> {
+/** 落杯前：给机括一次改写玩家发言、追加临时提示的机会。返回本轮机括名单，出杯后照单回收 */
+async function runBeforeSendHooks(session: MixSession, text?: string): Promise<{ session: MixSession; text?: string; note?: string; roster: MixMechanismMaterial[] }> {
     const result = await runMechanismHooks(session, "beforeSend", { text });
     const next: MixSession = {
         ...session,
         state: mergeHookState(session.state ?? {}, result.state),
         mechanismStore: result.store,
     };
-    return { session: next, text: result.text, note: result.notes.join("\n") || undefined };
+    return { session: next, text: result.text, note: result.notes.join("\n") || undefined, roster: result.roster };
 }
 
 /**
@@ -486,6 +493,7 @@ async function runMixGeneration(
     signal?: AbortSignal,
     skipBeforeSend = false,
     onDelta?: (text: string) => void,
+    roster?: MixMechanismMaterial[],
 ): Promise<MixReplyResult> {
     const apiConfig = resolveMixApiConfig();
     if (!apiConfig) {
@@ -495,10 +503,14 @@ async function runMixGeneration(
     // 因为改写要发生在发言落库之前）；这些路径没有新发言，机括只能追加临时提示
     let working = session;
     let extraNote: string | undefined;
+    // 本轮机括名单：落杯前判一次条件，出杯后照同一份名单跑回收——
+    // 中途小票改了记住的值也不换人，注入过格式要求的机括必须自己收尾
+    let turnRoster = roster;
     if (!skipBeforeSend) {
         const before = await runBeforeSendHooks(session);
         working = before.session;
         extraNote = before.note;
+        turnRoster = before.roster;
         if (working !== session) saveMixSession(working);
     }
     const combinedNudge = [nudge, extraNote].filter(Boolean).join("\n\n") || undefined;
@@ -570,6 +582,7 @@ async function runMixGeneration(
             ticketRaws: ticketBlocks.length ? ticketBlocks.map((b) => b.raw) : undefined,
             encoreRaws: encoreBlocks.length ? encoreBlocks.map((b) => b.raw) : undefined,
         },
+        turnRoster,
     );
     const finalText = typeof afterHook.text === "string" ? afterHook.text : text;
     const nextState = mergeHookState(stateFromTicket, afterHook.state);
@@ -624,8 +637,9 @@ export async function generateMixReply(
     // 落杯前钩子是 await 的，这句落库比调用方那次「同步回读」晚一拍，
     // 所以得主动喊一声：用户气泡要在模型回来之前就上屏
     onUserTurn?.();
-    // 这条路径的落杯前已经跑过了，别在 runMixGeneration 里重复触发
-    return runMixGeneration(withUser, before.note, signal, true, onDelta);
+    // 这条路径的落杯前已经跑过了，别在 runMixGeneration 里重复触发；
+    // 名单原封带过去，出杯后照单回收
+    return runMixGeneration(withUser, before.note, signal, true, onDelta, before.roster);
 }
 
 /** 本局全部小票材料（记住的值的声明来源），按槽位顺序 */
