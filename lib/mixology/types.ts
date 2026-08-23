@@ -638,6 +638,14 @@ export type MixSession = {
      */
     mechanismStore?: Record<string, Record<string, string>>;
     /**
+     * 最后一轮出杯后钩子跑之前的机括存储快照 + 它属于哪一轮。
+     * 编辑原始输出后的「替换重跑」靠它：先回到这轮记账前的底稿再重跑一次钩子，
+     * 原来那笔账自然作废，反复编辑反复同步也只记一笔。只留最后一轮——
+     * 编辑角色回复本来就会把之后的轮全部截掉，编辑完它一定是最后一轮。
+     */
+    mechanismStorePrev?: Record<string, Record<string, string>>;
+    mechanismStorePrevTurn?: string;
+    /**
      * 玩家自己拖动/缩放过的面板位置（materialId → 摆放），只在这一局有效。
      * 不写回材料：材料是作者的作品，玩家挪一下自己的屏幕不该改到别人的作品。
      */

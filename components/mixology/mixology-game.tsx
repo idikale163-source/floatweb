@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChevronLeft, Copy, History, MoreHorizontal, Pencil, Plus, RotateCcw, Send, Sun, WandSparkles, X } from "lucide-react";
-import { continueMix, editMixTurn, generateMixReply, MIX_REPAIR_EVENT, mixTurnRawText, refreshMixOpening, regenerateMixTail, rerollMixReply, runMixSessionEnd, truncateMixAfterTurn, type MixRepairEventDetail } from "@/lib/mixology/engine";
+import { continueMix, editMixTurn, generateMixReply, MIX_REPAIR_EVENT, mixTurnRawText, refreshMixOpening, regenerateMixTail, rerollMixReply, runMixEditSync, runMixSessionEnd, truncateMixAfterTurn, type MixRepairEventDetail } from "@/lib/mixology/engine";
 import { getMixMaterial, getMixSession, listMixPickables, MIX_CABINET_UPDATED_EVENT, resolveMixRecipeMaterials, saveMixSession } from "@/lib/mixology/storage";
 import { applyMixMacros, MIX_DEFAULT_USER_NAME } from "@/lib/mixology/assembler";
 import { buildMixConditionContext, pickActiveMixMaterials } from "@/lib/mixology/state";
@@ -160,6 +160,8 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- 只关心开/关，别在每次敲字时重挂监听
     }, [Boolean(editing)]);
     const [confirm, setConfirm] = useState<{ type: "rewind" | "edit"; turnId: string } | null>(null);
+    /** 编辑完角色回复后待确认的「同步给机括」：存的是刚编辑的那一轮 id */
+    const [editSyncId, setEditSyncId] = useState<string | null>(null);
     const [recipeOpen, setRecipeOpen] = useState(false);
     /** 局内的叠层编辑：排序 / 生效条件 / 移除，和吧台同一套编辑器 */
     const [slotEdit, setSlotEdit] = useState<MixMaterialKind | null>(null);
@@ -623,7 +625,28 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
         // 编辑的是玩家发言：直接续生成新回复；编辑角色回复则到此为止
         if (target?.role === "user") {
             void run((signal, _commit, onDelta) => regenerateMixTail(sessionId, signal, onDelta));
+            return;
         }
+        // 编辑的是角色回复且本局带钩子机括：问一声要不要把新原文交给机括重新收数
+        // （机括的标记行只有它自己的钩子认得，不重跑的话补写的标记行会留在正文里裸奔）
+        if (target?.role === "assistant") {
+            const hasHooked = mixSlotEntries(session.recipe.slots, "mechanism")
+                .some((e) => {
+                    const m = getMixMaterial(e.materialId);
+                    return m?.kind === "mechanism" && Boolean(m.script?.trim());
+                });
+            if (hasHooked) setEditSyncId(editing.id);
+        }
+    };
+
+    const doEditSync = (turnId: string, mode: "replace" | "append") => {
+        setEditSyncId(null);
+        void runMixEditSync(sessionId, turnId, mode).then((ok) => {
+            setSession(getMixSession(sessionId));
+            onToast(ok
+                ? (mode === "replace" ? "已替换：机括按编辑后的原文重新记了这一轮。" : "已追加：机括按编辑后的原文补记了一轮。")
+                : "同步失败，这一轮没有变化。");
+        });
     };
 
     /**
@@ -1272,6 +1295,31 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                     }}
                 />
             ) : null}
+
+            {editSyncId ? (() => {
+                // 替换要有这一轮记账前的底稿才做得到；底稿只属于最后生成的那一轮
+                const canReplace = session.mechanismStorePrevTurn === editSyncId && Boolean(session.mechanismStorePrev);
+                return (
+                    <div className="mix-confirm-mask" onClick={() => setEditSyncId(null)}>
+                        <div className="mix-confirm" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="同步给机括">
+                            <div className="mix-confirm-title">同步给机括？</div>
+                            <div className="mix-confirm-body">
+                                把编辑后的这一轮重新交给机括收数：标记行会被摘走，面板数据照新原文更新。
+                                {canReplace
+                                    ? <><br />「替换」先撤销这一轮机括原来记的账再重跑，一般选它；「追加」保留原账再记一遍。替换会连带丢掉这一轮之后你在机括面板里手改的内容。</>
+                                    : <><br />这一轮的记账底稿已不在（不是最后生成的那一轮），只能在现有数据上追加。</>}
+                            </div>
+                            <div className="mix-confirm-actions">
+                                <button type="button" className="mix-confirm-btn" onClick={() => setEditSyncId(null)}>不同步</button>
+                                <button type="button" className="mix-confirm-btn" onClick={() => doEditSync(editSyncId, "append")}>追加</button>
+                                {canReplace ? (
+                                    <button type="button" className="mix-confirm-btn" data-tone="primary" onClick={() => doEditSync(editSyncId, "replace")}>替换</button>
+                                ) : null}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })() : null}
         </div>
     );
 }

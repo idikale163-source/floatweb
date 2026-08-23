@@ -354,7 +354,7 @@ async function repairMixTicket(
 async function runMechanismHooks(
     session: MixSession,
     hook: MixHook,
-    input: { text?: string; ticketRaws?: string[]; encoreRaws?: string[] },
+    input: { text?: string; ticketRaws?: string[]; encoreRaws?: string[]; edited?: boolean },
     roster?: MixMechanismMaterial[],
 ): Promise<{ text?: string; notes: string[]; state: MixState; store: Record<string, Record<string, string>>; roster: MixMechanismMaterial[] }> {
     // roster：这一轮的机括名单。生效条件一轮只判一次（落杯前那次），之后
@@ -386,6 +386,7 @@ async function runMechanismHooks(
             encoreRaw: input.encoreRaws?.[0],
             ticketRaws: input.ticketRaws,
             encoreRaws: input.encoreRaws,
+            edited: input.edited || undefined,
         };
         const result = await runMixHook(session.id, material.id, script, hook, payload);
         if (typeof result.text === "string") out.text = result.text;
@@ -607,6 +608,9 @@ async function runMixGeneration(
         turns: [...working.turns, turn],
         state: nextState,
         mechanismStore: afterHook.store,
+        // 记账前底稿：编辑这一轮原文后「替换重跑」的回滚基准
+        mechanismStorePrev: working.mechanismStore ?? {},
+        mechanismStorePrevTurn: turn.id,
     };
     saveMixSession(updated);
     return { session: updated, turn };
@@ -788,6 +792,60 @@ export function editMixTurn(sessionId: string, turnId: string, newText: string):
     const updated = withRolledBackState(current, [...kept, edited]);
     saveMixSession(updated);
     return updated;
+}
+
+/**
+ * 编辑原始输出后的机括补跑：玩家在确认框里选了「替换」或「追加」才走这条。
+ * 拿编辑后的这一轮重跑一次出杯后钩子——机括按新正文重新收数（摘标记行、写存储、
+ * 补记住的值），钩子入参带 edited: true 供机括知情。
+ * - replace：从这一轮记账前的底稿（mechanismStorePrev）起跑，原来那笔账作废，
+ *   反复编辑反复同步也只记一笔。底稿必须还属于这一轮，不属于就退 false 让界面收窄选项。
+ * - append：从当前存储起跑，原有记录保留、再记一遍。
+ * turnCount 按"这一轮还没落库"的口径给（和真实出杯时一致），机括两次看到的世界相同。
+ */
+export async function runMixEditSync(sessionId: string, turnId: string, mode: "replace" | "append"): Promise<boolean> {
+    const session = getMixSession(sessionId);
+    if (!session) return false;
+    const idx = session.turns.findIndex((t) => t.id === turnId);
+    if (idx < 0 || session.turns[idx].role !== "assistant") return false;
+    let baseStore = session.mechanismStore;
+    if (mode === "replace") {
+        if (session.mechanismStorePrevTurn !== turnId || !session.mechanismStorePrev) return false;
+        baseStore = session.mechanismStorePrev;
+    }
+    const turn = session.turns[idx];
+    const ticketRaws = mixTurnTicketBlocks(turn).map((b) => b.raw);
+    const encoreRaws = mixTurnEncoreBlocks(turn).map((b) => b.raw);
+    const result = await runMechanismHooks(
+        { ...session, turns: session.turns.slice(0, idx), mechanismStore: baseStore },
+        "afterReply",
+        {
+            text: turn.text,
+            ticketRaws: ticketRaws.length ? ticketRaws : undefined,
+            encoreRaws: encoreRaws.length ? encoreRaws : undefined,
+            edited: true,
+        },
+    );
+    // 钩子是异步的，落库前重读一遍，别把补跑期间发生的改动盖掉
+    const latest = getMixSession(sessionId);
+    if (!latest) return false;
+    const at = latest.turns.findIndex((t) => t.id === turnId);
+    if (at < 0) return false;
+    const nextState = mergeHookState(latest.turns[at].state ?? latest.state ?? {}, result.state);
+    const turns = [...latest.turns];
+    turns[at] = {
+        ...turns[at],
+        text: typeof result.text === "string" ? result.text : turns[at].text,
+        state: nextState,
+    };
+    saveMixSession({
+        ...latest,
+        turns,
+        // 对局的当前值跟最后一轮的快照走；补跑的不是最后一轮就别动全局
+        state: at === turns.length - 1 ? nextState : latest.state,
+        mechanismStore: result.store,
+    });
+    return true;
 }
 
 /** 对当前历史直接生成回复（编辑玩家发言后的重新生成） */
