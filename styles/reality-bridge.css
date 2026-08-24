@@ -458,6 +458,14 @@
   transition: transform 0.18s ease;
 }
 .rb-add:active { transform: scale(0.92); }
+.rb-add:disabled {
+  background: var(--rb-line);
+  color: var(--rb-sub);
+  cursor: default;
+  box-shadow: none;
+  opacity: 0.72;
+}
+.rb-add:disabled:active { transform: none; }
 .rb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .rb-rcard {
   background: var(--rb-card);
