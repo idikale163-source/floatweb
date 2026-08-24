@@ -9,6 +9,7 @@
   --rb-acc: #7a5af8;
   --rb-acc-soft: #efeafe;
   --rb-acc-ink: #ffffff;
+  --rb-acc-text: #5f3cc4;
   --rb-ok: #2fa46a;
   --rb-warn: #e8a33d;
   --rb-shadow: 0 2px 8px rgba(23, 23, 28, 0.04);
@@ -397,6 +398,10 @@
   min-height: 44px;
   box-sizing: border-box;
   padding: 12px 0;
+}
+.rb-screen-chat-bind-hint {
+  color: var(--rb-acc-text);
+  font-weight: 700;
 }
 
 /* ── 首页 · 问候 ── */

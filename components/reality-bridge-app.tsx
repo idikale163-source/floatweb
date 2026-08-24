@@ -2041,7 +2041,7 @@ export function RealityBridgeApp({ onClose, onNotice }: {
                       <p className="rb-hint">个人云连通后这里会显示你的专属令牌。</p>
                     )}
                   </div>
-                  <p className="rb-hint">导入完成后，到系统「设置 → 辅助功能 → 触控 → 辅助触控」，把「轻点两下」设为这条快捷指令。</p>
+                  <p className="rb-hint rb-screen-chat-bind-hint">导入完成后，到系统「设置 → 辅助功能 → 触控 → 辅助触控」，把「轻点两下」设为这条快捷指令。</p>
 
                   <details className="rb-more rb-screen-chat-manual">
                     <summary>需要手动搭建？展开完整步骤</summary>
