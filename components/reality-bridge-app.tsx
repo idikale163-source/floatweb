@@ -202,6 +202,7 @@ const WIZ_STEP_NAMES = ["接通管道", "创建快捷指令", "选择信号", "�
 const SWIZ_STEP_NAMES = ["接通通道", "动作是什么", "触发方式", "参数与结果", "创建快捷指令", "测试与保存"] as const;
 const DWIZ_STEP_NAMES = ["接通通道", "数据项是什么", "创建上传快捷指令", "测试与保存"] as const;
 const SCREEN_WIZ_STEP_NAMES = ["接通个人云", "选择角色", "创建快捷指令", "确认与启用"] as const;
+const SCREEN_CHAT_SHORTCUT_URL = "https://www.icloud.com/shortcuts/d0ce177469a34aceb4c44b6eb14baae0";
 
 function ruleIcon(rule: BridgeRule) {
   const a = rule.actions ?? {};
@@ -2020,58 +2021,84 @@ export function RealityBridgeApp({ onClose, onNotice }: {
 
               {screenWizStep === 3 ? (
                 <div className="rb-wiz-page">
-                  <p className="rb-wiz-tip">在 iPhone 的「快捷指令」App 搭建一次：</p>
-                  <div className="rb-substep">
-                    <i>1</i>
-                    <div className="rb-substep-body">
-                      <p><b>新建快捷指令</b>：新建一条快捷指令（不是自动化），起名如「屏幕速聊」。</p>
-                    </div>
+                  <p className="rb-wiz-intro">推荐直接导入已经搭好的「屏幕速聊」，导入时按提示填写你的接口地址和令牌。</p>
+                  <a
+                    className="rb-btn rb-shortcut-import"
+                    href={SCREEN_CHAT_SHORTCUT_URL}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    aria-label="打开 iCloud 导入屏幕速聊快捷指令"
+                  >一键导入屏幕速聊</a>
+                  <div>
+                    <p className="rb-wiz-tip">问题 1 · 接口地址</p>
+                    <div className="rb-code" onClick={() => copy(screenChatUrl, "接口地址")}><code>{screenChatUrl}</code><span className="rb-copy">复制</span></div>
                   </div>
-                  <div className="rb-substep">
-                    <i>2</i>
-                    <div className="rb-substep-body">
-                      <p><b>截屏并压缩</b>：依次添加「截屏」→「调整图像大小」（宽度 960，高度自动）→「转换图像」（JPEG）→「Base64 编码」。</p>
-                      <p className="rb-hint">再加「从图像中提取文本」，输入选择调整大小后的图像，作为图像识别不可用时的兜底。</p>
-                    </div>
+                  <div>
+                    <p className="rb-wiz-tip">问题 2 · 令牌</p>
+                    {bridgeToken ? (
+                      <div className="rb-code" onClick={() => copy(bridgeToken, "令牌")}><code>{bridgeToken}</code><span className="rb-copy">复制</span></div>
+                    ) : (
+                      <p className="rb-hint">个人云连通后这里会显示你的专属令牌。</p>
+                    )}
                   </div>
-                  <div className="rb-substep">
-                    <i>3</i>
-                    <div className="rb-substep-body">
-                      <p><b>发给角色</b>：添加「获取 URL 内容」，URL 填：</p>
-                      <div className="rb-code" onClick={() => copy(screenChatUrl, "接口地址")}><code>{screenChatUrl}</code><span className="rb-copy">复制</span></div>
-                      <p>方法选 <b>POST</b>，请求体选 <b>JSON</b>，添加 4 个文本字段：
-                        <button type="button" className="rb-copychip" onClick={() => copy("token", "字段名")}>token</button> 填下方令牌、
-                        <button type="button" className="rb-copychip" onClick={() => copy("image", "字段名")}>image</button> 插入 Base64 变量、
-                        <button type="button" className="rb-copychip" onClick={() => copy("imageType", "字段名")}>imageType</button> 填 <button type="button" className="rb-copychip" onClick={() => copy("image/jpeg", "字段值")}>image/jpeg</button>、
-                        <button type="button" className="rb-copychip" onClick={() => copy("ocr", "字段名")}>ocr</button> 插入图像文本变量。</p>
-                      {bridgeToken ? (
-                        <div className="rb-code" onClick={() => copy(bridgeToken, "令牌")}><code>{bridgeToken}</code><span className="rb-copy">复制</span></div>
-                      ) : (
-                        <p className="rb-hint">个人云连通后这里会显示你的专属令牌。</p>
-                      )}
+                  <p className="rb-hint">导入完成后，到系统「设置 → 辅助功能 → 触控 → 辅助触控」，把「轻点两下」设为这条快捷指令。</p>
+
+                  <details className="rb-more rb-screen-chat-manual">
+                    <summary>需要手动搭建？展开完整步骤</summary>
+                    <div className="rb-more-body">
+                      <div className="rb-substep">
+                        <i>1</i>
+                        <div className="rb-substep-body">
+                          <p><b>新建快捷指令</b>：新建一条快捷指令（不是自动化），起名如「屏幕速聊」。</p>
+                        </div>
+                      </div>
+                      <div className="rb-substep">
+                        <i>2</i>
+                        <div className="rb-substep-body">
+                          <p><b>截屏并压缩</b>：依次添加「截屏」→「调整图像大小」（宽度 960，高度自动）→「转换图像」（JPEG）→「Base64 编码」。</p>
+                          <p className="rb-hint">再加「从图像中提取文本」，输入选择调整大小后的图像，作为图像识别不可用时的兜底。</p>
+                        </div>
+                      </div>
+                      <div className="rb-substep">
+                        <i>3</i>
+                        <div className="rb-substep-body">
+                          <p><b>发给角色</b>：添加「获取 URL 内容」，URL 填：</p>
+                          <div className="rb-code" onClick={() => copy(screenChatUrl, "接口地址")}><code>{screenChatUrl}</code><span className="rb-copy">复制</span></div>
+                          <p>方法选 <b>POST</b>，请求体选 <b>JSON</b>，添加 4 个文本字段：
+                            <button type="button" className="rb-copychip" onClick={() => copy("token", "字段名")}>token</button> 填下方令牌、
+                            <button type="button" className="rb-copychip" onClick={() => copy("image", "字段名")}>image</button> 插入 Base64 变量、
+                            <button type="button" className="rb-copychip" onClick={() => copy("imageType", "字段名")}>imageType</button> 填 <button type="button" className="rb-copychip" onClick={() => copy("image/jpeg", "字段值")}>image/jpeg</button>、
+                            <button type="button" className="rb-copychip" onClick={() => copy("ocr", "字段名")}>ocr</button> 插入图像文本变量。</p>
+                          {bridgeToken ? (
+                            <div className="rb-code" onClick={() => copy(bridgeToken, "令牌")}><code>{bridgeToken}</code><span className="rb-copy">复制</span></div>
+                          ) : (
+                            <p className="rb-hint">个人云连通后这里会显示你的专属令牌。</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="rb-substep">
+                        <i>4</i>
+                        <div className="rb-substep-body">
+                          <p><b>弹出回复</b>：从「URL 内容」获取字典值 <button type="button" className="rb-copychip" onClick={() => copy("reply", "键名")}>reply</button>，再用「显示提醒」弹出它。</p>
+                          <p className="rb-hint">也可读取 <button type="button" className="rb-copychip" onClick={() => copy("error", "键名")}>error</button>，在请求失败时显示原因。</p>
+                        </div>
+                      </div>
+                      <div className="rb-substep">
+                        <i>5</i>
+                        <div className="rb-substep-body">
+                          <p><b>续聊循环</b>：添加「重复」（15 次），内部放「要求输入」→ 再次 POST 同一地址（<button type="button" className="rb-copychip" onClick={() => copy("token", "字段名")}>token</button> 与 <button type="button" className="rb-copychip" onClick={() => copy("text", "字段名")}>text</button>）→ 获取 reply →「显示提醒」。</p>
+                          <p className="rb-hint">弹窗点「取消」即可结束本次对话。</p>
+                        </div>
+                      </div>
+                      <div className="rb-substep">
+                        <i>6</i>
+                        <div className="rb-substep-body">
+                          <p><b>绑定悬浮球</b>：系统「设置 → 辅助功能 → 触控 → 辅助触控」，把「轻点两下」设为这条快捷指令。</p>
+                          <p className="rb-hint">首次运行请允许网络与截屏权限；每轮回复通常需要 3～8 秒。</p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="rb-substep">
-                    <i>4</i>
-                    <div className="rb-substep-body">
-                      <p><b>弹出回复</b>：从「URL 内容」获取字典值 <button type="button" className="rb-copychip" onClick={() => copy("reply", "键名")}>reply</button>，再用「显示提醒」弹出它。</p>
-                      <p className="rb-hint">也可读取 <button type="button" className="rb-copychip" onClick={() => copy("error", "键名")}>error</button>，在请求失败时显示原因。</p>
-                    </div>
-                  </div>
-                  <div className="rb-substep">
-                    <i>5</i>
-                    <div className="rb-substep-body">
-                      <p><b>续聊循环</b>：添加「重复」（15 次），内部放「要求输入」→ 再次 POST 同一地址（<button type="button" className="rb-copychip" onClick={() => copy("token", "字段名")}>token</button> 与 <button type="button" className="rb-copychip" onClick={() => copy("text", "字段名")}>text</button>）→ 获取 reply →「显示提醒」。</p>
-                      <p className="rb-hint">弹窗点「取消」即可结束本次对话。</p>
-                    </div>
-                  </div>
-                  <div className="rb-substep">
-                    <i>6</i>
-                    <div className="rb-substep-body">
-                      <p><b>绑定悬浮球</b>：系统「设置 → 辅助功能 → 触控 → 辅助触控」，把「轻点两下」设为这条快捷指令。</p>
-                      <p className="rb-hint">首次运行请允许网络与截屏权限；每轮回复通常需要 3～8 秒。</p>
-                    </div>
-                  </div>
+                  </details>
                 </div>
               ) : null}
 

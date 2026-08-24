@@ -380,6 +380,24 @@
   box-shadow: var(--rb-shadow);
 }
 .rb-btn.danger { color: #d9534f; }
+.rb-shortcut-import {
+  min-height: 44px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  text-decoration: none;
+}
+.rb-screen-chat-manual {
+  border-top: 1px solid var(--rb-line);
+  padding-top: 10px;
+}
+.rb-screen-chat-manual > summary {
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 12px 0;
+}
 
 /* ── 首页 · 问候 ── */
 .rb-hello {
