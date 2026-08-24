@@ -14,6 +14,7 @@ import {
   loadBridgeRules,
   loadBridgeSettings,
   loadBridgeShortcutActions,
+  loadScreenChatSettings,
   parseBridgeActionParameterSchema,
   readBridgeStateSnapshot,
   sanitizeBridgeDataKey,
@@ -21,8 +22,10 @@ import {
   saveBridgeRules,
   saveBridgeSettings,
   saveBridgeShortcutActions,
+  saveScreenChatSettings,
   type BridgeDataItem,
   type BridgeShortcutAction,
+  type ScreenChatSettings,
 } from "@/lib/reality-bridge/storage";
 import type { BridgeRule } from "@/lib/reality-bridge/types";
 import { createShortcutCommand, loadRecentShortcutCommands, type ShortcutCommand } from "@/lib/shortcut-command-client";
@@ -235,7 +238,8 @@ export function RealityBridgeApp({ onClose, onNotice }: {
   const [bridgeToken, setBridgeToken] = useState("");
   const [closing, setClosing] = useState(false);
   const [spinTurns, setSpinTurns] = useState(0);
-  const [mainSec, setMainSec] = useState<"rules" | "shortcuts" | "queries">("rules");
+  const [mainSec, setMainSec] = useState<"rules" | "shortcuts" | "queries" | "screen">("rules");
+  const [screenChat, setScreenChat] = useState<ScreenChatSettings>(() => loadScreenChatSettings());
   const [histSec, setHistSec] = useState<"feed" | "commands">("feed");
   const [confirmClear, setConfirmClear] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -364,6 +368,14 @@ export function RealityBridgeApp({ onClose, onNotice }: {
     });
   }, []);
 
+  const updateScreenChat = useCallback((patch: Partial<ScreenChatSettings>) => {
+    setScreenChat(prev => {
+      const next = { ...prev, ...patch };
+      saveScreenChatSettings(next);
+      return next;
+    });
+  }, []);
+
   const persistRules = useCallback((next: BridgeRule[]) => {
     setRules(next);
     saveBridgeRules(next);
@@ -434,9 +446,12 @@ export function RealityBridgeApp({ onClose, onNotice }: {
       : `${siteOrigin}/api/push/bridge-wake?token=${bridgeToken}`
     : "";
 
-  // 离线联动：联动向导打开时按需拉取唤醒令牌——个人云从自己的网关取，
+  // 屏幕速聊同步入口（部署在用户个人云上的 screen-chat 函数）
+  const screenChatUrl = `${normalizeBackupUrl(config.url) || "https://你的项目.supabase.co"}/functions/v1/screen-chat`;
+
+  // 离线联动：联动向导或屏幕速聊页打开时按需拉取令牌——个人云从自己的网关取，
   // 否则从站点取（未登录/自托管会静默失败，区块隐藏）
-  const wantWakeToken = editing !== null;
+  const wantWakeToken = editing !== null || mainSec === "screen";
   useEffect(() => {
     if (!wantWakeToken || bridgeToken) return;
     let cancelled = false;
@@ -835,16 +850,18 @@ export function RealityBridgeApp({ onClose, onNotice }: {
             <section>
               <div className="rb-hello">
                 <h3>iOS现实桥</h3>
-                <button
-                  type="button"
-                  className="rb-add"
-                  aria-label={mainSec === "rules" ? "新建联动" : mainSec === "shortcuts" ? "新建快捷动作" : "新建数据项"}
-                  onClick={() => {
-                    if (mainSec === "rules") openRuleEditor(newRule(), false);
-                    else if (mainSec === "shortcuts") openShortcutEditor(newShortcutAction(), false);
-                    else openDataItemEditor(newDataItem(), false);
-                  }}
-                >＋</button>
+                {mainSec !== "screen" ? (
+                  <button
+                    type="button"
+                    className="rb-add"
+                    aria-label={mainSec === "rules" ? "新建联动" : mainSec === "shortcuts" ? "新建快捷动作" : "新建数据项"}
+                    onClick={() => {
+                      if (mainSec === "rules") openRuleEditor(newRule(), false);
+                      else if (mainSec === "shortcuts") openShortcutEditor(newShortcutAction(), false);
+                      else openDataItemEditor(newDataItem(), false);
+                    }}
+                  >＋</button>
+                ) : null}
               </div>
 
               <div className="rb-tiles">
@@ -916,6 +933,7 @@ export function RealityBridgeApp({ onClose, onNotice }: {
                       <button type="button" className={`rb-chip${mainSec === "rules" ? " active" : ""}`} onClick={() => setMainSec("rules")}>自动联动</button>
                       <button type="button" className={`rb-chip${mainSec === "shortcuts" ? " active" : ""}`} onClick={() => setMainSec("shortcuts")}>快捷动作</button>
                       <button type="button" className={`rb-chip${mainSec === "queries" ? " active" : ""}`} onClick={() => setMainSec("queries")}>主动查询</button>
+                      <button type="button" className={`rb-chip${mainSec === "screen" ? " active" : ""}`} onClick={() => setMainSec("screen")}>屏幕速聊</button>
                     </div>
                   </div>
                   {mainSec === "rules" ? (rules.length === 0 ? (
@@ -1017,6 +1035,116 @@ export function RealityBridgeApp({ onClose, onNotice }: {
                       </div>
                     </>
                   )) : null}
+
+                  {mainSec === "screen" ? (
+                    <div className="rb-editor rb-wiz-page" style={{ padding: "4px 2px 0" }}>
+                      <p className="rb-wiz-intro">屏幕速聊：点一下悬浮球，把当前屏幕截图发给角色，TA的回复以系统弹窗直接出现在屏幕上，还能在弹窗里继续聊。全程不用打开小手机。</p>
+
+                      <div className="rb-main-row">
+                        <span className="rb-icchip">{RB_ICON_CHAT}</span>
+                        <div className="rb-main-text">
+                          <b>启用屏幕速聊</b>
+                          <p>{personalPushActive ? "个人云已就绪" : "需先在「设置 → 云服务部署」部署个人云（含离线推送）"}</p>
+                        </div>
+                        <button
+                          type="button"
+                          className={`rb-switch ${screenChat.enabled ? "on" : ""}`}
+                          onClick={() => {
+                            if (!screenChat.enabled && characters.length === 0) {
+                              onNotice?.("请先创建一个角色");
+                              return;
+                            }
+                            updateScreenChat({
+                              enabled: !screenChat.enabled,
+                              characterId: screenChat.characterId || characters[0]?.id || "",
+                            });
+                          }}
+                          aria-label="启用屏幕速聊"
+                        />
+                      </div>
+
+                      {screenChat.enabled ? (
+                        <>
+                          <label>谁来接弹窗
+                            <select value={screenChat.characterId}
+                              onChange={event => updateScreenChat({ characterId: event.target.value })}>
+                              {characters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                          </label>
+                          <label>续聊窗口（多久内再次截屏算同一场对话）
+                            <select value={screenChat.resumeMinutes}
+                              onChange={event => updateScreenChat({ resumeMinutes: Number(event.target.value) || 0 })}>
+                              <option value={0}>每次都开新对话</option>
+                              <option value={10}>10 分钟</option>
+                              <option value={30}>30 分钟</option>
+                              <option value={60}>1 小时</option>
+                              <option value={180}>3 小时</option>
+                            </select>
+                          </label>
+                          <p className="rb-hint">设置保存后会自动把角色的人设快照同步到你的个人云（切后台时上传，也可以在聊天里发条消息触发）。截图是否随图发送，跟随该角色 API 配置里的「图像识别」开关：开了发原图，没开则改用快捷指令本地识别出的屏幕文字，纯文本模型也能用。对话会在小手机打开时自动进入聊天记录。</p>
+
+                          <p className="rb-wiz-tip">照下面的清单搭一个快捷指令（只需搭一次）：</p>
+                          <div className="rb-substep">
+                            <i>1</i>
+                            <div className="rb-substep-body">
+                              <p><b>新建快捷指令</b>：在「快捷指令」App 新建一条（不是自动化），起名如「屏幕速聊」。</p>
+                            </div>
+                          </div>
+                          <div className="rb-substep">
+                            <i>2</i>
+                            <div className="rb-substep-body">
+                              <p><b>截屏并压缩</b>：依次添加 4 个动作——「截屏」→「调整图像大小」（宽度填 960，高度自动）→「转换图像」（转为 JPEG）→「Base64 编码」。</p>
+                              <p className="rb-hint">再加一个「从图像中提取文本」（输入选调整大小后的图像）：没开图像识别时它就是角色「看到」的内容，开了也建议保留作兜底。</p>
+                            </div>
+                          </div>
+                          <div className="rb-substep">
+                            <i>3</i>
+                            <div className="rb-substep-body">
+                              <p><b>发给角色</b>：添加「获取 URL 内容」，URL 填：</p>
+                              <div className="rb-code" onClick={() => copy(screenChatUrl, "接口地址")}><code>{screenChatUrl}</code><span className="rb-copy">复制</span></div>
+                              <p>方法选 <b>POST</b>，请求体选 <b>JSON</b>，添加 4 个「文本」字段：
+                                <button type="button" className="rb-copychip" onClick={() => copy("token", "字段名")}>token</button> 填下方令牌、
+                                <button type="button" className="rb-copychip" onClick={() => copy("image", "字段名")}>image</button> 插入「Base64 编码」变量、
+                                <button type="button" className="rb-copychip" onClick={() => copy("imageType", "字段名")}>imageType</button> 填 <button type="button" className="rb-copychip" onClick={() => copy("image/jpeg", "字段值")}>image/jpeg</button>、
+                                <button type="button" className="rb-copychip" onClick={() => copy("ocr", "字段名")}>ocr</button> 插入「图像中的文本」变量。</p>
+                              {bridgeToken ? (
+                                <div className="rb-code" onClick={() => copy(bridgeToken, "令牌")}><code>{bridgeToken}</code><span className="rb-copy">复制</span></div>
+                              ) : (
+                                <p className="rb-hint">（个人云连通后这里会显示你的专属令牌）</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="rb-substep">
+                            <i>4</i>
+                            <div className="rb-substep-body">
+                              <p><b>弹出回复</b>：添加「获取字典值」两次——从「URL 内容」里分别取
+                                <button type="button" className="rb-copychip" onClick={() => copy("reply", "键名")}>reply</button> 和
+                                <button type="button" className="rb-copychip" onClick={() => copy("session", "键名")}>session</button>；
+                                再添加「显示提醒」，标题填角色名，信息插入 reply 变量。</p>
+                              <p className="rb-hint">出错时 reply 为空——可再取一次 <button type="button" className="rb-copychip" onClick={() => copy("error", "键名")}>error</button> 键，用「如果」判断后弹提醒显示原因。</p>
+                            </div>
+                          </div>
+                          <div className="rb-substep">
+                            <i>5</i>
+                            <div className="rb-substep-body">
+                              <p><b>续聊循环</b>：添加「重复」（次数 15），内部依次放三个动作——「要求输入」（文本，提示语填「回复TA」）→「获取 URL 内容」（同上地址，POST/JSON，三个文本字段：
+                                <button type="button" className="rb-copychip" onClick={() => copy("token", "字段名")}>token</button> 同上、
+                                <button type="button" className="rb-copychip" onClick={() => copy("session", "字段名")}>session</button> 插入第④步的 session 变量、
+                                <button type="button" className="rb-copychip" onClick={() => copy("text", "字段名")}>text</button> 插入「提供的输入」变量）→「获取字典值」取 reply 后「显示提醒」。</p>
+                              <p className="rb-hint">任何一个弹窗点「取消」即结束对话；想结束也可以直接不理它。</p>
+                            </div>
+                          </div>
+                          <div className="rb-substep">
+                            <i>6</i>
+                            <div className="rb-substep-body">
+                              <p><b>绑定悬浮球</b>：系统「设置 → 辅助功能 → 触控 → 辅助触控」开启悬浮球，把「轻点两下」（或自定操作任选）设为这条快捷指令。之后在任何界面点悬浮球，几秒后角色就会弹窗跟你说话。</p>
+                              <p className="rb-hint">首次运行会请求网络与截屏权限，允许并勾选「始终允许」即可；对话每轮大约等 3~8 秒。</p>
+                            </div>
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+                  ) : null}
               </>
             </section>
           ) : null}

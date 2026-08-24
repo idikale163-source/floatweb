@@ -17,7 +17,8 @@ begin
       and c.relname <> all (array[
         'ai_phone_cloud_meta',
         'push_server_config', 'push_subscriptions', 'push_jobs', 'push_outbox',
-        'push_shortcut_commands', 'push_bridge_config', 'push_bridge_snapshots'
+        'push_shortcut_commands', 'push_bridge_config', 'push_bridge_snapshots',
+        'push_screen_sessions'
       ])
   ) into has_unknown_public_table;
 
@@ -156,6 +157,19 @@ create table if not exists public.push_bridge_snapshots (
   primary key (user_id, rule_id)
 );
 
+-- 屏幕速聊：悬浮球截屏对话的会话上下文（screen-chat 同步接口专用，48 小时自清理）
+create table if not exists public.push_screen_sessions (
+  id text primary key,
+  user_id text not null,
+  turns jsonb not null default '[]'::jsonb,
+  image jsonb,
+  turn_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists push_screen_sessions_user_idx
+  on public.push_screen_sessions (user_id, updated_at desc);
+
 alter table public.push_server_config enable row level security;
 alter table public.ai_phone_cloud_meta enable row level security;
 alter table public.push_subscriptions enable row level security;
@@ -164,6 +178,7 @@ alter table public.push_outbox enable row level security;
 alter table public.push_shortcut_commands enable row level security;
 alter table public.push_bridge_config enable row level security;
 alter table public.push_bridge_snapshots enable row level security;
+alter table public.push_screen_sessions enable row level security;
 
 -- 2026 年起新项目不会自动把 public 新表暴露给 Data API。
 -- 网关和生成器只以 service_role 访问，绝不授予 anon 或 authenticated。
@@ -176,7 +191,8 @@ grant select, insert, update, delete on table
   public.push_outbox,
   public.push_shortcut_commands,
   public.push_bridge_config,
-  public.push_bridge_snapshots
+  public.push_bridge_snapshots,
+  public.push_screen_sessions
 to service_role;
 
 create extension if not exists pg_cron;
