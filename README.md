@@ -69,7 +69,7 @@ NEXT_PUBLIC_SELF_HOSTED_MODE=true
 | 变量 | 用途 |
 |---|---|
 | `NEXT_PUBLIC_SELF_HOSTED_MODE` | `true`=单机模式（推荐自部署开启）；`false`=启用账号/激活码门禁（需配 Supabase） |
-| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | 你自己的 Supabase 项目，启用云端功能时必填（服务端专用，勿放进 NEXT_PUBLIC） |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | 站点账号、社区功能和现实桥邮件自动化使用的 Supabase 项目（服务端专用，勿放进 NEXT_PUBLIC）；应用内创建的个人云不需要把密钥填到这里 |
 | `MIXOLOGY_SUPABASE_URL` / `MIXOLOGY_SUPABASE_SERVICE_ROLE_KEY` | 独家特调专用的独立 Supabase 项目（酒材/配方/点赞/入柜/评论）。特调数据只走这里，不填则特调云端不开张，不会回退主库 |
 | `ACCOUNT_GATE_SECRET` | 账号门禁签名密钥，启用账号系统时设为随机长字符串 |
 | `VERIFY_ADMIN_KEY` | 成年审核/激活码管理后台密钥 |
@@ -81,7 +81,7 @@ NEXT_PUBLIC_SELF_HOSTED_MODE=true
 | `TRIPO_API_KEY` | 可选的服务端兜底，一般不用填——用户在世界搭建界面内自行填写 Tripo key |
 | `IMGBB_API_KEY` | 可选的服务端兜底，一般不用填——用户在应用内生图/图床设置里自行填写 |
 | `WEIXIN_PROXY` | 微信本地助手代理，见 `tools/weixin-local-assistant/README.md` |
-| `RESEND_API_KEY` / `REALITY_BRIDGE_EMAIL_FROM` / `SHORTCUT_EMAIL_VERIFICATION_SECRET` | 可选的现实桥邮件执行通道；普通推送快捷动作不需要 |
+| `RESEND_API_KEY` / `REALITY_BRIDGE_EMAIL_FROM` / `SHORTCUT_EMAIL_VERIFICATION_SECRET` | 可选的现实桥“邮件自动”实验通道；普通推送快捷动作不需要 |
 
 ## 启用自己的 Supabase（可选云端功能）
 
@@ -126,6 +126,79 @@ SUPABASE_ANON_KEY=your-anon-key
 部署完成后，在聊天信息页开启「离线推送与定时消息」；微信 Bot 则在
 **设置 → 微信接入**中添加。云端与本地使用相同的角色运行包，微信消息、离线回复、
 快捷动作结果和来电留痕会按因果顺序合并回小手机。
+
+### iOS 现实桥：通知点击运行
+
+现实桥默认使用“通知点击运行”：角色触发快捷动作后，个人云向 iPhone 发送系统通知，
+用户点击通知即可运行快捷指令。该模式随上面的个人云一起部署，**不需要 Resend**，
+也不需要额外的站点 Supabase 环境变量，是推荐的默认选择。
+
+### iOS 现实桥：邮件自动运行（实验）
+
+“邮件自动”利用 iOS 的“收到指定邮件时立即运行”自动化，因此必须有服务负责发送触发
+邮件。目前项目使用 [Resend](https://resend.com)：
+
+- 自己部署、自己使用时，由站点主人配置一次 Resend。
+- 多人共用一个站点时，由站点运营者配置一次；普通用户只在小手机里验证接收邮箱，
+  不需要各自注册 Resend。
+- 不配置 Resend 不影响云备份、微信、离线回复或“通知点击运行”，只是邮件模式不可用。
+
+#### 1. 配置 Resend
+
+1. 注册 Resend，在 Domains 中添加自己拥有的域名。推荐使用独立子域名，例如
+   `notify.example.com`。
+2. 按页面提示添加 DNS 记录，等待状态变成 `Verified`。参见
+   [Resend 域名验证文档](https://resend.com/docs/dashboard/domains/introduction)。
+3. 在 [Resend API Keys](https://resend.com/api-keys) 创建 API Key。密钥只显示一次，
+   请立即保存，不要提交到 Git。
+
+域名验证后可以直接使用该域名下的任意发件地址，例如
+`bridge@notify.example.com`，该地址不要求拥有独立收件箱。
+
+#### 2. 配置站点环境变量与数据库
+
+在 Netlify / Vercel 的环境变量中增加：
+
+```env
+RESEND_API_KEY=re_xxxxxxxxx
+REALITY_BRIDGE_EMAIL_FROM="Float Reality Bridge <bridge@notify.example.com>"
+SHORTCUT_EMAIL_VERIFICATION_SECRET=独立随机长字符串
+```
+
+可用下面的命令生成验证码签名密钥：
+
+```bash
+openssl rand -hex 32
+```
+
+以上都是服务端秘密，不要添加 `NEXT_PUBLIC_` 前缀。发件邮箱的域名必须与 Resend
+中已经验证的域名一致。
+
+邮件验证记录和邮件型快捷指令目前存放在**站点 Supabase**，不是用户一键创建的个人云。
+因此还需要配置：
+
+```env
+SUPABASE_URL=https://your-site-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+```
+
+然后在这个站点 Supabase 项目的 SQL Editor 执行
+[`docs/push-supabase.sql`](./docs/push-supabase.sql)，再重新部署站点。若已为账号或其他
+站点功能配置过这两个变量，可以继续使用同一个站点项目。不要把 `service_role` 密钥
+交给浏览器或写进任何 `NEXT_PUBLIC_*` 变量。
+
+#### 3. 配置 iPhone
+
+1. 打开“现实桥 → iOS 快捷动作”，将送达方式选为“邮件自动（实验）”。
+2. 填写 iPhone“邮件”App 能及时收信的邮箱，接收并输入六位验证码。
+3. 把页面显示的发件人加入白名单，避免触发邮件进入垃圾箱。
+4. 在“快捷指令 → 自动化”中新建“电子邮件”自动化：发件人填写页面显示的地址，
+   主题选择“包含”页面显示的主题标记，运行方式选“立即运行”。
+5. 自动化动作设置为运行页面生成的快捷指令，并把邮件正文作为快捷指令输入。
+
+为减少延迟，推荐使用在 iPhone 邮件 App 中支持实时推送的 iCloud 或 Exchange 邮箱。
+首次运行仍可能要求 iOS 权限确认，部分动作在锁屏状态下也可能受到系统限制，因此该
+模式仍标记为实验功能。
 
 维护者修改云函数源文件后运行：
 
