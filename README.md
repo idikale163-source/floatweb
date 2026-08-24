@@ -9,6 +9,8 @@
 - 剧情玩法：剧情模式、视觉小说、查手机、访谈、地图冒险、日记、便签墙
 - 扩展生态：应用市场（用 SDK 写自定义 APP）、游戏大厅、内置小游戏
 - 多媒体：AI 生图、Minimax 语音合成、网易云在线音乐（需自配 API）、3D 世界搭建（Tripo）
+- 个人云：可把云备份、微信助手、离线回复、定时消息、快捷动作与云端来电部署到用户自己的 Supabase
+- 现实桥：角色可调用用户映射的 iPhone 快捷指令，并在文本/图片结果回传后继续回复
 - 桌面美化：主题、壁纸、贴纸小组件、自定义 CSS，支持 PWA 安装到手机桌面
 
 所有 LLM 调用都使用**你自己的 API key**，本项目不内置任何模型服务。
@@ -79,6 +81,7 @@ NEXT_PUBLIC_SELF_HOSTED_MODE=true
 | `TRIPO_API_KEY` | 可选的服务端兜底，一般不用填——用户在世界搭建界面内自行填写 Tripo key |
 | `IMGBB_API_KEY` | 可选的服务端兜底，一般不用填——用户在应用内生图/图床设置里自行填写 |
 | `WEIXIN_PROXY` | 微信本地助手代理，见 `tools/weixin-local-assistant/README.md` |
+| `RESEND_API_KEY` / `REALITY_BRIDGE_EMAIL_FROM` / `SHORTCUT_EMAIL_VERIFICATION_SECRET` | 可选的现实桥邮件执行通道；普通推送快捷动作不需要 |
 
 ## 启用自己的 Supabase（可选云端功能）
 
@@ -106,6 +109,33 @@ SUPABASE_ANON_KEY=your-anon-key
 
 不要把 `.env.local` 提交到 Git。
 
+## 个人云、离线推送与微信接入
+
+这套功能不要求站点维护者把所有用户数据放进同一个 Supabase。每位用户可在
+**设置 → 云服务部署**里粘贴自己的 Supabase Access Token、选择自己的组织，应用会：
+
+1. 自动创建一个名为 `AI Phone Personal Cloud` 的独立项目；
+2. 按用户勾选范围部署云备份、微信 Edge Function、离线推送与快捷动作函数；
+3. 把该项目的地址和密钥只保存在用户自己的小手机数据中，Access Token 仅在本次部署请求中透传，不保存；
+4. 用项目标记和数据库表检查阻止误装进已有业务库。
+
+个人云与上文的站点运营库是两件事：`SUPABASE_URL` 用于账号、市场等站点级功能；
+个人云由用户在界面中创建，默认不会复用或修改站点运营库。自部署者只想个人使用时，
+保持 `NEXT_PUBLIC_SELF_HOSTED_MODE=true`，无需先配置站点运营库，也能使用个人云。
+
+部署完成后，在聊天信息页开启「离线推送与定时消息」；微信 Bot 则在
+**设置 → 微信接入**中添加。云端与本地使用相同的角色运行包，微信消息、离线回复、
+快捷动作结果和来电留痕会按因果顺序合并回小手机。
+
+维护者修改云函数源文件后运行：
+
+```bash
+npm run push:build-dist   # 生成浏览器一键部署包
+npm run check:push        # 校验源文件与部署包一致，且不含私有站点地址
+npm run weixin:build-dist # 生成微信本地/云端分发包
+npm run check:weixin      # 校验微信提示词与分发文件
+```
+
 ## 分支选择
 
 本仓库长期保留两个设备兼容版本：
@@ -120,6 +150,7 @@ npm run dev     # 本地开发（端口 3001）
 npm run build   # 生产构建
 npm run start   # 生产运行
 npm run lint    # 代码检查
+npm run check:push # 校验个人云部署包
 ```
 
 ## License
