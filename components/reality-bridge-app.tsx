@@ -891,17 +891,18 @@ export function RealityBridgeApp({ onClose, onNotice }: {
             <section>
               <div className="rb-hello">
                 <h3>iOS现实桥</h3>
-                <button
-                  type="button"
-                  className="rb-add"
-                  aria-label={mainSec === "rules" ? "新建联动" : mainSec === "shortcuts" ? "新建快捷动作" : mainSec === "queries" ? "新建数据项" : "配置屏幕速聊"}
-                  onClick={() => {
-                    if (mainSec === "rules") openRuleEditor(newRule(), false);
-                    else if (mainSec === "shortcuts") openShortcutEditor(newShortcutAction(), false);
-                    else if (mainSec === "queries") openDataItemEditor(newDataItem(), false);
-                    else openScreenChatEditor(Boolean(screenChat.characterId));
-                  }}
-                >＋</button>
+                {mainSec !== "screen" ? (
+                  <button
+                    type="button"
+                    className="rb-add"
+                    aria-label={mainSec === "rules" ? "新建联动" : mainSec === "shortcuts" ? "新建快捷动作" : "新建数据项"}
+                    onClick={() => {
+                      if (mainSec === "rules") openRuleEditor(newRule(), false);
+                      else if (mainSec === "shortcuts") openShortcutEditor(newShortcutAction(), false);
+                      else openDataItemEditor(newDataItem(), false);
+                    }}
+                  >＋</button>
+                ) : null}
               </div>
 
               <div className="rb-tiles">
