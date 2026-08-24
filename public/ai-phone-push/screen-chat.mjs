@@ -4,8 +4,8 @@
 // 职责：iPhone 悬浮球快捷指令 POST 截图/屏幕文字/回复文本 → 读取「屏幕速聊」
 //      prompt 快照（现实桥同步，payload_key 加密）→ 代入会话上下文与截图 →
 //      调 LLM 生成角色回复并在本次请求内同步返回（快捷指令用「显示提醒」弹窗）→
-//      会话存 push_screen_sessions 供连续对话 → 每轮写 push_outbox(kind=bridge)，
-//      小手机打开时合并进聊天记录与角色记忆。不推送通知（用户正看着弹窗）。
+//      以角色在小手机中的唯一 sessionId 为准，只暂存尚未回端的文字增量 → 每轮原子写
+//      push_outbox(kind=bridge)，小手机打开时合并进原聊天记录。不持久化截图。
 // 注意：自包含移植文件，改动共享逻辑时需同步 push-bridge / push-generate。
 
 type ProviderKind = "openai-compatible" | "anthropic" | "gemini";
@@ -140,21 +140,19 @@ const IMAGE_MARKER = "SCREEN_CHAT_IMAGE_SLOT";
 const MAX_BODY_BYTES = 3 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_DAILY_CAP = 120;
-const DEFAULT_RESUME_MINUTES = 30;
-/** 会话里保留的最大轮数（一问一答算两条）；prompt 只带最近这些 */
-const MAX_STORED_TURNS = 32;
-const SESSION_TTL_HOURS = 48;
+const MAX_PENDING_TURNS = 500;
 
 type ScreenSnapshot = {
   replyRequest?: { url: string; headers: Record<string, string>; body: Record<string, unknown>; providerKind: ProviderKind };
   enableVision?: boolean;
-  resumeMinutes?: number;
+  ackSequence?: number;
   dailyCap?: number;
   chat?: { characterId?: string; sessionId?: string; characterName?: string };
   reply?: Record<string, unknown>;
 };
 
 type ScreenTurn = {
+  sequence: number;
   role: "user" | "assistant";
   text: string;
   /** 该轮携带了屏幕内容（截图或屏幕文字） */
@@ -164,13 +162,11 @@ type ScreenTurn = {
   at: string;
 };
 
-type SessionRow = {
-  id: string;
-  user_id: string;
-  turns: ScreenTurn[];
-  image: { mimeType: string; base64: string } | null;
-  turn_count: number;
-  updated_at: string;
+type BeginResult = {
+  status?: "ok" | "busy" | "daily_cap";
+  pendingTurns?: unknown;
+  nextSequence?: number;
+  sessionId?: string;
 };
 
 const corsHeaders = {
@@ -315,36 +311,50 @@ function injectImageAtMarker(
   return false;
 }
 
-/** 组装代入快照的对话文本：场景说明 + 截图插入位 + 最近轮次。
- *  只有最新一次屏幕内容进 prompt：视觉开启时留下 IMAGE_MARKER 待注图，
- *  否则直接代入该轮的 OCR 文字；更早的屏幕轮次只保留一句提示。 */
-function buildTranscript(turns: ScreenTurn[], hasLiveImage: boolean): string {
+function normalizePendingTurns(value: unknown, acknowledged: number): ScreenTurn[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap(item => {
+    const row = item && typeof item === "object" ? item as Partial<ScreenTurn> : {};
+    const sequence = Number(row.sequence);
+    const role = row.role === "user" || row.role === "assistant" ? row.role : null;
+    if (!Number.isSafeInteger(sequence) || sequence <= acknowledged || !role) return [];
+    const text = cleanText(row.text, 2000);
+    const ocr = cleanText(row.ocr, 6000);
+    return [{
+      sequence,
+      role,
+      text,
+      ...(row.screen === true ? { screen: true } : {}),
+      ...(ocr ? { ocr } : {}),
+      at: cleanText(row.at, 60) || new Date().toISOString(),
+    } satisfies ScreenTurn];
+  }).slice(-MAX_PENDING_TURNS);
+}
+
+/** 快照本身已有小手机的完整历史；这里只代入尚未回端的增量和当前屏幕。
+ *  不按时间或轮数新开对话，也不把过去的截图写入数据库。 */
+function buildTranscript(turns: ScreenTurn[], liveSequence: number, hasLiveImage: boolean): string {
   const lines: string[] = [
     "【屏幕速聊】用户正通过 iPhone 悬浮球和你进行即时弹窗对话：TA把当前手机屏幕发给了你，"
     + "你的回复会以系统弹窗直接显示在TA的屏幕上，TA可以在弹窗里继续回复你。"
     + "请保持你的身份自然回应，每次回复保持简短（一至三句话）。",
     "",
   ];
-  const recent = turns.slice(-MAX_STORED_TURNS);
-  const lastScreenIndex = (() => {
-    for (let i = recent.length - 1; i >= 0; i -= 1) {
-      if (recent[i].screen) return i;
-    }
-    return -1;
-  })();
-  recent.forEach((turn, index) => {
+  turns.forEach(turn => {
     if (turn.role === "assistant") {
       lines.push(`你：${turn.text}`);
       return;
     }
     if (turn.screen) {
-      if (index === lastScreenIndex) {
+      if (turn.sequence === liveSequence) {
         lines.push(hasLiveImage
           ? `用户发来了当前的屏幕截图：${IMAGE_MARKER}`
           : "用户发来了当前的屏幕内容（文字识别结果）：\n"
             + (turn.ocr ? turn.ocr.slice(0, 4000) : "（截图未能识别出文字，请结合上下文回应）"));
       } else {
-        lines.push("用户发来了一张屏幕截图（较早，已略去）。");
+        lines.push(turn.ocr
+          ? `用户此前发来的屏幕文字：\n${turn.ocr.slice(0, 4000)}`
+          : "用户此前发来过一张屏幕截图（原图未保存）。");
       }
       if (turn.text) lines.push(`用户：${turn.text}`);
       return;
@@ -435,188 +445,162 @@ Deno.serve(async (request: Request) => {
     }
     if (!image && !text && !ocr) return json({ ok: false, error: "缺少内容：请携带截图（image）或文本（text）。" }, 400);
 
-    // 当日上限：保护 token（只统计屏幕速聊自己的生成）
+    const characterId = cleanText(snapshot.chat?.characterId, 100);
+    const canonicalSessionId = cleanText(snapshot.chat?.sessionId, 100);
+    if (!characterId || !canonicalSessionId) {
+      return json({ ok: false, error: "屏幕速聊缺少角色会话，请打开小手机重新选择角色。" }, 409);
+    }
+
+    // 按角色原子串行生成并计数；不会因双击过快而覆盖另一轮。
     const dailyCap = Math.max(10, Math.min(500, Number(snapshot.dailyCap) || DEFAULT_DAILY_CAP));
-    const dayStart = `${new Date().toISOString().slice(0, 10)}T00:00:00Z`;
-    const capResponse = await rest(
-      `push_outbox?user_id=eq.${encodeURIComponent(userId)}&created_at=gte.${encodeURIComponent(dayStart)}`
-      + `&meta->>screenChat=eq.true&select=id&limit=${dailyCap + 1}`,
-    );
-    const todayRows = capResponse.ok ? await capResponse.json() as unknown[] : [];
-    if (todayRows.length >= dailyCap) {
-      return json({ ok: false, error: `今天的屏幕速聊次数已达上限（${dailyCap} 次），明天再来吧。` }, 429);
-    }
-
-    // 会话：显式续聊用 session 参数；新截屏在续聊窗口内自动接上最近一场
-    const resumeMinutes = Math.max(0, Math.min(720, Number(snapshot.resumeMinutes) || DEFAULT_RESUME_MINUTES));
-    const requestedSession = cleanText(body.session, 80);
-    let session: SessionRow | null = null;
-    if (requestedSession) {
-      const found = await rest(
-        `push_screen_sessions?id=eq.${encodeURIComponent(requestedSession)}`
-        + `&user_id=eq.${encodeURIComponent(userId)}&select=id,user_id,turns,image,turn_count,updated_at&limit=1`,
-      );
-      const rows = found.ok ? await found.json() as SessionRow[] : [];
-      session = rows[0] ?? null;
-    } else if (resumeMinutes > 0) {
-      const found = await rest(
-        `push_screen_sessions?user_id=eq.${encodeURIComponent(userId)}`
-        + `&select=id,user_id,turns,image,turn_count,updated_at&order=updated_at.desc&limit=1`,
-      );
-      const rows = found.ok ? await found.json() as SessionRow[] : [];
-      const latest = rows[0];
-      if (latest && Date.now() - Date.parse(latest.updated_at) < resumeMinutes * 60_000) session = latest;
-    }
-    const isNewSession = !session;
-    if (!session) {
-      session = {
-        id: `sc_${crypto.randomUUID()}`,
-        user_id: userId,
-        turns: [],
-        image: null,
-        turn_count: 0,
-        updated_at: new Date().toISOString(),
-      };
-    }
-    if (!Array.isArray(session.turns)) session.turns = [];
-
-    const now = new Date().toISOString();
-    const carriesScreen = Boolean(image || ocr);
-    const userTurn: ScreenTurn = {
-      role: "user",
-      text,
-      ...(carriesScreen ? { screen: true } : {}),
-      ...(ocr ? { ocr } : {}),
-      at: now,
-    };
-    session.turns.push(userTurn);
-    if (image) session.image = image;
-
-    // 组装请求：哨兵 → 对话文本；截图插入位 → 图片附件（视觉开）或该轮屏幕文字（视觉关）
-    const enableVision = snapshot.enableVision === true;
-    const liveImage = enableVision ? (image ?? session.image) : null;
-    const transcript = buildTranscript(session.turns, Boolean(liveImage));
-    const bodyJson = substituteSentinel(JSON.stringify(replyRequest.body), SCREEN_CHAT_SENTINEL, transcript);
-    if (bodyJson === JSON.stringify(replyRequest.body)) {
-      return json({ ok: false, error: "快照里找不到对话占位符，请到小手机重新保存一次屏幕速聊设置。" }, 500);
-    }
-    const requestBody = JSON.parse(bodyJson) as Record<string, unknown>;
-    if (liveImage) {
-      if (!injectImageAtMarker(requestBody, replyRequest.providerKind, IMAGE_MARKER, liveImage)) {
-        replaceMarkerInStrings(requestBody, IMAGE_MARKER, ocr || "（截图注入失败，请结合上下文回应）");
-      }
-    } else {
-      // 兜底：无论何种原因插入位仍残留，一律替换掉，绝不把内部标记发给模型
-      replaceMarkerInStrings(requestBody, IMAGE_MARKER, ocr || "（无截图内容）");
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120_000);
-    let llmResponse: Response;
+    const lockToken = crypto.randomUUID();
+    let lockHeld = false;
     try {
-      llmResponse = await fetch(replyRequest.url, {
+      const beginResponse = await rest("rpc/ai_phone_screen_chat_begin", {
         method: "POST",
-        headers: replyRequest.headers,
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
+        body: JSON.stringify({
+          p_user_id: userId,
+          p_character_id: characterId,
+          p_session_id: canonicalSessionId,
+          p_lock_token: lockToken,
+          p_daily_cap: dailyCap,
+        }),
       });
-    } catch (err) {
-      return json({
-        ok: false,
-        error: `AI 接口连接失败：${(err instanceof Error ? err.message : String(err)).slice(0, 120)}`,
-      }, 502);
-    } finally {
-      clearTimeout(timeout);
-    }
-    if (!llmResponse.ok) {
-      const detail = await llmResponse.text().catch(() => "");
-      return json({ ok: false, error: `AI 接口返回 ${llmResponse.status}：${detail.slice(0, 160)}` }, 502);
-    }
-    let rawText = extractResponseText(replyRequest.providerKind, await llmResponse.json()).trim();
-    if (!rawText) return json({ ok: false, error: "AI 返回了空回复，请再试一次。" }, 502);
+      if (!beginResponse.ok) {
+        const detail = await beginResponse.text().catch(() => "");
+        return json({ ok: false, error: `个人云版本不兼容，请重新部署（${detail.slice(0, 100)}）` }, 409);
+      }
+      const begin = await beginResponse.json().catch(() => ({})) as BeginResult;
+      if (begin.status === "busy") return json({ ok: false, error: "角色正在回复上一条，请稍后再试。" }, 409);
+      if (begin.status === "daily_cap") {
+        return json({ ok: false, error: `今天的屏幕速聊次数已达上限（${dailyCap} 次），明天再来吧。` }, 429);
+      }
+      if (begin.status !== "ok") return json({ ok: false, error: "无法取得屏幕速聊会话锁。" }, 500);
+      lockHeld = true;
 
-    // 弹窗通道不执行任何控制标记：快捷动作/改送微信/来电标签一律剥离
-    rawText = rawText
-      .replace(/【快捷动作[：:][^】\n]{1,60}】/g, "")
-      .replace(/【发到微信】/g, "")
-      .replace(/[\[【]我(?:向[^\]】\r\n]{1,80})?发起了语音通话[\]】]/g, "")
-      .replace(/【拨打电话】/g, "")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-    if (!rawText) rawText = "……";
+      const acknowledged = Math.max(0, Number(snapshot.ackSequence) || 0);
+      const pendingTurns = normalizePendingTurns(begin.pendingTurns, acknowledged);
+      const sequence = Math.max(0, Number(begin.nextSequence) || 0) + 1;
+      const now = new Date().toISOString();
+      const carriesScreen = Boolean(image || ocr);
+      pendingTurns.push({
+        sequence,
+        role: "user",
+        text,
+        ...(carriesScreen ? { screen: true } : {}),
+        ...(ocr ? { ocr } : {}),
+        at: now,
+      });
 
-    // 会话落库（截断轮数，只保留最新截图）
-    session.turns.push({ role: "assistant", text: rawText.slice(0, 2000), at: new Date().toISOString() });
-    session.turns = session.turns.slice(-MAX_STORED_TURNS);
-    session.turn_count += 1;
-    const sessionPatch = {
-      user_id: session.user_id,
-      turns: session.turns,
-      image: session.image,
-      turn_count: session.turn_count,
-      updated_at: new Date().toISOString(),
-    };
-    if (isNewSession) {
-      await rest("push_screen_sessions", {
-        method: "POST",
-        body: JSON.stringify([{ id: session.id, ...sessionPatch, created_at: now }]),
-      }).catch(() => undefined);
-    } else {
-      await rest(`push_screen_sessions?id=eq.${encodeURIComponent(session.id)}`, {
-        method: "PATCH",
-        body: JSON.stringify(sessionPatch),
-      }).catch(() => undefined);
-    }
+      // 原图仅存在于本次函数内存和本次 LLM 请求中；不会写入任何 Supabase 表。
+      const liveImage = snapshot.enableVision === true ? image : null;
+      const transcript = buildTranscript(pendingTurns, sequence, Boolean(liveImage));
+      const originalBodyJson = JSON.stringify(replyRequest.body);
+      const bodyJson = substituteSentinel(originalBodyJson, SCREEN_CHAT_SENTINEL, transcript);
+      if (bodyJson === originalBodyJson) {
+        return json({ ok: false, error: "快照里找不到对话占位符，请到小手机重新保存一次屏幕速聊设置。" }, 500);
+      }
+      const requestBody = JSON.parse(bodyJson) as Record<string, unknown>;
+      if (liveImage) {
+        if (!injectImageAtMarker(requestBody, replyRequest.providerKind, IMAGE_MARKER, liveImage)) {
+          replaceMarkerInStrings(requestBody, IMAGE_MARKER, ocr || "（截图注入失败，请结合上下文回应）");
+        }
+      } else {
+        replaceMarkerInStrings(requestBody, IMAGE_MARKER, ocr || "（无截图内容）");
+      }
 
-    // 回端同步：kind=bridge 的回箱行——小手机打开时把「用户这轮说的」写进聊天，
-    // raw_text（角色原始回复）走通用解析管线合并（含状态栏/分条协议）。不推通知。
-    const userSideText = carriesScreen
-      ? `（通过悬浮球把当前手机屏幕截图发给了${characterName}）${text ? `：${text}` : ""}`
-      : text || "（继续了屏幕速聊）";
-    const turnIndex = session.turn_count;
-    await rest("push_outbox", {
-      method: "POST",
-      body: JSON.stringify([{
-        id: `out_${crypto.randomUUID()}`,
-        user_id: userId,
-        job_id: null,
-        session_id: (snapshot.reply as { sessionId?: string } | undefined)?.sessionId ?? null,
-        trigger_key: `screen:${session.id}:${turnIndex}`,
-        raw_text: rawText,
-        meta: {
-          kind: "bridge",
-          screenChat: true,
-          item: { id: `${session.id}_${turnIndex}`, type: "屏幕速聊", payload: userSideText, createdAt: now },
-          chatMessageId: `screen_${session.id}_${turnIndex}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 240),
-          chat: snapshot.chat && snapshot.chat.characterId
-            ? {
-                characterId: snapshot.chat.characterId,
-                sessionId: snapshot.chat.sessionId,
-                role: "user",
-                requestReply: false,
-                characterName,
-              }
-            : null,
-          feedNote: "屏幕速聊（悬浮球）",
-          reply: snapshot.reply ?? null,
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120_000);
+      let llmResponse: Response;
+      try {
+        llmResponse = await fetch(replyRequest.url, {
+          method: "POST",
+          headers: replyRequest.headers,
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        return json({
+          ok: false,
+          error: `AI 接口连接失败：${(err instanceof Error ? err.message : String(err)).slice(0, 120)}`,
+        }, 502);
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (!llmResponse.ok) {
+        const detail = await llmResponse.text().catch(() => "");
+        return json({ ok: false, error: `AI 接口返回 ${llmResponse.status}：${detail.slice(0, 160)}` }, 502);
+      }
+      let rawText = extractResponseText(replyRequest.providerKind, await llmResponse.json()).trim();
+      if (!rawText) return json({ ok: false, error: "AI 返回了空回复，请再试一次。" }, 502);
+
+      // 弹窗通道不直接执行控制标记；只同步角色最终说出口的内容。
+      rawText = rawText
+        .replace(/【快捷动作[：:][^】\n]{1,60}】/g, "")
+        .replace(/【发到微信】/g, "")
+        .replace(/[\[【]我(?:向[^\]】\r\n]{1,80})?发起了语音通话[\]】]/g, "")
+        .replace(/【拨打电话】/g, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim() || "……";
+
+      const assistantAt = new Date().toISOString();
+      pendingTurns.push({ sequence, role: "assistant", text: rawText.slice(0, 2000), at: assistantAt });
+      const unacknowledgedTurns = pendingTurns.filter(turn => turn.sequence > acknowledged).slice(-MAX_PENDING_TURNS);
+      const exchangeId = crypto.randomUUID();
+      const userSideText = carriesScreen
+        ? `（通过悬浮球把当前手机屏幕发给了${characterName}）${text ? `：${text}` : ""}`
+        : text || "（继续了屏幕速聊）";
+      const historyText = carriesScreen && ocr
+        ? `${userSideText}\n[屏幕文字识别结果]\n${ocr}`.slice(0, 8000)
+        : userSideText;
+      const meta = {
+        kind: "bridge",
+        screenChat: true,
+        screenChatCharacterId: characterId,
+        screenChatSequence: sequence,
+        screenChatResponseBatchId: `screen_reply_${exchangeId}`,
+        screenChatAssistantAt: assistantAt,
+        item: { id: exchangeId, type: "屏幕速聊", payload: userSideText, createdAt: now },
+        historyText,
+        chatMessageId: `screen_user_${exchangeId}`,
+        chat: {
+          characterId,
+          sessionId: canonicalSessionId,
+          role: "user",
+          requestReply: false,
+          characterName,
         },
-      }]),
-    }).catch(() => undefined);
+        feedNote: "屏幕速聊（悬浮球）",
+        reply: snapshot.reply ?? null,
+      };
+      const finishResponse = await rest("rpc/ai_phone_screen_chat_finish", {
+        method: "POST",
+        body: JSON.stringify({
+          p_user_id: userId,
+          p_character_id: characterId,
+          p_lock_token: lockToken,
+          p_pending_turns: unacknowledgedTurns,
+          p_next_sequence: sequence,
+          p_outbox_id: `out_${exchangeId}`,
+          p_session_id: canonicalSessionId,
+          p_trigger_key: `screen:${canonicalSessionId}:${sequence}`,
+          p_raw_text: rawText,
+          p_meta: meta,
+        }),
+      });
+      const finished = finishResponse.ok && await finishResponse.json().catch(() => false) === true;
+      if (!finished) return json({ ok: false, error: "回复已生成，但写入个人云失败，请重试。" }, 500);
+      lockHeld = false;
 
-    // 顺手清理：过期会话删除（失败不影响本轮）
-    const ttlCutoff = new Date(Date.now() - SESSION_TTL_HOURS * 3600_000).toISOString();
-    await rest(
-      `push_screen_sessions?user_id=eq.${encodeURIComponent(userId)}&updated_at=lt.${encodeURIComponent(ttlCutoff)}`,
-      { method: "DELETE" },
-    ).catch(() => undefined);
-
-    return json({
-      ok: true,
-      reply: popupTextFromReply(rawText),
-      session: session.id,
-      characterName,
-      resumed: !isNewSession && !requestedSession,
-    });
+      return json({ ok: true, reply: popupTextFromReply(rawText), characterName, sequence });
+    } finally {
+      if (lockHeld) {
+        await rest("rpc/ai_phone_screen_chat_abort", {
+          method: "POST",
+          body: JSON.stringify({ p_user_id: userId, p_character_id: characterId, p_lock_token: lockToken }),
+        }).catch(() => undefined);
+      }
+    }
   } catch (error) {
     return json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 500);
   }

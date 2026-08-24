@@ -30,7 +30,11 @@ import {
 import type { BridgeRule } from "@/lib/reality-bridge/types";
 import { createShortcutCommand, loadRecentShortcutCommands, type ShortcutCommand } from "@/lib/shortcut-command-client";
 import { enableOfflinePush, isShellEnvironment } from "@/lib/push-client";
-import { isPersonalPushCloudActive, personalPushFetch } from "@/lib/personal-push-cloud";
+import {
+  isPersonalPushCloudActive,
+  isPersonalScreenChatCloudReady,
+  personalPushFetch,
+} from "@/lib/personal-push-cloud";
 import { isValidShortcutEmailAddress, shortcutEmailSubjectTag } from "@/lib/shortcut-email";
 
 type TabId = "main" | "history";
@@ -440,6 +444,7 @@ export function RealityBridgeApp({ onClose, onNotice }: {
   const siteOrigin = typeof window !== "undefined" ? window.location.origin : "https://你的小手机域名";
   // 个人云激活时唤醒入口在用户自己的网关（离线扫描由用户库的 cron 驱动）；否则走站点
   const personalPushActive = isPersonalPushCloudActive();
+  const personalScreenChatReady = isPersonalScreenChatCloudReady();
   const wakeUrl = bridgeToken
     ? personalPushActive
       ? `${normalizeBackupUrl(config.url)}/functions/v1/ai-phone-push?action=bridge-wake&token=${bridgeToken}`
@@ -449,11 +454,11 @@ export function RealityBridgeApp({ onClose, onNotice }: {
   // 屏幕速聊同步入口（部署在用户个人云上的 screen-chat 函数）
   const screenChatUrl = `${normalizeBackupUrl(config.url) || "https://你的项目.supabase.co"}/functions/v1/screen-chat`;
 
-  // 离线联动：联动向导或屏幕速聊页打开时按需拉取令牌——个人云从自己的网关取，
-  // 否则从站点取（未登录/自托管会静默失败，区块隐藏）
+  // 屏幕速聊令牌只从个人云读取，绝不回退到站点主项目。
   const wantWakeToken = editing !== null || mainSec === "screen";
   useEffect(() => {
     if (!wantWakeToken || bridgeToken) return;
+    if (mainSec === "screen" && !personalScreenChatReady) return;
     let cancelled = false;
     const request = personalPushActive
       ? personalPushFetch("bridge-config")
@@ -465,7 +470,7 @@ export function RealityBridgeApp({ onClose, onNotice }: {
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
-  }, [wantWakeToken, bridgeToken, personalPushActive]);
+  }, [wantWakeToken, bridgeToken, personalPushActive, personalScreenChatReady, mainSec]);
   const stateUrl = useCallback((key: string) =>
     `${config.url || "https://你的项目.supabase.co"}/storage/v1/object/${CLOUD_BACKUP_BUCKET}/bridge-state/${key || "[标识]"}.json`, [config.url]);
 
@@ -1044,12 +1049,20 @@ export function RealityBridgeApp({ onClose, onNotice }: {
                         <span className="rb-icchip">{RB_ICON_CHAT}</span>
                         <div className="rb-main-text">
                           <b>启用屏幕速聊</b>
-                          <p>{personalPushActive ? "个人云已就绪" : "需先在「设置 → 云服务部署」部署个人云（含离线推送）"}</p>
+                          <p>{personalScreenChatReady
+                            ? "个人云已就绪"
+                            : personalPushActive
+                              ? "个人云版本较旧，请到「设置 → 云服务部署」重新部署"
+                              : "需先在「设置 → 云服务部署」部署个人云（含离线推送）"}</p>
                         </div>
                         <button
                           type="button"
                           className={`rb-switch ${screenChat.enabled ? "on" : ""}`}
                           onClick={() => {
+                            if (!screenChat.enabled && !personalScreenChatReady) {
+                              onNotice?.(personalPushActive ? "请先重新部署最新版个人云" : "请先部署个人云");
+                              return;
+                            }
                             if (!screenChat.enabled && characters.length === 0) {
                               onNotice?.("请先创建一个角色");
                               return;
@@ -1071,17 +1084,8 @@ export function RealityBridgeApp({ onClose, onNotice }: {
                               {characters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                           </label>
-                          <label>续聊窗口（多久内再次截屏算同一场对话）
-                            <select value={screenChat.resumeMinutes}
-                              onChange={event => updateScreenChat({ resumeMinutes: Number(event.target.value) || 0 })}>
-                              <option value={0}>每次都开新对话</option>
-                              <option value={10}>10 分钟</option>
-                              <option value={30}>30 分钟</option>
-                              <option value={60}>1 小时</option>
-                              <option value={180}>3 小时</option>
-                            </select>
-                          </label>
-                          <p className="rb-hint">设置保存后会自动把角色的人设快照同步到你的个人云（切后台时上传，也可以在聊天里发条消息触发）。截图是否随图发送，跟随该角色 API 配置里的「图像识别」开关：开了发原图，没开则改用快捷指令本地识别出的屏幕文字，纯文本模型也能用。对话会在小手机打开时自动进入聊天记录。</p>
+                          <p className="rb-hint">屏幕速聊始终接入这个角色在小手机里的同一个聊天窗口：换 App、隔很久再双击，也不会新开对话。打开小手机后，云端暂存的问答会按顺序自动进入原聊天记录。</p>
+                          <p className="rb-hint">隐私说明：截图只用于当前一次 AI 生成，不保存到 Supabase；云端仅暂存尚未同步回小手机的文字增量。图像识别关闭时改用快捷指令本地识别出的屏幕文字。</p>
 
                           <p className="rb-wiz-tip">照下面的清单搭一个快捷指令（只需搭一次）：</p>
                           <div className="rb-substep">
@@ -1117,9 +1121,8 @@ export function RealityBridgeApp({ onClose, onNotice }: {
                           <div className="rb-substep">
                             <i>4</i>
                             <div className="rb-substep-body">
-                              <p><b>弹出回复</b>：添加「获取字典值」两次——从「URL 内容」里分别取
-                                <button type="button" className="rb-copychip" onClick={() => copy("reply", "键名")}>reply</button> 和
-                                <button type="button" className="rb-copychip" onClick={() => copy("session", "键名")}>session</button>；
+                              <p><b>弹出回复</b>：添加「获取字典值」，从「URL 内容」里取
+                                <button type="button" className="rb-copychip" onClick={() => copy("reply", "键名")}>reply</button>；
                                 再添加「显示提醒」，标题填角色名，信息插入 reply 变量。</p>
                               <p className="rb-hint">出错时 reply 为空——可再取一次 <button type="button" className="rb-copychip" onClick={() => copy("error", "键名")}>error</button> 键，用「如果」判断后弹提醒显示原因。</p>
                             </div>
@@ -1127,9 +1130,8 @@ export function RealityBridgeApp({ onClose, onNotice }: {
                           <div className="rb-substep">
                             <i>5</i>
                             <div className="rb-substep-body">
-                              <p><b>续聊循环</b>：添加「重复」（次数 15），内部依次放三个动作——「要求输入」（文本，提示语填「回复TA」）→「获取 URL 内容」（同上地址，POST/JSON，三个文本字段：
+                              <p><b>续聊循环</b>：添加「重复」（次数 15），内部依次放三个动作——「要求输入」（文本，提示语填「回复TA」）→「获取 URL 内容」（同上地址，POST/JSON，两个文本字段：
                                 <button type="button" className="rb-copychip" onClick={() => copy("token", "字段名")}>token</button> 同上、
-                                <button type="button" className="rb-copychip" onClick={() => copy("session", "字段名")}>session</button> 插入第④步的 session 变量、
                                 <button type="button" className="rb-copychip" onClick={() => copy("text", "字段名")}>text</button> 插入「提供的输入」变量）→「获取字典值」取 reply 后「显示提醒」。</p>
                               <p className="rb-hint">任何一个弹窗点「取消」即结束对话；想结束也可以直接不理它。</p>
                             </div>

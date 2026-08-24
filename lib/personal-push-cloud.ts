@@ -12,6 +12,7 @@ const PUSH_SUBSCRIPTION_GATE_KEY = "push_account_subscribed_v1";
 export const PERSONAL_PUSH_GATEWAY_SLUG = "ai-phone-push";
 export const PERSONAL_PUSH_GENERATE_SLUG = "push-generate";
 export const PERSONAL_PUSH_SW_SCOPE = "/personal-push/";
+export const PERSONAL_PUSH_SCHEMA_VERSION = 3;
 
 registerKvMigration(PERSONAL_PUSH_STATE_KEY);
 
@@ -21,6 +22,7 @@ export type PersonalPushCloudState = {
   url: string;
   deployedAt: string;
   healthStatus: "ready" | "pending";
+  schemaVersion: number;
   healthError?: string;
 };
 
@@ -48,11 +50,22 @@ export function loadPersonalPushCloudState(): PersonalPushCloudState | null {
       deployedAt: typeof parsed.deployedAt === "string" ? parsed.deployedAt : "",
       // 旧版本只会在健康检查通过后写入状态，因此向后兼容时视为 ready。
       healthStatus: parsed.healthStatus === "pending" ? "pending" : "ready",
+      schemaVersion: Number.isSafeInteger(parsed.schemaVersion) ? Number(parsed.schemaVersion) : 2,
       healthError: typeof parsed.healthError === "string" ? parsed.healthError : undefined,
     };
   } catch {
     return null;
   }
+}
+
+/** 屏幕速聊只允许进入带连续会话/原子写入结构的最新版个人云。 */
+export function isPersonalScreenChatCloudReady(): boolean {
+  const state = loadPersonalPushCloudState();
+  return Boolean(
+    isPersonalPushCloudActive()
+    && state?.healthStatus === "ready"
+    && state.schemaVersion >= PERSONAL_PUSH_SCHEMA_VERSION,
+  );
 }
 
 /** 只有部署记录和当前云备份仍指向同一个项目时才启用，防止换项目后误发数据。 */
@@ -148,8 +161,22 @@ async function waitForPersonalPushHealth(
       },
       cache: "no-store",
     }).catch(() => null);
-    const data = health ? await health.json().catch(() => ({})) as { ok?: boolean; error?: string } : null;
-    if (health?.ok && data?.ok === true) return { ready: true };
+    const data = health ? await health.json().catch(() => ({})) as {
+      ok?: boolean;
+      error?: string;
+      schemaVersion?: number;
+      capabilities?: string[];
+    } : null;
+    if (
+      health?.ok
+      && data?.ok === true
+      && Number(data.schemaVersion) >= PERSONAL_PUSH_SCHEMA_VERSION
+      && data.capabilities?.includes("screen-chat-continuous")
+    ) return { ready: true };
+    if (health?.ok && data?.ok === true) {
+      lastError = "个人云版本较旧，请重新部署后再启用屏幕速聊。";
+      return { ready: false, error: lastError };
+    }
     lastError = data?.error || (health ? `健康检查返回 HTTP ${health.status}` : "暂时无法连接个人云函数");
     // 无效密钥、数据库权限等确定性错误无需等待 17 秒后重复报错。
     if (!isTransientHealthFailure(health)) return { ready: false, error: lastError };
@@ -212,12 +239,14 @@ export async function deployPersonalPushCloud(accessToken: string): Promise<Pers
     url,
     deployedAt: new Date().toISOString(),
     healthStatus: "pending",
+    schemaVersion: PERSONAL_PUSH_SCHEMA_VERSION,
   };
   savePersonalPushState(state);
   const health = await waitForPersonalPushHealth(url, backup.key.trim());
   state = {
     ...state,
     healthStatus: health.ready ? "ready" : "pending",
+    schemaVersion: PERSONAL_PUSH_SCHEMA_VERSION,
     healthError: health.ready ? undefined : health.error,
   };
   savePersonalPushState(state);
