@@ -820,7 +820,6 @@ $CRON$)`);
           ...(cloudConfig ? { cloud_config: cloudConfig } : {}),
           rule_runs: ruleRuns,
           shortcut_actions: shortcutActions,
-          ...(siteBridgeToken ? { site_bridge_token: siteBridgeToken } : {}),
           updated_at: new Date().toISOString(),
         }),
       }));
@@ -835,9 +834,23 @@ $CRON$)`);
             ...(cloudConfig ? { cloud_config: cloudConfig } : {}),
             rule_runs: ruleRuns,
             shortcut_actions: shortcutActions,
-            ...(siteBridgeToken ? { site_bridge_token: siteBridgeToken } : {}),
           }]),
         }));
+      }
+
+      // 站点桥令牌单独写一次，且失败不致命：这一列是后加的，用户没重新部署过
+      // 个人云时它根本不存在，PostgREST 会 400。要是把它塞进上面那个 PATCH，
+      // readJson 一抛错就会把规则同步、快照、动作目录整块带崩——为一个只影响
+      // 邮件代发的字段赔掉整条同步，不值。写不进去只是邮件模式用不了。
+      if (siteBridgeToken) {
+        const tokenWrite = await rest(`push_bridge_config?user_id=eq.${OWNER_ID}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({ site_bridge_token: siteBridgeToken }),
+        }).catch(() => null);
+        if (!tokenWrite || !tokenWrite.ok) {
+          console.warn("[bridge-sync] site_bridge_token 写入失败（个人云可能需要重新部署）");
+        }
       }
 
       const deleteIds = Array.isArray(body.deleteRuleIds)

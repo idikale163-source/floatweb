@@ -660,7 +660,10 @@ Deno.serve(async (req: Request) => {
     // 由客户端写进现实桥动态。成功则保持空串，不打扰。
     let shortcutDeliveryError = "";
     const noteShortcutDelivery = (actionName: string, note: string): string => {
-      if (/failed|skipped/.test(note)) {
+      // 按「成功」反向判断，别去枚举失败关键词——投递路径的文案有中有英，
+      // 加一句新的失败文案就会从关键词表里漏出去，静默丢掉本该给用户的提示。
+      // 这里只在真正投递出去时收到含 delivered 的 note。
+      if (!/delivered/.test(note)) {
         shortcutDeliveryError = `快捷动作「${actionName}」未能送达：${note.replace(/^, /, "")}`.slice(0, 300);
       }
       return note;
@@ -689,7 +692,11 @@ Deno.serve(async (req: Request) => {
           ? await tokenResponse.json() as { site_bridge_token?: string | null }[]
           : [];
         const siteBridgeToken = String(tokenRows[0]?.site_bridge_token || "");
-        if (!siteBridgeToken) return ", shortcut email skipped: site bridge token not synced";
+        // 令牌没同步上来，绝大多数是个人云还没跑过新版 schema（site_bridge_token
+        // 是后加的列）。这句会经 outbox meta 显示给用户，所以要写成可操作的。
+        if (!siteBridgeToken) {
+          return ", 站点代发未启用：请到「设置 → 云服务部署」重新部署个人云";
+        }
 
         const response = await fetch(`${siteOrigin}/api/push/shortcut-commands/deliver-email`, {
           method: "POST",
