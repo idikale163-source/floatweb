@@ -1640,6 +1640,7 @@ export function RealityBridgeApp({ onClose, onNotice }: {
                   ) : (
                     <>
                       <p className="rb-help">收到触发邮件时由 iOS 自动化「立即运行」，全程无需点按。实验功能：首次运行可能仍要求权限，锁屏下部分动作可能受 iOS 限制。</p>
+                      <p className="rb-hint">邮件只是动作的触发通道：角色说的话仍走离线推送送达，所以离线推送要保持开启，否则 App 关着时这条动作也不会被触发。</p>
                       <p className="rb-wiz-tip">验证 iPhone「邮件」App 里能即时收信的邮箱（仅 iCloud / Exchange 支持实时推送）：</p>
                       {shortcutEmailVerifyBlock}
                       <p className="rb-hint">还要把发件人 <button type="button" className="rb-copychip" onClick={() => copy(shortcutEmailStatus?.senderAddress || "bridge@notify.floatbubble.top", "发件人地址")}>{shortcutEmailStatus?.senderAddress || "bridge@notify.floatbubble.top"}</button> 加入邮箱白名单，防止触发邮件进垃圾箱、自动化收不到。</p>

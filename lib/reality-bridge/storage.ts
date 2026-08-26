@@ -1,6 +1,7 @@
 "use client";
 
 import { kvGet, kvSet, registerKvMigration } from "../kv-db";
+import { loadActiveAccountId } from "../account-client";
 import { loadCloudBackupConfig, isCloudBackupConfigured, type CloudBackupConfig } from "../cloud-backup/config";
 import { claimObject, getObject, listObjects, putObject, removeObject } from "../cloud-backup/storage-client";
 import {
@@ -242,7 +243,7 @@ export function saveBridgeShortcutActions(actions: BridgeShortcutAction[]): void
  * 不依赖用户主动进现实桥页面，也不会让不同设备长期给出不同答案。 */
 const SHORTCUT_EMAIL_READY_TTL_MS = 12 * 60 * 60 * 1000;
 
-type ShortcutEmailReadyCache = { ready: boolean; at: number };
+type ShortcutEmailReadyCache = { ready: boolean; at: number; accountId: string };
 
 function readShortcutEmailReadyCache(): ShortcutEmailReadyCache | null {
   try {
@@ -252,7 +253,9 @@ function readShortcutEmailReadyCache(): ShortcutEmailReadyCache | null {
     if (raw === "1" || raw === "0") return null;
     const parsed = JSON.parse(raw) as Partial<ShortcutEmailReadyCache>;
     if (typeof parsed?.ready !== "boolean" || typeof parsed?.at !== "number") return null;
-    return { ready: parsed.ready, at: parsed.at };
+    // 换账号后不复用上一个账号的结论（缓存无账号维度会导致跨账号误判）
+    if ((parsed.accountId || "") !== loadActiveAccountId()) return null;
+    return { ready: parsed.ready, at: parsed.at, accountId: parsed.accountId || "" };
   } catch {
     return null;
   }
@@ -272,7 +275,11 @@ export function shortcutEmailReadyNeedsRefresh(): boolean {
 
 export function saveShortcutEmailReady(ready: boolean): void {
   try {
-    kvSet(BRIDGE_EMAIL_READY_KEY, JSON.stringify({ ready, at: Date.now() } satisfies ShortcutEmailReadyCache));
+    kvSet(BRIDGE_EMAIL_READY_KEY, JSON.stringify({
+      ready,
+      at: Date.now(),
+      accountId: loadActiveAccountId(),
+    } satisfies ShortcutEmailReadyCache));
   } catch { /* 缓存写失败只是少给一个动作，不影响主流程 */ }
 }
 

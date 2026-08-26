@@ -277,7 +277,7 @@ export async function armFollowUpBailout(
         // 无原生工具重放：服务端执行不了本地工具循环，兜底生成按纯补全组装。
         // 但标记式快捷动作云端是支持的（push-generate 解析【快捷动作：名称】），
         // 所以照常注入动作目录，别让角色在离线追问里以为自己什么都做不了。
-        maybeAppendShortcutCapability(llmMessages);
+        maybeAppendShortcutCapability(llmMessages, { continuationAvailable: true });
         const request = buildProviderRequest(config, preset, toLlmRequestMessages(llmMessages));
         const shortcutContinuation = buildOfflineShortcutContinuation(llmMessages, messages => {
             const req = buildProviderRequest(config, preset, toLlmRequestMessages(messages));
@@ -432,7 +432,7 @@ export async function armIdleReconnectBailout(rule: IdleReconnectRule): Promise<
             { appTags: ["chat", "text", "idle_wake"], timedWakeElapsedMinutes: elapsedMinutes },
         );
         maybeAppendCallInvite(llmMessages, rule.characterId);
-        maybeAppendShortcutCapability(llmMessages);
+        maybeAppendShortcutCapability(llmMessages, { continuationAvailable: true });
         const weixinBotId = maybeAppendWeixinChannel(llmMessages, rule.characterId);
         const request = buildProviderRequest(config, preset, toLlmRequestMessages(llmMessages));
         const shortcutContinuation = buildOfflineShortcutContinuation(llmMessages, messages => {
@@ -498,7 +498,7 @@ export async function armTimedWakeBailout(schedule: TimedWakeSchedule): Promise<
             { appTags: ["chat", "text", wakeTag], timedWakeElapsedMinutes: elapsedMinutes, timedWakeIntent: schedule.intent },
         );
         maybeAppendCallInvite(llmMessages, schedule.characterId);
-        maybeAppendShortcutCapability(llmMessages);
+        maybeAppendShortcutCapability(llmMessages, { continuationAvailable: true });
         const weixinBotId = maybeAppendWeixinChannel(llmMessages, schedule.characterId);
         const request = buildProviderRequest(config, preset, toLlmRequestMessages(llmMessages));
         const shortcutContinuation = buildOfflineShortcutContinuation(llmMessages, messages => {
@@ -567,7 +567,7 @@ export async function armPeriodCareBailouts(): Promise<void> {
                     history,
                     { appTags: ["chat", "text", "period_care"], periodCareContext: event.context },
                 );
-                maybeAppendShortcutCapability(llmMessages);
+                maybeAppendShortcutCapability(llmMessages, { continuationAvailable: true });
                 const request = buildProviderRequest(apiConfig, preset, toLlmRequestMessages(llmMessages));
                 const shortcutContinuation = buildOfflineShortcutContinuation(llmMessages, messages => {
                     const req = buildProviderRequest(apiConfig, preset, toLlmRequestMessages(messages));

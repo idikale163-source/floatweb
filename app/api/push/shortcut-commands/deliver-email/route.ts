@@ -18,27 +18,25 @@ import { encodeSupabaseFilter, formatSupabaseRestError, getSupabaseServerConfig,
  * 自部署用户的「站点」就是他自己那份部署，走的是同一条代码路径。
  *
  * ── 信任边界（改动前先读这一段）──
- * 本路由**不校验 actionId 是否真的登记过，也不按 schema 校验参数**：站点看不到
- * 个人云那张命令表，做不到跨库核对。因此持有 bridge_token 的人可以用任意动作名
- * 和任意参数发这封信，iOS 自动化会照着执行。当前接受这个风险的前提是：现实桥的
- * 快捷动作都是截图、读数据、发通知这类低危操作，最坏后果是给自己的手机发噪音。
+ * 站点看不到个人云那张命令表，做不到跨库核对命令本身，所以用两道旁证把关：
+ *   1. actionId 必须在客户端同步上来的 email_action_ids 白名单里；
+ *   2. 结果回传地址必须落在该账号登记的个人云源站上（resultUrlAllowed），
+ *      令牌泄露也没法把快捷指令的输出引到别处。
  *
- * 已经挡住的是结果外泄——回传地址被钉死在该账号登记的个人云源站上（见
- * resultUrlAllowed），令牌泄露也没法把快捷指令的输出引到别处。
- *
- * **如果以后允许登记开锁、支付、代发消息这类高危动作，这个前提就不成立了**，
- * 必须补两件事：客户端把邮件模式动作的 actionId 白名单同步给站点，本路由拒绝
- * 表外的 actionId；参数按该动作自己的 schema 校验后再透传。
+ * 仍未做的是**按各动作自己的 schema 校验参数**——参数由模型填写、原样进邮件正文。
+ * 也就是说，能影响角色上下文的人（群成员、工具抓回的网页、自定义 APP）理论上能
+ * 诱导出一次带任意参数的白名单内动作。要收紧就得把每个动作的 schema 也同步过来。
  */
 
 /** 频控与 ai-phone-push 的 shortcut-create 同级：每分钟至多 6 封。 */
+/** 仅供 RPC 缺失时的回退实现使用；须与 push_shortcut_email_claim_slot 里写死的值一致。 */
 const CLOUD_DELIVERY_WINDOW_MS = 60_000;
 const CLOUD_DELIVERY_MAX_PER_WINDOW = 6;
 const MAX_ARGS_BYTES = 4000;
 /** 与签发方 supabase/functions/ai-phone-push 的 SHORTCUT_COMMAND_ID_PATTERN 保持一致。 */
 const SHORTCUT_COMMAND_ID_PATTERN = /^cmd_[a-z0-9-]{20,80}$/i;
 
-type BridgeConfigRow = { user_id: string; cloud_origin: string | null };
+type BridgeConfigRow = { user_id: string; cloud_origin: string | null; email_action_ids: string[] | null };
 type EmailThrottleRow = { cloud_delivery_count: number | null; cloud_delivery_window_start: string | null };
 
 function fail(error: string, status: number) {
@@ -57,6 +55,7 @@ function resultUrlAllowed(resultUrl: string, cloudOrigin: string | null): boolea
     }
 }
 
+/** 函数不存在、或还是旧的三参数签名（找不到匹配重载）都算「没有可用 RPC」。 */
 function isMissingClaimSlotRpc(error: string): boolean {
     return /push_shortcut_email_claim_slot|PGRST202|Could not find the function|schema cache|does not exist/i.test(error);
 }
@@ -67,13 +66,11 @@ function isMissingClaimSlotRpc(error: string): boolean {
  * 代价只是并发下同一窗口可能多放行一两封。
  */
 async function claimDeliverySlot(userId: string): Promise<boolean> {
+    // 窗口与上限由函数内部写死（它是 security definer，参数越少攻击面越小），
+    // 这里只传 user_id。老库若还是三参数签名，下面的 miss 判定会走回退实现。
     const rpc = await supabaseRestFetch<boolean>("rpc/push_shortcut_email_claim_slot", {
         method: "POST",
-        body: JSON.stringify({
-            p_user_id: userId,
-            p_window_seconds: Math.round(CLOUD_DELIVERY_WINDOW_MS / 1000),
-            p_max: CLOUD_DELIVERY_MAX_PER_WINDOW,
-        }),
+        body: JSON.stringify({ p_user_id: userId }),
     });
     if (rpc.ok) return rpc.data === true;
     if (!isMissingClaimSlotRpc(rpc.error)) throw new Error(rpc.error);
@@ -124,7 +121,8 @@ export async function POST(request: Request) {
         if (JSON.stringify(args).length > MAX_ARGS_BYTES) return fail("快捷动作参数过大。", 413);
 
         const config = await supabaseRestFetch<BridgeConfigRow[]>(
-            `push_bridge_config?bridge_token=eq.${encodeSupabaseFilter(token)}&select=user_id,cloud_origin&limit=1`,
+            `push_bridge_config?bridge_token=eq.${encodeSupabaseFilter(token)}`
+            + `&select=user_id,cloud_origin,email_action_ids&limit=1`,
         );
         // 这是公开路由：库的原始报错只写日志，不回给调用方
         if (!config.ok) {
@@ -136,6 +134,14 @@ export async function POST(request: Request) {
 
         if (!resultUrlAllowed(resultUrl, row.cloud_origin)) {
             return fail("结果回传地址不在该账号登记的个人云源站上。", 403);
+        }
+
+        // 只放行客户端登记过的邮件动作。站点看不到个人云的命令表，没有这道白名单
+        // 就只能相信调用方报上来的 actionId，等于拿到 bridge_token 就能触发任意
+        // 快捷指令——而快捷指令是用户自己登记的，不能假定它一定无害。
+        const allowedActionIds = Array.isArray(row.email_action_ids) ? row.email_action_ids : [];
+        if (!allowedActionIds.includes(actionId)) {
+            return fail("该动作不在此账号登记的云端代发白名单内。", 403);
         }
 
         const recipient = await getVerifiedShortcutEmailRecipient(row.user_id);

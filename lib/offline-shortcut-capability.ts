@@ -88,6 +88,19 @@ function availableActions(): BridgeShortcutAction[] {
  * 缓存为假 → 目录里筛不出邮件动作 → 没人去建立站点关联、也没人去续期缓存 →
  * 缓存永远为假。桥同步据此决定要不要建关联并刷新就绪状态。
  */
+/**
+ * 允许云端代发的邮件动作 actionId 名单，同步给站点做白名单校验。
+ * 与 hasConfiguredEmailShortcutActions 同样读原始清单——就绪缓存为假时也要把
+ * 名单登记上去，否则「站点没白名单 → 一律拒发 → 永远就绪不了」会互相锁死。
+ */
+export function listEmailShortcutActionIds(): string[] {
+  if (!bridgeActionsUsable()) return [];
+  return loadBridgeShortcutActions()
+    .filter(action => action.enabled && action.deliveryMode === "email")
+    .map(action => action.id)
+    .slice(0, 40);
+}
+
 export function hasConfiguredEmailShortcutActions(): boolean {
   if (!bridgeActionsUsable()) return false;
   return loadBridgeShortcutActions().some(action => action.enabled && action.deliveryMode === "email");
@@ -140,8 +153,20 @@ function describeActionParameters(action: BridgeShortcutAction): string {
   return `［参数：${names.map(name => required.has(name) ? `${name}（必填）` : name).join("、")}］`;
 }
 
+export type ShortcutCapabilityOptions = {
+  /**
+   * 本次快照有没有真的挂「结果续跑」。只有挂了才允许告诉角色"结果会自动交回来"——
+   * 普通回复兜底为了避开 900KB 上限没挂续跑（见 chat-engine），要是照样这么承诺，
+   * 角色会说"我截图看一下，等会告诉你"然后永远等不到第二轮。
+   */
+  continuationAvailable: boolean;
+};
+
 /** 快照注入：告诉角色离线时也能调用快捷动作。没有可用动作则什么都不加。 */
-export function maybeAppendShortcutCapability(llmMessages: LLMMessage[]): void {
+export function maybeAppendShortcutCapability(
+  llmMessages: LLMMessage[],
+  options: ShortcutCapabilityOptions,
+): void {
   const actions = availableActions();
   if (actions.length === 0) return;
   // schema 解析一次就够，别在菜单和 hasParameters 两处各解一遍
@@ -164,7 +189,9 @@ export function maybeAppendShortcutCapability(llmMessages: LLMMessage[]): void {
         ? "带参数的动作写成【快捷动作：动作名({\"参数名\":\"值\"})】，括号里是一个 JSON 对象；没有参数的动作不要写括号。"
         : "")
       + "标着〔自动执行〕的动作对方手机会直接跑，标着〔需对方点确认〕的会先弹一条运行提示、TA点一下才执行。"
-      + "会回传结果的动作，结果之后会自动交给你继续回复。"
+      + (options.continuationAvailable
+        ? "会回传结果的动作，结果之后会自动交给你继续回复。"
+        : "这一轮不会把结果回传给你，所以不要说\"等我看完再告诉你\"之类的话，也不要等结果。")
       + "不需要就不要输出，也不要提及本条说明。）",
   });
 }

@@ -87,6 +87,12 @@ export async function POST(request: Request) {
     if (body.cloudOrigin !== undefined && !cloudOrigin) {
       return NextResponse.json({ ok: false, error: "个人云地址无效。" }, { status: 400 });
     }
+    // 允许云端代发的邮件动作白名单：只收 actionId，代发路由据此拒绝表外动作。
+    const emailActionIds = Array.isArray(body.emailActionIds)
+      ? Array.from(new Set(body.emailActionIds
+        .map(item => String(item ?? "").trim().slice(0, 100))
+        .filter(Boolean))).slice(0, 40)
+      : null;
 
     const filter = `push_bridge_config?user_id=eq.${encodeSupabaseFilter(account.id)}`;
     const patch = await supabaseRestFetch(filter, {
@@ -97,6 +103,7 @@ export async function POST(request: Request) {
         ...(cloudConfig ? { cloud_config: cloudConfig } : {}),
         ...(ruleRuns ? { rule_runs: ruleRuns } : {}),
         ...(cloudOrigin ? { cloud_origin: cloudOrigin } : {}),
+        ...(emailActionIds ? { email_action_ids: emailActionIds } : {}),
         updated_at: new Date().toISOString(),
       }),
     });
@@ -116,6 +123,7 @@ export async function POST(request: Request) {
           ...(cloudConfig ? { cloud_config: cloudConfig } : {}),
           ...(ruleRuns ? { rule_runs: ruleRuns } : {}),
           ...(cloudOrigin ? { cloud_origin: cloudOrigin } : {}),
+          ...(emailActionIds ? { email_action_ids: emailActionIds } : {}),
         }]),
       });
     }

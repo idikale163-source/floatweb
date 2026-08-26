@@ -2444,7 +2444,8 @@ async function generateChatCompletionCore(
         // 静默丢掉离线回复——为了第二轮续跑赔掉第一轮，不划算。冷场重连与定时
         // 唤醒是低频任务，那两条照常挂续跑。
         const bailoutMessages = [...llmMessages];
-        maybeAppendShortcutCapability(bailoutMessages);
+        // 这条路径不挂续跑（见上），所以也不能向角色承诺第二轮
+        maybeAppendShortcutCapability(bailoutMessages, { continuationAvailable: false });
         void import("./push-bailout-client").then(async mod => {
             const handle = await mod.armReplyBailout({
                 sessionId: session.id,

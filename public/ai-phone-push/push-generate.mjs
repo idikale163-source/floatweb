@@ -874,19 +874,26 @@ Deno.serve(async (req: Request) => {
                   }]),
                 });
                 await armed.text().catch(() => "");
-                if (armed.ok) {
-                  if (deliveryMode === "email") {
-                    deferredShortcutEmail = emailDelivery;
-                  } else {
-                    deferredShortcutCommandId = commandId;
-                    deferredShortcutActionName = emailDelivery.actionName;
-                  }
-                  shortcutActionNote += ", continuation armed";
+                // 挂载成功与否都要把命令投递出去——命令已经以 deferDelivery 建好，
+                // 不投递它就只会静默过期：角色说了"我去看一下"，用户手机什么都收不到。
+                // 挂载失败时降级为"没有第二轮"，动作照跑，只是结果不会自动交回角色。
+                if (deliveryMode === "email") {
+                  deferredShortcutEmail = emailDelivery;
                 } else {
-                  shortcutActionNote += ", continuation arm failed";
+                  deferredShortcutCommandId = commandId;
+                  deferredShortcutActionName = emailDelivery.actionName;
                 }
+                shortcutActionNote += armed.ok
+                  ? ", continuation armed"
+                  : ", continuation arm failed (degraded to one-shot)";
               } catch {
-                shortcutActionNote += ", continuation arm failed";
+                if (deliveryMode === "email") {
+                  deferredShortcutEmail = emailDelivery;
+                } else {
+                  deferredShortcutCommandId = commandId;
+                  deferredShortcutActionName = emailDelivery.actionName;
+                }
+                shortcutActionNote += ", continuation arm failed (degraded to one-shot)";
               }
             }
           } else {
@@ -967,15 +974,18 @@ Deno.serve(async (req: Request) => {
         }).catch(() => undefined);
       }
       await deliverDeferredShortcut();
+      // 微信直发分支没有 outbox 行可以挂 meta，失败只能留在任务日志里。
+      // 不为此伪造一条 outbox：那会在聊天里凭空多出一条消息。
       await finish("done", `sent via weixin${shortcutActionNote ? `, ${shortcutActionNote}` : ""}`);
       return;
     }
 
     await progress(`llm ok, ${rawText.length} chars${deliverAsCall ? ", call" : ""}`);
+    const outboxId = `out_${crypto.randomUUID()}`;
     const outboxResponse = await rest("push_outbox", {
       method: "POST",
       body: JSON.stringify([{
-        id: `out_${crypto.randomUUID()}`,
+        id: outboxId,
         user_id: job.user_id,
         job_id: job.id,
         session_id: payload.merge?.sessionId ?? null,
@@ -1085,6 +1095,23 @@ Deno.serve(async (req: Request) => {
     // 第一轮正文已经落库并完成推送后，再发“运行快捷指令”通知。用户看到的
     // 顺序稳定为：角色先说话 → 运行动作 → 结果回来后角色再说话。
     await deliverDeferredShortcut();
+
+    // 会回传结果的动作是在上面这一步才投递的，比 outbox 落库晚——失败摘要没法
+    // 赶上那一行的 meta。补写一次，否则「投递失败不再无声」只对不回传结果的
+    // 动作成立，而截图这类恰恰都是回传结果的。
+    if (shortcutDeliveryError) {
+      await rest(`push_outbox?id=eq.${encodeURIComponent(outboxId)}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({
+          meta: {
+            ...(payload.merge ?? {}),
+            pushGenerated: true,
+            shortcutDeliveryError,
+          },
+        }),
+      }).catch(() => undefined);
+    }
 
     // 冷场重连的下一发：连发上限内自动排队（用户回来后客户端会撤销并按新周期重挂）
     const idleRepeat = payload.merge?.idleRepeat as

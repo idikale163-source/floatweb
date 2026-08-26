@@ -16,6 +16,7 @@ import {
 } from "./chat-storage";
 import { loadCharacters } from "./character-storage";
 import { kvGet, kvSet } from "./kv-db";
+import { loadActiveAccountId } from "./account-client";
 import {
     BRIDGE_EVENT_SENTINEL,
     SCREEN_CHAT_SENTINEL,
@@ -26,6 +27,7 @@ import { hasAccountPushSubscription } from "./push-client";
 import {
     buildOfflineShortcutContinuation,
     hasConfiguredEmailShortcutActions,
+    listEmailShortcutActionIds,
     listOfflineShortcutActions,
     maybeAppendShortcutCapability,
     maybeAppendWeixinChannel,
@@ -130,7 +132,7 @@ async function buildRuleSnapshot(rule: BridgeRule): Promise<Record<string, unkno
             [...history, synthetic],
             { appTags: ["chat", "text"] },
         );
-        maybeAppendShortcutCapability(llmMessages);
+        maybeAppendShortcutCapability(llmMessages, { continuationAvailable: true });
         const weixinBotId = maybeAppendWeixinChannel(llmMessages, chat.characterId);
         const request = buildProviderRequest(config, preset, toLlmRequestMessages(llmMessages));
         const shortcutContinuation = buildOfflineShortcutContinuation(llmMessages, messages => {
@@ -191,7 +193,7 @@ async function buildRuleSnapshot(rule: BridgeRule): Promise<Record<string, unkno
  * 源站上，否则站点拒发——令牌万一泄露也没法把快捷指令的输出引去别处。
  * 只登记源站，不传密钥；个人云的 service key 始终不出用户自己的项目。
  */
-async function registerSiteEmailRelay(cloudUrl: string): Promise<string> {
+async function registerSiteEmailRelay(cloudUrl: string, emailActionIds: string[]): Promise<string> {
     try {
         const tokenResponse = await fetch("/api/push/bridge-config", {
             credentials: "include",
@@ -206,8 +208,9 @@ async function registerSiteEmailRelay(cloudUrl: string): Promise<string> {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
-            // 只带 cloudOrigin：规则与触发状态留在个人云，别被这次调用洗掉
-            body: JSON.stringify({ cloudOrigin: cloudUrl }),
+            // 只带 cloudOrigin 与邮件动作白名单：规则与触发状态留在个人云，
+            // 别被这次调用洗掉
+            body: JSON.stringify({ cloudOrigin: cloudUrl, emailActionIds }),
         }).catch(() => null);
         return registered?.ok ? bridgeToken : "";
     } catch {
@@ -244,14 +247,31 @@ async function refreshShortcutEmailReady(): Promise<void> {
  * 取站点桥令牌，登记结果按云地址缓存。
  * 这一步跑在同步指纹短路之前，不缓存的话每个同步周期都会白打两次站点请求。
  */
-async function resolveSiteEmailRelayToken(cloudUrl: string): Promise<string> {
+async function resolveSiteEmailRelayToken(cloudUrl: string, emailActionIds: string[]): Promise<string> {
     try {
+        const accountId = loadActiveAccountId();
+        // 白名单变了就必须重登记，否则新加的邮件动作会被站点按"表外动作"拒掉
+        const actionSignature = [...emailActionIds].sort().join(",");
         const raw = kvGet(SITE_EMAIL_RELAY_KV);
-        const cached = raw ? JSON.parse(raw) as { token?: string; cloudUrl?: string } : null;
-        if (cached?.token && cached.cloudUrl === cloudUrl) return cached.token;
-        const token = await registerSiteEmailRelay(cloudUrl);
+        const cached = raw ? JSON.parse(raw) as {
+            token?: string;
+            cloudUrl?: string;
+            accountId?: string;
+            actionSignature?: string;
+        } : null;
+        // 必须带账号维度：同一台设备换了站点账号、个人云地址又没变时，复用上一个
+        // 账号的令牌会让云端请站点代发时被解析成上一个账号——邮件发进别人的收件箱。
+        if (cached?.token
+            && cached.cloudUrl === cloudUrl
+            && (cached.accountId || "") === accountId
+            && (cached.actionSignature || "") === actionSignature) {
+            return cached.token;
+        }
+        const token = await registerSiteEmailRelay(cloudUrl, emailActionIds);
         // 失败不写缓存：下个周期再试，别把一次网络抖动记成"这个账号没有令牌"
-        if (token) kvSet(SITE_EMAIL_RELAY_KV, JSON.stringify({ token, cloudUrl }));
+        if (token) {
+            kvSet(SITE_EMAIL_RELAY_KV, JSON.stringify({ token, cloudUrl, accountId, actionSignature }));
+        }
         return token;
     } catch {
         return "";
@@ -336,7 +356,10 @@ async function runSync(): Promise<void> {
         // 后者会被就绪缓存过滤掉，缓存为假时这里就永远进不来，缓存也就永远续不上。
         const needsSiteEmailRelay = usePersonal && hasConfiguredEmailShortcutActions();
         if (needsSiteEmailRelay) await refreshShortcutEmailReady();
-        const siteBridgeToken = needsSiteEmailRelay ? await resolveSiteEmailRelayToken(cloudConfig.url) : "";
+        const emailActionIds = needsSiteEmailRelay ? listEmailShortcutActionIds() : [];
+        const siteBridgeToken = needsSiteEmailRelay
+            ? await resolveSiteEmailRelayToken(cloudConfig.url, emailActionIds)
+            : "";
         // 就绪状态可能刚被刷新（例如用户去站点验完邮箱），重取一次目录，
         // 否则这一轮同步上去的目录还是缺邮件动作，要等下一轮才生效。
         const syncedShortcutActions = needsSiteEmailRelay ? listOfflineShortcutActions() : shortcutActions;
@@ -348,6 +371,7 @@ async function runSync(): Promise<void> {
             ruleRuns,
             shortcutActions: syncedShortcutActions,
             siteEmailRelay: needsSiteEmailRelay && Boolean(siteBridgeToken),
+            emailActionIds,
         });
         const snapshotRules = rules.filter(rule => rule.actions?.chat?.requestReply);
         const snapshots: { ruleId: string; payload: Record<string, unknown> }[] = [];
