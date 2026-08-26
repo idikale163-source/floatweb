@@ -234,20 +234,45 @@ export function saveBridgeShortcutActions(actions: BridgeShortcutAction[]): void
 
 /* ---------- 邮件通道就绪缓存 ----------
  * 「站点已配好发信服务 + 收件人已验证」这件事只有接口知道，而提示词组装
- * （availableActions）是同步的，取不了接口。现实桥页面每次拉到邮箱状态就把
- * 结论写进这里，离线目录据此决定要不要把邮件送达的动作交给角色。
- * 读不到就当没就绪——宁可少给一个动作，也不让角色请求一个发不出去的动作。 */
-export function loadShortcutEmailReady(): boolean {
+ * （availableActions）是同步的，取不了接口，所以把结论缓存下来。
+ * 读不到就当没就绪——宁可少给一个动作，也不让角色请求一个发不出去的动作。
+ *
+ * 带过期时间：用户取消邮箱验证、或站点把发信服务撤了，缓存不会一直停在
+ * 「可用」上让角色白白承诺。过期后由桥同步（push-bridge-sync）自动续期，
+ * 不依赖用户主动进现实桥页面，也不会让不同设备长期给出不同答案。 */
+const SHORTCUT_EMAIL_READY_TTL_MS = 12 * 60 * 60 * 1000;
+
+type ShortcutEmailReadyCache = { ready: boolean; at: number };
+
+function readShortcutEmailReadyCache(): ShortcutEmailReadyCache | null {
   try {
-    return kvGet(BRIDGE_EMAIL_READY_KEY) === "1";
+    const raw = kvGet(BRIDGE_EMAIL_READY_KEY);
+    if (!raw) return null;
+    // 旧版写的是裸 "1"/"0"（无时间戳）：一律当作已过期，走一次续期即可。
+    if (raw === "1" || raw === "0") return null;
+    const parsed = JSON.parse(raw) as Partial<ShortcutEmailReadyCache>;
+    if (typeof parsed?.ready !== "boolean" || typeof parsed?.at !== "number") return null;
+    return { ready: parsed.ready, at: parsed.at };
   } catch {
-    return false;
+    return null;
   }
+}
+
+export function loadShortcutEmailReady(): boolean {
+  const cache = readShortcutEmailReadyCache();
+  if (!cache) return false;
+  return cache.ready && Date.now() - cache.at < SHORTCUT_EMAIL_READY_TTL_MS;
+}
+
+/** 缓存是否需要续期（不存在、已过期、或曾经写坏）。 */
+export function shortcutEmailReadyNeedsRefresh(): boolean {
+  const cache = readShortcutEmailReadyCache();
+  return !cache || Date.now() - cache.at >= SHORTCUT_EMAIL_READY_TTL_MS;
 }
 
 export function saveShortcutEmailReady(ready: boolean): void {
   try {
-    kvSet(BRIDGE_EMAIL_READY_KEY, ready ? "1" : "0");
+    kvSet(BRIDGE_EMAIL_READY_KEY, JSON.stringify({ ready, at: Date.now() } satisfies ShortcutEmailReadyCache));
   } catch { /* 缓存写失败只是少给一个动作，不影响主流程 */ }
 }
 

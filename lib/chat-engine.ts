@@ -1,7 +1,7 @@
 // lib/chat-engine.ts
 
 import { createSseJsonParser } from "./sse-json";
-import { buildOfflineShortcutContinuation, maybeAppendShortcutCapability } from "./offline-shortcut-capability";
+import { maybeAppendShortcutCapability } from "./offline-shortcut-capability";
 import { loadCharacters } from "./character-storage";
 import { buildScreenEffectPromptHint } from "./chat-screen-effects";
 import { emitChatPluginEvent, runChatPluginTransform } from "./chat-plugin-hooks";
@@ -2437,6 +2437,12 @@ async function generateChatCompletionCore(
         // 留在微任务里，别把这条热路径上的回复往后拖。
         // 顺带注入快捷动作目录——服务端接管生成时执行不了本地工具循环，但
         // 标记式【快捷动作：名称】push-generate 是认的，不注入角色就只会说"我没有工具"。
+        //
+        // 这里刻意不挂「结果续跑」快照：普通回复兜底是每条消息都要挂一次的，
+        // 续跑快照会把上传体积翻倍（两份完整提示词），提示词大时会撞上服务端
+        // 900KB 上限（app/api/push/jobs/route.ts），一撞就是整条兜底挂不上、
+        // 静默丢掉离线回复——为了第二轮续跑赔掉第一轮，不划算。冷场重连与定时
+        // 唤醒是低频任务，那两条照常挂续跑。
         const bailoutMessages = [...llmMessages];
         maybeAppendShortcutCapability(bailoutMessages);
         void import("./push-bailout-client").then(async mod => {
@@ -2446,10 +2452,6 @@ async function generateChatCompletionCore(
                 userName: userIdentity?.name,
                 regexes,
                 request: buildProviderRequest(config, preset, toLlmRequestMessages(bailoutMessages)),
-                shortcutContinuation: buildOfflineShortcutContinuation(bailoutMessages, messages => {
-                    const req = buildProviderRequest(config, preset, toLlmRequestMessages(messages));
-                    return { url: req.url, headers: req.headers, body: req.body, providerKind: req.providerKind };
-                }),
                 replyAfter: replyAfterMessage
                     ? { localMessageId: replyAfterMessage.id, createdAt: replyAfterMessage.createdAt }
                     : undefined,

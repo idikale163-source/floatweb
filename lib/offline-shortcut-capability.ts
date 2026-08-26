@@ -65,17 +65,32 @@ export function buildOfflineShortcutContinuation(
   }
 }
 
-function availableActions(): BridgeShortcutAction[] {
-  if (typeof window === "undefined" || !isPersonalPushCloudActive()) return [];
+/** 现实桥离线动作的公共门槛：个人云激活 + 能力开启。 */
+function bridgeActionsUsable(): boolean {
+  if (typeof window === "undefined" || !isPersonalPushCloudActive()) return false;
   const capability = getInternalCapability(REALITY_BRIDGE_CAPABILITY_ID);
-  if (!capability || !capability.enabled || capability.mode === "off") return [];
+  return Boolean(capability && capability.enabled && capability.mode !== "off");
+}
+
+function availableActions(): BridgeShortcutAction[] {
+  if (!bridgeActionsUsable()) return [];
   // 邮件送达的动作由站点代发（个人云自己没有发信服务），所以只有在站点确实
   // 配好了发信服务、且收件人验证过时才交给角色——否则它会请求一个必然
-  // 送不出去的动作。就绪状态由现实桥页面拉取后缓存，读不到就当没就绪。
+  // 送不出去的动作。就绪状态带过期时间，由桥同步负责续期。
   const emailReady = loadShortcutEmailReady();
   return loadBridgeShortcutActions()
     .filter(action => action.enabled && (action.deliveryMode !== "email" || emailReady))
     .slice(0, 20);
+}
+
+/**
+ * 是否登记过启用中的邮件送达动作。**刻意不看就绪缓存**——否则会锁死：
+ * 缓存为假 → 目录里筛不出邮件动作 → 没人去建立站点关联、也没人去续期缓存 →
+ * 缓存永远为假。桥同步据此决定要不要建关联并刷新就绪状态。
+ */
+export function hasConfiguredEmailShortcutActions(): boolean {
+  if (!bridgeActionsUsable()) return false;
+  return loadBridgeShortcutActions().some(action => action.enabled && action.deliveryMode === "email");
 }
 
 /** 同步给云端的动作目录（云端按 name 精确匹配标记里的动作名）。 */

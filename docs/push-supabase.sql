@@ -145,6 +145,47 @@ alter table public.push_shortcut_email_config
 alter table public.push_shortcut_email_config
   add column if not exists cloud_delivery_window_start timestamptz;
 
+-- 云端代发邮件的频控：行锁下读改写，两个并发请求不会都读到同一个旧计数而双双放行。
+-- 返回 true 表示本次获得配额。RPC 不存在时 API 路由会退回非原子的读改写实现，
+-- 老库不执行本段也不会坏，只是并发下同一窗口可能多放行一两封。
+create or replace function public.push_shortcut_email_claim_slot(
+  p_user_id text,
+  p_window_seconds integer,
+  p_max integer
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.push_shortcut_email_config;
+  v_within boolean;
+  v_count integer;
+begin
+  select * into v_row from public.push_shortcut_email_config
+    where user_id = p_user_id for update;
+  if not found then
+    return false;
+  end if;
+
+  v_within := v_row.cloud_delivery_window_start is not null
+    and now() - v_row.cloud_delivery_window_start < make_interval(secs => p_window_seconds);
+  v_count := case when v_within then coalesce(v_row.cloud_delivery_count, 0) else 0 end;
+
+  if v_within and v_count >= p_max then
+    return false;
+  end if;
+
+  update public.push_shortcut_email_config
+    set cloud_delivery_count = v_count + 1,
+        cloud_delivery_window_start = case when v_within then cloud_delivery_window_start else now() end,
+        updated_at = now()
+    where user_id = p_user_id;
+  return true;
+end;
+$$;
+
 -- 快捷指令截图临时存储：私有桶，只能经 push-shortcut-result Edge Function
 -- 使用每条命令的 callback_token 上传/读取。
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

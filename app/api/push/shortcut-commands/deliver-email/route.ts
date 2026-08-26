@@ -16,12 +16,27 @@ import { encodeSupabaseFilter, formatSupabaseRestError, getSupabaseServerConfig,
  * 全部留在个人云闭环，这边不碰命令表也不写命令状态。
  *
  * 自部署用户的「站点」就是他自己那份部署，走的是同一条代码路径。
+ *
+ * ── 信任边界（改动前先读这一段）──
+ * 本路由**不校验 actionId 是否真的登记过，也不按 schema 校验参数**：站点看不到
+ * 个人云那张命令表，做不到跨库核对。因此持有 bridge_token 的人可以用任意动作名
+ * 和任意参数发这封信，iOS 自动化会照着执行。当前接受这个风险的前提是：现实桥的
+ * 快捷动作都是截图、读数据、发通知这类低危操作，最坏后果是给自己的手机发噪音。
+ *
+ * 已经挡住的是结果外泄——回传地址被钉死在该账号登记的个人云源站上（见
+ * resultUrlAllowed），令牌泄露也没法把快捷指令的输出引到别处。
+ *
+ * **如果以后允许登记开锁、支付、代发消息这类高危动作，这个前提就不成立了**，
+ * 必须补两件事：客户端把邮件模式动作的 actionId 白名单同步给站点，本路由拒绝
+ * 表外的 actionId；参数按该动作自己的 schema 校验后再透传。
  */
 
 /** 频控与 ai-phone-push 的 shortcut-create 同级：每分钟至多 6 封。 */
 const CLOUD_DELIVERY_WINDOW_MS = 60_000;
 const CLOUD_DELIVERY_MAX_PER_WINDOW = 6;
 const MAX_ARGS_BYTES = 4000;
+/** 与签发方 supabase/functions/ai-phone-push 的 SHORTCUT_COMMAND_ID_PATTERN 保持一致。 */
+const SHORTCUT_COMMAND_ID_PATTERN = /^cmd_[a-z0-9-]{20,80}$/i;
 
 type BridgeConfigRow = { user_id: string; cloud_origin: string | null };
 type EmailThrottleRow = { cloud_delivery_count: number | null; cloud_delivery_window_start: string | null };
@@ -42,8 +57,27 @@ function resultUrlAllowed(resultUrl: string, cloudOrigin: string | null): boolea
     }
 }
 
-/** 固定窗口计数。并发下最坏是同窗口多放行一两封，够挡住失控循环。 */
-async function withinRateLimit(userId: string): Promise<boolean> {
+function isMissingClaimSlotRpc(error: string): boolean {
+    return /push_shortcut_email_claim_slot|PGRST202|Could not find the function|schema cache|does not exist/i.test(error);
+}
+
+/**
+ * 固定窗口频控。优先走行锁下读改写的 RPC，两个并发请求不会都读到旧计数而双双放行。
+ * 老库没建这个函数时退回非原子实现——功能不能因为少跑一段 DDL 就整个失效，
+ * 代价只是并发下同一窗口可能多放行一两封。
+ */
+async function claimDeliverySlot(userId: string): Promise<boolean> {
+    const rpc = await supabaseRestFetch<boolean>("rpc/push_shortcut_email_claim_slot", {
+        method: "POST",
+        body: JSON.stringify({
+            p_user_id: userId,
+            p_window_seconds: Math.round(CLOUD_DELIVERY_WINDOW_MS / 1000),
+            p_max: CLOUD_DELIVERY_MAX_PER_WINDOW,
+        }),
+    });
+    if (rpc.ok) return rpc.data === true;
+    if (!isMissingClaimSlotRpc(rpc.error)) throw new Error(rpc.error);
+
     const filter = `push_shortcut_email_config?user_id=eq.${encodeSupabaseFilter(userId)}`;
     const current = await supabaseRestFetch<EmailThrottleRow[]>(
         `${filter}&select=cloud_delivery_count,cloud_delivery_window_start&limit=1`,
@@ -82,6 +116,7 @@ export async function POST(request: Request) {
         const commandId = cleanAccountText(body.commandId, 100);
         const resultUrl = cleanAccountText(body.resultUrl, 600);
         if (!actionId || !actionName || !commandId || !resultUrl) return fail("快捷动作参数不完整。", 400);
+        if (!SHORTCUT_COMMAND_ID_PATTERN.test(commandId)) return fail("命令 ID 无效。", 400);
 
         const args = body.arguments && typeof body.arguments === "object" && !Array.isArray(body.arguments)
             ? body.arguments as Record<string, unknown>
@@ -91,7 +126,11 @@ export async function POST(request: Request) {
         const config = await supabaseRestFetch<BridgeConfigRow[]>(
             `push_bridge_config?bridge_token=eq.${encodeSupabaseFilter(token)}&select=user_id,cloud_origin&limit=1`,
         );
-        if (!config.ok) return fail(config.error, 500);
+        // 这是公开路由：库的原始报错只写日志，不回给调用方
+        if (!config.ok) {
+            console.warn("[DeliverEmail] bridge config lookup failed:", config.error);
+            return fail("服务暂时不可用。", 500);
+        }
         const row = config.data[0];
         if (!row?.user_id) return fail("令牌无效。", 403);
 
@@ -102,7 +141,7 @@ export async function POST(request: Request) {
         const recipient = await getVerifiedShortcutEmailRecipient(row.user_id);
         if (!recipient) return fail("请先验证接收邮箱。", 409);
 
-        if (!await withinRateLimit(row.user_id)) return fail("云端代发邮件过于频繁，请稍后再试。", 429);
+        if (!await claimDeliverySlot(row.user_id)) return fail("云端代发邮件过于频繁，请稍后再试。", 429);
 
         // 正文与前台同构：iOS 自动化按主题里的动作标签分流，按 JSON 取参数与回传地址。
         await sendShortcutEmail({
@@ -114,9 +153,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true, delivered: true, deliveryMode: "email" });
     } catch (err) {
         const message = formatSupabaseRestError(err instanceof Error ? err.message : String(err));
+        console.warn("[DeliverEmail] failed:", message);
+        // 「邮件服务尚未配置」是调用方需要知道的配置结论，可以回传；
+        // 其余错误可能带库结构细节，公开路由上一律收敛成一句话。
+        const configurationIssue = /尚未配置|收件邮箱/.test(message);
         return NextResponse.json(
-            { ok: false, delivered: false, error: message },
-            { status: /尚未配置/.test(message) ? 503 : 500 },
+            { ok: false, delivered: false, error: configurationIssue ? message : "代发邮件失败。" },
+            { status: configurationIssue ? 503 : 500 },
         );
     }
 }

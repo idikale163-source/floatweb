@@ -25,6 +25,7 @@ import {
 import { hasAccountPushSubscription } from "./push-client";
 import {
     buildOfflineShortcutContinuation,
+    hasConfiguredEmailShortcutActions,
     listOfflineShortcutActions,
     maybeAppendShortcutCapability,
     maybeAppendWeixinChannel,
@@ -44,6 +45,8 @@ import {
     loadBridgeShortcutActions,
     loadScreenChatSettings,
     loadScreenChatAck,
+    saveShortcutEmailReady,
+    shortcutEmailReadyNeedsRefresh,
 } from "./reality-bridge/storage";
 import type { BridgeRule } from "./reality-bridge/types";
 
@@ -213,6 +216,31 @@ async function registerSiteEmailRelay(cloudUrl: string): Promise<string> {
 }
 
 /**
+ * 续期「邮件通道是否可用」的就绪缓存（到期才打接口）。
+ *
+ * 放在桥同步里而不是只靠现实桥页面：页面不是每台设备都会进，缓存会长期停在
+ * 旧结论上——用户取消了邮箱验证，角色还在承诺自动执行；或者换了台设备，
+ * 明明配好了却一个邮件动作都拿不到。同步是每台设备都会跑的。
+ */
+async function refreshShortcutEmailReady(): Promise<void> {
+    if (!shortcutEmailReadyNeedsRefresh()) return;
+    try {
+        const response = await fetch("/api/push/shortcut-email", {
+            credentials: "include",
+            cache: "no-store",
+        }).catch(() => null);
+        if (!response?.ok) return; // 拿不到就维持原状，别把网络抖动记成"不可用"
+        const data = await response.json().catch(() => ({})) as {
+            ok?: boolean;
+            providerConfigured?: boolean;
+            verified?: boolean;
+        };
+        if (data.ok === false) return;
+        saveShortcutEmailReady(data.providerConfigured === true && data.verified === true);
+    } catch { /* 续期失败维持原状 */ }
+}
+
+/**
  * 取站点桥令牌，登记结果按云地址缓存。
  * 这一步跑在同步指纹短路之前，不缓存的话每个同步周期都会白打两次站点请求。
  */
@@ -302,16 +330,23 @@ async function runSync(): Promise<void> {
         const shortcutActions = listOfflineShortcutActions();
         // 邮件送达的动作个人云自己发不了信，要请站点代发。为此两边各登记一次：
         // 站点侧存个人云源站（校验结果回传地址），个人云侧存站点桥令牌（认账号）。
-        // 只在确实有邮件动作时才建立这层关联，纯推送用户不会平白多两次请求。
-        const needsSiteEmailRelay = usePersonal && shortcutActions.some(action => action.deliveryMode === "email");
+        // 只在确实有邮件动作时才建立这层关联，纯推送用户不会平白多几次请求。
+        //
+        // 判定用 hasConfiguredEmailShortcutActions 而不是上面筛过的 shortcutActions：
+        // 后者会被就绪缓存过滤掉，缓存为假时这里就永远进不来，缓存也就永远续不上。
+        const needsSiteEmailRelay = usePersonal && hasConfiguredEmailShortcutActions();
+        if (needsSiteEmailRelay) await refreshShortcutEmailReady();
         const siteBridgeToken = needsSiteEmailRelay ? await resolveSiteEmailRelayToken(cloudConfig.url) : "";
+        // 就绪状态可能刚被刷新（例如用户去站点验完邮箱），重取一次目录，
+        // 否则这一轮同步上去的目录还是缺邮件动作，要等下一轮才生效。
+        const syncedShortcutActions = needsSiteEmailRelay ? listOfflineShortcutActions() : shortcutActions;
 
         // 内容指纹：触发状态也必须参与，否则本地刚执行过的规则不会刷新服务端冷却。
         const configFingerprint = JSON.stringify({
             serverRules,
             cloud: { url: cloudConfig.url, key: cloudConfig.key },
             ruleRuns,
-            shortcutActions,
+            shortcutActions: syncedShortcutActions,
             siteEmailRelay: needsSiteEmailRelay && Boolean(siteBridgeToken),
         });
         const snapshotRules = rules.filter(rule => rule.actions?.chat?.requestReply);
@@ -342,7 +377,7 @@ async function runSync(): Promise<void> {
                     rules: serverRules,
                     cloudConfig: { url: cloudConfig.url, key: cloudConfig.key },
                     ruleRuns,
-                    shortcutActions,
+                    shortcutActions: syncedShortcutActions,
                     ...(siteBridgeToken ? { siteBridgeToken } : {}),
                     snapshots,
                     deleteRuleIds,

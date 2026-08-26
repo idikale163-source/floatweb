@@ -127,8 +127,6 @@ export async function armReplyBailout(params: {
     userName?: string;
     regexes: RegexConfig[];
     request: Pick<LlmRequestPayload, "url" | "headers" | "body" | "providerKind">;
-    /** 会回传结果的快捷动作被触发时，服务端据此武装第二轮生成。 */
-    shortcutContinuation?: OfflineShortcutContinuation | null;
     /** 云回复必须排在这条本地输入之后；跨设备排序不能只依赖两边时钟。 */
     replyAfter?: { localMessageId: string; createdAt: string };
     signal?: AbortSignal;
@@ -154,7 +152,6 @@ export async function armReplyBailout(params: {
                     providerKind: params.request.providerKind,
                 },
                 notify: { title: params.characterName, url: "/" },
-                ...(params.shortcutContinuation ? { shortcutContinuation: params.shortcutContinuation } : {}),
                 merge: {
                     sessionId: params.sessionId,
                     prevCount: 0,
@@ -174,7 +171,12 @@ export async function armReplyBailout(params: {
             },
         }),
     }).catch(() => null);
-    if (!response || !response.ok) return null;
+    if (!response || !response.ok) {
+        // 413 = 快照超过服务端 900KB 上限（提示词太大/贴图太多）。以前这里
+        // 完全静默，用户只会发现"App 被杀后没收到回复"却查不到原因。
+        if (response) console.warn("[PushBailout] 回复兜底预约失败：HTTP", response.status);
+        return null;
+    }
     if (params.signal?.aborted) {
         await deleteBailoutJob(triggerKey);
         return null;

@@ -645,6 +645,7 @@ Deno.serve(async (req: Request) => {
     // 老库/站点库无此列时查询失败即视为无目录，不执行）。标记一律从正文剥离。
     let shortcutActionNote = "";
     let deferredShortcutCommandId = "";
+    let deferredShortcutActionName = "";
     type DeferredShortcutEmail = {
       userId: string;
       commandId: string;
@@ -654,6 +655,16 @@ Deno.serve(async (req: Request) => {
       args: Record<string, unknown>;
     };
     let deferredShortcutEmail: DeferredShortcutEmail | null = null;
+    // 送达失败要让用户看得见：shortcutActionNote 只进任务日志（result_note），
+    // 而角色已经说了"我去看一眼"。把失败摘要挂进 outbox meta 带回客户端，
+    // 由客户端写进现实桥动态。成功则保持空串，不打扰。
+    let shortcutDeliveryError = "";
+    const noteShortcutDelivery = (actionName: string, note: string): string => {
+      if (/failed|skipped/.test(note)) {
+        shortcutDeliveryError = `快捷动作「${actionName}」未能送达：${note.replace(/^, /, "")}`.slice(0, 300);
+      }
+      return note;
+    };
     /**
      * 邮件模式的触发信请站点代发。个人云自己发不了信——RESEND_API_KEY 和
      * REALITY_BRIDGE_EMAIL_FROM 是站点的环境变量，用户的 Supabase 边缘函数里
@@ -706,13 +717,15 @@ Deno.serve(async (req: Request) => {
       if (deferredShortcutEmail) {
         const pending = deferredShortcutEmail;
         deferredShortcutEmail = null;
-        shortcutActionNote += await deliverShortcutEmailViaSite(pending);
+        shortcutActionNote += noteShortcutDelivery(pending.actionName, await deliverShortcutEmailViaSite(pending));
         await progress(shortcutActionNote);
         return;
       }
       if (!deferredShortcutCommandId) return;
       const commandId = deferredShortcutCommandId;
+      const actionName = deferredShortcutActionName || "快捷动作";
       deferredShortcutCommandId = "";
+      deferredShortcutActionName = "";
       try {
         const response = await fetch(`${supabaseUrl}/functions/v1/ai-phone-push?action=shortcut-deliver`, {
           method: "POST",
@@ -727,10 +740,10 @@ Deno.serve(async (req: Request) => {
         const delivered = response.ok && data.ok === true && data.delivered === true;
         shortcutActionNote += delivered
           ? ", shortcut delivered after first reply"
-          : `, shortcut delivery failed: ${String(data.error || response.status).slice(0, 80)}`;
+          : noteShortcutDelivery(actionName, `, shortcut delivery failed: ${String(data.error || response.status).slice(0, 80)}`);
         await progress(shortcutActionNote);
       } catch (error) {
-        shortcutActionNote += `, shortcut delivery failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 80)}`;
+        shortcutActionNote += noteShortcutDelivery(actionName, `, shortcut delivery failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 80)}`);
         await progress(shortcutActionNote);
       }
     };
@@ -754,7 +767,13 @@ Deno.serve(async (req: Request) => {
           const action = catalog.find(entry => String(entry.name ?? "") === wanted);
           if (action) {
             const resultMode = String(action.resultMode ?? "none");
+            // 目录里没有 deliveryMode 的是同步过来的老快照（该字段是后加的）。
+            // 退回推送仍然能用（只是要对方点一下通知，而不是自动执行），比不投递好；
+            // 但要在任务日志里留痕，否则「提示词说自动执行、实际弹了通知」查不出原因。
+            // 用户改动作或下一轮桥同步时目录会补上这个字段，属自愈。
+            const catalogHasDeliveryMode = typeof action.deliveryMode === "string";
             const deliveryMode = String(action.deliveryMode ?? "push") === "email" ? "email" : "push";
+            if (!catalogHasDeliveryMode) shortcutActionNote += ", catalog missing deliveryMode (fell back to push)";
             const continuation = payload.shortcutContinuation;
             const canContinue = resultMode !== "none"
               && Boolean(continuation?.request && continuation.replyMarker && continuation.resultMarker);
@@ -798,7 +817,10 @@ Deno.serve(async (req: Request) => {
               args: wantedArgs,
             };
             if (createResponse.ok && createData.ok && deliveryMode === "email" && !canContinue) {
-              shortcutActionNote += await deliverShortcutEmailViaSite(emailDelivery);
+              shortcutActionNote += noteShortcutDelivery(
+                emailDelivery.actionName,
+                await deliverShortcutEmailViaSite(emailDelivery),
+              );
             }
 
             // 需回传结果的动作：武装 shortcut_resume 续跑任务——把刚生成的
@@ -846,8 +868,12 @@ Deno.serve(async (req: Request) => {
                 });
                 await armed.text().catch(() => "");
                 if (armed.ok) {
-                  if (deliveryMode === "email") deferredShortcutEmail = emailDelivery;
-                  else deferredShortcutCommandId = commandId;
+                  if (deliveryMode === "email") {
+                    deferredShortcutEmail = emailDelivery;
+                  } else {
+                    deferredShortcutCommandId = commandId;
+                    deferredShortcutActionName = emailDelivery.actionName;
+                  }
                   shortcutActionNote += ", continuation armed";
                 } else {
                   shortcutActionNote += ", continuation arm failed";
@@ -948,7 +974,11 @@ Deno.serve(async (req: Request) => {
         session_id: payload.merge?.sessionId ?? null,
         trigger_key: job.trigger_key,
         raw_text: rawText,
-        meta: { ...(payload.merge ?? {}), pushGenerated: true },
+        meta: {
+          ...(payload.merge ?? {}),
+          pushGenerated: true,
+          ...(shortcutDeliveryError ? { shortcutDeliveryError } : {}),
+        },
       }]),
     });
     if (!outboxResponse.ok) {

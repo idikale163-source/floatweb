@@ -11,6 +11,7 @@ import { loadChatMessages, loadChatSessions, reindexSessionMessageOrdersByTime }
 import { hasAccountPushSubscription } from "./push-client";
 import { isPersonalPushCloudActive, loadPersonalPushCloudState, personalPushFetch } from "./personal-push-cloud";
 import { removeTimedWakeSchedule } from "./timed-wake-storage";
+import { appendBridgeFeed } from "./reality-bridge/storage";
 import { loadScreenChatSettings, saveScreenChatAck } from "./reality-bridge/storage";
 
 type OutboxEntry = {
@@ -29,6 +30,8 @@ type OutboxEntry = {
         appTags?: string[];
         followUpCount?: number;
         armAt?: string;
+        /** 云端触发快捷动作失败的摘要；成功时不带这个字段 */
+        shortcutDeliveryError?: string;
     } | null;
     created_at: string;
 };
@@ -142,6 +145,22 @@ export async function consumeServerOutbox(options?: { silent?: boolean; force?: 
                         consumedIds.push(entry.id);
                         if (entry.trigger_key) handledTriggerKeys.add(entry.trigger_key);
                         continue;
+                    }
+                    // 云端触发快捷动作失败时（邮件服务没配、令牌没同步、频控等），
+                    // 角色已经说了"我去看一眼"却什么都没发生。写进现实桥动态，
+                    // 让用户至少能查到为什么。成功时云端不会带这个字段。
+                    if (typeof meta.shortcutDeliveryError === "string" && meta.shortcutDeliveryError) {
+                        try {
+                            appendBridgeFeed({
+                                id: `shortcut_fail_${entry.id}`,
+                                type: "快捷动作",
+                                payload: meta.shortcutDeliveryError,
+                                rules: [],
+                                actions: [],
+                                error: meta.shortcutDeliveryError,
+                                receivedAt: new Date().toISOString(),
+                            });
+                        } catch { /* 动态写失败不影响回复合并 */ }
                     }
                     const sessionId = meta.sessionId || entry.session_id || "";
                     const session = sessionId ? loadChatSessions().find(s => s.id === sessionId) : undefined;
