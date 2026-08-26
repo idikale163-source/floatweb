@@ -15,7 +15,7 @@ import {
     loadChatMessages,
 } from "./chat-storage";
 import { loadCharacters } from "./character-storage";
-import { kvGet, kvSet } from "./kv-db";
+import { kvGet, kvRemove, kvSet } from "./kv-db";
 import { loadActiveAccountId } from "./account-client";
 import {
     BRIDGE_EVENT_SENTINEL,
@@ -243,6 +243,22 @@ async function refreshShortcutEmailReady(): Promise<void> {
     } catch { /* 续期失败维持原状 */ }
 }
 
+/** 邮件动作全没了：把站点白名单清空并丢掉本地登记缓存。没登记过就什么都不做。 */
+async function clearSiteEmailRelay(): Promise<void> {
+    try {
+        if (!kvGet(SITE_EMAIL_RELAY_KV)) return;
+        const cleared = await fetch("/api/push/bridge-config", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ emailActionIds: [] }),
+        }).catch(() => null);
+        // 清不掉就留着缓存，下一轮再试；这时站点白名单仍是旧的，但代发要用的
+        // 令牌本来也已经不再同步，实际打不进来。
+        if (cleared?.ok) kvRemove(SITE_EMAIL_RELAY_KV);
+    } catch { /* 清理失败不影响本轮同步 */ }
+}
+
 /**
  * 取站点桥令牌，登记结果按云地址缓存。
  * 这一步跑在同步指纹短路之前，不缓存的话每个同步周期都会白打两次站点请求。
@@ -360,6 +376,10 @@ async function runSync(): Promise<void> {
         const siteBridgeToken = needsSiteEmailRelay
             ? await resolveSiteEmailRelayToken(cloudConfig.url, emailActionIds)
             : "";
+        // 最后一个邮件动作被删/禁用后 needsSiteEmailRelay 直接变 false，登记流程
+        // 不再走，站点里的旧白名单就会残留。既然做了白名单，这条边界要收干净：
+        // 有过登记记录才去清一次，清完丢掉缓存，避免每轮都白打一次请求。
+        if (!needsSiteEmailRelay && usePersonal) await clearSiteEmailRelay();
         // 就绪状态可能刚被刷新（例如用户去站点验完邮箱），重取一次目录，
         // 否则这一轮同步上去的目录还是缺邮件动作，要等下一轮才生效。
         const syncedShortcutActions = needsSiteEmailRelay ? listOfflineShortcutActions() : shortcutActions;

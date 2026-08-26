@@ -146,21 +146,27 @@ export async function consumeServerOutbox(options?: { silent?: boolean; force?: 
                         if (entry.trigger_key) handledTriggerKeys.add(entry.trigger_key);
                         continue;
                     }
-                    // 云端触发快捷动作失败时（邮件服务没配、令牌没同步、频控等），
-                    // 角色已经说了"我去看一眼"却什么都没发生。写进现实桥动态，
-                    // 让用户至少能查到为什么。成功时云端不会带这个字段。
-                    if (typeof meta.shortcutDeliveryError === "string" && meta.shortcutDeliveryError) {
+                    // 云端触发快捷动作失败的诊断行：角色已经说了"我去看一眼"却什么
+                    // 都没发生，写进现实桥动态让用户查得到原因。这是一条独立的
+                    // outbox 行（云端在投递之后才写），不是角色消息——消费掉即可，
+                    // 绝不能走下面的建消息流程，否则聊天里会凭空多出一条。
+                    if ((meta as { kind?: string }).kind === "shortcut_delivery_error") {
+                        const detail = typeof meta.shortcutDeliveryError === "string"
+                            ? meta.shortcutDeliveryError
+                            : entry.raw_text;
                         try {
                             appendBridgeFeed({
                                 id: `shortcut_fail_${entry.id}`,
                                 type: "快捷动作",
-                                payload: meta.shortcutDeliveryError,
+                                payload: detail,
                                 rules: [],
                                 actions: [],
-                                error: meta.shortcutDeliveryError,
+                                error: detail,
                                 receivedAt: new Date().toISOString(),
                             });
-                        } catch { /* 动态写失败不影响回复合并 */ }
+                        } catch { /* 动态写失败不影响其余条目消费 */ }
+                        consumedIds.push(entry.id);
+                        continue;
                     }
                     const sessionId = meta.sessionId || entry.session_id || "";
                     const session = sessionId ? loadChatSessions().find(s => s.id === sessionId) : undefined;

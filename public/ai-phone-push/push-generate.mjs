@@ -718,6 +718,33 @@ Deno.serve(async (req: Request) => {
         return `, shortcut email failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 80)}`;
       }
     };
+    /**
+     * 快捷动作投递失败时单独落一条诊断行，而不是往角色那条消息的 meta 上补写。
+     *
+     * 补写会输给一个竞态：消息行落库并推送之后，用户点开通知，客户端可能在服务端
+     * PATCH 之前就把那行读走并 ACK 掉——恰好在"投递失败 + 用户立刻点通知"这种
+     * 情况下丢掉错误。诊断行是在投递之后才创建的，不存在赶不上的问题。
+     *
+     * trigger_key 必须留空：客户端按 trigger_key 去重，跟消息行同键会被当成重复
+     * 直接消费掉，根本走不到写动态那段。raw_text 只是占位（列是 NOT NULL），
+     * 客户端认 meta.kind 后就短路了，不会生成聊天消息。
+     */
+    const writeShortcutDeliveryDiagnostic = async () => {
+      if (!shortcutDeliveryError) return;
+      await rest("push_outbox", {
+        method: "POST",
+        body: JSON.stringify([{
+          id: `out_${crypto.randomUUID()}`,
+          user_id: job.user_id,
+          job_id: job.id,
+          session_id: payload.merge?.sessionId ?? null,
+          trigger_key: null,
+          raw_text: shortcutDeliveryError,
+          meta: { kind: "shortcut_delivery_error", shortcutDeliveryError },
+        }]),
+      }).catch(() => undefined);
+    };
+
     const deliverDeferredShortcut = async () => {
       // 邮件命令绝不能落到下面的 shortcut-deliver：本网关只发 Web Push，
       // 邮件模式在那边是 409。这里改请站点代发。
@@ -974,28 +1001,22 @@ Deno.serve(async (req: Request) => {
         }).catch(() => undefined);
       }
       await deliverDeferredShortcut();
-      // 微信直发分支没有 outbox 行可以挂 meta，失败只能留在任务日志里。
-      // 不为此伪造一条 outbox：那会在聊天里凭空多出一条消息。
+      await writeShortcutDeliveryDiagnostic();
       await finish("done", `sent via weixin${shortcutActionNote ? `, ${shortcutActionNote}` : ""}`);
       return;
     }
 
     await progress(`llm ok, ${rawText.length} chars${deliverAsCall ? ", call" : ""}`);
-    const outboxId = `out_${crypto.randomUUID()}`;
     const outboxResponse = await rest("push_outbox", {
       method: "POST",
       body: JSON.stringify([{
-        id: outboxId,
+        id: `out_${crypto.randomUUID()}`,
         user_id: job.user_id,
         job_id: job.id,
         session_id: payload.merge?.sessionId ?? null,
         trigger_key: job.trigger_key,
         raw_text: rawText,
-        meta: {
-          ...(payload.merge ?? {}),
-          pushGenerated: true,
-          ...(shortcutDeliveryError ? { shortcutDeliveryError } : {}),
-        },
+        meta: { ...(payload.merge ?? {}), pushGenerated: true },
       }]),
     });
     if (!outboxResponse.ok) {
@@ -1096,22 +1117,7 @@ Deno.serve(async (req: Request) => {
     // 顺序稳定为：角色先说话 → 运行动作 → 结果回来后角色再说话。
     await deliverDeferredShortcut();
 
-    // 会回传结果的动作是在上面这一步才投递的，比 outbox 落库晚——失败摘要没法
-    // 赶上那一行的 meta。补写一次，否则「投递失败不再无声」只对不回传结果的
-    // 动作成立，而截图这类恰恰都是回传结果的。
-    if (shortcutDeliveryError) {
-      await rest(`push_outbox?id=eq.${encodeURIComponent(outboxId)}`, {
-        method: "PATCH",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({
-          meta: {
-            ...(payload.merge ?? {}),
-            pushGenerated: true,
-            shortcutDeliveryError,
-          },
-        }),
-      }).catch(() => undefined);
-    }
+    await writeShortcutDeliveryDiagnostic();
 
     // 冷场重连的下一发：连发上限内自动排队（用户回来后客户端会撤销并按新周期重挂）
     const idleRepeat = payload.merge?.idleRepeat as
