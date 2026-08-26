@@ -9,13 +9,20 @@ import { getWeixinCloudDeployedAt } from "./cloud-deploy-status";
 import { getInternalCapability, REALITY_BRIDGE_CAPABILITY_ID } from "./internal-capability-storage";
 import type { LLMMessage } from "./llm-prompt-assembler";
 import { isPersonalPushCloudActive } from "./personal-push-cloud";
-import { loadBridgeShortcutActions, type BridgeShortcutAction } from "./reality-bridge/storage";
+import {
+  loadBridgeShortcutActions,
+  loadShortcutEmailReady,
+  parseBridgeActionParameterSchema,
+  type BridgeShortcutAction,
+} from "./reality-bridge/storage";
 import { loadWeixinBots } from "./weixin-storage";
 
 export type OfflineShortcutAction = {
   actionId: string;
   name: string;
   shortcutName: string;
+  /** 云端据此决定投递通道：push 走个人云 Web Push，email 转投站点代发。 */
+  deliveryMode: "push" | "email";
   resultMode: "none" | "text" | "image";
   expiresInSeconds?: number;
 };
@@ -62,8 +69,12 @@ function availableActions(): BridgeShortcutAction[] {
   if (typeof window === "undefined" || !isPersonalPushCloudActive()) return [];
   const capability = getInternalCapability(REALITY_BRIDGE_CAPABILITY_ID);
   if (!capability || !capability.enabled || capability.mode === "off") return [];
+  // 邮件送达的动作由站点代发（个人云自己没有发信服务），所以只有在站点确实
+  // 配好了发信服务、且收件人验证过时才交给角色——否则它会请求一个必然
+  // 送不出去的动作。就绪状态由现实桥页面拉取后缓存，读不到就当没就绪。
+  const emailReady = loadShortcutEmailReady();
   return loadBridgeShortcutActions()
-    .filter(action => action.enabled && action.deliveryMode !== "email")
+    .filter(action => action.enabled && (action.deliveryMode !== "email" || emailReady))
     .slice(0, 20);
 }
 
@@ -73,6 +84,7 @@ export function listOfflineShortcutActions(): OfflineShortcutAction[] {
     actionId: action.id,
     name: action.name,
     shortcutName: action.shortcutName,
+    deliveryMode: action.deliveryMode,
     resultMode: action.resultMode,
     expiresInSeconds: action.expiresInSeconds,
   }));
@@ -101,20 +113,43 @@ export function maybeAppendWeixinChannel(llmMessages: LLMMessage[], characterId:
   return botId;
 }
 
+/** 把动作的参数 schema 压成一句人话，让角色知道括号里该写什么。无参数返回空串。 */
+function describeActionParameters(action: BridgeShortcutAction): string {
+  const schema = parseBridgeActionParameterSchema(action.parameterSchema);
+  const properties = schema && typeof schema.properties === "object" && schema.properties !== null
+    ? schema.properties as Record<string, unknown>
+    : null;
+  const names = properties ? Object.keys(properties).slice(0, 8) : [];
+  if (names.length === 0) return "";
+  const required = new Set(Array.isArray(schema?.required) ? schema.required.map(item => String(item)) : []);
+  return `［参数：${names.map(name => required.has(name) ? `${name}（必填）` : name).join("、")}］`;
+}
+
 /** 快照注入：告诉角色离线时也能调用快捷动作。没有可用动作则什么都不加。 */
 export function maybeAppendShortcutCapability(llmMessages: LLMMessage[]): void {
   const actions = availableActions();
   if (actions.length === 0) return;
-  const menu = actions
-    .map(action => action.description
-      ? `「${action.name}」（${action.description.slice(0, 40)}）`
-      : `「${action.name}」`)
+  // schema 解析一次就够，别在菜单和 hasParameters 两处各解一遍
+  const described = actions.map(action => ({ action, parameters: describeActionParameters(action) }));
+  const menu = described
+    .map(({ action, parameters }) => {
+      const description = action.description ? `（${action.description.slice(0, 40)}）` : "";
+      // 邮件送达由 iOS 自动化无确认执行，推送送达要对方点一下通知——差别会
+      // 影响角色怎么措辞（"我去看一眼" vs "帮我点一下"），所以逐条标出来。
+      const channel = action.deliveryMode === "email" ? "〔自动执行〕" : "〔需对方点确认〕";
+      return `「${action.name}」${description}${channel}${parameters}`;
+    })
     .join("、");
+  const hasParameters = described.some(item => item.parameters !== "");
   llmMessages.push({
     role: "system",
     content: "（可选能力：你可以请求在对方的 iPhone 上执行这些快捷动作：" + menu
       + "。确有需要时，在回复中单独一行输出【快捷动作：动作名】，动作名必须与上面完全一致；"
-      + "对方的手机会收到运行提示，TA点一下就会执行。会回传结果的动作，结果之后会自动交给你继续回复。"
+      + (hasParameters
+        ? "带参数的动作写成【快捷动作：动作名({\"参数名\":\"值\"})】，括号里是一个 JSON 对象；没有参数的动作不要写括号。"
+        : "")
+      + "标着〔自动执行〕的动作对方手机会直接跑，标着〔需对方点确认〕的会先弹一条运行提示、TA点一下才执行。"
+      + "会回传结果的动作，结果之后会自动交给你继续回复。"
       + "不需要就不要输出，也不要提及本条说明。）",
   });
 }

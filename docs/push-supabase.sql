@@ -139,6 +139,12 @@ create table if not exists public.push_shortcut_email_config (
 alter table public.push_shortcut_email_config
   add column if not exists verification_attempts integer not null default 0;
 
+-- 云端代发邮件的频控窗口（个人云离线生成触发邮件模式快捷动作时用固定窗口计数）
+alter table public.push_shortcut_email_config
+  add column if not exists cloud_delivery_count integer not null default 0;
+alter table public.push_shortcut_email_config
+  add column if not exists cloud_delivery_window_start timestamptz;
+
 -- 快捷指令截图临时存储：私有桶，只能经 push-shortcut-result Edge Function
 -- 使用每条命令的 callback_token 上传/读取。
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -167,6 +173,12 @@ create table if not exists public.push_bridge_config (
   daily_count jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
+
+-- 个人云的 Supabase 源站（明文，非密钥）。云端离线生成触发邮件模式的快捷动作时，
+-- 站点只负责代发那封信；信里的结果回传地址必须落在这个源站上，否则拒发——
+-- 防止 bridge_token 泄露后被人把快捷指令的输出引到别处。
+alter table public.push_bridge_config
+  add column if not exists cloud_origin text;
 
 -- 每条「让TA回话」规则的 prompt 快照（带占位符，客户端防抖刷新）
 create table if not exists public.push_bridge_snapshots (

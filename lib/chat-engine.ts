@@ -1,6 +1,7 @@
 // lib/chat-engine.ts
 
 import { createSseJsonParser } from "./sse-json";
+import { buildOfflineShortcutContinuation, maybeAppendShortcutCapability } from "./offline-shortcut-capability";
 import { loadCharacters } from "./character-storage";
 import { buildScreenEffectPromptHint } from "./chat-screen-effects";
 import { emitChatPluginEvent, runChatPluginTransform } from "./chat-plugin-hooks";
@@ -2431,13 +2432,24 @@ async function generateChatCompletionCore(
             && Boolean(message.id)
             && Boolean(message.createdAt),
         );
+        // 消息数组必须同步定格：下面的工具循环会往 llmMessages 里 splice 中间轮次，
+        // 等动态 import 的微任务跑到时数组早就不是这一轮的原样了。组装请求本身
+        // 留在微任务里，别把这条热路径上的回复往后拖。
+        // 顺带注入快捷动作目录——服务端接管生成时执行不了本地工具循环，但
+        // 标记式【快捷动作：名称】push-generate 是认的，不注入角色就只会说"我没有工具"。
+        const bailoutMessages = [...llmMessages];
+        maybeAppendShortcutCapability(bailoutMessages);
         void import("./push-bailout-client").then(async mod => {
             const handle = await mod.armReplyBailout({
                 sessionId: session.id,
                 characterName: character.name,
                 userName: userIdentity?.name,
                 regexes,
-                request: buildProviderRequest(config, preset, toLlmRequestMessages(llmMessages)),
+                request: buildProviderRequest(config, preset, toLlmRequestMessages(bailoutMessages)),
+                shortcutContinuation: buildOfflineShortcutContinuation(bailoutMessages, messages => {
+                    const req = buildProviderRequest(config, preset, toLlmRequestMessages(messages));
+                    return { url: req.url, headers: req.headers, body: req.body, providerKind: req.providerKind };
+                }),
                 replyAfter: replyAfterMessage
                     ? { localMessageId: replyAfterMessage.id, createdAt: replyAfterMessage.createdAt }
                     : undefined,

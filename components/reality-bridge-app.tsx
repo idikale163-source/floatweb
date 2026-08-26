@@ -14,6 +14,7 @@ import {
   loadBridgeRules,
   loadBridgeSettings,
   loadBridgeShortcutActions,
+  saveShortcutEmailReady,
   loadScreenChatSettings,
   parseBridgeActionParameterSchema,
   readBridgeStateSnapshot,
@@ -288,6 +289,8 @@ export function RealityBridgeApp({ onClose, onNotice }: {
     if (!response.ok || data.ok === false) throw new Error(data.error || "邮箱状态读取失败。");
     setShortcutEmailStatus(data);
     setShortcutEmailInput(data.recipient || "");
+    // 离线目录要同步知道邮件通道能不能用（提示词组装是同步的，取不了接口）
+    saveShortcutEmailReady(data.providerConfigured === true && data.verified === true);
   }, []);
 
   /* 快捷动作向导选了邮件模式时，拉取邮箱验证状态 */
@@ -295,6 +298,17 @@ export function RealityBridgeApp({ onClose, onNotice }: {
   useEffect(() => {
     if (editingShortcutDelivery === "email") void refreshShortcutEmailStatus().catch(() => undefined);
   }, [editingShortcutDelivery, refreshShortcutEmailStatus]);
+
+  /* 已经登记过邮件送达的动作：进页面就刷一次状态，把离线目录的就绪缓存校准。
+     只在"有邮件动作"时打这个接口，没用邮件的用户不会平白多一次请求。 */
+  const hasEnabledEmailAction = shortcutActions.some(item => item.enabled && item.deliveryMode === "email");
+  useEffect(() => {
+    if (!hasEnabledEmailAction) {
+      saveShortcutEmailReady(false);
+      return;
+    }
+    void refreshShortcutEmailStatus().catch(() => undefined);
+  }, [hasEnabledEmailAction, refreshShortcutEmailStatus]);
 
   const sendShortcutEmailCode = useCallback(async () => {
     const recipient = shortcutEmailInput.trim().toLowerCase();

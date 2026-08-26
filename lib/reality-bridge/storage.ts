@@ -20,6 +20,7 @@ const BRIDGE_DATA_ITEMS_KEY = "ai_phone_reality_bridge_data_items_v1";
 const BRIDGE_SHORTCUT_ACTIONS_KEY = "ai_phone_reality_bridge_shortcut_actions_v1";
 const BRIDGE_RULE_RUNS_KEY = "ai_phone_reality_bridge_rule_runs_v1";
 const BRIDGE_SCREEN_CHAT_KEY = "ai_phone_reality_bridge_screen_chat_v1";
+const BRIDGE_EMAIL_READY_KEY = "ai_phone_reality_bridge_email_ready_v1";
 const FEED_LIMIT = 200;
 
 registerKvMigration(BRIDGE_RULES_KEY);
@@ -29,6 +30,7 @@ registerKvMigration(BRIDGE_DATA_ITEMS_KEY);
 registerKvMigration(BRIDGE_SHORTCUT_ACTIONS_KEY);
 registerKvMigration(BRIDGE_RULE_RUNS_KEY);
 registerKvMigration(BRIDGE_SCREEN_CHAT_KEY);
+registerKvMigration(BRIDGE_EMAIL_READY_KEY);
 
 export type BridgeSettings = {
   enabled: boolean;
@@ -228,6 +230,25 @@ export function loadBridgeShortcutActions(): BridgeShortcutAction[] {
 
 export function saveBridgeShortcutActions(actions: BridgeShortcutAction[]): void {
   kvSet(BRIDGE_SHORTCUT_ACTIONS_KEY, JSON.stringify(actions.slice(0, 30)));
+}
+
+/* ---------- 邮件通道就绪缓存 ----------
+ * 「站点已配好发信服务 + 收件人已验证」这件事只有接口知道，而提示词组装
+ * （availableActions）是同步的，取不了接口。现实桥页面每次拉到邮箱状态就把
+ * 结论写进这里，离线目录据此决定要不要把邮件送达的动作交给角色。
+ * 读不到就当没就绪——宁可少给一个动作，也不让角色请求一个发不出去的动作。 */
+export function loadShortcutEmailReady(): boolean {
+  try {
+    return kvGet(BRIDGE_EMAIL_READY_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveShortcutEmailReady(ready: boolean): void {
+  try {
+    kvSet(BRIDGE_EMAIL_READY_KEY, ready ? "1" : "0");
+  } catch { /* 缓存写失败只是少给一个动作，不影响主流程 */ }
 }
 
 export function parseBridgeActionParameterSchema(value: string): Record<string, unknown> | null {

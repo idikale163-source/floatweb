@@ -805,9 +805,13 @@ $CRON$)`);
           actionId: cleanText(entry.actionId, 100),
           name: cleanText(entry.name, 60),
           shortcutName: cleanText(entry.shortcutName, 80),
+          deliveryMode: cleanText(entry.deliveryMode, 10) === "email" ? "email" : "push",
           resultMode: SHORTCUT_RESULT_MODES.has(cleanText(entry.resultMode, 20)) ? cleanText(entry.resultMode, 20) : "none",
           expiresInSeconds: Math.max(30, Math.min(900, Number(entry.expiresInSeconds) || 120)),
         }));
+      // 站点桥令牌：邮件模式的动作要靠它请站点代发（个人云没有发信服务）。
+      // 客户端没带就保持原值，不要把已存的令牌洗掉。
+      const siteBridgeToken = cleanText(body.siteBridgeToken, 100);
       const patched = await readJson<unknown[]>(await rest(`push_bridge_config?user_id=eq.${OWNER_ID}`, {
         method: "PATCH",
         headers: { Prefer: "return=representation" },
@@ -816,6 +820,7 @@ $CRON$)`);
           ...(cloudConfig ? { cloud_config: cloudConfig } : {}),
           rule_runs: ruleRuns,
           shortcut_actions: shortcutActions,
+          ...(siteBridgeToken ? { site_bridge_token: siteBridgeToken } : {}),
           updated_at: new Date().toISOString(),
         }),
       }));
@@ -830,6 +835,7 @@ $CRON$)`);
             ...(cloudConfig ? { cloud_config: cloudConfig } : {}),
             rule_runs: ruleRuns,
             shortcut_actions: shortcutActions,
+            ...(siteBridgeToken ? { site_bridge_token: siteBridgeToken } : {}),
           }]),
         }));
       }
@@ -875,6 +881,8 @@ $CRON$)`);
       const actionName = cleanText(body.actionName, 60);
       const shortcutName = cleanText(body.shortcutName, 80);
       const resultMode = cleanText(body.resultMode, 20);
+      // 邮件模式的信由站点代发，本函数只建行；投递交给调用方后续单独发起。
+      const deliveryMode = cleanText(body.deliveryMode, 10) === "email" ? "email" : "push";
       const args = body.arguments && typeof body.arguments === "object" && !Array.isArray(body.arguments)
         ? body.arguments as Record<string, unknown>
         : {};
@@ -916,7 +924,7 @@ $CRON$)`);
           action_id: actionId,
           action_name: actionName,
           shortcut_name: shortcutName,
-          delivery_mode: "push",
+          delivery_mode: deliveryMode,
           callback_token: callbackToken,
           action_args: args,
           result_mode: resultMode,
@@ -926,13 +934,17 @@ $CRON$)`);
       }));
       if (!inserted[0]) return json({ ok: false, error: "命令创建失败。" }, 500);
 
-      const delivery = deferDelivery
+      // 本函数只会发 Web Push；邮件模式一律不在这里投递，由调用方转投站点代发。
+      const delivery = deferDelivery || deliveryMode === "email"
         ? { delivered: false, push: undefined }
         : await deliverShortcutCommandRow(inserted[0]);
       return json({
         ok: true,
         command: toPublicShortcutCommand(inserted[0]),
         runUrl: `${supabaseUrl}/functions/v1/ai-phone-push?action=run&command=${inserted[0].id}&ticket=${inserted[0].callback_token}`,
+        // 邮件模式要把这个地址写进信里，让 iPhone 把结果回传到本项目。
+        // 票据只随创建这一次返回，不进 toPublicShortcutCommand 的公开字段。
+        resultUrl: `${supabaseUrl}/functions/v1/push-shortcut-result?command=${inserted[0].id}&ticket=${inserted[0].callback_token}`,
         delivered: delivery.delivered,
         deferred: deferDelivery,
         push: delivery.push,
@@ -955,6 +967,9 @@ $CRON$)`);
         return json({ ok: false, error: "命令已过期。" }, 410);
       }
       if (command.status !== "pending") return json({ ok: false, error: `命令状态：${command.status}` }, 409);
+      if (command.delivery_mode === "email") {
+        return json({ ok: false, error: "邮件模式由站点代发，本网关不投递。" }, 409);
+      }
       const delivery = await deliverShortcutCommandRow(command);
       return json({ ok: true, delivered: delivery.delivered, push: delivery.push });
     }

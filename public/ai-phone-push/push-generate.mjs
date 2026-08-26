@@ -297,6 +297,25 @@ type ShortcutCommandRow = {
   expires_at: string;
 };
 
+// 【快捷动作：名称】与带参数的【快捷动作：名称({...})】都要认。参数允许换行
+// （模型爱把 JSON 展开写），所以参数段用 [\s\S] 而不是 [^\n]。
+const SHORTCUT_MARKER_RE = /【快捷动作[：:]\s*([^(（）)】\n]{1,60}?)\s*(?:[(（]([\s\S]{0,2000}?)[)）])?\s*】/;
+const SHORTCUT_MARKER_STRIP_RE = new RegExp(SHORTCUT_MARKER_RE.source, "g");
+
+/** 标记括号里的 JSON 参数。写坏了就当没带参数——宁可少传，也不要整条动作失败。 */
+function parseShortcutMarkerArgs(raw: string | undefined): Record<string, unknown> {
+  const text = (raw ?? "").trim();
+  if (!text) return {};
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 function shortcutResultText(value: unknown): string {
   if (typeof value === "string") return value.trim();
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -626,7 +645,71 @@ Deno.serve(async (req: Request) => {
     // 老库/站点库无此列时查询失败即视为无目录，不执行）。标记一律从正文剥离。
     let shortcutActionNote = "";
     let deferredShortcutCommandId = "";
+    type DeferredShortcutEmail = {
+      userId: string;
+      commandId: string;
+      resultUrl: string;
+      actionId: string;
+      actionName: string;
+      args: Record<string, unknown>;
+    };
+    let deferredShortcutEmail: DeferredShortcutEmail | null = null;
+    /**
+     * 邮件模式的触发信请站点代发。个人云自己发不了信——RESEND_API_KEY 和
+     * REALITY_BRIDGE_EMAIL_FROM 是站点的环境变量，用户的 Supabase 边缘函数里
+     * 没有也不该有。命令行、结果回传、续跑快照全部留在本项目，站点只发那封信。
+     * 失败一律只回一句 note：邮件没发出去不该让整个生成任务失败。
+     */
+    const deliverShortcutEmailViaSite = async (input: {
+      userId: string;
+      commandId: string;
+      resultUrl: string;
+      actionId: string;
+      actionName: string;
+      args: Record<string, unknown>;
+    }): Promise<string> => {
+      if (!siteOrigin) return ", shortcut email skipped: site origin unknown";
+      if (!input.commandId || !input.resultUrl) return ", shortcut email skipped: command incomplete";
+      try {
+        const tokenResponse = await rest(
+          `push_bridge_config?user_id=eq.${encodeURIComponent(input.userId)}&select=site_bridge_token&limit=1`,
+        );
+        const tokenRows = tokenResponse.ok
+          ? await tokenResponse.json() as { site_bridge_token?: string | null }[]
+          : [];
+        const siteBridgeToken = String(tokenRows[0]?.site_bridge_token || "");
+        if (!siteBridgeToken) return ", shortcut email skipped: site bridge token not synced";
+
+        const response = await fetch(`${siteOrigin}/api/push/shortcut-commands/deliver-email`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token: siteBridgeToken,
+            actionId: input.actionId,
+            actionName: input.actionName,
+            commandId: input.commandId,
+            resultUrl: input.resultUrl,
+            arguments: input.args,
+          }),
+        });
+        const data = await response.json().catch(() => ({})) as { ok?: boolean; error?: string };
+        return response.ok && data.ok === true
+          ? ", shortcut email delivered by site"
+          : `, shortcut email failed: ${String(data.error || response.status).slice(0, 80)}`;
+      } catch (error) {
+        return `, shortcut email failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 80)}`;
+      }
+    };
     const deliverDeferredShortcut = async () => {
+      // 邮件命令绝不能落到下面的 shortcut-deliver：本网关只发 Web Push，
+      // 邮件模式在那边是 409。这里改请站点代发。
+      if (deferredShortcutEmail) {
+        const pending = deferredShortcutEmail;
+        deferredShortcutEmail = null;
+        shortcutActionNote += await deliverShortcutEmailViaSite(pending);
+        await progress(shortcutActionNote);
+        return;
+      }
       if (!deferredShortcutCommandId) return;
       const commandId = deferredShortcutCommandId;
       deferredShortcutCommandId = "";
@@ -654,11 +737,12 @@ Deno.serve(async (req: Request) => {
     // shortcut_resume 已经是一次动作结果后的第二轮，禁止它再次解析动作标记，
     // 避免模型不守“不要重复执行”提示时形成递归快捷动作。
     if (!payload.shortcut) {
-      const markerMatch = rawText.match(/【快捷动作[：:]\s*([^】\n]{1,60})】/);
+      const markerMatch = rawText.match(SHORTCUT_MARKER_RE);
       if (markerMatch) {
-        rawText = rawText.replace(/【快捷动作[：:][^】\n]{1,60}】/g, "").replace(/\n{3,}/g, "\n\n").trim();
+        rawText = rawText.replace(SHORTCUT_MARKER_STRIP_RE, "").replace(/\n{3,}/g, "\n\n").trim();
         if (!rawText) rawText = "……";
         const wanted = markerMatch[1].trim();
+        const wantedArgs = parseShortcutMarkerArgs(markerMatch[2]);
         try {
           const catalogResponse = await rest(
             `push_bridge_config?user_id=eq.${encodeURIComponent(job.user_id)}&select=shortcut_actions&limit=1`,
@@ -670,6 +754,7 @@ Deno.serve(async (req: Request) => {
           const action = catalog.find(entry => String(entry.name ?? "") === wanted);
           if (action) {
             const resultMode = String(action.resultMode ?? "none");
+            const deliveryMode = String(action.deliveryMode ?? "push") === "email" ? "email" : "push";
             const continuation = payload.shortcutContinuation;
             const canContinue = resultMode !== "none"
               && Boolean(continuation?.request && continuation.replyMarker && continuation.resultMarker);
@@ -684,16 +769,37 @@ Deno.serve(async (req: Request) => {
                 actionId: String(action.actionId ?? ""),
                 actionName: String(action.name ?? ""),
                 shortcutName: String(action.shortcutName ?? ""),
-                arguments: {},
+                arguments: wantedArgs,
                 resultMode,
+                deliveryMode,
                 expiresInSeconds: Number(action.expiresInSeconds) || undefined,
                 deferDelivery: canContinue,
               }),
             });
-            const createData = await createResponse.json().catch(() => ({})) as { ok?: boolean; command?: { id?: string } };
+            const createData = await createResponse.json().catch(() => ({})) as {
+              ok?: boolean;
+              command?: { id?: string };
+              resultUrl?: string;
+            };
             shortcutActionNote = createResponse.ok && createData.ok
               ? `shortcut sent: ${wanted}`
               : `shortcut failed: http ${createResponse.status}`;
+
+            // 邮件模式：个人云没有发信服务（RESEND_API_KEY 是站点的环境变量），
+            // 请站点凭 site_bridge_token 代发那封信。命令行与结果回传仍留在本项目。
+            // 有续跑的动作等续跑任务挂稳、首条回复送达之后再发（与推送模式同序），
+            // 见下方 armed.ok 分支；这里只处理不回传结果、可以立刻触发的动作。
+            const emailDelivery: DeferredShortcutEmail = {
+              userId: job.user_id,
+              commandId: String(createData.command?.id || ""),
+              resultUrl: String(createData.resultUrl || ""),
+              actionId: String(action.actionId ?? ""),
+              actionName: String(action.name ?? ""),
+              args: wantedArgs,
+            };
+            if (createResponse.ok && createData.ok && deliveryMode === "email" && !canContinue) {
+              shortcutActionNote += await deliverShortcutEmailViaSite(emailDelivery);
+            }
 
             // 需回传结果的动作：武装 shortcut_resume 续跑任务——把刚生成的
             // 回复代入续跑快照的回复占位；结果回传后由本函数把结果代入生成下一轮。
@@ -740,7 +846,8 @@ Deno.serve(async (req: Request) => {
                 });
                 await armed.text().catch(() => "");
                 if (armed.ok) {
-                  deferredShortcutCommandId = commandId;
+                  if (deliveryMode === "email") deferredShortcutEmail = emailDelivery;
+                  else deferredShortcutCommandId = commandId;
                   shortcutActionNote += ", continuation armed";
                 } else {
                   shortcutActionNote += ", continuation arm failed";

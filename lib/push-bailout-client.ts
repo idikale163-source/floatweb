@@ -127,6 +127,8 @@ export async function armReplyBailout(params: {
     userName?: string;
     regexes: RegexConfig[];
     request: Pick<LlmRequestPayload, "url" | "headers" | "body" | "providerKind">;
+    /** 会回传结果的快捷动作被触发时，服务端据此武装第二轮生成。 */
+    shortcutContinuation?: OfflineShortcutContinuation | null;
     /** 云回复必须排在这条本地输入之后；跨设备排序不能只依赖两边时钟。 */
     replyAfter?: { localMessageId: string; createdAt: string };
     signal?: AbortSignal;
@@ -152,6 +154,7 @@ export async function armReplyBailout(params: {
                     providerKind: params.request.providerKind,
                 },
                 notify: { title: params.characterName, url: "/" },
+                ...(params.shortcutContinuation ? { shortcutContinuation: params.shortcutContinuation } : {}),
                 merge: {
                     sessionId: params.sessionId,
                     prevCount: 0,
@@ -269,8 +272,15 @@ export async function armFollowUpBailout(
             messagesWithHint,
             { appTags: ["chat", "text", "followup"], followUpCount: count, followUpDelay: delaySec },
         );
-        // 无工具重放：服务端执行不了本地工具循环，兜底生成按纯补全组装。
+        // 无原生工具重放：服务端执行不了本地工具循环，兜底生成按纯补全组装。
+        // 但标记式快捷动作云端是支持的（push-generate 解析【快捷动作：名称】），
+        // 所以照常注入动作目录，别让角色在离线追问里以为自己什么都做不了。
+        maybeAppendShortcutCapability(llmMessages);
         const request = buildProviderRequest(config, preset, toLlmRequestMessages(llmMessages));
+        const shortcutContinuation = buildOfflineShortcutContinuation(llmMessages, messages => {
+            const req = buildProviderRequest(config, preset, toLlmRequestMessages(messages));
+            return { url: req.url, headers: req.headers, body: req.body, providerKind: req.providerKind };
+        });
 
         // 组装耗时不短——上传前复核排期还在且没被改过（用户可能已回复触发了取消）
         const latestSchedule = loadFollowUpSchedule(sessionId);
@@ -291,6 +301,7 @@ export async function armFollowUpBailout(
                         providerKind: request.providerKind,
                     },
                     notify: { title: character.name, url: "/" },
+                    ...(shortcutContinuation ? { shortcutContinuation } : {}),
                     merge: {
                         sessionId,
                         followUpIndex: count,
@@ -554,13 +565,19 @@ export async function armPeriodCareBailouts(): Promise<void> {
                     history,
                     { appTags: ["chat", "text", "period_care"], periodCareContext: event.context },
                 );
+                maybeAppendShortcutCapability(llmMessages);
                 const request = buildProviderRequest(apiConfig, preset, toLlmRequestMessages(llmMessages));
+                const shortcutContinuation = buildOfflineShortcutContinuation(llmMessages, messages => {
+                    const req = buildProviderRequest(apiConfig, preset, toLlmRequestMessages(messages));
+                    return { url: req.url, headers: req.headers, body: req.body, providerKind: req.providerKind };
+                });
                 await postBailoutJob({
                     triggerKey: `periodcare:${session.contactId}:${event.cycleKey}`,
                     kind: "timed_task",
                     executeAtMs,
                     request,
                     notifyTitle: characterName,
+                    shortcutContinuation,
                     merge: {
                         sessionId: session.id,
                         prevCount: 0,

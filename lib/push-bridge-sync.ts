@@ -48,6 +48,7 @@ import {
 import type { BridgeRule } from "./reality-bridge/types";
 
 const SYNC_HASH_KV = "push_bridge_sync_hash_v1";
+const SITE_EMAIL_RELAY_KV = "push_bridge_site_email_relay_v1";
 let syncing = false;
 let debounceTimer: number | null = null;
 
@@ -180,6 +181,55 @@ async function buildRuleSnapshot(rule: BridgeRule): Promise<Record<string, unkno
     }
 }
 
+/**
+ * 建立「个人云 ↔ 站点」的邮件代发关联，返回站点的桥令牌（失败返回空串）。
+ *
+ * 站点侧登记个人云源站：云端请站点代发信时，信里的结果回传地址必须落在这个
+ * 源站上，否则站点拒发——令牌万一泄露也没法把快捷指令的输出引去别处。
+ * 只登记源站，不传密钥；个人云的 service key 始终不出用户自己的项目。
+ */
+async function registerSiteEmailRelay(cloudUrl: string): Promise<string> {
+    try {
+        const tokenResponse = await fetch("/api/push/bridge-config", {
+            credentials: "include",
+            cache: "no-store",
+        }).catch(() => null);
+        if (!tokenResponse?.ok) return "";
+        const tokenData = await tokenResponse.json().catch(() => ({})) as { ok?: boolean; bridgeToken?: string };
+        const bridgeToken = tokenData.ok && tokenData.bridgeToken ? tokenData.bridgeToken : "";
+        if (!bridgeToken) return "";
+
+        const registered = await fetch("/api/push/bridge-config", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            // 只带 cloudOrigin：规则与触发状态留在个人云，别被这次调用洗掉
+            body: JSON.stringify({ cloudOrigin: cloudUrl }),
+        }).catch(() => null);
+        return registered?.ok ? bridgeToken : "";
+    } catch {
+        return "";
+    }
+}
+
+/**
+ * 取站点桥令牌，登记结果按云地址缓存。
+ * 这一步跑在同步指纹短路之前，不缓存的话每个同步周期都会白打两次站点请求。
+ */
+async function resolveSiteEmailRelayToken(cloudUrl: string): Promise<string> {
+    try {
+        const raw = kvGet(SITE_EMAIL_RELAY_KV);
+        const cached = raw ? JSON.parse(raw) as { token?: string; cloudUrl?: string } : null;
+        if (cached?.token && cached.cloudUrl === cloudUrl) return cached.token;
+        const token = await registerSiteEmailRelay(cloudUrl);
+        // 失败不写缓存：下个周期再试，别把一次网络抖动记成"这个账号没有令牌"
+        if (token) kvSet(SITE_EMAIL_RELAY_KV, JSON.stringify({ token, cloudUrl }));
+        return token;
+    } catch {
+        return "";
+    }
+}
+
 /** 屏幕速聊 prompt 快照：与联动规则快照同链路（rule_id 固定为 screen-chat），
  *  正文 = 所选角色的完整聊天上下文 + 对话占位哨兵；screen-chat 函数只做替换与注图。 */
 async function buildScreenChatSnapshot(): Promise<Record<string, unknown> | null> {
@@ -250,6 +300,11 @@ async function runSync(): Promise<void> {
 
         // 离线快捷动作目录：角色离线回复里的【快捷动作：名称】按它匹配执行
         const shortcutActions = listOfflineShortcutActions();
+        // 邮件送达的动作个人云自己发不了信，要请站点代发。为此两边各登记一次：
+        // 站点侧存个人云源站（校验结果回传地址），个人云侧存站点桥令牌（认账号）。
+        // 只在确实有邮件动作时才建立这层关联，纯推送用户不会平白多两次请求。
+        const needsSiteEmailRelay = usePersonal && shortcutActions.some(action => action.deliveryMode === "email");
+        const siteBridgeToken = needsSiteEmailRelay ? await resolveSiteEmailRelayToken(cloudConfig.url) : "";
 
         // 内容指纹：触发状态也必须参与，否则本地刚执行过的规则不会刷新服务端冷却。
         const configFingerprint = JSON.stringify({
@@ -257,6 +312,7 @@ async function runSync(): Promise<void> {
             cloud: { url: cloudConfig.url, key: cloudConfig.key },
             ruleRuns,
             shortcutActions,
+            siteEmailRelay: needsSiteEmailRelay && Boolean(siteBridgeToken),
         });
         const snapshotRules = rules.filter(rule => rule.actions?.chat?.requestReply);
         const snapshots: { ruleId: string; payload: Record<string, unknown> }[] = [];
@@ -287,6 +343,7 @@ async function runSync(): Promise<void> {
                     cloudConfig: { url: cloudConfig.url, key: cloudConfig.key },
                     ruleRuns,
                     shortcutActions,
+                    ...(siteBridgeToken ? { siteBridgeToken } : {}),
                     snapshots,
                     deleteRuleIds,
                 }),
