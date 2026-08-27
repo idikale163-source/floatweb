@@ -56,6 +56,29 @@ function statsLine(entry: { likeCount: number; saveCount: number; commentCount: 
     return `♥ ${entry.likeCount} · 入柜 ${entry.saveCount} · 评论 ${entry.commentCount}`;
 }
 
+/**
+ * 拍图管线版本：拍法变了（比如折叠区从摊开改为保持收起）就 +1。
+ * 版本变化后，「我的发布」会把自己名下已有封面的存量条目也重拍一轮，
+ * 否则旧管线拍的封面永远和酒柜的实时缩样对不上。哪些条目已按当前版本
+ * 拍过记在 localStorage 里，避免每次进「我的发布」都重复拍。
+ */
+const THUMB_PIPELINE_VERSION = 2;
+const THUMB_REDO_KEY = "mix-thumb-redone";
+
+function loadThumbRedone(): Set<string> {
+    try {
+        const parsed = JSON.parse(window.localStorage.getItem(THUMB_REDO_KEY) ?? "") as { v?: number; ids?: unknown };
+        if (parsed?.v === THUMB_PIPELINE_VERSION && Array.isArray(parsed.ids)) return new Set(parsed.ids.map(String));
+    } catch { /* 没存过或格式不对：当作全部没按当前版本拍过 */ }
+    return new Set();
+}
+
+function saveThumbRedone(ids: Set<string>): void {
+    try {
+        window.localStorage.setItem(THUMB_REDO_KEY, JSON.stringify({ v: THUMB_PIPELINE_VERSION, ids: [...ids].slice(-500) }));
+    } catch { /* 私隐模式等存不进就算了：重拍是幂等的，大不了下次再拍一遍 */ }
+}
+
 
 // ── 评论区（楼中楼） ──
 // 酒材/配方详情用，也导出给酒柜详情用（本地材料带 publishedId / 导入件时能看同一条评论流）
@@ -263,24 +286,33 @@ export function MixologyHall({
      * 给自己发布的存量条目补封面。
      * 缩略图是后来才有的东西，之前上架的条目云端 cover 是空的，坐在大厅里
      * 永远等不到——而作者本地就有整份材料，进「我的发布」时顺手拍一张补上去。
+     * 拍图管线升过版本后（THUMB_PIPELINE_VERSION），已有封面的条目也重拍一轮：
+     * 旧管线拍的图（比如摊开折叠区那版）不重拍就永远和酒柜的实时缩样对不上。
      * 只补自己的、只补拍得出图的（小票/尾调且留了示例数据）；一个个来不并发，
      * 单个失败跳过，全程不打扰玩家。补完就地更新列表与会话缓存，不重新回源。
      */
     const backfillThumbs = useCallback(async (entries: MixHallMaterial[], cacheKey: string) => {
-        const pending = entries.filter((e) => !e.cover && (e.kind === "ticket" || e.kind === "encore"));
+        const redone = loadThumbRedone();
+        const pending = entries.filter((e) => (e.kind === "ticket" || e.kind === "encore") && (!e.cover || !redone.has(e.id)));
         if (!pending.length) return;
         const done = new Map<string, string>();
+        let redoneChanged = false;
         for (const entry of pending) {
             const local = findMixMaterialByPublishedId(entry.id);
             if (!local) continue;
             try {
                 const cover = await backfillHallThumb(entry.id, local);
-                if (cover) done.set(entry.id, cover);
+                if (cover) {
+                    done.set(entry.id, cover);
+                    redone.add(entry.id);
+                    redoneChanged = true;
+                }
             } catch {
                 // 补不上就算了：条目照旧显示图标，下次进来再试
             }
             if (!mountedRef.current) return;
         }
+        if (redoneChanged) saveThumbRedone(redone);
         if (!done.size || !mountedRef.current) return;
         const patch = (list: MixHallMaterial[]) =>
             list.map((e) => (done.has(e.id) ? { ...e, cover: done.get(e.id) as string } : e));
