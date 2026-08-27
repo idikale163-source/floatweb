@@ -797,16 +797,25 @@ Deno.serve(async (req: Request) => {
         let deferredAiShortcutCommandId = "";
         let deferredAiShortcutName = "";
         let deferredAiShortcutEmail: { commandId: string; resultUrl: string; actionId: string; actionName: string; args: Record<string, unknown> } | null = null;
-        // 实际执行过的快捷动作（名称+参数）：随 outbox 带回小手机记进聊天历史，
+        // 实际执行过的快捷动作标记（原文+在剥离后正文中的位置）：随 outbox 带回
+        // 小手机，在原始位置落一对 tool_call/tool_notice——上下文里是标记原文，
         // 角色下一轮才知道自己传过什么参数（否则「换一首歌」会换出同一首）
-        let executedShortcutInvocation: { name: string; args: Record<string, unknown> } | null = null;
+        let executedShortcutMarker: { text: string; insertAt: number; name: string } | null = null;
         if (replyRaw) {
           const markerMatch = replyRaw.match(/【快捷动作[：:]\s*([^(（）)】\n]{1,60}?)\s*(?:[(（]([\s\S]{0,2000}?)[)）])?\s*】/);
           if (markerMatch) {
+            const markerStripRe = /【快捷动作[：:]\s*[^(（）)】\n]{1,60}?\s*(?:[(（][\s\S]{0,2000}?[)）])?\s*】/g;
+            const markerText = markerMatch[0];
+            // 标记在剥离后正文中的原始位置：对前缀做同一套清洗后取长度（尾部 trim 不影响前缀）
+            const cleanedPrefix = replyRaw.slice(0, markerMatch.index ?? 0)
+              .replace(markerStripRe, "")
+              .replace(/\n{3,}/g, "\n\n")
+              .replace(/^\s+/, "");
             replyRaw = replyRaw
-              .replace(/【快捷动作[：:]\s*[^(（）)】\n]{1,60}?\s*(?:[(（][\s\S]{0,2000}?[)）])?\s*】/g, "")
+              .replace(markerStripRe, "")
               .replace(/\n{3,}/g, "\n\n").trim();
             if (!replyRaw) replyRaw = "……";
+            const markerInsertAt = Math.min(cleanedPrefix.length, replyRaw.length);
             const wanted = markerMatch[1].trim();
             // 括号里的 JSON 参数写坏了就当没带——宁可少传，也不要整条动作失败。
             // 模型爱用全角标点（中文引号/冒号/逗号），原文解析失败就按归一化后的再试一次。
@@ -838,7 +847,7 @@ Deno.serve(async (req: Request) => {
               aiNote = created.note;
               const wantedDeliveryMode = String(catalogAction.deliveryMode ?? "push") === "email" ? "email" : "push";
               if (created.ok && created.commandId) {
-                executedShortcutInvocation = { name: wanted, args: wantedArgs };
+                executedShortcutMarker = { text: markerText, insertAt: markerInsertAt, name: wanted };
               }
               // 邮件模式且不挂续跑：立刻请站点代发触发信（网关只建行不发信）
               if (created.ok && created.commandId && wantedDeliveryMode === "email" && !(canContinue && continuation)) {
@@ -936,6 +945,10 @@ Deno.serve(async (req: Request) => {
           if (markerAt >= 0) {
             replyRaw = (replyRaw.slice(0, markerAt) + replyRaw.slice(markerAt + WEIXIN_MARKER.length)).trim();
             if (!replyRaw) replyRaw = "……";
+            // 微信标记被剥掉后，快捷动作标记的还原位置要跟着前移（消费端还会钳位兜底）
+            if (executedShortcutMarker && markerAt < executedShortcutMarker.insertAt) {
+              executedShortcutMarker.insertAt = Math.max(0, executedShortcutMarker.insertAt - WEIXIN_MARKER.length);
+            }
             const snapshot = await loadSnapshot(rule.id);
             const weixinBotId = typeof snapshot?.weixin?.botId === "string" ? snapshot.weixin.botId : "";
             if (weixinBotId) {
@@ -965,7 +978,7 @@ Deno.serve(async (req: Request) => {
           chat: rule.chat ?? null,
           deferredActions: rule.deferredActions ?? [],
           ...(shortcutNote ? { shortcutNote } : {}),
-          ...(executedShortcutInvocation ? { shortcutInvocation: executedShortcutInvocation } : {}),
+          ...(executedShortcutMarker ? { shortcutMarker: executedShortcutMarker } : {}),
           capped,
           reply: replyRaw ? (await loadSnapshot(rule.id))?.reply ?? null : null,
         };

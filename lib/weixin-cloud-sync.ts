@@ -267,7 +267,10 @@ export type WeixinCloudStoredMessage = {
   replyAfterCreatedAt?: string;
   /** 同一次主动发送被拆成多段时的稳定顺序（从 0 开始）。 */
   replySequence?: number;
-  /** 这条回复实际触发过的快捷动作（名称+参数）：由助手写入，导入时挂到本地消息 */
+  /** 这条回复实际触发过的快捷动作标记（原文+在剥离后正文中的位置）：由助手写入，
+   *  导入时在对应位置插入一对 tool_call/tool_notice 消息 */
+  shortcutMarker?: { text: string; insertAt: number; name: string };
+  /** 旧字段（v1 只存名称+参数，无原文位置）：仅为兼容存量云消息保留读取 */
   shortcutInvocation?: { name: string; args?: Record<string, unknown> };
 };
 
@@ -1910,6 +1913,37 @@ function normalizeCloudAssistantContentForImport(
   }
 }
 
+/** 云消息上的快捷动作调用记录统一成标记形态；v1 旧字段只有名称+参数，合成等价标记放末尾。 */
+function normalizeStoredShortcutMarker(
+  stored: WeixinCloudStoredMessage,
+): { text: string; insertAt: number; name: string } | null {
+  const marker = stored.shortcutMarker;
+  if (
+    marker && typeof marker === "object"
+    && typeof marker.text === "string" && marker.text
+    && typeof marker.name === "string" && marker.name
+  ) {
+    return {
+      text: marker.text,
+      insertAt: typeof marker.insertAt === "number" && Number.isFinite(marker.insertAt)
+        ? marker.insertAt
+        : Number.MAX_SAFE_INTEGER,
+      name: marker.name,
+    };
+  }
+  const legacy = stored.shortcutInvocation;
+  if (legacy && typeof legacy === "object" && typeof legacy.name === "string" && legacy.name) {
+    let argsJson = "{}";
+    try { argsJson = JSON.stringify(legacy.args ?? {}); } catch { /* 保底空对象 */ }
+    return {
+      text: `【快捷动作：${legacy.name}${argsJson === "{}" ? "" : `(${argsJson})`}】`,
+      insertAt: Number.MAX_SAFE_INTEGER,
+      name: legacy.name,
+    };
+  }
+  return null;
+}
+
 function importCloudAssistantMessage(
   stored: WeixinCloudStoredMessage,
   session: ChatSession,
@@ -1987,19 +2021,43 @@ function importCloudAssistantMessage(
     }, strippedContent));
   }
 
-  // 云端执行过的快捷动作记录挂到最后一条正文消息上：重新烘焙运行包时这段
-  // 历史才带得上调用注记（气泡不渲染该字段，显示不受影响）
-  const invocation = stored.shortcutInvocation;
-  if (invocation && typeof invocation === "object" && typeof invocation.name === "string" && invocation.name) {
-    const lastAssistant = [...messages].reverse().find(message => message.role === "assistant");
-    if (lastAssistant) {
-      lastAssistant.shortcutInvocation = {
-        name: invocation.name,
-        args: invocation.args && typeof invocation.args === "object" && !Array.isArray(invocation.args)
-          ? invocation.args
-          : {},
-      };
+  // 云端执行过的快捷动作：在标记原来所在的分条位置插入一对 tool_call（标记原文，
+  // 组装器不跳过——重新烘焙运行包时原样进上下文，气泡隐藏）+ tool_notice（可见
+  // 灰条），与小手机内直接调用快捷动作的显示一致。位置用游标扫描近似映射
+  //（导入前经过时间戳剥离/正则整形，偏移只能对齐到分条边界），找不到就兜底放末尾。
+  const marker = normalizeStoredShortcutMarker(stored);
+  if (marker) {
+    let insertIdx = messages.length;
+    let cursor = 0;
+    for (let i = 0; i < visibleParts.length && i < messages.length; i++) {
+      const probe = (visibleParts[i].content || "").trim();
+      const at = probe ? normalizedContent.indexOf(probe, cursor) : -1;
+      if (at >= 0) {
+        if (at >= marker.insertAt) { insertIdx = i; break; }
+        cursor = at + probe.length;
+      }
     }
+    messages.splice(
+      insertIdx,
+      0,
+      makeCloudImportedMessage(stored, session.id, createdAt, 900, {
+        role: "assistant",
+        content: marker.text,
+        mediaType: "tool_call",
+      }, strippedContent),
+      makeCloudImportedMessage(stored, session.id, createdAt, 901, {
+        role: "system",
+        content: `发出快捷动作「${marker.name}」`,
+        mediaType: "tool_notice",
+      }, strippedContent),
+    );
+    // 时间戳按最终顺序重排：原本 index 即位置（基准+index 毫秒），配对插进中间后
+    // 得重新按位置递增，否则烘焙历史时配对会被时间序甩到末尾
+    const baseTime = new Date(createdAt).getTime();
+    const safeTime = Number.isFinite(baseTime) ? baseTime : Date.now();
+    messages.forEach((message, position) => {
+      message.createdAt = new Date(safeTime + position).toISOString();
+    });
   }
 
   let inserted = false;

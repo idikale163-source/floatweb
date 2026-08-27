@@ -216,15 +216,18 @@ export async function consumeServerOutbox(options?: { silent?: boolean; force?: 
                         text = applyOutputRegex(text, regexes, { macroEngine, activeTags });
                     }
 
-                    // 云端执行过的快捷动作（名称+参数）：挂到落库消息上，角色下一轮
-                    // 才知道自己传过什么参数（进提示词不进气泡）
-                    const rawInvocation = (meta as { shortcutInvocation?: { name?: unknown; args?: unknown } }).shortcutInvocation;
-                    const shortcutInvocation = rawInvocation && typeof rawInvocation.name === "string" && rawInvocation.name
+                    // 云端执行过的快捷动作标记：在原始位置落一对 tool_call/tool_notice——
+                    // 上下文里保留标记原文，UI 显示与小手机内直接调用一致
+                    const rawMarker = (meta as { shortcutMarker?: { text?: unknown; insertAt?: unknown; name?: unknown } }).shortcutMarker;
+                    const shortcutMarker = rawMarker
+                        && typeof rawMarker.text === "string" && rawMarker.text
+                        && typeof rawMarker.name === "string" && rawMarker.name
                         ? {
-                            name: rawInvocation.name,
-                            args: rawInvocation.args && typeof rawInvocation.args === "object" && !Array.isArray(rawInvocation.args)
-                                ? rawInvocation.args as Record<string, unknown>
-                                : {},
+                            text: rawMarker.text,
+                            insertAt: typeof rawMarker.insertAt === "number" && Number.isFinite(rawMarker.insertAt)
+                                ? rawMarker.insertAt
+                                : Number.MAX_SAFE_INTEGER,
+                            name: rawMarker.name,
                         }
                         : undefined;
                     const { hasVisible, newCount, stateValues } = await parseAndSaveResponse(
@@ -233,7 +236,7 @@ export async function consumeServerOutbox(options?: { silent?: boolean; force?: 
                         meta.prevCount ?? 0,
                         followUpIndex,
                         existingMessages,
-                        { silent: options?.silent !== false, ...(shortcutInvocation ? { shortcutInvocation } : {}) },
+                        { silent: options?.silent !== false, ...(shortcutMarker ? { shortcutMarker } : {}) },
                     );
                     if (hasVisible && newCount < 10) scheduleFollowUp(sessionId, newCount, stateValues);
                     clearTimedWakeIfHandled(entry.trigger_key);

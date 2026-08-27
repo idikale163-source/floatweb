@@ -392,7 +392,9 @@ async function autoReplyPendingMessages(env, runtime, options = {}) {
       failedCount: sendErrors.length,
       sendResults,
       ...(deferredShortcut ? { shortcutCommandId: deferredShortcut.commandId } : {}),
-    }, undefined, deferredShortcut ? { name: deferredShortcut.actionName, args: deferredShortcut.args ?? {} } : undefined);
+    }, undefined, deferredShortcut && shortcutRequest.marker
+      ? { text: shortcutRequest.marker.text, insertAt: shortcutRequest.marker.insertAt, name: deferredShortcut.actionName }
+      : undefined);
     if (deferredShortcut) {
       const delivered = await deliverWeixinShortcut(env, deferredShortcut).catch(err => ({
         ok: false,
@@ -608,7 +610,7 @@ export function extractWeixinShortcutRequest(text, actions = []) {
   // 与 push-generate 同一套标记：【快捷动作：名称】与带参数的【快捷动作：名称({...})】
   // 都要认（参数允许换行）——老正则会把括号连参数当成动作名，目录匹配必然落空。
   const match = raw.match(/【快捷动作[：:]\s*([^(（）)】\n]{1,60}?)\s*(?:[(（]([\s\S]{0,2000}?)[)）])?\s*】/);
-  if (!match) return { text: raw.trim(), requestedName: "", action: null, args: {} };
+  if (!match) return { text: raw.trim(), requestedName: "", action: null, args: {}, marker: null };
   const requestedName = match[1].trim();
   // 括号里的 JSON 参数写坏了就当没带——宁可少传，也不要整条动作失败。
   // 模型爱用全角标点（中文引号/冒号/逗号），原文解析失败就按归一化后的再试一次。
@@ -627,12 +629,25 @@ export function extractWeixinShortcutRequest(text, actions = []) {
       console.warn(`[weixin-assistant] 快捷动作参数解析失败 name=${requestedName} raw=${rawArgs.slice(0, 200)}`);
     }
   }
+  const stripRe = /【快捷动作[：:]\s*[^(（）)】\n]{1,60}?\s*(?:[(（][\s\S]{0,2000}?[)）])?\s*】/g;
   const cleaned = raw
-    .replace(/【快捷动作[：:]\s*[^(（）)】\n]{1,60}?\s*(?:[(（][\s\S]{0,2000}?[)）])?\s*】/g, "")
+    .replace(stripRe, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim() || "……";
+  // 标记在剥离后正文中的原始位置：对前缀做同一套清洗后取长度（尾部 trim 不影响
+  // 前缀）。下一轮拼上下文/拉回小手机时按这个位置原样还原，不挪到末尾。
+  const cleanedPrefix = raw.slice(0, match.index)
+    .replace(stripRe, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\s+/, "");
   const action = actions.find(item => String(item?.name || "") === requestedName) || null;
-  return { text: cleaned, requestedName, action, args };
+  return {
+    text: cleaned,
+    requestedName,
+    action,
+    args,
+    marker: { text: match[0], insertAt: Math.min(cleanedPrefix.length, cleaned.length) },
+  };
 }
 
 function compactContinuationMessages(messages) {
@@ -1027,13 +1042,18 @@ export function renderHistoryPromptMessages(collected) {
 function cloudStoredMessageToPromptMessage(runtime, message, imageAttachments = new Map()) {
   const role = message.role === "assistant" ? "assistant" : message.role === "system" ? "system" : "user";
   let text = String(message.content || "");
-  // 把这一轮实际执行过的快捷动作（名称+参数）注回上下文：角色能看见自己
-  // 上次传了什么参数，「换一首」才换得动。只进提示词，不进聊天气泡。
-  const invocation = message.shortcutInvocation;
-  if (invocation && typeof invocation === "object" && invocation.name) {
+  // 把这一轮实际执行过的快捷动作标记按原始位置还原进上下文：模型看到的历史
+  // 与它当初的输出一致，「换一首」才换得动。只进提示词，微信正文仍是剥离后的。
+  const marker = message.shortcutMarker;
+  if (marker && typeof marker === "object" && typeof marker.text === "string" && marker.text) {
+    const at = Math.max(0, Math.min(Number(marker.insertAt) || 0, text.length));
+    text = `${text.slice(0, at)}\n${marker.text}\n${text.slice(at)}`.replace(/\n{3,}/g, "\n\n").trim();
+  } else if (message.shortcutInvocation && typeof message.shortcutInvocation === "object" && message.shortcutInvocation.name) {
+    // 旧字段兼容：v1 存量消息只有名称+参数，没有原文位置，补一条等价标记在末尾
+    const legacy = message.shortcutInvocation;
     let argsJson = "{}";
-    try { argsJson = JSON.stringify(invocation.args ?? {}); } catch { /* keep {} */ }
-    text = `${text}\n（本轮已实际执行快捷动作「${invocation.name}」，参数：${argsJson}）`.trim();
+    try { argsJson = JSON.stringify(legacy.args ?? {}); } catch { /* keep {} */ }
+    text = `${text}\n【快捷动作：${legacy.name}${argsJson === "{}" ? "" : `(${argsJson})`}】`.trim();
   }
   const imageDataUrl = message.externalId ? imageAttachments.get(message.externalId) : undefined;
   if (!text.trim() && !imageDataUrl) return null;
@@ -1887,7 +1907,7 @@ function makeIlinkHeaders(botToken) {
   return headers;
 }
 
-async function storeOutgoingMessage(env, runtime, externalId, content, raw, replyAnchor, shortcutInvocation) {
+async function storeOutgoingMessage(env, runtime, externalId, content, raw, replyAnchor, shortcutMarker) {
   const createdAt = new Date().toISOString();
   const path = `${MESSAGE_PREFIX}/${runtime.bot.id}/${sanitizePathPart(externalId)}.json`;
   await putObject(env, path, JSON.stringify({
@@ -1907,10 +1927,10 @@ async function storeOutgoingMessage(env, runtime, externalId, content, raw, repl
       replyAfterCreatedAt: replyAnchor.createdAt,
       replySequence: replyAnchor.sequence,
     } : {}),
-    // 快捷动作标记发出即从正文剥离，角色下一轮看不到自己传过什么参数——
-    // 「换一首歌」会换出同一首。把调用记录存成独立字段（不进聊天气泡），
-    // 下一轮拼提示词时作为注记喂回。
-    ...(shortcutInvocation?.name ? { shortcutInvocation } : {}),
+    // 快捷动作标记发出即从正文剥离（微信真实用户永远收不到标记），但模型的
+    // 上下文里要保留原样标记在原始位置——否则角色下一轮看不到自己传过什么参数，
+    // 「换一首歌」会换出同一首。存原文+位置，拼提示词/拉回小手机时按位还原。
+    ...(shortcutMarker?.text ? { shortcutMarker } : {}),
   }, null, 2), "application/json");
 }
 
