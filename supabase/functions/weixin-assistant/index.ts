@@ -610,14 +610,22 @@ export function extractWeixinShortcutRequest(text, actions = []) {
   const match = raw.match(/【快捷动作[：:]\s*([^(（）)】\n]{1,60}?)\s*(?:[(（]([\s\S]{0,2000}?)[)）])?\s*】/);
   if (!match) return { text: raw.trim(), requestedName: "", action: null, args: {} };
   const requestedName = match[1].trim();
-  // 括号里的 JSON 参数写坏了就当没带——宁可少传，也不要整条动作失败
+  // 括号里的 JSON 参数写坏了就当没带——宁可少传，也不要整条动作失败。
+  // 模型爱用全角标点（中文引号/冒号/逗号），原文解析失败就按归一化后的再试一次。
   let args = {};
   const rawArgs = (match[2] || "").trim();
   if (rawArgs) {
-    try {
-      const parsed = JSON.parse(rawArgs);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) args = parsed;
-    } catch { /* ignore */ }
+    const candidates = [rawArgs, rawArgs.replace(/[\u201c\u201d\u201e\u201f]/g, '"').replace(/\uff1a/g, ":").replace(/\uff0c/g, ",")];
+    for (const candidate of candidates) {
+      try {
+        const parsed = JSON.parse(candidate);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) { args = parsed; break; }
+      } catch { /* try next */ }
+    }
+    // 排障留痕：参数写了但一个都没解析出来，日志里能看到模型到底写了什么
+    if (Object.keys(args).length === 0) {
+      console.warn(`[weixin-assistant] 快捷动作参数解析失败 name=${requestedName} raw=${rawArgs.slice(0, 200)}`);
+    }
   }
   const cleaned = raw
     .replace(/【快捷动作[：:]\s*[^(（）)】\n]{1,60}?\s*(?:[(（][\s\S]{0,2000}?[)）])?\s*】/g, "")

@@ -750,14 +750,21 @@ Deno.serve(async (req: Request) => {
               .replace(/\n{3,}/g, "\n\n").trim();
             if (!replyRaw) replyRaw = "……";
             const wanted = markerMatch[1].trim();
-            // 括号里的 JSON 参数写坏了就当没带——宁可少传，也不要整条动作失败
+            // 括号里的 JSON 参数写坏了就当没带——宁可少传，也不要整条动作失败。
+            // 模型爱用全角标点（中文引号/冒号/逗号），原文解析失败就按归一化后的再试一次。
             let wantedArgs: Record<string, unknown> = {};
             const rawArgs = (markerMatch[2] ?? "").trim();
             if (rawArgs) {
-              try {
-                const parsed = JSON.parse(rawArgs) as unknown;
-                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) wantedArgs = parsed as Record<string, unknown>;
-              } catch { /* ignore */ }
+              const candidates = [rawArgs, rawArgs.replace(/[\u201c\u201d\u201e\u201f]/g, '"').replace(/\uff1a/g, ":").replace(/\uff0c/g, ",")];
+              for (const candidate of candidates) {
+                try {
+                  const parsed = JSON.parse(candidate) as unknown;
+                  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) { wantedArgs = parsed as Record<string, unknown>; break; }
+                } catch { /* try next */ }
+              }
+              if (Object.keys(wantedArgs).length === 0) {
+                console.warn(`[push-bridge] 快捷动作参数解析失败 raw=${rawArgs.slice(0, 200)}`);
+              }
             }
             const catalogAction = shortcutCatalog.find(entry => String(entry.name ?? "") === wanted);
             let aiNote = `快捷动作「${wanted}」不存在或未启用`;

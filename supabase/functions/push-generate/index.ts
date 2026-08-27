@@ -306,14 +306,16 @@ const SHORTCUT_MARKER_STRIP_RE = new RegExp(SHORTCUT_MARKER_RE.source, "g");
 function parseShortcutMarkerArgs(raw: string | undefined): Record<string, unknown> {
   const text = (raw ?? "").trim();
   if (!text) return {};
-  try {
-    const parsed = JSON.parse(text) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : {};
-  } catch {
-    return {};
+  // 模型爱用全角标点（中文引号/冒号/逗号），原文解析失败就按归一化后的再试一次
+  const candidates = [text, text.replace(/[\u201c\u201d\u201e\u201f]/g, '"').replace(/\uff1a/g, ":").replace(/\uff0c/g, ",")];
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+    } catch { /* try next */ }
   }
+  console.warn(`[push-generate] 快捷动作参数解析失败 raw=${text.slice(0, 200)}`);
+  return {};
 }
 
 function shortcutResultText(value: unknown): string {
