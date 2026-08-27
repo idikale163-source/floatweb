@@ -2413,10 +2413,21 @@
     pointer-events: none;
 }
 
-/* 有缩样的海报卡：放开固定比例，高度由缩样决定；给个下限护住底部文案区 */
-.mix-mat-card[data-poster="true"][data-live="true"] {
+/* 有缩样的海报卡：放开固定比例，高度由缩样决定；给个下限护住底部文案区。
+   data-flow 是小票/尾调的静态封面（渲染缩样拍成的图）：同样随内容走 */
+.mix-mat-card[data-poster="true"][data-live="true"],
+.mix-mat-card[data-poster="true"][data-flow="true"] {
     aspect-ratio: auto;
     min-height: 96px;
+}
+
+/* 缩样封面回到文档流按原比例摆：固定海报框 + object-fit: cover 会把
+   收起状态的矮小票放大裁剪成一条，和酒柜的实时缩样对不上 */
+.mix-mat-card[data-poster="true"][data-flow="true"] .mix-mat-cover {
+    position: static;
+    height: auto;
+    aspect-ratio: auto;
+    object-fit: unset;
 }
 
 .mix-poster-blank {
