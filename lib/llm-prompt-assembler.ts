@@ -151,6 +151,20 @@ type PromptBlock = {
     toolName?: string;
 };
 
+
+/**
+ * 快捷动作调用注记：这条回复实际触发过的动作（名称+参数）跟在正文后进提示词。
+ * 标记发出即从正文剥离，不注回的话角色看不到自己传过什么参数——「换一首歌」
+ * 会换出同一首。只进提示词，聊天气泡照旧不显示。
+ */
+function appendShortcutInvocationNote(msg: ChatMessage, body: string): string {
+    const invocation = msg.shortcutInvocation;
+    if (msg.role !== "assistant" || !invocation?.name) return body;
+    let argsJson = "{}";
+    try { argsJson = JSON.stringify(invocation.args ?? {}); } catch { /* 保底空对象 */ }
+    return `${body}\n（本轮已实际执行快捷动作「${invocation.name}」，参数：${argsJson}）`.trim();
+}
+
 function resolveHistoryPromptRole(msg: ChatMessage): Exclude<LLMMessageRole, "tool"> {
     // appHistoryRole：显示身份与记忆身份分离（自定义APP卡片与现实桥文本消息都在用）
     const appHistoryRole = msg.mediaData?.appHistoryRole;
@@ -545,6 +559,7 @@ function pushChronologicalShortTermBlocks(params: {
             }
         }
 
+        body = appendShortcutInvocationNote(msg, body);
         if (!body.trim() && !imageUrl) return;
 
         const isAssistantImage = imageUrl && msg.role === "assistant" && msg.mediaType === "media_file";
@@ -1691,6 +1706,7 @@ function pushGroupChronologicalShortTermBlocks(params: {
             body = formatAnnotatedVisionBody(msg, body);
             imageUrl = visionImageUrl;
         }
+        body = appendShortcutInvocationNote(msg, body);
 
         const isAssistantImage = imageUrl && msg.role === "assistant" && msg.mediaType === "media_file";
         const text = isAssistantImage

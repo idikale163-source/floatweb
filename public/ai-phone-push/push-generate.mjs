@@ -646,6 +646,9 @@ Deno.serve(async (req: Request) => {
     // 动作目录在 push_bridge_config.shortcut_actions（个人云由客户端同步；
     // 老库/站点库无此列时查询失败即视为无目录，不执行）。标记一律从正文剥离。
     let shortcutActionNote = "";
+    // 实际执行过的快捷动作（名称+参数）：随 outbox 带回小手机记进聊天历史，
+    // 角色下一轮才知道自己传过什么参数（否则「换一首歌」会换出同一首）
+    let executedShortcutInvocation: { name: string; args: Record<string, unknown> } | null = null;
     let deferredShortcutCommandId = "";
     let deferredShortcutActionName = "";
     type DeferredShortcutEmail = {
@@ -839,6 +842,9 @@ Deno.serve(async (req: Request) => {
             shortcutActionNote = createResponse.ok && createData.ok
               ? `shortcut sent: ${wanted}`
               : `shortcut failed: http ${createResponse.status}`;
+            if (createResponse.ok && createData.ok) {
+              executedShortcutInvocation = { name: wanted, args: wantedArgs };
+            }
 
             // 邮件模式：个人云没有发信服务（RESEND_API_KEY 是站点的环境变量），
             // 请站点凭 site_bridge_token 代发那封信。命令行与结果回传仍留在本项目。
@@ -1018,7 +1024,11 @@ Deno.serve(async (req: Request) => {
         session_id: payload.merge?.sessionId ?? null,
         trigger_key: job.trigger_key,
         raw_text: rawText,
-        meta: { ...(payload.merge ?? {}), pushGenerated: true },
+        meta: {
+          ...(payload.merge ?? {}),
+          pushGenerated: true,
+          ...(executedShortcutInvocation ? { shortcutInvocation: executedShortcutInvocation } : {}),
+        },
       }]),
     });
     if (!outboxResponse.ok) {

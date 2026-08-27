@@ -886,6 +886,8 @@ export async function parseAndSaveResponse(
         createdAt?: string;
         rawResponseText?: string;
         reasoningText?: string;
+        /** 这轮回复实际触发过的快捷动作：挂到最后一条落库消息上，进提示词不进气泡 */
+        shortcutInvocation?: { name: string; args?: Record<string, unknown> };
     },
 ): Promise<{ hasVisible: boolean; newCount: number; stateValues: StateValue[] }> {
     const responseBatchId = options?.responseBatchId || createResponseBatchId();
@@ -958,6 +960,7 @@ export async function parseAndSaveResponse(
                 stateValues: stateValues.length > 0 ? stateValues : undefined,
                 freshStateValues,
                 ...(followUpIndex ? { followUpIndex } : {}),
+                ...(options?.shortcutInvocation ? { shortcutInvocation: options.shortcutInvocation } : {}),
             });
         }
         // Emit call trigger event for chat-room to pick up
@@ -998,6 +1001,9 @@ export async function parseAndSaveResponse(
             senderCharacterId: options?.senderCharacterId,
             senderName: options?.senderName,
             ...(followUpIndex ? { followUpIndex } : {}),
+            ...(i === filteredParts.length - 1 && options?.shortcutInvocation
+                ? { shortcutInvocation: options.shortcutInvocation }
+                : {}),
         });
         if (isPendingChatGeneratedImageMessage(saved)) {
             imageReplacementTasks.push(

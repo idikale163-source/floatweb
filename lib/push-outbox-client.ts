@@ -216,13 +216,24 @@ export async function consumeServerOutbox(options?: { silent?: boolean; force?: 
                         text = applyOutputRegex(text, regexes, { macroEngine, activeTags });
                     }
 
+                    // 云端执行过的快捷动作（名称+参数）：挂到落库消息上，角色下一轮
+                    // 才知道自己传过什么参数（进提示词不进气泡）
+                    const rawInvocation = (meta as { shortcutInvocation?: { name?: unknown; args?: unknown } }).shortcutInvocation;
+                    const shortcutInvocation = rawInvocation && typeof rawInvocation.name === "string" && rawInvocation.name
+                        ? {
+                            name: rawInvocation.name,
+                            args: rawInvocation.args && typeof rawInvocation.args === "object" && !Array.isArray(rawInvocation.args)
+                                ? rawInvocation.args as Record<string, unknown>
+                                : {},
+                        }
+                        : undefined;
                     const { hasVisible, newCount, stateValues } = await parseAndSaveResponse(
                         text,
                         sessionId,
                         meta.prevCount ?? 0,
                         followUpIndex,
                         existingMessages,
-                        { silent: options?.silent !== false },
+                        { silent: options?.silent !== false, ...(shortcutInvocation ? { shortcutInvocation } : {}) },
                     );
                     if (hasVisible && newCount < 10) scheduleFollowUp(sessionId, newCount, stateValues);
                     clearTimedWakeIfHandled(entry.trigger_key);

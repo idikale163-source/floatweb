@@ -237,6 +237,8 @@ export type ChatMessage = {
     nativeToolResult?: NativeToolResultRecord; // tool result paired with an assistant native tool call
     nativeToolReasoning?: string; // provider reasoning content required by some tool APIs
     nativeToolOpenRouterReasoningDetails?: unknown[]; // OpenRouter provider-private reasoning state for tool replay
+    /** 这条回复实际触发过的快捷动作（名称+参数）：仅注入提示词供角色回顾，不进聊天气泡 */
+    shortcutInvocation?: { name: string; args?: Record<string, unknown> };
     cloudSync?: {
         source: "weixin-cloud";
         botId?: string;
