@@ -1236,8 +1236,6 @@ export async function pullWeixinCloudMessagesFromCloud(
   const result: WeixinCloudMessagePullResult = { added: 0, skipped: 0, errors: [], sessionIds: [] };
   const touchedSessionIds = new Set<string>();
   const limit = Math.max(1, Math.min(500, Math.floor(options?.limitPerBot ?? 100)));
-  // 本地删过的消息见碑即跳：本地删除与这轮拉取可能并发，云对象也可能没删干净
-  const tombstones = loadWeixinCloudMessageTombstones();
 
   for (const target of targets) {
     const prefix = `${WEIXIN_CLOUD_PREFIX}/messages/${sanitizePathPart(target.botId)}/`;
@@ -1269,10 +1267,6 @@ export async function pullWeixinCloudMessagesFromCloud(
             result.skipped += 1;
             continue;
           }
-          if (tombstones[weixinCloudTombstoneKey(stored.botId, stored.externalId)]) {
-            result.skipped += 1;
-            continue;
-          }
           storedMessages.push(stored);
         } else {
           result.skipped += 1;
@@ -1283,14 +1277,7 @@ export async function pullWeixinCloudMessagesFromCloud(
     }
 
     storedMessages.sort((a, b) => cloudStoredMessageTime(a).localeCompare(cloudStoredMessageTime(b)));
-    // 逐个下载对象可能花好几秒，期间用户可能刚删完消息——落库前用最新的墓碑再筛一遍，
-    // 否则这一轮已经读到手的对象会把刚删掉的消息原样插回来
-    const freshTombstones = loadWeixinCloudMessageTombstones();
     for (const stored of storedMessages) {
-      if (freshTombstones[weixinCloudTombstoneKey(stored.botId, stored.externalId)]) {
-        result.skipped += 1;
-        continue;
-      }
       const imported = await importCloudStoredMessage(cloudConfig, stored);
       if (imported.inserted) {
         result.added += 1;
@@ -1606,56 +1593,15 @@ export async function syncEditedWeixinCloudMessageToCloud(
   return true;
 }
 
-// ── 删除墓碑 ──
-// 本地删掉一条云端来源的消息后，光删桶里的对象不够稳：
-// 1. 删除瞬间可能正有一轮拉取在飞——对象已被它读走，本地行删完它才落库，等于复活；
-// 2. removeObject 是网络请求，中途失败的话对象还在，下一轮拉取照样拉回来。
-// 所以删除先落一块本地墓碑（botId/externalId），拉取侧见碑即跳过，永不复活。
-const WEIXIN_CLOUD_TOMBSTONE_KEY = "weixin_cloud_message_tombstones_v1";
-const WEIXIN_CLOUD_TOMBSTONE_LIMIT = 1000;
-registerKvMigration(WEIXIN_CLOUD_TOMBSTONE_KEY);
-
-function weixinCloudTombstoneKey(botId: string, externalId: string): string {
-  return `${sanitizePathPart(botId)}/${sanitizePathPart(externalId)}`;
-}
-
-function loadWeixinCloudMessageTombstones(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  try {
-    const parsed = JSON.parse(kvGet(WEIXIN_CLOUD_TOMBSTONE_KEY) ?? "") as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    const out: Record<string, string> = {};
-    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-      if (typeof value === "string") out[key] = value;
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
-
-function addWeixinCloudMessageTombstones(keys: string[]): void {
-  if (typeof window === "undefined" || keys.length === 0) return;
-  const map = loadWeixinCloudMessageTombstones();
-  const now = new Date().toISOString();
-  for (const key of keys) map[key] = now;
-  // 有上限的墓碑园：老碑按删除时间淘汰——它们对应的对象早就删干净了，留着只占空间
-  const entries = Object.entries(map).sort((a, b) => a[1].localeCompare(b[1]));
-  const trimmed = entries.slice(Math.max(0, entries.length - WEIXIN_CLOUD_TOMBSTONE_LIMIT));
-  kvSet(WEIXIN_CLOUD_TOMBSTONE_KEY, JSON.stringify(Object.fromEntries(trimmed)));
-}
-
 export async function deleteWeixinCloudMessagesFromCloud(messages: ChatMessage[]): Promise<number> {
   const cloudConfig = loadCloudBackupConfig();
   if (!isCloudBackupConfigured(cloudConfig)) return 0;
 
   const paths = new Set<string>();
-  const tombstones: string[] = [];
   for (const message of messages) {
     const sync = message.cloudSync;
     if (sync?.source === "weixin-cloud" && sync.botId && sync.externalId) {
       paths.add(weixinCloudMessagePath(sync.botId, sync.externalId));
-      tombstones.push(weixinCloudTombstoneKey(sync.botId, sync.externalId));
       continue;
     }
     if (!shouldUploadLocalWeixinMessage(message)) continue;
@@ -1664,19 +1610,10 @@ export async function deleteWeixinCloudMessagesFromCloud(messages: ChatMessage[]
     paths.add(weixinCloudMessagePath(target.bot.id, `local_${message.id}`));
   }
 
-  // 墓碑先立、对象后删：反过来的话，删对象期间落库的拉取结果就没碑可挡
-  addWeixinCloudMessageTombstones(tombstones);
-
   let deleted = 0;
   for (const path of paths) {
-    // 逐条容错：一条删失败（网络抖动）不该让后面的对象全部漏删——
-    // 漏删的下一轮拉取会被墓碑挡住，不至于复活，但桶里的对象能删还是删
-    try {
-      await removeObject(cloudConfig, path);
-      deleted += 1;
-    } catch (err) {
-      console.warn("[WeixinCloudSync] remove cloud message failed:", path, err);
-    }
+    await removeObject(cloudConfig, path);
+    deleted += 1;
   }
   return deleted;
 }
