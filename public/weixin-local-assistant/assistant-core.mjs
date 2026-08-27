@@ -773,6 +773,8 @@ async function prepareWeixinShortcut(env, runtime, action, firstMessages, firstR
     actionId: action.actionId,
     deliveryMode: action.deliveryMode,
     resultUrl,
+    // 邮件代发要把参数再报给站点拼进正文：命令表里的 action_args 站点看不到
+    args,
   };
 }
 
@@ -821,7 +823,9 @@ async function deliverWeixinShortcutEmail(env, deferred) {
         actionName: deferred.actionName,
         commandId: deferred.commandId,
         resultUrl: deferred.resultUrl,
-        arguments: {},
+        // 之前这里硬编码空对象：命令表里参数好好存着，邮件正文里却永远没有——
+        // 快捷指令从邮件取输入，等于参数在最后一步被整个过滤掉
+        arguments: deferred.args && typeof deferred.args === "object" ? deferred.args : {},
       }),
     });
     const data = await response.json().catch(() => ({}));
