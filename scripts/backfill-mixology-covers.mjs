@@ -200,7 +200,7 @@ async function launchBrowser() {
 
 async function main() {
   // 只拉小票/尾调：其余种类要么没有自动封面这回事（角色卡用作者配图），要么不上图
-  const filters = ["deleted_at=is.null", "kind=in.(ticket,encore)", "select=id,kind,name,cover,payload", "order=updated_at.desc"];
+  const filters = ["deleted_at=is.null", "kind=in.(ticket,encore)", "select=id,kind,name,cover,payload,updated_at", "order=updated_at.desc"];
   if (ONLY_ID) filters.unshift(`id=eq.${encodeURIComponent(ONLY_ID)}`);
   else if (!FORCE) filters.unshift("or=(cover.is.null,cover.eq.%22%22)");
   const rows = await rest(`mixology_items?${filters.join("&")}`, { headers: { Range: "0-9999" } });
@@ -235,11 +235,20 @@ async function main() {
           continue;
         }
         const url = await uploadCover(row.id, bytes);
-        // 只写 cover 一列：不动 updated_at，补封面不会把老条目顶到大厅最前面
+        // 首次补空封面只写 cover 一列：不动 updated_at，不会把老条目顶到大厅最前面。
+        // 换掉已有封面（--force 重拍）时把 updated_at 悄悄 +1 秒：列表的封面代理
+        // /api/mixology/cover 带 v=updated_at 且 CDN 按年 immutable 缓存，v 不变的话
+        // 新图永远被旧缓存挡住；+1 秒不足以改变列表排序。
+        const patch = { cover: url };
+        const oldCover = String(row.cover ?? "").trim();
+        if (oldCover && oldCover !== url) {
+          const stamp = Date.parse(String(row.updated_at ?? ""));
+          if (Number.isFinite(stamp)) patch.updated_at = new Date(stamp + 1000).toISOString();
+        }
         await rest(`mixology_items?id=eq.${encodeURIComponent(row.id)}`, {
           method: "PATCH",
           headers: { Prefer: "return=minimal" },
-          body: JSON.stringify({ cover: url }),
+          body: JSON.stringify(patch),
         });
         ok += 1;
         console.log(`✓ ${label} ${(bytes.length / 1024).toFixed(1)}KB → ${url}`);
