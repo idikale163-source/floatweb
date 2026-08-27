@@ -62,7 +62,7 @@ function statsLine(entry: { likeCount: number; saveCount: number; commentCount: 
  * 否则旧管线拍的封面永远和酒柜的实时缩样对不上。哪些条目已按当前版本
  * 拍过记在 localStorage 里，避免每次进「我的发布」都重复拍。
  */
-const THUMB_PIPELINE_VERSION = 3;
+const THUMB_PIPELINE_VERSION = 4;
 const THUMB_REDO_KEY = "mix-thumb-redone";
 
 function loadThumbRedone(): Set<string> {
