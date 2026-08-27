@@ -578,7 +578,8 @@ export function MixMatAutoCover({ material }: { material: MixMaterial }) {
         const html = material.renderHtml?.trim() ?? "";
         const raw = material.previewRaw?.trim() ?? "";
         if (!html || !raw) return null;
-        return <HalfScale><MixTicketFrame html={html} raw={raw} /></HalfScale>;
+        // 折叠区摊开：卡面缩样要和大厅的静态封面（拍图时同样摊开）长一个样
+        return <HalfScale><MixTicketFrame html={html} raw={raw} expandFolds /></HalfScale>;
     }
     if (material.kind === "encore") {
         const html = mixEncoreRenderHtml(material).trim();
@@ -586,7 +587,7 @@ export function MixMatAutoCover({ material }: { material: MixMaterial }) {
         const raw = material.previewRaw?.trim() ?? "";
         // AI 供稿型没留示例数据就渲染不出内容，别摆一张空壳
         if (material.contract?.trim() && !raw) return null;
-        return <HalfScale><MixTicketFrame html={html} raw={raw} /></HalfScale>;
+        return <HalfScale><MixTicketFrame html={html} raw={raw} expandFolds /></HalfScale>;
     }
     if (material.kind === "garnish") {
         if (!material.css.trim()) return null;

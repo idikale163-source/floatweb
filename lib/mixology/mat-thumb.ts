@@ -66,8 +66,10 @@ function shotBridge(token: string): string {
   }
   function shoot(){
     try{
-      /* 折叠件保持收起状态原样拍：酒柜卡走实时渲染缩样，折叠区就是收着的，
-         缩略图摊开来拍会和酒柜长得不一样——列表封面所见即渲染 */
+      /* 折叠件先摊开再拍：封面是给人在列表里认东西用的，收起的把手拍不出内容。
+         酒柜卡的实时缩样也同样摊开（MixTicketFrame expandFolds），两边长一个样 */
+      var fold=document.querySelectorAll("details:not([open])");
+      for(var f=0;f<fold.length;f++){try{fold[f].setAttribute("open","");}catch(e){}}
       var w=Math.max(1,Math.ceil(document.documentElement.getBoundingClientRect().width||${RENDER_W}));
       var h=measure();
       /* 脚本标签不必带进图里，去掉省体积（SVG 里本来也不执行） */
