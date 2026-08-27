@@ -247,6 +247,9 @@ export function MixologyHall({
     // 点头部刷新（reloadToken 变化）或下架后整体作废
     const listCacheRef = useRef(new Map<string, { materials: MixHallMaterial[]; recipes: MixHallRecipe[]; notReady: string | null }>());
     const lastReloadRef = useRef(reloadToken);
+    // 最新一次 load 的缓存键：快速切 TAG 时几个请求同时在飞，晚到的过期响应
+    // 不许上屏（否则小票页会被后到的文风列表盖掉），只写进会话缓存留着切回去用
+    const activeKeyRef = useRef("");
 
     useEffect(() => {
         mountedRef.current = true;
@@ -292,6 +295,11 @@ export function MixologyHall({
             lastReloadRef.current = reloadToken;
         }
         const cacheKey = `${mode}:${kind}:${scope}`;
+        // 键里带上刷新令牌：点过头部刷新后，刷新前发出的同名请求也算过期
+        const loadKey = `${reloadToken}:${cacheKey}`;
+        activeKeyRef.current = loadKey;
+        // 这次请求回来时还是不是当前画面：卸载了不算，用户已切走/刷新过也不算
+        const fresh = () => mountedRef.current && activeKeyRef.current === loadKey;
         const cached = listCacheRef.current.get(cacheKey);
         if (cached) {
             setMaterials(cached.materials);
@@ -305,31 +313,38 @@ export function MixologyHall({
         try {
             if (mode === "menu") {
                 const { entries, setupRequired } = await fetchHallMaterials(kind, scope === "mine");
-                if (!mountedRef.current) return;
                 const notReadyText = setupRequired ? "酒材页的后厨还没开张（共享表未创建）。" : null;
+                // 过期响应也进会话缓存（切回那个 TAG 能秒开）；头部刷新清过缓存的话不回填旧数据
+                if (lastReloadRef.current === reloadToken) {
+                    listCacheRef.current.set(cacheKey, { materials: entries, recipes: [], notReady: notReadyText });
+                    if (scope === "mine") void backfillThumbs(entries, cacheKey);
+                }
+                if (!fresh()) return;
                 setMaterials(entries);
                 if (notReadyText) setNotReady(notReadyText);
-                listCacheRef.current.set(cacheKey, { materials: entries, recipes: [], notReady: notReadyText });
-                if (scope === "mine") void backfillThumbs(entries, cacheKey);
             } else {
                 const { entries, setupRequired } = await fetchHallRecipes(scope === "mine");
-                if (!mountedRef.current) return;
                 const notReadyText = setupRequired ? "配方页还没开张（共享表未创建）。" : null;
+                if (lastReloadRef.current === reloadToken) {
+                    listCacheRef.current.set(cacheKey, { materials: [], recipes: entries, notReady: notReadyText });
+                }
+                if (!fresh()) return;
                 setRecipes(entries);
                 if (notReadyText) setNotReady(notReadyText);
-                listCacheRef.current.set(cacheKey, { materials: [], recipes: entries, notReady: notReadyText });
             }
         } catch (error) {
-            if (!mountedRef.current) return;
             const message = error instanceof Error ? error.message : "暂时连不上后厨。";
             const permanent = /missing_supabase_env/.test(message);
             const text = permanent ? "酒材页和配方页只在官网营业——本地部署没有联网后端。" : message;
-            setNotReady(text);
             // 未配后端是会话内永久状态：缓存住，自部署环境切 TAG 不反复空打；
             // 瞬时网络错误不缓存，下次切换自动重试
-            if (permanent) listCacheRef.current.set(cacheKey, { materials: [], recipes: [], notReady: text });
+            if (permanent && lastReloadRef.current === reloadToken) {
+                listCacheRef.current.set(cacheKey, { materials: [], recipes: [], notReady: text });
+            }
+            if (!fresh()) return;
+            setNotReady(text);
         } finally {
-            if (mountedRef.current) setLoading(false);
+            if (fresh()) setLoading(false);
         }
     // reloadToken 只作触发器，值本身不参与请求
     // eslint-disable-next-line react-hooks/exhaustive-deps
