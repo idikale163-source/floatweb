@@ -1414,6 +1414,13 @@ export function startWeixinCloudRealtimeSync(): () => void {
     void deleteWeixinCloudMessagesFromCloud(messages).catch((err) => {
       console.warn("[WeixinCloudSync] cloud delete failed:", err);
     });
+
+    // 只删云消息对象不够，理由和上面编辑回复那条完全一样：删掉的若是运行包生成
+    // 之前的消息，它早就被烘焙进 bakedHistoryMessages 了，而助手按
+    // 「时间戳 > 运行包生成时刻」过滤云对象（assistant-core 的 generateReply），
+    // 那条云对象本来就不进提示词——删了等于没删，云端照样记得。
+    // 重新烘焙一次运行包才能真正让删除生效。防抖会把连删的一批合成一次。
+    scheduleRuntimeSync();
   };
 
   // ── 运行包自动同步 ──
