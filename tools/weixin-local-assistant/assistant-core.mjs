@@ -375,7 +375,7 @@ async function autoReplyPendingMessages(env, runtime, options = {}) {
       failedCount: sendErrors.length,
       sendResults,
       ...(deferredShortcut ? { shortcutCommandId: deferredShortcut.commandId } : {}),
-    });
+    }, undefined, deferredShortcut ? { name: deferredShortcut.actionName, args: deferredShortcut.args ?? {} } : undefined);
     if (deferredShortcut) {
       const delivered = await deliverWeixinShortcut(env, deferredShortcut).catch(err => ({
         ok: false,
@@ -1009,7 +1009,15 @@ export function renderHistoryPromptMessages(collected) {
 
 function cloudStoredMessageToPromptMessage(runtime, message, imageAttachments = new Map()) {
   const role = message.role === "assistant" ? "assistant" : message.role === "system" ? "system" : "user";
-  const text = String(message.content || "");
+  let text = String(message.content || "");
+  // 把这一轮实际执行过的快捷动作（名称+参数）注回上下文：角色能看见自己
+  // 上次传了什么参数，「换一首」才换得动。只进提示词，不进聊天气泡。
+  const invocation = message.shortcutInvocation;
+  if (invocation && typeof invocation === "object" && invocation.name) {
+    let argsJson = "{}";
+    try { argsJson = JSON.stringify(invocation.args ?? {}); } catch { /* keep {} */ }
+    text = `${text}\n（本轮已实际执行快捷动作「${invocation.name}」，参数：${argsJson}）`.trim();
+  }
   const imageDataUrl = message.externalId ? imageAttachments.get(message.externalId) : undefined;
   if (!text.trim() && !imageDataUrl) return null;
   return {
@@ -1862,7 +1870,7 @@ function makeIlinkHeaders(botToken) {
   return headers;
 }
 
-async function storeOutgoingMessage(env, runtime, externalId, content, raw, replyAnchor) {
+async function storeOutgoingMessage(env, runtime, externalId, content, raw, replyAnchor, shortcutInvocation) {
   const createdAt = new Date().toISOString();
   const path = `${MESSAGE_PREFIX}/${runtime.bot.id}/${sanitizePathPart(externalId)}.json`;
   await putObject(env, path, JSON.stringify({
@@ -1882,6 +1890,10 @@ async function storeOutgoingMessage(env, runtime, externalId, content, raw, repl
       replyAfterCreatedAt: replyAnchor.createdAt,
       replySequence: replyAnchor.sequence,
     } : {}),
+    // 快捷动作标记发出即从正文剥离，角色下一轮看不到自己传过什么参数——
+    // 「换一首歌」会换出同一首。把调用记录存成独立字段（不进聊天气泡），
+    // 下一轮拼提示词时作为注记喂回。
+    ...(shortcutInvocation?.name ? { shortcutInvocation } : {}),
   }, null, 2), "application/json");
 }
 
