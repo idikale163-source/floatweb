@@ -1240,7 +1240,17 @@ export async function syncWeixinCloudFunctionCore(cloudConfig?: CloudBackupConfi
 }
 
 export async function pullWeixinCloudMessagesFromCloud(
-  options?: { cloudConfig?: CloudBackupConfig; botId?: string; limitPerBot?: number },
+  options?: {
+    cloudConfig?: CloudBackupConfig;
+    botId?: string;
+    limitPerBot?: number;
+    /**
+     * latest = 只看最新一页，整页全是新消息时自动继续翻页直到翻到见过的
+     *（常规 8 秒轮询用，积压再多也一次拉完）；full（默认）= 把所有页走遍，
+     * 兜住历史上「中间漏一段没导入」的坑。limitPerBot 只是每页大小，不是总上限。
+     */
+    scan?: "latest" | "full";
+  },
 ): Promise<WeixinCloudMessagePullResult> {
   await Promise.all([hydrateChatStorage(), ensureSettingsStorageHydrated()]);
   const cloudConfig = options?.cloudConfig ?? loadCloudBackupConfig();
@@ -1259,15 +1269,6 @@ export async function pullWeixinCloudMessagesFromCloud(
 
   for (const target of targets) {
     const prefix = `${WEIXIN_CLOUD_PREFIX}/messages/${sanitizePathPart(target.botId)}/`;
-    let objects;
-    try {
-      // 按创建时间倒序列举：老的按名字升序 + 截断 limit，一旦桶里对象超过 limit，
-      // 最新的消息可能根本不在窗口里——表现就是「微信都回了，小手机半天拉不到」。
-      objects = await listObjects(cloudConfig, prefix, limit, { column: "created_at", order: "desc" });
-    } catch (err) {
-      result.errors.push(`${target.characterName}: ${err instanceof Error ? err.message : String(err)}`);
-      continue;
-    }
 
     // 已导入过的对象不再逐个下载：对象名就是 sanitize 过的 externalId，
     // 和本地消息 cloudSync 里存的能对上。之前每 8 秒把全部对象串行下载一遍，
@@ -1280,13 +1281,35 @@ export async function pullWeixinCloudMessagesFromCloud(
         seenExternalIds.add(sanitizePathPart(sync.externalId));
       }
     }
+    const isKnownName = (name: string) => {
+      const nameNoExt = name.replace(/\.json$/i, "");
+      return nameNoExt.startsWith("local_") || seenExternalIds.has(nameNoExt);
+    };
+
+    // 按创建时间倒序 + 翻页列举。老逻辑按名字升序且只取第一页：桶里对象一旦
+    // 超过一页，最新的消息可能根本不在窗口里——表现就是「微信都回了，小手机
+    // 半天拉不到」。limit 现在只是每页大小：latest 模式整页全新就继续往下翻
+    //（离线积压再多也一次拉完），full 模式走遍所有页。
+    const objects: Awaited<ReturnType<typeof listObjects>> = [];
+    try {
+      const scanFull = options?.scan !== "latest";
+      for (let offset = 0; offset < 10_000; offset += limit) {
+        const page = await listObjects(cloudConfig, prefix, limit, { column: "created_at", order: "desc" }, offset);
+        objects.push(...page);
+        if (page.length < limit) break;
+        // latest 模式：这一页里出现了已经见过的对象，说明更老的也都拉过了，就此打住
+        if (!scanFull && page.some(object => object.name && !object.name.endsWith("/") && isKnownName(object.name))) break;
+      }
+    } catch (err) {
+      result.errors.push(`${target.characterName}: ${err instanceof Error ? err.message : String(err)}`);
+      continue;
+    }
 
     const storedMessages: WeixinCloudStoredMessage[] = [];
     for (const object of objects) {
       if (!object.name || object.name.endsWith("/")) continue;
-      const nameNoExt = object.name.replace(/\.json$/i, "");
       // local_ 前缀是本机上传的（拉取本来就跳过）；seen 是已经导入过的
-      if (nameNoExt.startsWith("local_") || seenExternalIds.has(nameNoExt)) {
+      if (isKnownName(object.name)) {
         result.skipped += 1;
         continue;
       }
@@ -1361,16 +1384,23 @@ export function startWeixinCloudRealtimeSync(): () => void {
     }
   };
 
-  const pullNow = async (force = false) => {
+  // 全量翻页扫描的节流：常规轮询只看最新页（整页全新会自动续翻），
+  // 启动、回前台、以及每 10 分钟做一次全量，兜历史坑
+  const FULL_SCAN_INTERVAL_MS = 10 * 60 * 1000;
+  let lastFullScanAt = 0;
+
+  const pullNow = async (force = false, deep = false) => {
     if (stopped || pullInFlight || !shouldRun()) return;
     if (!force && document.visibilityState !== "visible") return;
     const now = Date.now();
     if (!force && now - lastPullAt < REALTIME_PULL_INTERVAL_MS - 500) return;
     lastPullAt = now;
+    const scan = deep || now - lastFullScanAt >= FULL_SCAN_INTERVAL_MS ? "full" as const : "latest" as const;
     // 保存 promise 而不只是布尔：运行包同步要能等这一轮拉取落库（见 syncRuntimesNow）。
     const running = (async () => {
       try {
-        const result = await pullWeixinCloudMessagesFromCloud({ limitPerBot: 200 });
+        const result = await pullWeixinCloudMessagesFromCloud({ limitPerBot: 200, scan });
+        if (scan === "full") lastFullScanAt = Date.now();
         if (result.added > 0) {
           dispatchPulledSessions(result.sessionIds);
           emitWeixinSyncToast(`已同步 ${result.added} 条微信消息`);
@@ -1511,8 +1541,9 @@ export function startWeixinCloudRealtimeSync(): () => void {
 
   const onVisibility = () => {
     if (document.visibilityState === "visible") {
-      // 先拉聊天再同步运行包，别并发：见 syncRuntimesNow 里的说明
-      void pullNow(true).then(() => syncRuntimesNow(false));
+      // 先拉聊天再同步运行包，别并发：见 syncRuntimesNow 里的说明。
+      // 回前台做全量扫：离开的这段时间积压最可能发生
+      void pullNow(true, true).then(() => syncRuntimesNow(false));
     }
   };
 
