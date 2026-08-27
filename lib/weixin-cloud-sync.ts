@@ -267,6 +267,8 @@ export type WeixinCloudStoredMessage = {
   replyAfterCreatedAt?: string;
   /** 同一次主动发送被拆成多段时的稳定顺序（从 0 开始）。 */
   replySequence?: number;
+  /** 这条回复实际触发过的快捷动作（名称+参数）：由助手写入，导入时挂到本地消息 */
+  shortcutInvocation?: { name: string; args?: Record<string, unknown> };
 };
 
 export type WeixinCloudMessagePullResult = {
@@ -1983,6 +1985,21 @@ function importCloudAssistantMessage(
       role: "assistant",
       content: normalizedContent,
     }, strippedContent));
+  }
+
+  // 云端执行过的快捷动作记录挂到最后一条正文消息上：重新烘焙运行包时这段
+  // 历史才带得上调用注记（气泡不渲染该字段，显示不受影响）
+  const invocation = stored.shortcutInvocation;
+  if (invocation && typeof invocation === "object" && typeof invocation.name === "string" && invocation.name) {
+    const lastAssistant = [...messages].reverse().find(message => message.role === "assistant");
+    if (lastAssistant) {
+      lastAssistant.shortcutInvocation = {
+        name: invocation.name,
+        args: invocation.args && typeof invocation.args === "object" && !Array.isArray(invocation.args)
+          ? invocation.args
+          : {},
+      };
+    }
   }
 
   let inserted = false;
