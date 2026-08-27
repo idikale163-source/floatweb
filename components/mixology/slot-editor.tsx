@@ -223,7 +223,7 @@ export function MixSlotEditor({
     varNames: string[];
     onChange: (next: MixSlotEntry[]) => void;
     onPickMore: () => void;
-    /** 传了就在每条上出编辑入口（官方出厂件除外）：对局里就地改材料用 */
+    /** 传了就在每条上出编辑入口（官方出厂件与别人上传的导入件除外，与酒柜同一条准入线）：对局里就地改材料用 */
     onEdit?: (material: MixMaterial) => void;
     /** 传了就在右上出「+」：不离开弹窗直接新建一件这一格的材料 */
     onCreate?: () => void;
@@ -294,7 +294,7 @@ export function MixSlotEditor({
                                             </button>
                                         </div>
                                         <div className="mix-stack-ops">
-                                            {onEdit && material && !isMixBuiltinId(material.id) ? (
+                                            {onEdit && material && !isMixBuiltinId(material.id) && !material.imported ? (
                                                 <button type="button" className="mix-icon-btn" onClick={() => onEdit(material)} aria-label="编辑"><Pencil size={15} /></button>
                                             ) : null}
                                             <button type="button" className="mix-icon-btn" onClick={() => move(index, -1)} disabled={index === 0} aria-label="上移"><ArrowUp size={15} /></button>

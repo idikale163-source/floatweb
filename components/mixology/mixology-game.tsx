@@ -1274,7 +1274,8 @@ export function MixologyGame({ sessionId, onBack, onToast }: GameProps) {
                                             </div>
                                             {m.hook ? <div className="mix-mat-hook">{m.hook}</div> : null}
                                         </div>
-                                        {!isMixBuiltinId(m.id) ? (
+                                        {/* 与酒柜同一条准入线：官方出厂件、从酒材页拿来的别人的材料都不给编辑 */}
+                                        {!isMixBuiltinId(m.id) && !m.imported ? (
                                             <button
                                                 type="button"
                                                 className="mix-icon-btn"
