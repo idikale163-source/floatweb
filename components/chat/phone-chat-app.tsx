@@ -282,7 +282,19 @@ export const PhoneChatApp = memo(function PhoneChatApp({ onClose, initialSession
             {/* Chat Rooms — all visited sessions stay mounted, only active one is visible */}
             {[...visitedSessions.values()].map(sess => (
                 <div key={sess.id} style={{ display: activeSession?.id === sess.id ? undefined : 'none' }} className="chat-room-layer absolute inset-0">
-                    <ChatRoom session={sess} onBack={() => setActiveSession(null)} />
+                    <ChatRoom
+                        session={sess}
+                        onBack={() => setActiveSession(null)}
+                        onDeleted={() => {
+                            // 会话已删除：把缓存的聊天室一并卸载，避免僵尸挂载
+                            setVisitedSessions(prev => {
+                                const next = new Map(prev);
+                                next.delete(sess.id);
+                                return next;
+                            });
+                            setActiveSession(null);
+                        }}
+                    />
                 </div>
             ))}
             {activeMascot && (
