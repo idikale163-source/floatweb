@@ -2209,6 +2209,16 @@
     );
 }
 
+/* 缩样卡（实时缩样 data-live / 渲染缩略图封面 data-flow）：缩样本身就是内容，
+   文字压上去会挡住看的东西——文案区改走文档流，落在缩样下面单独一段。
+   角色卡等配图海报仍用压图 + 渐变纱的经典样式 */
+.mix-mat-card[data-poster="true"][data-live="true"] .mix-poster-veil,
+.mix-mat-card[data-poster="true"][data-flow="true"] .mix-poster-veil {
+    position: static;
+    padding: 9px 11px 11px;
+    background: none;
+}
+
 .mix-poster-name {
     font-size: 14.5px;
     font-weight: 700;
