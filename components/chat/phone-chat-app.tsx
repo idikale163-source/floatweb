@@ -15,6 +15,7 @@ import { SessionCustomCSS } from "@/components/ui/session-custom-css";
 import { kvGet } from "@/lib/kv-db";
 import { formatXiaohongshuShareForPrompt, type ChatSharePayload } from "@/lib/chat-share";
 import { CHAT_OPEN_SESSION_EVENT, CHAT_OPEN_ADD_CONTACT_EVENT } from "@/lib/chat-notification-events";
+import { CHAT_SESSIONS_MERGED_EVENT, type ChatSessionsMergedDetail } from "@/lib/chat-session-merge";
 import { getMascotSettingsSnapshot } from "@/lib/mascot-settings";
 
 type TabKey = "messages" | "contacts" | "feeds" | "me";
@@ -88,6 +89,24 @@ export const PhoneChatApp = memo(function PhoneChatApp({ onClose, initialSession
         };
         window.addEventListener(CHAT_OPEN_SESSION_EVENT, handler);
         return () => window.removeEventListener(CHAT_OPEN_SESSION_EVENT, handler);
+    }, []);
+
+    // 重复会话被合并：被删会话的聊天室缓存一并卸载
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const removed = (e as CustomEvent<ChatSessionsMergedDetail>).detail?.removedSessionIds;
+            if (!removed?.length) return;
+            const removedSet = new Set(removed);
+            setVisitedSessions(prev => {
+                if (![...prev.keys()].some(id => removedSet.has(id))) return prev;
+                const next = new Map(prev);
+                removedSet.forEach(id => next.delete(id));
+                return next;
+            });
+            setActiveSession(prev => (prev && removedSet.has(prev.id) ? null : prev));
+        };
+        window.addEventListener(CHAT_SESSIONS_MERGED_EVENT, handler);
+        return () => window.removeEventListener(CHAT_SESSIONS_MERGED_EVENT, handler);
     }, []);
 
     // 名片点击「加好友」：关会话、切联系人 tab，待添加角色经 prop 交给列表打开添加页

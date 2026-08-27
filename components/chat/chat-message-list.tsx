@@ -12,8 +12,15 @@ import { clearRequestsForCharacter, dispatchFriendRequestUpdated } from "@/lib/f
 import { UserProfilePanel } from "./user-profile-panel";
 import { PageShell } from "@/components/ui/page-shell";
 import { GroupCreateModal } from "./group-create-modal";
+import { Toggle } from "@/components/ui/form";
 import { formatChatUiTime } from "@/lib/chat-time";
 import { getChatOfflineTurnPreview, getLastChatOfflineTurn } from "@/lib/chat-offline-storage";
+import {
+    dismissMergeSignatures,
+    findPromptableDuplicateSessionGroups,
+    mergeDuplicateSessionGroup,
+    type DuplicateSessionGroup,
+} from "@/lib/chat-session-merge";
 import { kvSet } from "@/lib/kv-db";
 import { ChatFallbackAvatar } from "./chat-fallback-avatar";
 import {
@@ -106,6 +113,9 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
     const [showUserProfile, setShowUserProfile] = useState(false);
     const [showContactPicker, setShowContactPicker] = useState(false);
     const [showGroupCreate, setShowGroupCreate] = useState(false);
+    // 重复会话合并弹窗：进列表时检测一次，用户按组勾选
+    const [mergePrompt, setMergePrompt] = useState<DuplicateSessionGroup[] | null>(null);
+    const [mergeSelected, setMergeSelected] = useState<Set<string>>(new Set());
     const [identity, setIdentity] = useState<UserIdentity | null>(null);
     const mascotSettings = useSyncExternalStore(subscribeMascotSettings, getMascotSettingsSnapshot, getMascotSettingsSnapshot);
     const mascotChat = useSyncExternalStore(subscribeMascotChat, getMascotChatSnapshot, getMascotChatSnapshot);
@@ -142,6 +152,31 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
             window.removeEventListener("chat-messages-updated", refreshSessions);
         };
     }, []);
+
+    // 进列表时检测重复会话（同一角色的单聊 / 同一批成员的群聊），默认全选
+    useEffect(() => {
+        const groups = findPromptableDuplicateSessionGroups();
+        if (groups.length === 0) return;
+        setMergePrompt(groups);
+        setMergeSelected(new Set(groups.map(g => g.signature)));
+    }, []);
+
+    const handleMergeConfirm = () => {
+        if (!mergePrompt) return;
+        for (const group of mergePrompt) {
+            if (mergeSelected.has(group.signature)) mergeDuplicateSessionGroup(group);
+        }
+        // 没勾的按签名记账：这批会话不再提醒，新出现的重复照常提示
+        dismissMergeSignatures(mergePrompt.filter(g => !mergeSelected.has(g.signature)).map(g => g.signature));
+        setMergePrompt(null);
+        setSessions(loadChatSessions());
+    };
+
+    const handleMergeDismiss = () => {
+        if (!mergePrompt) return;
+        dismissMergeSignatures(mergePrompt.map(g => g.signature));
+        setMergePrompt(null);
+    };
 
     return (
         <div className="relative flex-1 h-full">
@@ -540,6 +575,56 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                         setShowContactPicker(false);
                     }}
                 />
+            )}
+
+            {/* Merge Duplicate Sessions Modal */}
+            {mergePrompt && (
+                <div className="modal-overlay" onClick={() => setMergePrompt(null)}>
+                    <div className="modal-dialog" onClick={e => e.stopPropagation()}>
+                        <span className="modal-header-title">检测到相同角色的重复会话</span>
+                        <p className="ts-13 text-[var(--c-text)] opacity-80 mb-3">
+                            勾选要合并的组：聊天记录（含线下）将并入最近活跃的会话，其余重复会话被删除；不勾选的组之后不再提醒。
+                        </p>
+                        <div className="flex flex-col gap-2 w-full max-h-[40vh] overflow-y-auto mb-3">
+                            {mergePrompt.map(group => (
+                                <div key={group.signature} className="flex items-center gap-3 p-2 rounded-lg bg-[var(--c-input)]">
+                                    <div className="flex-1 overflow-hidden">
+                                        <div className="ts-14 font-medium text-[var(--c-text-title)] truncate">
+                                            {group.isGroup ? "群聊 " : "单聊 "}{group.label}
+                                        </div>
+                                        <div className="ts-12 text-[var(--c-icon)] truncate">
+                                            {group.sessions.length} 个会话
+                                            {group.isGroup ? ` · 成员：${group.memberNames.join("、")}` : ""}
+                                        </div>
+                                    </div>
+                                    <Toggle
+                                        checked={mergeSelected.has(group.signature)}
+                                        onChange={(next) => {
+                                            setMergeSelected(prev => {
+                                                const nextSet = new Set(prev);
+                                                if (next) nextSet.add(group.signature);
+                                                else nextSet.delete(group.signature);
+                                                return nextSet;
+                                            });
+                                        }}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex gap-2 w-full">
+                            <button className="ui-btn ui-btn-ghost flex-1" onClick={handleMergeDismiss}>
+                                暂不合并
+                            </button>
+                            <button
+                                className="ui-btn ui-btn-primary flex-1"
+                                disabled={mergeSelected.size === 0}
+                                onClick={handleMergeConfirm}
+                            >
+                                合并所选
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Group Create Modal */}

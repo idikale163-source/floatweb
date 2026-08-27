@@ -54,6 +54,7 @@ function normalizeTurn(value: unknown): ChatOfflineTurn | null {
         summary: typeof item.summary === "string" ? item.summary : "",
         summaryTag: typeof item.summaryTag === "string" && item.summaryTag.trim() ? item.summaryTag.trim() : "summary",
         rawText: typeof item.rawText === "string" ? item.rawText : undefined,
+        reasoningText: typeof item.reasoningText === "string" ? item.reasoningText : undefined,
         createdAt: item.createdAt,
     };
 }
