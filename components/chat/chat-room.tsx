@@ -2,7 +2,7 @@
 
 import { forwardRef, Fragment, memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChatSession, ChatMessage, CHAT_APP_SETTINGS_UPDATED_EVENT, CHAT_INITIAL_VISIBLE_MESSAGE_COUNT, CHAT_LOAD_MORE_MESSAGE_COUNT, CHAT_REQUEST_REPLY_EVENT, loadChatAppSettings, loadChatMessages, loadChatContacts, loadChatSessions, saveChatSessions, pushChatMessage, updateChatMessage, deleteChatMessage, deleteChatMessagesFrom, deleteChatMessagesByIds, retractChatMessage, editChatMessage, updateMessageMediaData, replaceResponseBatchWithParts, replaceGroupResponseRound, isReadingDiscussMessage, isSystemInstructionMessage, createResponseBatchId, createResponseRoundId, getLatestStateValues, getLatestCharacterStateValues, compareChatMessages } from "@/lib/chat-storage";
-import { cleanStreamText, stripLiteralTexts, stripXmlTagBlocks } from "@/lib/stream-preview";
+import { cleanStreamText, splitStreamPreviewSegments, stripLiteralTexts, stripXmlTagBlocks } from "@/lib/stream-preview";
 import type { StateValue } from "@/lib/chat-storage";
 import { parseStateValues, mergeStateValues } from "@/lib/state-value-parser";
 import { parseAIResponse, type ParsedMessagePart } from "@/lib/rich-message-parser";
@@ -1095,8 +1095,9 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
     const [isOfflineGenerating, setIsOfflineGenerating] = useState(false);
     // 流式生成预览：线上（单聊/群聊）与线下各一份，生成中实时刷新，结束后清空
     const [streamPreview, setStreamPreview] = useState<null | {
-        text?: string;
-        parts?: { characterId: string; characterName: string; text: string }[];
+        /** 单聊：按空行定型的分段气泡列表，最后一段在打字 */
+        texts?: string[];
+        parts?: { characterId: string; characterName: string; texts: string[] }[];
     }>(null);
     const [offlineStreamPreview, setOfflineStreamPreview] = useState<null | { content: string; summary: string }>(null);
     const streamAccumRef = useRef("");
@@ -3237,7 +3238,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                     .map(item => ({
                                         characterId: item.characterId,
                                         characterName: item.characterName,
-                                        text: cleanStreamText(item.responseText, { stripXmlTags: streamPreviewTagConfig.online, stripLiterals: streamPreviewTagConfig.stripTexts }),
+                                        texts: splitStreamPreviewSegments(cleanStreamText(item.responseText, { stripXmlTags: streamPreviewTagConfig.online, stripLiterals: streamPreviewTagConfig.stripTexts })),
                                     }));
                                 setStreamPreview({ parts });
                             });
@@ -3277,7 +3278,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                             streamParseFrameRef.current = window.requestAnimationFrame(() => {
                                 streamParseFrameRef.current = 0;
                                 if (!isCurrentGeneration()) return;
-                                setStreamPreview({ text: cleanStreamText(streamAccumRef.current, { stripXmlTags: streamPreviewTagConfig.online, stripLiterals: streamPreviewTagConfig.stripTexts }) });
+                                setStreamPreview({ texts: splitStreamPreviewSegments(cleanStreamText(streamAccumRef.current, { stripXmlTags: streamPreviewTagConfig.online, stripLiterals: streamPreviewTagConfig.stripTexts })) });
                             });
                         },
                         onTextPart: () => {
@@ -3584,7 +3585,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                 .map(item => ({
                                     characterId: item.characterId,
                                     characterName: item.characterName,
-                                    text: cleanStreamText(item.responseText, { stripXmlTags: streamPreviewTagConfig.online, stripLiterals: streamPreviewTagConfig.stripTexts }),
+                                    texts: splitStreamPreviewSegments(cleanStreamText(item.responseText, { stripXmlTags: streamPreviewTagConfig.online, stripLiterals: streamPreviewTagConfig.stripTexts })),
                                 }));
                             setStreamPreview({ parts });
                         });
@@ -3753,7 +3754,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                         streamParseFrameRef.current = window.requestAnimationFrame(() => {
                             streamParseFrameRef.current = 0;
                             if (!isCurrentGeneration()) return;
-                            setStreamPreview({ text: cleanStreamText(streamAccumRef.current, { stripXmlTags: streamPreviewTagConfig.online, stripLiterals: streamPreviewTagConfig.stripTexts }) });
+                            setStreamPreview({ texts: splitStreamPreviewSegments(cleanStreamText(streamAccumRef.current, { stripXmlTags: streamPreviewTagConfig.online, stripLiterals: streamPreviewTagConfig.stripTexts })) });
                         });
                     },
                     onTextPart: async (text, _senderInfo, options) => {
@@ -6129,41 +6130,51 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                 {!offlineMode && streamPreview && (
                     <div className="chat-stream-preview" data-ui="stream-preview">
                         {session.isGroup && streamPreview.parts && streamPreview.parts.length > 0 ? (
+                            /* 按空行定型：写完的段落立即成为独立气泡（与最终拆条同规则），只有最后一段带光标打字 */
                             streamPreview.parts.map((part, i) => {
                                 const senderChar = groupCharMap.get(part.characterId) || character;
+                                const isLastPart = i === (streamPreview.parts?.length ?? 0) - 1;
+                                return part.texts.map((segText, j) => {
+                                    const isTyping = isLastPart && j === part.texts.length - 1;
+                                    return (
+                                        <div key={`stream-${part.characterId}-${i}-${j}`} className="chat-msg-wrapper" data-role="assistant">
+                                            <div className="chat-msg-avatar flex flex-col items-center gap-1 shrink-0">
+                                                <div className="w-[40px] h-[40px] rounded-[20px] bg-[var(--c-input)] overflow-hidden">
+                                                    {senderChar?.avatar ? <img src={senderChar.avatar} className="w-full h-full object-cover" alt="" /> : <ChatFallbackAvatar />}
+                                                </div>
+                                            </div>
+                                            <div className="chat-msg-content-wrap flex flex-col min-w-0 max-w-[70%]">
+                                                <span className="chat-group-sender-name">{part.characterName}</span>
+                                                <div className="chat-bubble-role-assistant chat-stream-bubble break-words rounded-md px-3 py-2">
+                                                    {/* 流式预览用轻量 pre-wrap 渲染：避免每帧跑 markdown/双语解析导致闪烁卡顿 */}
+                                                    <div className="chat-stream-text whitespace-pre-wrap break-words">{segText}</div>
+                                                    {isTyping && <span className="chat-stream-cursor" aria-hidden="true" />}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                });
+                            })
+                        ) : streamPreview.texts && streamPreview.texts.length > 0 ? (
+                            streamPreview.texts.map((segText, j) => {
+                                const isTyping = j === (streamPreview.texts?.length ?? 0) - 1;
                                 return (
-                                    <div key={`stream-${part.characterId}-${i}`} className="chat-msg-wrapper" data-role="assistant">
+                                    <div key={`stream-seg-${j}`} className="chat-msg-wrapper" data-role="assistant">
                                         <div className="chat-msg-avatar flex flex-col items-center gap-1 shrink-0">
                                             <div className="w-[40px] h-[40px] rounded-[20px] bg-[var(--c-input)] overflow-hidden">
-                                                {senderChar?.avatar ? <img src={senderChar.avatar} className="w-full h-full object-cover" alt="" /> : <ChatFallbackAvatar />}
+                                                {character?.avatar ? <img src={character.avatar} className="w-full h-full object-cover" alt="" /> : <ChatFallbackAvatar />}
                                             </div>
                                         </div>
                                         <div className="chat-msg-content-wrap flex flex-col min-w-0 max-w-[70%]">
-                                            <span className="chat-group-sender-name">{part.characterName}</span>
                                             <div className="chat-bubble-role-assistant chat-stream-bubble break-words rounded-md px-3 py-2">
                                                 {/* 流式预览用轻量 pre-wrap 渲染：避免每帧跑 markdown/双语解析导致闪烁卡顿 */}
-                                                <div className="chat-stream-text whitespace-pre-wrap break-words">{part.text}</div>
-                                                <span className="chat-stream-cursor" aria-hidden="true" />
+                                                <div className="chat-stream-text whitespace-pre-wrap break-words">{segText}</div>
+                                                {isTyping && <span className="chat-stream-cursor" aria-hidden="true" />}
                                             </div>
                                         </div>
                                     </div>
                                 );
                             })
-                        ) : streamPreview.text ? (
-                            <div className="chat-msg-wrapper" data-role="assistant">
-                                <div className="chat-msg-avatar flex flex-col items-center gap-1 shrink-0">
-                                    <div className="w-[40px] h-[40px] rounded-[20px] bg-[var(--c-input)] overflow-hidden">
-                                        {character?.avatar ? <img src={character.avatar} className="w-full h-full object-cover" alt="" /> : <ChatFallbackAvatar />}
-                                    </div>
-                                </div>
-                                <div className="chat-msg-content-wrap flex flex-col min-w-0 max-w-[70%]">
-                                    <div className="chat-bubble-role-assistant chat-stream-bubble break-words rounded-md px-3 py-2">
-                                        {/* 流式预览用轻量 pre-wrap 渲染：避免每帧跑 markdown/双语解析导致闪烁卡顿 */}
-                                        <div className="chat-stream-text whitespace-pre-wrap break-words">{streamPreview.text}</div>
-                                        <span className="chat-stream-cursor" aria-hidden="true" />
-                                    </div>
-                                </div>
-                            </div>
                         ) : null}
                     </div>
                 )}

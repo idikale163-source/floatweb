@@ -35,6 +35,13 @@ export function stripLiteralTexts(text: string, literals: readonly string[]): st
     return result;
 }
 
+/** 按空行把净化后的预览文本切成「一段一条」，与最终解析（parseAIResponse 的
+ *  \n\n+ 分段规则）同源：已经出现空行的段落在生成过程中即可定型为独立气泡，
+ *  只有最后一段仍在打字。cleanStreamText 已把 3+ 连续换行压成空行，这里直接切。 */
+export function splitStreamPreviewSegments(text: string): string[] {
+    return text.split(/\n\n+/).map(seg => seg.trim()).filter(Boolean);
+}
+
 /** 剥掉不在气泡正文里展示的协议标签，保留对话正文（含群聊 [角色名]: 前缀）。
  *  stripXmlTags：额外剥掉的配置型 XML 标签块（如预设的线上思维链标签）；
  *  stripLiterals：按字面量直接删除的文本片段（预设 strip_texts，与引擎最终清洗对齐）。
