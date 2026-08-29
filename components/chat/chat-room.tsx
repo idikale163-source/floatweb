@@ -1591,7 +1591,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         const bindings = loadBindingConfig();
         const slot = resolveBinding(bindings, session.isGroup ? undefined : session.contactId, session.isGroup ? "group_chat" : "chat");
         const preset = loadPresets().find(item => item.id === slot.presetId) || null;
-        const withThoughtCompat = (tag: string): string[] => (tag === "thinking" ? ["thinking", "thought"] : [tag]);
+        const withThoughtCompat = (tag: string): string[] => (tag === "thinking" ? ["thinking", "thought", "think"] : [tag]);
         return {
             online: preset?.online_thinking_enabled === true
                 ? withThoughtCompat(preset.online_thinking_tag?.trim() || "thinking")
@@ -4169,7 +4169,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                         const previewContent = (parsed.content
                             ? stripXmlTagBlocks(parsed.content, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
                             : stripXmlTagBlocks(previewRaw, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
-                                .replace(/<\/?(?:content|summary|thinking|thought)>/gi, "")
+                                .replace(/<\/?(?:content|summary|thinking|thought|think)>/gi, "")
                                 .replace(/<[^>]+>/g, "")
                         ).trim();
                         setOfflineStreamPreview({ content: previewContent, summary: parsed.summary });
@@ -4319,7 +4319,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                     const previewContent = (parsed.content
                         ? stripXmlTagBlocks(parsed.content, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
                         : stripXmlTagBlocks(previewRaw, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
-                            .replace(/<\/?(?:content|summary|thinking|thought)>/gi, "")
+                            .replace(/<\/?(?:content|summary|thinking|thought|think)>/gi, "")
                             .replace(/<[^>]+>/g, "")
                     ).trim();
                     setOfflineStreamPreview({ content: previewContent, summary: parsed.summary });
@@ -5635,16 +5635,26 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                         />
                                     </div>
                                 </div>
-                                <div className="chat-offline-generating">
-                                    <span>线下回复生成中</span>
-                                    {offlineStreamPreview?.content && (
-                                        <div className="chat-offline-stream-preview">
-                                            {/* 流式预览用轻量 pre-wrap 渲染：避免每帧跑 markdown/双语解析导致闪烁卡顿 */}
+                                {offlineStreamPreview?.content ? (
+                                    /* 流式预览原地长出：与正式剧情正文同结构（头像/角色名/正文区），
+                                       正文用轻量 pre-wrap 渲染（避免每帧 markdown/双语解析），落库时原地换成正式排版 */
+                                    <div className="chat-offline-entry" data-role="assistant">
+                                        <div className="chat-offline-avatar" aria-hidden="true">
+                                            {character?.avatar ? <img src={character.avatar} alt="" /> : <ChatFallbackAvatar />}
+                                        </div>
+                                        <div className="chat-offline-label-row">
+                                            <div className="chat-offline-label">{session.isGroup ? (session.groupName || "群聊") : (character?.name || "对方")}</div>
+                                        </div>
+                                        <div className="chat-offline-text">
                                             <div className="chat-stream-text whitespace-pre-wrap break-words">{offlineStreamPreview.content}</div>
                                             <span className="chat-stream-cursor" aria-hidden="true" />
                                         </div>
-                                    )}
-                                </div>
+                                    </div>
+                                ) : (
+                                    <div className="chat-offline-generating">
+                                        <span>线下回复生成中</span>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

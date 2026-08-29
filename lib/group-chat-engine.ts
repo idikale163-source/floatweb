@@ -1182,7 +1182,7 @@ export async function generateGroupOfflineChatCompletion(
         // 模型漏写 <content> 时 parseOfflineResponse 兜底把全文当正文，thinking 块会残留其中：
         // 这里统一剥掉，避免思考过程既进思维链又出现在正文（默认标签 thinking 兼容 thought）
         let cleanedContent = parsed.content;
-        for (const tag of (thinkingTag === "thinking" ? ["thinking", "thought"] : [thinkingTag])) {
+        for (const tag of (thinkingTag === "thinking" ? ["thinking", "thought", "think"] : [thinkingTag])) {
             cleanedContent = stripOnlineThinkingTag(cleanedContent, tag);
         }
         parsed = { ...parsed, content: cleanedContent };
