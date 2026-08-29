@@ -1599,6 +1599,8 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                 ? withThoughtCompat(preset.thinking_tag?.trim() || "thinking")
                 : [],
             summaryTag: preset?.story_summary_tag?.trim() || "summary",
+            // 预设「剔除文本」：引擎最终会删，预览阶段同步删，避免闪现（字面量删除，成本极低）
+            stripTexts: (preset?.strip_texts || []).filter(Boolean),
         };
     }, [regexRevision, session.contactId, session.isGroup]);
 
@@ -3233,7 +3235,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                     .map(item => ({
                                         characterId: item.characterId,
                                         characterName: item.characterName,
-                                        text: cleanStreamText(item.responseText, { stripXmlTags: streamPreviewTagConfig.online }),
+                                        text: cleanStreamText(item.responseText, { stripXmlTags: streamPreviewTagConfig.online, stripLiterals: streamPreviewTagConfig.stripTexts }),
                                     }));
                                 setStreamPreview({ parts });
                             });
@@ -3273,7 +3275,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                             streamParseFrameRef.current = window.requestAnimationFrame(() => {
                                 streamParseFrameRef.current = 0;
                                 if (!isCurrentGeneration()) return;
-                                setStreamPreview({ text: cleanStreamText(streamAccumRef.current, { stripXmlTags: streamPreviewTagConfig.online }) });
+                                setStreamPreview({ text: cleanStreamText(streamAccumRef.current, { stripXmlTags: streamPreviewTagConfig.online, stripLiterals: streamPreviewTagConfig.stripTexts }) });
                             });
                         },
                         onTextPart: () => {
@@ -3580,7 +3582,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                 .map(item => ({
                                     characterId: item.characterId,
                                     characterName: item.characterName,
-                                    text: cleanStreamText(item.responseText, { stripXmlTags: streamPreviewTagConfig.online }),
+                                    text: cleanStreamText(item.responseText, { stripXmlTags: streamPreviewTagConfig.online, stripLiterals: streamPreviewTagConfig.stripTexts }),
                                 }));
                             setStreamPreview({ parts });
                         });
@@ -3749,7 +3751,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                         streamParseFrameRef.current = window.requestAnimationFrame(() => {
                             streamParseFrameRef.current = 0;
                             if (!isCurrentGeneration()) return;
-                            setStreamPreview({ text: cleanStreamText(streamAccumRef.current, { stripXmlTags: streamPreviewTagConfig.online }) });
+                            setStreamPreview({ text: cleanStreamText(streamAccumRef.current, { stripXmlTags: streamPreviewTagConfig.online, stripLiterals: streamPreviewTagConfig.stripTexts }) });
                         });
                     },
                     onTextPart: async (text, _senderInfo, options) => {
@@ -4160,7 +4162,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                         // 流式碎片阶段 XML 标签可能未闭合：content 提取不到时，剥掉开标签残片直接显示原文；
                         // 思维链/自定义摘要标签按当前预设整块隐藏，避免生成过程中闪现（与引擎最终清洗同源）
                         const previewContent = (parsed.content
-                            ? stripXmlTagBlocks(parsed.content, streamPreviewTagConfig.offlineThinking)
+                            ? stripXmlTagBlocks(parsed.content, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
                             : stripXmlTagBlocks(offlineStreamAccumRef.current, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
                                 .replace(/<\/?(?:content|summary|thinking|thought)>/gi, "")
                                 .replace(/<[^>]+>/g, "")
@@ -4308,7 +4310,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                     // 流式碎片阶段 XML 标签可能未闭合：content 提取不到时，剥掉开标签残片直接显示原文；
                     // 思维链/自定义摘要标签按当前预设整块隐藏，避免生成过程中闪现（与引擎最终清洗同源）
                     const previewContent = (parsed.content
-                        ? stripXmlTagBlocks(parsed.content, streamPreviewTagConfig.offlineThinking)
+                        ? stripXmlTagBlocks(parsed.content, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
                         : stripXmlTagBlocks(offlineStreamAccumRef.current, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
                             .replace(/<\/?(?:content|summary|thinking|thought)>/gi, "")
                             .replace(/<[^>]+>/g, "")

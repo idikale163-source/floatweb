@@ -26,12 +26,18 @@ export function stripXmlTagBlocks(text: string, tags: readonly string[]): string
 }
 
 /** 剥掉不在气泡正文里展示的协议标签，保留对话正文（含群聊 [角色名]: 前缀）。
- *  stripXmlTags：额外剥掉的配置型 XML 标签块（如预设的线上思维链标签），由调用方
- *  按当前会话生效的预设传入——净化器本身不猜协议标签名。 */
-export function cleanStreamText(raw: string, options?: { stripXmlTags?: readonly string[] }): string {
+ *  stripXmlTags：额外剥掉的配置型 XML 标签块（如预设的线上思维链标签）；
+ *  stripLiterals：按字面量直接删除的文本片段（预设 strip_texts，与引擎最终清洗对齐）。
+ *  两者都由调用方按当前会话生效的预设传入——净化器本身不猜协议标签名。 */
+export function cleanStreamText(raw: string, options?: { stripXmlTags?: readonly string[]; stripLiterals?: readonly string[] }): string {
     if (!raw) return "";
     let text = raw;
     if (options?.stripXmlTags?.length) text = stripXmlTagBlocks(text, options.stripXmlTags);
+    if (options?.stripLiterals?.length) {
+        for (const literal of options.stripLiterals) {
+            if (literal) text = text.split(literal).join("");
+        }
+    }
     // 成对富媒体块整块剥掉
     text = text.replace(/\[状态栏\][\s\S]*?\[\/状态栏\]/gi, "");
     text = text.replace(/\[内心\][\s\S]*?\[\/内心\]/gi, "");
