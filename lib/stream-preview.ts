@@ -25,6 +25,16 @@ export function stripXmlTagBlocks(text: string, tags: readonly string[]): string
     return result;
 }
 
+/** 按字面量删除文本片段（预设 strip_texts）。与引擎 stripPresetTexts 同语义：
+ *  纯 split/join，不走正则。预览侧供「先清洗原文再解析」使用，保证与最终清洗顺序一致。 */
+export function stripLiteralTexts(text: string, literals: readonly string[]): string {
+    let result = text;
+    for (const literal of literals) {
+        if (literal) result = result.split(literal).join("");
+    }
+    return result;
+}
+
 /** 剥掉不在气泡正文里展示的协议标签，保留对话正文（含群聊 [角色名]: 前缀）。
  *  stripXmlTags：额外剥掉的配置型 XML 标签块（如预设的线上思维链标签）；
  *  stripLiterals：按字面量直接删除的文本片段（预设 strip_texts，与引擎最终清洗对齐）。
@@ -33,11 +43,7 @@ export function cleanStreamText(raw: string, options?: { stripXmlTags?: readonly
     if (!raw) return "";
     let text = raw;
     if (options?.stripXmlTags?.length) text = stripXmlTagBlocks(text, options.stripXmlTags);
-    if (options?.stripLiterals?.length) {
-        for (const literal of options.stripLiterals) {
-            if (literal) text = text.split(literal).join("");
-        }
-    }
+    if (options?.stripLiterals?.length) text = stripLiteralTexts(text, options.stripLiterals);
     // 成对富媒体块整块剥掉
     text = text.replace(/\[状态栏\][\s\S]*?\[\/状态栏\]/gi, "");
     text = text.replace(/\[内心\][\s\S]*?\[\/内心\]/gi, "");

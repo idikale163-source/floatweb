@@ -253,11 +253,15 @@ function normalizePresetPromptScope(prompt: Prompt): Prompt {
 export function savePresets(presets: PresetConfig[]): void {
     if (typeof window === "undefined") return;
     writePresetsCache(presets.map(stripDeprecatedPresetFields));
+    // 统一变更通知：预设管理器直接编辑保存此前不发事件，挂载中的聊天页（流式预览
+    // 标签配置等）拿不到新配置，最终清洗按新预设、预览按旧预设。监听方刷新是幂等的。
+    window.dispatchEvent(new CustomEvent("settings-presets-updated"));
 }
 
 export async function savePresetsAsync(presets: PresetConfig[]): Promise<void> {
     if (typeof window === "undefined") return;
     await writePresetsCacheAsync(presets.map(stripDeprecatedPresetFields));
+    window.dispatchEvent(new CustomEvent("settings-presets-updated"));
 }
 
 export async function ensureSettingsStorageHydrated(): Promise<void> {

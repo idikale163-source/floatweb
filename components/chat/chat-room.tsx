@@ -2,7 +2,7 @@
 
 import { forwardRef, Fragment, memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChatSession, ChatMessage, CHAT_APP_SETTINGS_UPDATED_EVENT, CHAT_INITIAL_VISIBLE_MESSAGE_COUNT, CHAT_LOAD_MORE_MESSAGE_COUNT, CHAT_REQUEST_REPLY_EVENT, loadChatAppSettings, loadChatMessages, loadChatContacts, loadChatSessions, saveChatSessions, pushChatMessage, updateChatMessage, deleteChatMessage, deleteChatMessagesFrom, deleteChatMessagesByIds, retractChatMessage, editChatMessage, updateMessageMediaData, replaceResponseBatchWithParts, replaceGroupResponseRound, isReadingDiscussMessage, isSystemInstructionMessage, createResponseBatchId, createResponseRoundId, getLatestStateValues, getLatestCharacterStateValues, compareChatMessages } from "@/lib/chat-storage";
-import { cleanStreamText, stripXmlTagBlocks } from "@/lib/stream-preview";
+import { cleanStreamText, stripLiteralTexts, stripXmlTagBlocks } from "@/lib/stream-preview";
 import type { StateValue } from "@/lib/chat-storage";
 import { parseStateValues, mergeStateValues } from "@/lib/state-value-parser";
 import { parseAIResponse, type ParsedMessagePart } from "@/lib/rich-message-parser";
@@ -1705,9 +1705,11 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         const refreshRegexes = () => setRegexRevision(value => value + 1);
         window.addEventListener("settings-regexes-updated", refreshRegexes);
         window.addEventListener("settings-bindings-updated", refreshRegexes);
+        window.addEventListener("settings-presets-updated", refreshRegexes);
         return () => {
             window.removeEventListener("settings-regexes-updated", refreshRegexes);
             window.removeEventListener("settings-bindings-updated", refreshRegexes);
+            window.removeEventListener("settings-presets-updated", refreshRegexes);
         };
     }, []);
 
@@ -4158,12 +4160,14 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                     offlineStreamFrameRef.current = window.requestAnimationFrame(() => {
                         offlineStreamFrameRef.current = 0;
                         if (!isCurrentOfflineRun()) return;
-                        const parsed = parseOfflineResponse(offlineStreamAccumRef.current, streamPreviewTagConfig.summaryTag);
+                        // 与引擎顺序一致：先按预设 strip_texts 清洗原文，再解析（避免剔除文本影响 XML 结构时预览与最终结果不一致）
+                        const previewRaw = stripLiteralTexts(offlineStreamAccumRef.current, streamPreviewTagConfig.stripTexts);
+                        const parsed = parseOfflineResponse(previewRaw, streamPreviewTagConfig.summaryTag);
                         // 流式碎片阶段 XML 标签可能未闭合：content 提取不到时，剥掉开标签残片直接显示原文；
                         // 思维链/自定义摘要标签按当前预设整块隐藏，避免生成过程中闪现（与引擎最终清洗同源）
                         const previewContent = (parsed.content
                             ? stripXmlTagBlocks(parsed.content, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
-                            : stripXmlTagBlocks(offlineStreamAccumRef.current, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
+                            : stripXmlTagBlocks(previewRaw, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
                                 .replace(/<\/?(?:content|summary|thinking|thought)>/gi, "")
                                 .replace(/<[^>]+>/g, "")
                         ).trim();
@@ -4306,12 +4310,14 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                 offlineStreamFrameRef.current = window.requestAnimationFrame(() => {
                     offlineStreamFrameRef.current = 0;
                     if (!isCurrentOfflineRun()) return;
-                    const parsed = parseOfflineResponse(offlineStreamAccumRef.current, streamPreviewTagConfig.summaryTag);
+                    // 与引擎顺序一致：先按预设 strip_texts 清洗原文，再解析（避免剔除文本影响 XML 结构时预览与最终结果不一致）
+                    const previewRaw = stripLiteralTexts(offlineStreamAccumRef.current, streamPreviewTagConfig.stripTexts);
+                    const parsed = parseOfflineResponse(previewRaw, streamPreviewTagConfig.summaryTag);
                     // 流式碎片阶段 XML 标签可能未闭合：content 提取不到时，剥掉开标签残片直接显示原文；
                     // 思维链/自定义摘要标签按当前预设整块隐藏，避免生成过程中闪现（与引擎最终清洗同源）
                     const previewContent = (parsed.content
                         ? stripXmlTagBlocks(parsed.content, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
-                        : stripXmlTagBlocks(offlineStreamAccumRef.current, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
+                        : stripXmlTagBlocks(previewRaw, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
                             .replace(/<\/?(?:content|summary|thinking|thought)>/gi, "")
                             .replace(/<[^>]+>/g, "")
                     ).trim();
