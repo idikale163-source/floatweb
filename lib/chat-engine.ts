@@ -1277,8 +1277,6 @@ export async function sendLLMToolRequest(
         }
         rawOutput = await applyChatPluginLlmResponse(rawOutput, pluginPurpose, options?.debugSessionId);
 
-        rawOutput = await applyChatPluginLlmResponse(rawOutput, pluginPurpose, options?.debugSessionId);
-
         if (!rawOutput && parsed.toolCalls.length === 0) {
             const emptyDetails = emptyResponseDetails(parsed.raw);
             console.warn("[ChatEngine] Empty native tool response from API!", {
