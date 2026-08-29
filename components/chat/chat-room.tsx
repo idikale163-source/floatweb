@@ -2,7 +2,7 @@
 
 import { forwardRef, Fragment, memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChatSession, ChatMessage, CHAT_APP_SETTINGS_UPDATED_EVENT, CHAT_INITIAL_VISIBLE_MESSAGE_COUNT, CHAT_LOAD_MORE_MESSAGE_COUNT, CHAT_REQUEST_REPLY_EVENT, loadChatAppSettings, loadChatMessages, loadChatContacts, loadChatSessions, saveChatSessions, pushChatMessage, updateChatMessage, deleteChatMessage, deleteChatMessagesFrom, deleteChatMessagesByIds, retractChatMessage, editChatMessage, updateMessageMediaData, replaceResponseBatchWithParts, replaceGroupResponseRound, isReadingDiscussMessage, isSystemInstructionMessage, createResponseBatchId, createResponseRoundId, getLatestStateValues, getLatestCharacterStateValues, compareChatMessages } from "@/lib/chat-storage";
-import { cleanStreamText } from "@/lib/stream-preview";
+import { cleanStreamText, stripXmlTagBlocks } from "@/lib/stream-preview";
 import type { StateValue } from "@/lib/chat-storage";
 import { parseStateValues, mergeStateValues } from "@/lib/state-value-parser";
 import { parseAIResponse, type ParsedMessagePart } from "@/lib/rich-message-parser";
@@ -43,7 +43,7 @@ import { TransferTargetModal } from "./transfer-target-modal";
 import { GiftPickerModal } from "./gift-picker-modal";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { deleteWeixinCloudMessagesFromCloud, emitWeixinSyncToast, syncAllWeixinBotRuntimesToCloud } from "@/lib/weixin-cloud-sync";
-import { loadBindingConfig, loadRegexes, resolveBinding, resolveUserIdentity } from "@/lib/settings-storage";
+import { loadBindingConfig, loadPresets, loadRegexes, resolveBinding, resolveUserIdentity } from "@/lib/settings-storage";
 import { generateGroupChatCompletion, generateGroupOfflineChatCompletion, parseGroupChatResponse, buildEditableGroupRoundText } from "@/lib/group-chat-engine";
 import { appendChatOfflineTurn, deleteChatOfflineTurn, deleteChatOfflineTurnsFrom, extractThinkingTag, loadChatOfflineTurns, parseOfflineResponse, saveChatOfflineTurns, updateChatOfflineTurn, type ChatOfflineTurn } from "@/lib/chat-offline-storage";
 import { applyDisplayRegex, applyEditRegex } from "@/lib/llm-prompt-assembler";
@@ -1581,6 +1581,25 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         return (activeSlot.regexIds || [])
             .map(id => allRegexes.find(regex => regex.id === id))
             .filter((regex): regex is RegexConfig => Boolean(regex));
+    }, [regexRevision, session.contactId, session.isGroup]);
+
+    // 流式预览的标签净化配置：与引擎同源（当前会话绑定的预设）。预设开启标签式思维链时，
+    // 生成过程中的预览也要按同一套标签剥掉思考过程/摘要，否则最终消息里被引擎剥掉的内容
+    // 会先在预览气泡里闪现（cleanStreamText 自身不猜配置型标签名，由这里统一传入）。
+    const streamPreviewTagConfig = useMemo(() => {
+        const bindings = loadBindingConfig();
+        const slot = resolveBinding(bindings, session.isGroup ? undefined : session.contactId, session.isGroup ? "group_chat" : "chat");
+        const preset = loadPresets().find(item => item.id === slot.presetId) || null;
+        const withThoughtCompat = (tag: string): string[] => (tag === "thinking" ? ["thinking", "thought"] : [tag]);
+        return {
+            online: preset?.online_thinking_enabled === true
+                ? withThoughtCompat(preset.online_thinking_tag?.trim() || "thinking")
+                : [],
+            offlineThinking: preset?.offline_thinking_enabled === true
+                ? withThoughtCompat(preset.thinking_tag?.trim() || "thinking")
+                : [],
+            summaryTag: preset?.story_summary_tag?.trim() || "summary",
+        };
     }, [regexRevision, session.contactId, session.isGroup]);
 
     const displayRegexMacroEngine = useMemo(() => {
@@ -3214,7 +3233,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                     .map(item => ({
                                         characterId: item.characterId,
                                         characterName: item.characterName,
-                                        text: cleanStreamText(item.responseText),
+                                        text: cleanStreamText(item.responseText, { stripXmlTags: streamPreviewTagConfig.online }),
                                     }));
                                 setStreamPreview({ parts });
                             });
@@ -3254,7 +3273,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                             streamParseFrameRef.current = window.requestAnimationFrame(() => {
                                 streamParseFrameRef.current = 0;
                                 if (!isCurrentGeneration()) return;
-                                setStreamPreview({ text: cleanStreamText(streamAccumRef.current) });
+                                setStreamPreview({ text: cleanStreamText(streamAccumRef.current, { stripXmlTags: streamPreviewTagConfig.online }) });
                             });
                         },
                         onTextPart: () => {
@@ -3561,7 +3580,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                 .map(item => ({
                                     characterId: item.characterId,
                                     characterName: item.characterName,
-                                    text: cleanStreamText(item.responseText),
+                                    text: cleanStreamText(item.responseText, { stripXmlTags: streamPreviewTagConfig.online }),
                                 }));
                             setStreamPreview({ parts });
                         });
@@ -3730,7 +3749,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                         streamParseFrameRef.current = window.requestAnimationFrame(() => {
                             streamParseFrameRef.current = 0;
                             if (!isCurrentGeneration()) return;
-                            setStreamPreview({ text: cleanStreamText(streamAccumRef.current) });
+                            setStreamPreview({ text: cleanStreamText(streamAccumRef.current, { stripXmlTags: streamPreviewTagConfig.online }) });
                         });
                     },
                     onTextPart: async (text, _senderInfo, options) => {
@@ -4137,12 +4156,15 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                     offlineStreamFrameRef.current = window.requestAnimationFrame(() => {
                         offlineStreamFrameRef.current = 0;
                         if (!isCurrentOfflineRun()) return;
-                        const parsed = parseOfflineResponse(offlineStreamAccumRef.current, "summary");
-                        // 流式碎片阶段 XML 标签可能未闭合：content 提取不到时，剥掉开标签残片直接显示原文
-                        const previewContent = parsed.content || offlineStreamAccumRef.current
-                            .replace(/<\/?(?:content|summary|thinking|thought)>/gi, "")
-                            .replace(/<[^>]+>/g, "")
-                            .trim();
+                        const parsed = parseOfflineResponse(offlineStreamAccumRef.current, streamPreviewTagConfig.summaryTag);
+                        // 流式碎片阶段 XML 标签可能未闭合：content 提取不到时，剥掉开标签残片直接显示原文；
+                        // 思维链/自定义摘要标签按当前预设整块隐藏，避免生成过程中闪现（与引擎最终清洗同源）
+                        const previewContent = (parsed.content
+                            ? stripXmlTagBlocks(parsed.content, streamPreviewTagConfig.offlineThinking)
+                            : stripXmlTagBlocks(offlineStreamAccumRef.current, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
+                                .replace(/<\/?(?:content|summary|thinking|thought)>/gi, "")
+                                .replace(/<[^>]+>/g, "")
+                        ).trim();
                         setOfflineStreamPreview({ content: previewContent, summary: parsed.summary });
                     });
                 };
@@ -4282,12 +4304,15 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                 offlineStreamFrameRef.current = window.requestAnimationFrame(() => {
                     offlineStreamFrameRef.current = 0;
                     if (!isCurrentOfflineRun()) return;
-                    const parsed = parseOfflineResponse(offlineStreamAccumRef.current, "summary");
-                    // 流式碎片阶段 XML 标签可能未闭合：content 提取不到时，剥掉开标签残片直接显示原文
-                    const previewContent = parsed.content || offlineStreamAccumRef.current
-                        .replace(/<\/?(?:content|summary|thinking|thought)>/gi, "")
-                        .replace(/<[^>]+>/g, "")
-                        .trim();
+                    const parsed = parseOfflineResponse(offlineStreamAccumRef.current, streamPreviewTagConfig.summaryTag);
+                    // 流式碎片阶段 XML 标签可能未闭合：content 提取不到时，剥掉开标签残片直接显示原文；
+                    // 思维链/自定义摘要标签按当前预设整块隐藏，避免生成过程中闪现（与引擎最终清洗同源）
+                    const previewContent = (parsed.content
+                        ? stripXmlTagBlocks(parsed.content, streamPreviewTagConfig.offlineThinking)
+                        : stripXmlTagBlocks(offlineStreamAccumRef.current, [streamPreviewTagConfig.summaryTag, ...streamPreviewTagConfig.offlineThinking])
+                            .replace(/<\/?(?:content|summary|thinking|thought)>/gi, "")
+                            .replace(/<[^>]+>/g, "")
+                    ).trim();
                     setOfflineStreamPreview({ content: previewContent, summary: parsed.summary });
                 });
             };
